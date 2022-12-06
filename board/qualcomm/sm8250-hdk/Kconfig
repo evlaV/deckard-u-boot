@@ -1,0 +1,12 @@
+if TARGET_SM8250_HDK
+
+config SYS_BOARD
+	default "sm8250-hdk"
+
+config SYS_CONFIG_NAME
+	default "sm8250-hdk"
+
+config SYS_VENDOR
+	default "qualcomm"
+
+endif
