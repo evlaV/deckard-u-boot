@@ -14,6 +14,10 @@ config SDM845
 	default n
 	select LINUX_KERNEL_IMAGE_HEADER
 
+config SM8250
+	bool "Qualcomm SM8250 SoC"
+	default n
+
 config LNX_KRNL_IMG_TEXT_OFFSET_BASE
 	default 0x80000000
 
@@ -77,11 +81,18 @@ config TARGET_QCS404EVB
 	  - 1GiB RAM
 	  - 8GiB eMMC, uSD slot
 
+config TARGET_SM8250_HDK
+	bool "Qualcomm SM8250 HDK"
+	help
+	  Support for Qualcomm SM8250 HDK
+	select SM8250
+
 endchoice
 
 source "board/qualcomm/dragonboard410c/Kconfig"
 source "board/qualcomm/dragonboard820c/Kconfig"
 source "board/qualcomm/dragonboard845c/Kconfig"
+source "board/qualcomm/sm8250-hdk/Kconfig"
 source "board/samsung/starqltechn/Kconfig"
 source "board/qualcomm/qcs404-evb/Kconfig"
 
