@@ -863,5 +863,5 @@ void invalidate_icache_all(void)
 void __weak enable_caches(void)
 {
 	icache_enable();
-	dcache_enable();
+	//dcache_enable();
 }
