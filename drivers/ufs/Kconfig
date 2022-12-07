@@ -21,4 +21,11 @@ config TI_J721E_UFS
 	  This selects the glue layer driver for Cadence controller
 	  present on TI's J721E devices.
 
+config QCOM_UFS
+	bool "Qualcomm platform driver for UFS"
+	depends on UFS
+        help
+	  This selects the platform driver for the Quclomm UFS host
+	  controller present on present on Qualcomm devices.
+
 endmenu
