@@ -238,6 +238,8 @@ static inline void geni_serial_baud(phys_addr_t base_address, u32 clk_div,
 {
 	u32 s_clk_cfg = 0;
 
+	return;
+
 	s_clk_cfg |= SER_CLK_EN;
 	s_clk_cfg |= (clk_div << CLK_DIV_SHFT);
 
@@ -249,7 +251,9 @@ int msm_serial_setbrg(struct udevice *dev, int baud)
 {
 	struct msm_serial_data *priv = dev_get_priv(dev);
 
+
 	priv->baud = baud;
+	return 0;
 	u32 clk_div;
 	u64 clk_rate;
 
