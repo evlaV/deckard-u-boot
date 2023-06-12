@@ -18,6 +18,10 @@ config SM8250
 	bool "Qualcomm SM8250 SoC"
 	default n
 
+config SM8550
+	bool "Qualcomm SM8550 SoC"
+	default n
+
 config LNX_KRNL_IMG_TEXT_OFFSET_BASE
 	default 0x80000000
 
@@ -87,12 +91,19 @@ config TARGET_SM8250_HDK
 	  Support for Qualcomm SM8250 HDK
 	select SM8250
 
+config TARGET_SM8550_HDK
+	bool "Qualcomm SM8550 HDK"
+	help
+	  Support for Qualcomm SM8550 HDK
+	select SM8550
+
 endchoice
 
 source "board/qualcomm/dragonboard410c/Kconfig"
 source "board/qualcomm/dragonboard820c/Kconfig"
 source "board/qualcomm/dragonboard845c/Kconfig"
 source "board/qualcomm/sm8250-hdk/Kconfig"
+source "board/qualcomm/sm8550-hdk/Kconfig"
 source "board/samsung/starqltechn/Kconfig"
 source "board/qualcomm/qcs404-evb/Kconfig"
 
