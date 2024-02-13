@@ -1,0 +1,33 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Qualcomm SM8550 chip device tree source
+ *
+ *(C) Copyright 2022 Jonathan Marek <jonathan@marek.ca>
+ *
+ */
+
+/dts-v1/;
+
+#include "skeleton64.dtsi"
+
+/ {
+	soc: soc {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0 0 0 0xffffffff>;
+		compatible = "simple-bus";
+
+		uart7: serial@89c000 {
+			compatible = "qcom,geni-debug-uart";
+			reg = <0x89c000 0x4000>;
+			reg-names = "se_phys";
+			status = "disabled";
+		};
+
+		ufs: ufs@1d84000 {
+			compatible = "qcom,ufs", "jedec,ufs-2.0";
+			reg = <0x1d84000 0x3000>;
+			status = "disabled";
+		};
+	};
+};
