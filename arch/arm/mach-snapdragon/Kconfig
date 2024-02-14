@@ -12,6 +12,18 @@ config SPL_SYS_MALLOC_F
 config SPL_SYS_MALLOC_F_LEN
 	default 0x2000
 
+config SM8250
+       bool "Qualcomm SM8250 SoC"
+       default n
+       imply CLK_QCOM_SM8250
+       imply BUTTON_QCOM_PMIC
+
+config SM8550
+       bool "Qualcomm SM8550 SoC"
+       default n
+       imply CLK_QCOM_SM8550
+       imply BUTTON_QCOM_PMIC
+
 config SDM845
 	bool "Qualcomm Snapdragon 845 SoC"
 	select LINUX_KERNEL_IMAGE_HEADER
@@ -89,6 +101,18 @@ config TARGET_QCS404EVB
 	  - Qualcomm Snapdragon QCS404 SoC
 	  - 1GiB RAM
 	  - 8GiB eMMC, uSD slot
+ 
+config TARGET_SM8250_HDK
+       bool "Qualcomm SM8250 HDK"
+       help
+         Support for Qualcomm SM8250 HDK
+       select SM8250
+
+config TARGET_SM8550_HDK
+       bool "Qualcomm SM8550 HDK"
+       help
+         Support for Qualcomm SM8550 HDK
+       select SM8550
 
 endchoice
 
@@ -97,5 +121,7 @@ source "board/qualcomm/dragonboard820c/Kconfig"
 source "board/qualcomm/dragonboard845c/Kconfig"
 source "board/samsung/starqltechn/Kconfig"
 source "board/qualcomm/qcs404-evb/Kconfig"
+source "board/qualcomm/sm8250-hdk/Kconfig"
+source "board/qualcomm/sm8550-hdk/Kconfig"
 
 endif
