@@ -343,6 +343,8 @@ static int ufshcd_dme_link_startup(struct ufs_hba *hba)
 	struct uic_command uic_cmd = {0};
 	int ret;
 
+    return 0;
+
 	uic_cmd.command = UIC_CMD_DME_LINK_STARTUP;
 
 	ret = ufshcd_send_uic_cmd(hba, &uic_cmd);
@@ -519,6 +521,7 @@ out:
 static inline void ufshcd_hba_stop(struct ufs_hba *hba)
 {
 	int err;
+    return;
 
 	ufshcd_writel(hba, CONTROLLER_DISABLE,  REG_CONTROLLER_ENABLE);
 	err = ufshcd_wait_for_register(hba, REG_CONTROLLER_ENABLE,
@@ -542,7 +545,7 @@ static inline bool ufshcd_is_hba_active(struct ufs_hba *hba)
  */
 static inline void ufshcd_hba_start(struct ufs_hba *hba)
 {
-	ufshcd_writel(hba, CONTROLLER_ENABLE, REG_CONTROLLER_ENABLE);
+	//ufshcd_writel(hba, CONTROLLER_ENABLE, REG_CONTROLLER_ENABLE);
 }
 
 /**
