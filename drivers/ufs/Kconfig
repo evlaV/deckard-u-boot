@@ -41,4 +41,12 @@ config UFS_RENESAS
 	  UFS host on Renesas needs some vendor specific configuration before
 	  accessing the hardware.
 
+config QCOM_UFS
+        bool "Qualcomm platform driver for UFS"
+        depends on UFS
+        help
+         This selects the platform driver for the Quclomm UFS host
+         controller present on present on Qualcomm devices.
+      
+
 endmenu
