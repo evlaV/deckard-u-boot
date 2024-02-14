@@ -17,12 +17,14 @@ config SM8250
        default n
        imply CLK_QCOM_SM8250
        imply BUTTON_QCOM_PMIC
+       select MISC_INIT_R
 
 config SM8550
        bool "Qualcomm SM8550 SoC"
        default n
        imply CLK_QCOM_SM8550
        imply BUTTON_QCOM_PMIC
+       select MISC_INIT_R
 
 config SDM845
 	bool "Qualcomm Snapdragon 845 SoC"

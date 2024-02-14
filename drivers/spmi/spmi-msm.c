@@ -23,13 +23,17 @@ DECLARE_GLOBAL_DATA_PTR;
 #define PMIC_ARB_VERSION_V2_MIN 0x20010000
 #define PMIC_ARB_VERSION_V3_MIN 0x30000000
 #define PMIC_ARB_VERSION_V5_MIN 0x50000000
+#define PMIC_ARB_VERSION_V7_MIN 0x70000000
 
 #define APID_MAP_OFFSET_V1_V2_V3 (0x800)
 #define APID_MAP_OFFSET_V5 (0x900)
+#define APID_MAP_OFFSET_V7 (0x2000)
 #define ARB_CHANNEL_OFFSET(n) (0x4 * (n))
 #define SPMI_CH_OFFSET(chnl) ((chnl) * 0x8000)
 #define SPMI_V5_OBS_CH_OFFSET(chnl) ((chnl) * 0x80)
+#define SPMI_V7_OBS_CH_OFFSET(chnl) ((chnl) * 0x20)
 #define SPMI_V5_RW_CH_OFFSET(chnl) ((chnl) * 0x10000)
+#define SPMI_V7_RW_CH_OFFSET(chnl) ((chnl) * 0x1000)
 
 #define SPMI_REG_CMD0 0x0
 #define SPMI_REG_CONFIG 0x4
@@ -50,13 +54,15 @@ DECLARE_GLOBAL_DATA_PTR;
 
 #define SPMI_MAX_CHANNELS 128
 #define SPMI_MAX_SLAVES 16
-#define SPMI_MAX_PERIPH 256
+#define PMIC_ARB_MAX_PERIPHS_V7		1024
+#define SPMI_MAX_PERIPH PMIC_ARB_MAX_PERIPHS_V7
 
 enum arb_ver {
 	V1 = 1,
 	V2,
 	V3,
-	V5 = 5
+	V5 = 5,
+	V7 = 7
 };
 
 /*
@@ -73,7 +79,7 @@ struct msm_spmi_priv {
 	phys_addr_t spmi_chnls; /* SPMI channels */
 	phys_addr_t spmi_obs;  /* SPMI observer */
 	/* SPMI channel map */
-	uint8_t channel_map[SPMI_MAX_SLAVES][SPMI_MAX_PERIPH];
+	uint16_t channel_map[SPMI_MAX_SLAVES][SPMI_MAX_PERIPH];
 	/* SPMI bus arbiter version */
 	u32 arb_ver;
 };
@@ -95,7 +101,7 @@ static int msm_spmi_write(struct udevice *dev, int usid, int pid, int off,
 
 	/* Disable IRQ mode for the current channel*/
 	writel(0x0,
-	       priv->spmi_chnls + SPMI_CH_OFFSET(channel) + SPMI_REG_CONFIG);
+		   priv->spmi_chnls + SPMI_CH_OFFSET(channel) + SPMI_REG_CONFIG);
 
 	/* Write single byte */
 	writel(val, priv->spmi_chnls + SPMI_CH_OFFSET(channel) + SPMI_REG_WDATA);
@@ -109,6 +115,8 @@ static int msm_spmi_write(struct udevice *dev, int usid, int pid, int off,
 
 	if (priv->arb_ver == V5)
 		ch_offset = SPMI_V5_RW_CH_OFFSET(channel);
+	else if(priv->arb_ver == V7)
+		ch_offset = SPMI_V7_RW_CH_OFFSET(channel);
 	else
 		ch_offset = SPMI_CH_OFFSET(channel);
 
@@ -119,7 +127,7 @@ static int msm_spmi_write(struct udevice *dev, int usid, int pid, int off,
 	reg = 0;
 	while (!reg) {
 		reg = readl(priv->spmi_chnls + SPMI_CH_OFFSET(channel) +
-			    SPMI_REG_STATUS);
+				SPMI_REG_STATUS);
 	}
 
 	if (reg ^ SPMI_STATUS_DONE) {
@@ -146,6 +154,8 @@ static int msm_spmi_read(struct udevice *dev, int usid, int pid, int off)
 
 	if (priv->arb_ver == V5)
 		ch_offset = SPMI_V5_OBS_CH_OFFSET(channel);
+	if (priv->arb_ver == V7)
+		ch_offset = SPMI_V7_OBS_CH_OFFSET(channel);
 	else
 		ch_offset = SPMI_CH_OFFSET(channel);
 
@@ -202,16 +212,19 @@ static int msm_spmi_probe(struct udevice *dev)
 	} else if (hw_ver < PMIC_ARB_VERSION_V5_MIN) {
 		priv->arb_ver = V3;
 		priv->arb_chnl = core_addr + APID_MAP_OFFSET_V1_V2_V3;
-	} else {
+	} else if (hw_ver < PMIC_ARB_VERSION_V7_MIN) {
 		priv->arb_ver = V5;
 		priv->arb_chnl = core_addr + APID_MAP_OFFSET_V5;
+	} else { // v7
+		priv->arb_ver = V7;
+		priv->arb_chnl = core_addr + APID_MAP_OFFSET_V7;
 	}
 
 	dev_dbg(dev, "PMIC Arb Version-%d (%#x)\n", hw_ver >> 28, hw_ver);
 
 	if (priv->arb_chnl == FDT_ADDR_T_NONE ||
-	    priv->spmi_chnls == FDT_ADDR_T_NONE ||
-	    priv->spmi_obs == FDT_ADDR_T_NONE)
+		priv->spmi_chnls == FDT_ADDR_T_NONE ||
+		priv->spmi_obs == FDT_ADDR_T_NONE)
 		return -EINVAL;
 
 	dev_dbg(dev, "priv->arb_chnl address (%#08llx)\n", priv->arb_chnl);
@@ -220,10 +233,12 @@ static int msm_spmi_probe(struct udevice *dev)
 	/* Scan peripherals connected to each SPMI channel */
 	for (i = 0; i < SPMI_MAX_PERIPH; i++) {
 		uint32_t periph = readl(priv->arb_chnl + ARB_CHANNEL_OFFSET(i));
-		uint8_t slave_id = (periph & 0xf0000) >> 16;
-		uint8_t pid = (periph & 0xff00) >> 8;
+		if ( periph & 0x1000000 ) { // TODO define this bit?
+			uint8_t slave_id = (periph & 0xff0000) >> 16;
+			uint8_t pid = (periph & 0xff00) >> 8;
 
-		priv->channel_map[slave_id][pid] = i;
+			priv->channel_map[slave_id][pid] = i;
+		}
 	}
 	return 0;
 }

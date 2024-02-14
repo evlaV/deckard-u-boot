@@ -77,8 +77,6 @@ static int pmic_qcom_probe(struct udevice *dev)
 	if (ret < 0)
 		return -EINVAL;
 
-	debug("usid: %d\n", priv->usid);
-
 	return 0;
 }
 

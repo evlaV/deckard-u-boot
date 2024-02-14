@@ -9,6 +9,7 @@
 /dts-v1/;
 
 #include "skeleton64.dtsi"
+#include <dt-bindings/spmi/spmi.h>
 
 / {
 	soc: soc {
@@ -28,6 +29,48 @@
 			compatible = "qcom,ufs", "jedec,ufs-2.0";
 			reg = <0x1d84000 0x3000>;
 			status = "disabled";
+		};
+	};
+
+	spmi: spmi@c400000 {
+		compatible = "qcom,spmi-pmic-arb";
+		reg = <0 0x0c400000 0 0x3000>,
+			<0 0x0c500000 0 0x4000000>,
+			<0 0x0c440000 0 0x80000>,
+			<0 0x0c4c0000 0 0x20000>,
+			<0 0x0c42d000 0 0x4000>;
+		reg-names = "core",
+				"chnls",
+				"obsrvr",
+				"intr",
+				"cnfg";
+
+		#address-cells = <2>;
+		#size-cells = <0>;
+
+		pmic0: pmk8550@0 {
+			compatible = "qcom,spmi-pmic";
+			reg = <0x0 SPMI_USID>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			pmk8550_pon: pon@1300 {
+				compatible = "qcom,pm8550-pon";
+				reg = <0x1300>;
+				reg-names = "hlos";
+
+				pm8998_resin: resin {
+					debounce = <15625>;
+					bias-pull-up;
+					status_bit = <6>;
+				};
+
+				pmk8550_pwrkey: pwrkey {
+					debounce = <15625>;
+					bias-pull-up;
+					status_bit = <7>;
+				};
+			};
 		};
 	};
 };

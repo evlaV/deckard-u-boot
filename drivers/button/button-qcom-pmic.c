@@ -86,21 +86,25 @@ static int qcom_pwrkey_probe(struct udevice *dev)
 	}
 
 	ret = pmic_reg_read(priv->pmic, priv->base + REG_SUBTYPE);
-	if ((ret & 0x7) == 0) {
+	if ((ret & 0xf) == 0) {
 		printf("%s: unexpected PMCI function subtype %d\n", dev->name, ret);
 		return -ENXIO;
 	}
 
 	if (NODE_IS_PWRKEY(node)) {
-		priv->status_bit = 0;
+		if (ofnode_read_u32(node, "status_bit", &priv->status_bit)) {
+			priv->status_bit = KPDPWR_ON_INT_BIT;
+		}
 		priv->code = KEY_ENTER;
 	} else if (NODE_IS_RESIN(node)) {
-		priv->status_bit = 1;
+		if (ofnode_read_u32(node, "status_bit", &priv->status_bit)) {
+			priv->status_bit = RESIN_ON_INT_BIT;
+		}
 		priv->code = KEY_DOWN;
 	} else {
 		/* Should not get here! */
 		printf("Invalid pon node '%s' should be 'pwrkey' or 'resin'\n",
-		       ofnode_get_name(node));
+				ofnode_get_name(node));
 		return -EINVAL;
 	}
 
@@ -151,6 +155,7 @@ static const struct udevice_id qcom_pwrkey_ids[] = {
 	{ .compatible = "qcom,pm8916-pon" },
 	{ .compatible = "qcom,pm8941-pon" },
 	{ .compatible = "qcom,pm8998-pon" },
+	{ .compatible = "qcom,pm8550-pon" },
 	{ }
 };
 
