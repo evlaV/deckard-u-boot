@@ -3,10 +3,12 @@
  * (C) Copyright 2022 Jonathan Marek <jonathan@marek.ca>
  */
 
+#include <button.h>
 #include <init.h>
 #include <env.h>
 #include <common.h>
 #include <asm/system.h>
+#include <asm/gpio.h>
 #include <dm.h>
 
 DECLARE_GLOBAL_DATA_PTR;
@@ -29,5 +31,27 @@ void reset_cpu(void)
 int board_init(void)
 {
 	// usb_ether_init();
+	return 0;
+}
+
+/* Check for vol- button - if pressed - stop autoboot */
+int misc_init_r(void)
+{
+	struct udevice *btn;
+	int ret;
+	enum button_state_t state;
+
+	ret = button_get_by_label("resin", &btn);
+	if (ret < 0) {
+		printf("Couldn't find Vol- button!\n");
+		return ret;
+	}
+
+	state = button_get_state(btn);
+	if (state == BUTTON_ON) {
+		env_set("bootdelay", "-1");
+		printf("Vol- button pressed - dropping to console.\n");
+	}
+
 	return 0;
 }
