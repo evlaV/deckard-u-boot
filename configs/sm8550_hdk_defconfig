@@ -848,7 +848,7 @@ CONFIG_BLK=y
 #
 # Button Support
 #
-# CONFIG_BUTTON is not set
+CONFIG_BUTTON=y
 
 #
 # Cache Controller drivers

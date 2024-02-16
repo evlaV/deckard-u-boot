@@ -41,17 +41,28 @@ int misc_init_r(void)
 	int ret;
 	enum button_state_t state;
 
-	ret = button_get_by_label("resin", &btn);
+	ret = button_get_by_label("vol_down", &btn);
 	if (ret < 0) {
 		printf("Couldn't find Vol- button!\n");
-		return ret;
-	}
+	} else {
+        printf("Found Vol- button!\n");
+        state = button_get_state(btn);
+        if (state == BUTTON_ON) {
+            env_set("BOOT_ORDER", "R");
+            printf("Vol- button pressed - targeting rescue partition for boot.\n");
+        }
+    }
 
-	state = button_get_state(btn);
-	if (state == BUTTON_ON) {
-		env_set("bootdelay", "-1");
-		printf("Vol- button pressed - dropping to console.\n");
-	}
+	ret = button_get_by_label("pwrkey", &btn);
+	if (ret < 0) {
+		printf("Couldn't find power button!\n");
+	} else {
+        printf("Found pwr button!\n");
+        state = button_get_state(btn);
+        if (state == BUTTON_ON) {
+            printf("PWR button pressed - do nothing.\n");
+        }
+    }
 
 	return 0;
 }
