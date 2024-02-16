@@ -45,7 +45,6 @@ int misc_init_r(void)
 	if (ret < 0) {
 		printf("Couldn't find Vol- button!\n");
 	} else {
-        printf("Found Vol- button!\n");
         state = button_get_state(btn);
         if (state == BUTTON_ON) {
             env_set("BOOT_ORDER", "R");
@@ -57,7 +56,6 @@ int misc_init_r(void)
 	if (ret < 0) {
 		printf("Couldn't find power button!\n");
 	} else {
-        printf("Found pwr button!\n");
         state = button_get_state(btn);
         if (state == BUTTON_ON) {
             printf("PWR button pressed - do nothing.\n");
