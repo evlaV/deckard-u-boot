@@ -1,0 +1,94 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Qualcomm SM8650 HDK board device tree source
+ *
+ * (C) Copyright 2022 Jonathan Marek <jonathan@marek.ca>
+ */
+
+/dts-v1/;
+
+#include "sm8650.dtsi"
+
+/ {
+	model = "Qualcomm SM8650";
+	compatible = "qcom,sm8650-hdk", "qcom,sm8650";
+	//interrupt-parent = <&intc>;
+	#address-cells = <2>;
+	#size-cells = <2>;
+
+	chosen {
+		stdout-path = "serial0:115200n8";
+	};
+
+	aliases {
+		serial0 = &uart7;
+	};
+
+	memory {
+		device_type = "memory";
+		reg = <0x00 0x80000000 0x00 0x80000000>,
+		      <0x08 0x80000000 0x02 0x80000000>;
+	};
+
+	reserved_memory: reserved-memory {
+		ranges;
+
+		#address-cells = <2>;
+		#size-cells = <2>;
+
+		hyp_tags_mem: hyp-tags-region@80e00000 {
+			no-map;
+			reg = <0x0 0x80e00000 0x0 0x3d0000>;
+		};
+
+		tz_tags_mem: tz-tags-region@e1200000 {
+			no-map;
+			reg = <0x0 0xe1200000 0x0 0x9b0000>;
+		};
+
+		aop_mem: aop_mem@81c00000 {
+			no-map;
+			reg = <0x0 0x81c00000 0x0 0x60000>;
+		};
+
+		aop_cmd_db_mem: aop-cmd-db-region@81c60000 {
+			compatible = "qcom,cmd-db";
+			reg = <0x0 0x81c60000 0x0 0x20000>;
+			no-map;
+		};
+
+		/* merged aop_config, tme_crash_dump, tme_log */
+		aop_config_merged_mem: aop-config-merged-region@81c80000 {
+			reg = <0x0 0x81c80000 0x0 0x64000>;
+			no-map;
+		};
+
+		smem: smem@81d00000 {
+			compatible = "qcom,smem";
+			reg = <0x0 0x81d00000 0x0 0x200000>;
+			// hwlocks = <&tcsr_mutex 3>;
+			no-map;
+		};
+
+		cpucp_fw_mem: cpucp-fw-region@d8140000 {
+			reg = <0x0 0xd8140000 0x0 0x1c0000>;
+			no-map;
+		};
+	};
+
+	// re-enable this when PSCI is enabled
+#if 0
+	psci {
+		compatible = "arm,psci-1.0";
+		method = "smc";
+	};
+#endif
+};
+
+&uart7 {
+	status = "okay";
+};
+
+&ufs {
+	status = "okay";
+};

@@ -26,6 +26,13 @@ config SM8550
        imply BUTTON_QCOM_PMIC
        select MISC_INIT_R
 
+config SM8650
+       bool "Qualcomm SM8650 SoC"
+       default n
+       imply CLK_QCOM_SM8650
+       imply BUTTON_QCOM_PMIC
+       select MISC_INIT_R
+
 config SDM845
 	bool "Qualcomm Snapdragon 845 SoC"
 	select LINUX_KERNEL_IMAGE_HEADER
@@ -116,6 +123,12 @@ config TARGET_SM8550_HDK
          Support for Qualcomm SM8550 HDK
        select SM8550
 
+config TARGET_SM8650
+       bool "Qualcomm SM8650"
+       help
+         Support for Qualcomm SM8650
+       select SM8650
+
 endchoice
 
 source "board/qualcomm/dragonboard410c/Kconfig"
@@ -125,5 +138,6 @@ source "board/samsung/starqltechn/Kconfig"
 source "board/qualcomm/qcs404-evb/Kconfig"
 source "board/qualcomm/sm8250-hdk/Kconfig"
 source "board/qualcomm/sm8550-hdk/Kconfig"
+source "board/qualcomm/sm8650/Kconfig"
 
 endif
