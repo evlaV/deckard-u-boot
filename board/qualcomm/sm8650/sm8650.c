@@ -4,6 +4,7 @@
  */
 
 #include <button.h>
+#include <led.h>
 #include <init.h>
 #include <env.h>
 #include <common.h>
@@ -25,6 +26,7 @@ int dram_init_banksize(void)
 
 void reset_cpu(void)
 {
+    printf("custom reset\n");
 	psci_system_reset();
 }
 
@@ -37,7 +39,7 @@ int board_init(void)
 /* Check for vol- button - if pressed - stop autoboot */
 int misc_init_r(void)
 {
-	struct udevice *btn;
+	struct udevice *btn,*led;
 	int ret;
 	enum button_state_t state;
 
@@ -61,6 +63,13 @@ int misc_init_r(void)
             printf("PWR button pressed - do nothing.\n");
         }
     }
+
+    ret  = led_get_by_label("blue", &led);
+	if (ret < 0) {
+		printf("Couldn't find blue led!\n");
+	} else {
+        led_set_state(led, LEDST_ON);
+    };
 
 	return 0;
 }

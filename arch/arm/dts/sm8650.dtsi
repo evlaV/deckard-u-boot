@@ -47,6 +47,7 @@
 
 		#address-cells = <2>;
 		#size-cells = <0>;
+        status = "okay";
 
 		pmic0: pmk8550@0 {
 			compatible = "qcom,spmi-pmic";
@@ -72,5 +73,22 @@
 				};
 			};
 		};
-	};
+
+		pmic1: pm8550@1 {
+			compatible = "qcom,spmi-pmic";
+			reg = <0x1 SPMI_USID>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+            status = "okay";
+
+            leds: led-controller@ef00 {
+				compatible = "qcom,qcom-led";
+				reg = <0xef00>;
+
+                led0: blue {
+                    blink = <0>;
+				};
+            };
+		};
+    };
 };

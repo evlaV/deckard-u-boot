@@ -9,6 +9,12 @@ config LED
 	  can provide access to board-specific LEDs. Use of the device tree
 	  for configuration is encouraged.
 
+config LED_QCOM_TRI
+	bool "LED Support for QCOM PMIC TRI LED"
+	depends on LED && SPMI
+    help
+      This option enables support for QCOM PMIC TRI LEDs.
+
 config LED_BCM6328
 	bool "LED Support for BCM6328"
 	depends on LED && ARCH_BMIPS
