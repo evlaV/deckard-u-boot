@@ -129,6 +129,18 @@ enum {
 /* bit and mask definitions for DME_VS_CORE_CLK_CTRL attribute */
 #define DME_VS_CORE_CLK_CTRL_CORE_CLK_DIV_EN_BIT		BIT(8)
 #define DME_VS_CORE_CLK_CTRL_MAX_CORE_CLK_1US_CYCLES_MASK	0xFF
+#define DME_VS_CORE_CLK_CTRL_MAX_CORE_CLK_1US_CYCLES_V4_MASK	GENMASK(27, 16)
+#define PA_VS_CORE_CLK_40NS_CYCLES			0x9007
+#define PA_VS_CORE_CLK_40NS_CYCLES_MASK			GENMASK(6, 0)
+
+/* QCOM UFS host controller core clk frequencies */
+#define UNIPRO_CORE_CLK_FREQ_37_5_MHZ          38
+#define UNIPRO_CORE_CLK_FREQ_75_MHZ            75
+#define UNIPRO_CORE_CLK_FREQ_100_MHZ           100
+#define UNIPRO_CORE_CLK_FREQ_150_MHZ           150
+#define UNIPRO_CORE_CLK_FREQ_300_MHZ           300
+#define UNIPRO_CORE_CLK_FREQ_201_5_MHZ         202
+#define UNIPRO_CORE_CLK_FREQ_403_MHZ           403
 
 static inline void
 ufs_qcom_get_controller_revision(struct ufs_hba *hba,
