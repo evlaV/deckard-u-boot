@@ -194,7 +194,7 @@ static void ufs_qcom_select_unipro_mode(struct ufs_qcom_priv *priv)
 		   ufs_qcom_cap_qunipro(priv) ? QUNIPRO_SEL : 0,
 		   REG_UFS_CFG1);
 
-	if (priv->hw_ver.major == 0x05)
+	if (priv->hw_ver.major >= 0x05)
 		ufshcd_rmwl(priv->hba, QUNIPRO_G4_SEL, 0, REG_UFS_CFG0);
 
 	/* make sure above configuration is applied before we return */
