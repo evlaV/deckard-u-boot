@@ -100,12 +100,16 @@ int dram_init_banksize(void)
 	return 0;
 }
 
+#include <linux/ioport.h>
+
 static void qcom_parse_memory(void)
 {
 	ofnode node;
 	const fdt64_t *memory;
 	int memsize;
 	phys_addr_t ram_end = 0;
+	struct resource res;
+	unsigned int count;
 	int i;
 
 	node = ofnode_path("/memory");
@@ -119,12 +123,15 @@ static void qcom_parse_memory(void)
 		return;
 	}
 
-	if (memsize / sizeof(u64) > ARRAY_SIZE(prevbl_ddr_banks))
+	count = memsize / (sizeof(u64) * 2);
+
+	if (count > ARRAY_SIZE(prevbl_ddr_banks))
 		log_err("Provided more than the max of %lu memory banks\n", ARRAY_SIZE(prevbl_ddr_banks));
-	for (i = 0; i < min(memsize / sizeof(u64), ARRAY_SIZE(prevbl_ddr_banks)); i++) {
-		prevbl_ddr_banks[i] = fdt64_to_cpu(memory[i]);
-		if (i % 2 == 1)
-			ram_end = max(ram_end, prevbl_ddr_banks[i-1] + prevbl_ddr_banks[i]);
+	for (i = 0; i < min(count, ARRAY_SIZE(prevbl_ddr_banks)); i++) {
+		ofnode_read_resource(node, i, &res);
+		prevbl_ddr_banks[i * 2] = (phys_addr_t)res.start;
+		prevbl_ddr_banks[(i * 2) + 1] = (phys_size_t)(res.end - res.start + 1);
+		ram_end = max(ram_end, (phys_addr_t)(res.end + 1));
 	}
 
 	gd->ram_base = prevbl_ddr_banks[0];
