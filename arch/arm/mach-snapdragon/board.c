@@ -40,7 +40,7 @@ static struct mm_region rbx_mem_map[CONFIG_NR_DRAM_BANKS + 2] = { { 0 } };
 
 struct mm_region *mem_map = rbx_mem_map;
 
-static u64 prevbl_ddr_banks[8] __section(".data") = { 0 };
+static u64 prevbl_ddr_banks[CONFIG_NR_DRAM_BANKS * 2] __section(".data") = { 0 };
 
 int dram_init(void)
 {
