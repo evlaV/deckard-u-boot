@@ -151,6 +151,25 @@ static u32 rpmh_rsc_reg_offset_ver_2_7[] = {
 	[RSC_DRV_CMD_RESP_DATA]		= 0x40,
 };
 
+static u32 rpmh_rsc_reg_offset_ver_3_0[] = {
+	[RSC_DRV_TCS_OFFSET]		= 672,
+	[RSC_DRV_CMD_OFFSET]		= 24,
+	[DRV_SOLVER_CONFIG]		= 0x04,
+	[DRV_PRNT_CHLD_CONFIG]		= 0x0C,
+	[RSC_DRV_IRQ_ENABLE]		= 0x00,
+	[RSC_DRV_IRQ_STATUS]		= 0x04,
+	[RSC_DRV_IRQ_CLEAR]		= 0x08,
+	[RSC_DRV_CMD_WAIT_FOR_CMPL]	= 0x20,
+	[RSC_DRV_CONTROL]		= 0x24,
+	[RSC_DRV_STATUS]		= 0x28,
+	[RSC_DRV_CMD_ENABLE]		= 0x2C,
+	[RSC_DRV_CMD_MSGID]		= 0x34,
+	[RSC_DRV_CMD_ADDR]		= 0x38,
+	[RSC_DRV_CMD_DATA]		= 0x3C,
+	[RSC_DRV_CMD_STATUS]		= 0x40,
+	[RSC_DRV_CMD_RESP_DATA]		= 0x44,
+};
+
 static inline void __iomem *
 tcs_reg_addr(const struct rsc_drv *drv, int reg, int tcs_id)
 {
@@ -571,12 +590,10 @@ found:
 	drv->ver.minor = rsc_id & (MINOR_VER_MASK << MINOR_VER_SHIFT);
 	drv->ver.minor >>= MINOR_VER_SHIFT;
 
-	if (drv->ver.major == 3) {
-		printf("RPMh v3 not supported\n");
-		return -EOPNOTSUPP;
-	} else {
+	if (drv->ver.major == 3)
+		drv->regs = rpmh_rsc_reg_offset_ver_3_0;
+	else
 		drv->regs = rpmh_rsc_reg_offset_ver_2_7;
-	}
 
 	ret = rpmh_probe_tcs_config(dev, drv);
 	if (ret)
