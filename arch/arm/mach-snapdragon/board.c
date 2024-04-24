@@ -388,6 +388,18 @@ static void build_mem_map(void)
 		mem_map[i].size = gd->bd->bi_dram[j].size;
 		mem_map[i].attrs = PTE_BLOCK_MEMTYPE(MT_NORMAL) | \
 				   PTE_BLOCK_INNER_SHARE;
+
+		if (gd->bd->bi_dram[j + 1].size &&
+		    (gd->bd->bi_dram[j].start + gd->bd->bi_dram[j].size) < gd->bd->bi_dram[j + 1].start) {
+			++i;
+
+			mem_map[i].phys = gd->bd->bi_dram[j].start + gd->bd->bi_dram[j].size;
+			mem_map[i].virt = mem_map[i].phys;
+			mem_map[i].size = gd->bd->bi_dram[j + 1].start - mem_map[i].phys;
+			mem_map[i].attrs = PTE_BLOCK_MEMTYPE(MT_DEVICE_NGNRNE) |
+				PTE_BLOCK_NON_SHARE |
+				PTE_BLOCK_PXN | PTE_BLOCK_UXN;
+		}
 	}
 
 	mem_map[i].phys = UINT64_MAX;
