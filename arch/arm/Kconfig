@@ -1118,6 +1118,8 @@ config ARCH_SNAPDRAGON
 	select OF_CONTROL
 	select SMEM
 	select SPMI
+	select SYSRESET
+	select SYSRESET_PSCI
 	select BOARD_LATE_INIT
 	select OF_BOARD
 	select SAVE_PREV_BL_FDT_ADDR if !ENABLE_ARM_SOC_BOOT0_HOOK
