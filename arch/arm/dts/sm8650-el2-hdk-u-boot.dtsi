@@ -1,0 +1,15 @@
+// SPDX-License-Identifier: BSD-3-Clause
+/*
+ * Copyright (c) 2024, Linaro Limited
+ */
+
+/ {
+	memory@a0000000 {
+		reg = <0x0 0x0 0x0 0x0>;
+	};
+};
+
+&usb_1_dwc3 {
+	dr_mode = "peripheral";
+	/delete-property/ usb-role-switch;
+};
