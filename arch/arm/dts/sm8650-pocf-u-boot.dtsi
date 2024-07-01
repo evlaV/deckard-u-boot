@@ -1,0 +1,55 @@
+// SPDX-License-Identifier: BSD-3-Clause
+/*
+ * Copyright (c) 2024, Linaro Limited
+ */
+
+/ {
+	memory@a0000000 {
+		reg = <0x00 0x80000000 0x00 0x80000000>,
+		      <0x08 0x80000000 0x02 0x80000000>;
+	};
+};
+
+&vreg_bob2 {
+	/delete-property/ regulator-always-on;
+};
+
+&vreg_l1b_1p8 {
+	/delete-property/ regulator-always-on;
+};
+
+&vreg_l2b_3p0 {
+	/delete-property/ regulator-always-on;
+};
+
+&vreg_l5b_3p1 {
+	/delete-property/ regulator-always-on;
+};
+
+&vreg_l10b_1p8 {
+	/delete-property/ regulator-always-on;
+};
+
+&vreg_l15b_1p8 {
+	/delete-property/ regulator-always-on;
+};
+
+&vreg_s1c_1p2 {
+	/delete-property/ regulator-always-on;
+};
+
+&vreg_l3c_1p2 {
+	/delete-property/ regulator-always-on;
+};
+
+&vreg_l2i_0p88 {
+	/delete-property/ regulator-always-on;
+};
+
+&vreg_l3i_1p2 {
+	/delete-property/ regulator-always-on;
+};
+
+&vreg_l7m_3p3 {
+	/delete-property/ regulator-always-on;
+};
