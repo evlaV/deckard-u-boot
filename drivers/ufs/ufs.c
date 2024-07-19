@@ -1571,7 +1571,6 @@ static void prepare_prdt_table(struct ufs_hba *hba, struct scsi_cmd *pccb)
 {
 	struct utp_transfer_req_desc *req_desc = hba->utrdl;
 	struct ufshcd_sg_entry *prd_table = hba->ucd_prdt_ptr;
-	uintptr_t aaddr = (uintptr_t)(pccb->pdata) & ~(ARCH_DMA_MINALIGN - 1);
 	ulong datalen = pccb->datalen;
 	int table_length;
 	u8 *buf;
@@ -1583,14 +1582,10 @@ static void prepare_prdt_table(struct ufs_hba *hba, struct scsi_cmd *pccb)
 		return;
 	}
 
-	if (pccb->dma_dir == DMA_TO_DEVICE) {	/* Write to device */
-		flush_dcache_range(aaddr,
-				   ALIGN((uintptr_t)pccb->pdata + datalen, ARCH_DMA_MINALIGN));
-	}
-
-	/* In any case, invalidate cache to avoid stale data in it. */
-	invalidate_dcache_range(aaddr,
-				ALIGN((uintptr_t)pccb->pdata + datalen, ARCH_DMA_MINALIGN));
+	if (pccb->dma_dir == DMA_TO_DEVICE)
+		ufshcd_cache_flush(pccb->pdata, datalen);
+	else
+		ufshcd_cache_invalidate(pccb->pdata, datalen);
 
 	table_length = DIV_ROUND_UP(pccb->datalen, MAX_PRDT_ENTRY);
 	buf = pccb->pdata;
