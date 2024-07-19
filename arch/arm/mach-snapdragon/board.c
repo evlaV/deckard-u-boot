@@ -33,6 +33,8 @@
 #include <sort.h>
 #include <soc/qcom/smem.h>
 #include <time.h>
+#include <led.h>
+#include <button.h>
 
 #include "qcom-priv.h"
 
@@ -53,8 +55,8 @@ static void show_psci_version(void)
 		return;
 
 	debug("PSCI:  v%ld.%ld\n",
-	      PSCI_VERSION_MAJOR(res.a0),
-	      PSCI_VERSION_MINOR(res.a0));
+		  PSCI_VERSION_MAJOR(res.a0),
+		  PSCI_VERSION_MINOR(res.a0));
 }
 
 /**
@@ -367,6 +369,42 @@ void __weak qcom_late_init(void)
 {
 }
 
+// XXX is misc_init_r no longer used?
+void deckard_init(void)
+{
+	struct udevice *btn,*led;
+	int ret;
+	enum button_state_t state;
+
+	ret = button_get_by_label("vol_down", &btn);
+	if (ret < 0) {
+			printf("Couldn't find Vol- button!\n");
+	} else {
+		state = button_get_state(btn);
+		if (state == BUTTON_ON) {
+			//env_set("BOOT_ORDER", "R");
+			printf("Vol- button pressed - targeting rescue partition for boot.\n");
+		}
+	}
+
+	ret = button_get_by_label("pwrkey", &btn);
+	if (ret < 0) {
+		printf("Couldn't find power button!\n");
+	} else {
+		state = button_get_state(btn);
+		if (state == BUTTON_ON) {
+			printf("PWR button pressed - do nothing.\n");
+		}
+	}
+
+	ret  = led_get_by_label("blue", &led);
+	if (ret < 0) {
+		printf("Couldn't find blue led!\n");
+	} else {
+		led_set_state(led, LEDST_ON);
+	};
+}
+
 #define KERNEL_COMP_SIZE	SZ_64M
 #ifdef CONFIG_FASTBOOT_BUF_SIZE
 #define FASTBOOT_BUF_SIZE CONFIG_FASTBOOT_BUF_SIZE
@@ -383,6 +421,7 @@ int board_late_init(void)
 	phys_addr_t addr;
 	struct fdt_header *fdt_blob = (struct fdt_header *)gd->fdt_blob;
 
+#if 0
 	/* We need to be fairly conservative here as we support boards with just 1G of TOTAL RAM */
 	addr = addr_alloc(SZ_128M);
 	status |= env_set_hex("kernel_addr_r", addr);
@@ -402,6 +441,7 @@ int board_late_init(void)
 
 	/* By default copy U-Boots FDT, it will be used as a fallback */
 	memcpy((void *)addr, (void *)gd->fdt_blob, fdt32_to_cpu(fdt_blob->totalsize));
+#endif
 
 	/* Initialise SMEM if it wasn't done already */
 	qcom_smem_init();
@@ -411,6 +451,8 @@ int board_late_init(void)
 
 	/* Configure the dfu_string for capsule updates */
 	qcom_configure_capsule_updates();
+
+	deckard_init();
 
 	return 0;
 }
@@ -448,7 +490,7 @@ static void build_mem_map(void)
 	debug("Configured memory map:\n");
 	for (i = 0; mem_map[i].size; i++)
 		debug("  0x%016llx - 0x%016llx: entry %d\n",
-		      mem_map[i].phys, mem_map[i].phys + mem_map[i].size, i);
+			  mem_map[i].phys, mem_map[i].phys + mem_map[i].size, i);
 #endif
 }
 
@@ -532,7 +574,7 @@ static void carve_out_reserved_memory(void)
 		 */
 		if (i == count || start + size < res[i].start - SZ_2M) {
 			debug("  0x%016llx - 0x%016llx: reserved\n",
-			      start, start + size);
+				  start, start + size);
 			mmu_change_region_attr(start, size, PTE_TYPE_FAULT);
 			/* If this is the final region then quit here before we index
 			 * out of bounds...

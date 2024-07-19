@@ -33,6 +33,12 @@ config LED_ACTIVITY
 
 	  [1] dtschema/schemas/options/u-boot.yaml
 
+config LED_QCOM_TRI
+	bool "LED Support for QCOM PMIC TRI LED"
+	depends on LED && SPMI
+	help
+	  This option enables support for QCOM PMIC TRI LEDs.
+
 config LED_BCM6328
 	bool "LED Support for BCM6328"
 	depends on LED && ARCH_BMIPS
