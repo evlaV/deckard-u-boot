@@ -31,8 +31,6 @@
 #include <usb.h>
 #include <sort.h>
 #include <time.h>
-#include <led.h>
-#include <button.h>
 
 #include "qcom-priv.h"
 
@@ -343,42 +341,6 @@ void __weak qcom_late_init(void)
 {
 }
 
-// XXX is misc_init_r no longer used?
-void deckard_init(void)
-{
-	struct udevice *btn,*led;
-	int ret;
-	enum button_state_t state;
-
-	ret = button_get_by_label("vol_down", &btn);
-	if (ret < 0) {
-			printf("Couldn't find Vol- button!\n");
-	} else {
-		state = button_get_state(btn);
-		if (state == BUTTON_ON) {
-			//env_set("BOOT_ORDER", "R");
-			printf("Vol- button pressed - targeting rescue partition for boot.\n");
-		}
-	}
-
-	ret = button_get_by_label("pwrkey", &btn);
-	if (ret < 0) {
-		printf("Couldn't find power button!\n");
-	} else {
-		state = button_get_state(btn);
-		if (state == BUTTON_ON) {
-			printf("PWR button pressed - do nothing.\n");
-		}
-	}
-
-	ret  = led_get_by_label("blue", &led);
-	if (ret < 0) {
-		printf("Couldn't find blue led!\n");
-	} else {
-		led_set_state(led, LEDST_ON);
-	};
-}
-
 #define KERNEL_COMP_SIZE	SZ_64M
 
 #define addr_alloc(lmb, size) lmb_alloc(lmb, size, SZ_2M)
@@ -387,7 +349,7 @@ void deckard_init(void)
 int board_late_init(void)
 {
 	struct lmb lmb;
-	u32 status = 0;
+	//u32 status = 0;
 
 	lmb_init_and_reserve(&lmb, gd->bd, (void *)gd->fdt_blob);
 
@@ -407,8 +369,6 @@ int board_late_init(void)
 #endif
 	configure_env();
 	qcom_late_init();
-
-	deckard_init();
 
 	return 0;
 }

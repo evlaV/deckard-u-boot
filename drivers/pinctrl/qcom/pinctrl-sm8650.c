@@ -41,6 +41,7 @@ static const struct pinctrl_function msm_pinctrl_functions[] = {
 	{"i2chub0_se8", 1},
 	{"i2chub0_se9", 1},
 	{"gpio", 0},
+	{"i2chub0_se7, 1"},
 };
 
 #define SDC_QDSD_PINGROUP(pg_name, ctl, pull, drv)	\
