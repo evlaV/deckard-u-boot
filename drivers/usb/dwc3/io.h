@@ -55,4 +55,12 @@ static inline void dwc3_flush_cache(uintptr_t addr, int length)
 
 	flush_dcache_range(start_addr, end_addr);
 }
+
+static inline void dwc3_invalidate_cache(uintptr_t addr, int length)
+{
+	uintptr_t start_addr = (uintptr_t)addr & ~(ARCH_DMA_MINALIGN - 1);
+	uintptr_t end_addr = ALIGN((uintptr_t)addr + length, ARCH_DMA_MINALIGN);
+
+	invalidate_dcache_range(start_addr, end_addr);
+}
 #endif /* __DRIVERS_USB_DWC3_IO_H */
