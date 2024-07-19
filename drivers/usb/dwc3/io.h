@@ -50,6 +50,9 @@ static inline void dwc3_writel(void __iomem *base, u32 offset, u32 value)
 
 static inline void dwc3_flush_cache(uintptr_t addr, int length)
 {
-	flush_dcache_range(addr, addr + ROUND(length, CACHELINE_SIZE));
+	uintptr_t start_addr = (uintptr_t)addr & ~(ARCH_DMA_MINALIGN - 1);
+	uintptr_t end_addr = ALIGN((uintptr_t)addr + length, ARCH_DMA_MINALIGN);
+
+	flush_dcache_range(start_addr, end_addr);
 }
 #endif /* __DRIVERS_USB_DWC3_IO_H */
