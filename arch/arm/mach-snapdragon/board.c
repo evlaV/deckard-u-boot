@@ -31,6 +31,8 @@
 #include <usb.h>
 #include <sort.h>
 #include <time.h>
+#include <led.h>
+#include <button.h>
 
 #include "qcom-priv.h"
 
@@ -146,8 +148,8 @@ static void show_psci_version(void)
 	arm_smccc_smc(ARM_PSCI_0_2_FN_PSCI_VERSION, 0, 0, 0, 0, 0, 0, 0, &res);
 
 	debug("PSCI:  v%ld.%ld\n",
-	      PSCI_VERSION_MAJOR(res.a0),
-	      PSCI_VERSION_MINOR(res.a0));
+		  PSCI_VERSION_MAJOR(res.a0),
+		  PSCI_VERSION_MINOR(res.a0));
 }
 
 void *board_fdt_blob_setup(int *err)
@@ -164,7 +166,7 @@ void *board_fdt_blob_setup(int *err)
 	 */
 
 	if (IS_ENABLED(CONFIG_OF_SEPARATE) && (!fdt || fdt != ALIGN(fdt, SZ_4K) ||
-					       fdt_check_header((void *)fdt))) {
+						   fdt_check_header((void *)fdt))) {
 		debug("%s: Using built in FDT, bootloader gave us %#llx\n", __func__, fdt);
 		return (void *)gd->fdt_blob;
 	}
@@ -341,6 +343,42 @@ void __weak qcom_late_init(void)
 {
 }
 
+// XXX is misc_init_r no longer used?
+void deckard_init(void)
+{
+	struct udevice *btn,*led;
+	int ret;
+	enum button_state_t state;
+
+	ret = button_get_by_label("vol_down", &btn);
+	if (ret < 0) {
+			printf("Couldn't find Vol- button!\n");
+	} else {
+		state = button_get_state(btn);
+		if (state == BUTTON_ON) {
+			//env_set("BOOT_ORDER", "R");
+			printf("Vol- button pressed - targeting rescue partition for boot.\n");
+		}
+	}
+
+	ret = button_get_by_label("pwrkey", &btn);
+	if (ret < 0) {
+		printf("Couldn't find power button!\n");
+	} else {
+		state = button_get_state(btn);
+		if (state == BUTTON_ON) {
+			printf("PWR button pressed - do nothing.\n");
+		}
+	}
+
+	ret  = led_get_by_label("blue", &led);
+	if (ret < 0) {
+		printf("Couldn't find blue led!\n");
+	} else {
+		led_set_state(led, LEDST_ON);
+	};
+}
+
 #define KERNEL_COMP_SIZE	SZ_64M
 
 #define addr_alloc(lmb, size) lmb_alloc(lmb, size, SZ_2M)
@@ -353,6 +391,7 @@ int board_late_init(void)
 
 	lmb_init_and_reserve(&lmb, gd->bd, (void *)gd->fdt_blob);
 
+#if 0
 	/* We need to be fairly conservative here as we support boards with just 1G of TOTAL RAM */
 	status |= env_set_hex("kernel_addr_r", addr_alloc(&lmb, SZ_128M));
 	status |= env_set_hex("ramdisk_addr_r", addr_alloc(&lmb, SZ_128M));
@@ -365,8 +404,11 @@ int board_late_init(void)
 	if (status)
 		log_warning("%s: Failed to set run time variables\n", __func__);
 
+#endif
 	configure_env();
 	qcom_late_init();
+
+	deckard_init();
 
 	return 0;
 }
@@ -397,7 +439,7 @@ static void build_mem_map(void)
 				   PTE_BLOCK_INNER_SHARE;
 
 		if (gd->bd->bi_dram[j + 1].size &&
-		    (gd->bd->bi_dram[j].start + gd->bd->bi_dram[j].size) < gd->bd->bi_dram[j + 1].start) {
+			(gd->bd->bi_dram[j].start + gd->bd->bi_dram[j].size) < gd->bd->bi_dram[j + 1].start) {
 			++i;
 
 			mem_map[i].phys = gd->bd->bi_dram[j].start + gd->bd->bi_dram[j].size;
@@ -416,7 +458,7 @@ static void build_mem_map(void)
 	debug("Configured memory map:\n");
 	for (i = 0; mem_map[i].size; i++)
 		debug("  0x%016llx - 0x%016llx: entry %d\n",
-		      mem_map[i].phys, mem_map[i].phys + mem_map[i].size, i);
+			  mem_map[i].phys, mem_map[i].phys + mem_map[i].size, i);
 #endif
 }
 
@@ -500,7 +542,7 @@ static void carve_out_reserved_memory(void)
 		 */
 		if (i == count || start + size < res[i].start - SZ_2M) {
 			debug("  0x%016llx - 0x%016llx: reserved\n",
-			      start, start + size);
+				  start, start + size);
 			mmu_change_region_attr(start, size, PTE_TYPE_FAULT);
 			/* If this is the final region then quit here before we index
 			 * out of bounds...

@@ -12,7 +12,7 @@
 #include "sm8650-el2.dtsi"
 
 / {
-	model = "SM8650 POC-F rev1 4slam 2et";
+	model = "SM8650 EV1 rev1 4slam 2et";
 	compatible = "qcom,sm8650-pocf", "qcom,sm8650";
 
 	aliases {
@@ -605,6 +605,13 @@
 	status = "okay";
 };
 
+&pm8550_leds {
+	status = "okay";
+	led0: blue {
+			blink = <0>;
+	};
+};
+
 &qup_spi10_cs {
 	pins = "gpio13", "gpio15";
 };
@@ -736,7 +743,7 @@
 
 	// nRF SPI interrupt and reset pins
 
-    	// expansion 
+		// expansion 
 	l_spihid_default_state: l-spihid-default {
 		irq0-pins {
 			pins = "gpio69";

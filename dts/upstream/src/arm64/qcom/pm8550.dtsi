@@ -62,6 +62,12 @@
 			status = "disabled";
 		};
 
+		pm8550_leds: led-controller@ef00 {
+			compatible = "qcom,qcom-led";
+			reg = <0xef00>;
+			status = "disabled";
+		};
+
 		pm8550_pwm: pwm {
 			compatible = "qcom,pm8550-pwm", "qcom,pm8350c-pwm";
 			#pwm-cells = <2>;
