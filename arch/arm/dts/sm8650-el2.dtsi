@@ -340,3 +340,9 @@
 	/delete-property/ dmas;
 	/delete-property/ dma-names;
 };
+
+/* PON PBS reboot mode */
+
+&pmk8550_pon {
+	compatible = "qcom,pmk8350-el2-pon", "qcom,pmk8350-pon";
+};

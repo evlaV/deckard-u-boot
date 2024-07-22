@@ -11,10 +11,14 @@
 #include <dm.h>
 #include <dm/device-internal.h>
 #include <dm/lists.h>
+#include <dm/ofnode.h>
 #include <log.h>
 #include <power/pmic.h>
 #include <spmi/spmi.h>
 #include <linux/bitops.h>
+#include <sysreset.h>
+#include <linux/delay.h>
+#include <asm/io.h>
 
 #define REG_TYPE		0x4
 #define REG_SUBTYPE		0x5
@@ -38,6 +42,14 @@ struct qcom_pmic_btn_priv {
 #define  PON_RESIN_N_SET		1
 #define  PON_GEN3_RESIN_N_SET		6
 #define  PON_GEN3_KPDPWR_N_SET		7
+
+#define PON_PBS_PS_HOLD_SW_CTL		0x852
+#define  PON_PS_HOLD_ENABLE		BIT(7)
+#define PON_PBS_PS_HOLD_RESET_CTL2	0x853
+#define  PON_PS_HOLD_TYPE_MASK		0x0f
+#define  PON_PS_HOLD_TYPE_WARM_RESET	1
+#define  PON_PS_HOLD_TYPE_SHUTDOWN	4
+#define  PON_PS_HOLD_TYPE_HARD_RESET	7
 
 static enum button_state_t qcom_pwrkey_get_state(struct udevice *dev)
 {
@@ -107,7 +119,6 @@ static int qcom_pwrkey_probe(struct udevice *dev)
 	int ret;
 	u64 base;
 
-	/* Ignore the top-level pon node */
 	if (!uc_plat->label)
 		return 0;
 
@@ -204,5 +215,73 @@ U_BOOT_DRIVER(qcom_pwrkey) = {
 	.bind = button_qcom_pmic_bind,
 	.probe = qcom_pwrkey_probe,
 	.ops = &button_qcom_pmic_ops,
+	.priv_auto = sizeof(struct qcom_pmic_btn_priv),
+};
+
+static int qcom_pon_request(struct udevice *dev, enum sysreset_t type)
+{
+	struct qcom_pmic_btn_priv *priv = dev_get_priv(dev);
+
+	pmic_reg_write(priv->pmic, PON_PBS_PS_HOLD_RESET_CTL2, 0);
+	udelay(1000);
+	switch (type) {
+	case SYSRESET_POWER_OFF:
+		pmic_reg_write(priv->pmic, PON_PBS_PS_HOLD_SW_CTL, PON_PS_HOLD_TYPE_SHUTDOWN);
+		break;
+	case SYSRESET_WARM:
+		pmic_reg_write(priv->pmic, PON_PBS_PS_HOLD_SW_CTL, PON_PS_HOLD_TYPE_MASK);
+		break;
+	case SYSRESET_COLD:
+	case SYSRESET_POWER:
+	default:
+		pmic_reg_write(priv->pmic, PON_PBS_PS_HOLD_SW_CTL, PON_PS_HOLD_TYPE_HARD_RESET);
+		break;
+	}
+	pmic_reg_write(priv->pmic, PON_PBS_PS_HOLD_RESET_CTL2, PON_PS_HOLD_ENABLE);
+
+	writel(0, (dma_addr_t)priv->base);
+	mdelay(10000);
+
+	return -EINPROGRESS;
+}
+
+static struct sysreset_ops qcom_pon_ops = {
+	.request = qcom_pon_request,
+};
+
+static int qcom_pon_probe(struct udevice *dev)
+{
+	struct qcom_pmic_btn_priv *priv = dev_get_priv(dev);
+	ofnode ps_hold;
+
+	ps_hold = ofnode_by_compatible(ofnode_null(), "qcom,pshold");
+	if (!ofnode_valid(ps_hold)) {
+		printf("Unable to find pshold node...\n");
+		return -EINVAL;
+	}
+
+	priv->base = ofnode_get_addr_index(ps_hold, 0);
+	if (priv->base == FDT_ADDR_T_NONE) {
+		printf("Unable to read pshold register...\n");
+		return -EINVAL;
+	}
+
+	priv->pmic = dev->parent;
+
+	return 0;
+}
+
+static const struct udevice_id qcom_pon_ids[] = {
+	{ .compatible = "qcom,pmk8350-el2-pon" },
+	{ }
+};
+
+U_BOOT_DRIVER(qcom_pon) = {
+	.name = "qcom_pon",
+	.id = UCLASS_SYSRESET,
+	.of_match = qcom_pon_ids,
+	.bind = button_qcom_pmic_bind,
+	.probe = qcom_pon_probe,
+	.ops = &qcom_pon_ops,
 	.priv_auto = sizeof(struct qcom_pmic_btn_priv),
 };
