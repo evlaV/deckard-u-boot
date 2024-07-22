@@ -2,7 +2,6 @@
 
 #include <dt-bindings/regulator/qcom,rpmh-regulator.h>
 #include "sm8650.dtsi"
-#include "sm8650-el2.dtsi"
 #include "pm8010.dtsi"
 #include "pm8550.dtsi"
 #include "pm8550b.dtsi"
@@ -10,6 +9,7 @@
 #define PMK8550VE_SID 8
 #include "pm8550ve.dtsi"
 #include "pmk8550.dtsi"
+#include "sm8650-el2.dtsi"
 
 / {
 	model = "SM8650 POC-F rev1 4slam 2et";
