@@ -29,6 +29,7 @@ enum geni_se_protocol_type {
 #define GENI_SER_S_CLK_CFG		0x4c
 #define GENI_IF_DISABLE_RO		0x64
 #define GENI_FW_REVISION_RO		0x68
+#define GENI_DFS_IF_CFG			0x80
 #define SE_GENI_CLK_SEL			0x7c
 #define SE_GENI_CFG_SEQ_START		0x84
 #define SE_GENI_BYTE_GRAN		0x254
@@ -57,15 +58,18 @@ enum geni_se_protocol_type {
 #define SE_GENI_IOS			0x908
 #define SE_DMA_TX_IRQ_STAT		0xc40
 #define SE_DMA_TX_IRQ_CLR		0xc44
+#define SE_DMA_TX_IRQ_EN_SET		0xc4c
 #define SE_DMA_TX_FSM_RST		0xc58
 #define SE_DMA_RX_IRQ_STAT		0xd40
 #define SE_DMA_RX_IRQ_CLR		0xd44
+#define SE_DMA_RX_IRQ_EN_SET		0xd4c
 #define SE_DMA_RX_LEN_IN		0xd54
 #define SE_DMA_RX_FSM_RST		0xd58
 #define SE_GSI_EVENT_EN			0xe18
 #define SE_IRQ_EN			0xe1c
 #define SE_HW_PARAM_0			0xe24
 #define SE_HW_PARAM_1			0xe28
+#define SE_DMA_GENERAL_CFG		0xe30
 
 /* GENI_FORCE_DEFAULT_REG fields */
 #define FORCE_DEFAULT	BIT(0)
@@ -261,5 +265,38 @@ enum geni_se_protocol_type {
 
 /* QUP SE VERSION value for major number 2 and minor number 5 */
 #define QUP_SE_VERSION_2_5                  0x20050000
+
+__attribute__ ((packed))
+struct se_elf_header {
+	u32 magic;
+	u32 version;
+	u32 core_version;
+	u16 serial_protocol;
+	u16 fw_version;
+	u16 cfg_version;
+	u16 fw_size_in_items;
+	u16 fw_offset;
+	u16 cfg_size_in_items;
+	u16 cfg_idx_offset;
+	u16 cfg_val_offset;
+};
+
+/* SE_DMA_GENERAL_CFG */
+#define DMA_RX_CLK_CGC_ON		BIT(0)
+#define DMA_TX_CLK_CGC_ON		BIT(1)
+#define DMA_AHB_SLV_CFG_ON		BIT(2)
+#define AHB_SEC_SLV_CLK_CGC_ON		BIT(3)
+#define DUMMY_RX_NON_BUFFERABLE		BIT(4)
+#define RX_DMA_ZERO_PADDING_EN		BIT(5)
+#define RX_DMA_IRQ_DELAY_MSK		GENMASK(8, 6)
+#define RX_DMA_IRQ_DELAY_SHFT		6
+
+#define GENI_SE_DMA_DONE_EN	BIT(0)
+#define GENI_SE_DMA_EOT_EN	BIT(1)
+#define GENI_SE_DMA_AHB_ERR_EN	BIT(2)
+
+#define GENI_SE_DMA_EOT_BUF	BIT(0)
+
+#define GENI_DMA_MODE_EN	BIT(0)
 
 #endif
