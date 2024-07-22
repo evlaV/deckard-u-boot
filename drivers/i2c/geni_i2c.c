@@ -23,6 +23,9 @@
 #include <time.h>
 #include <soc/qcom/geni-se.h>
 
+__attribute__ ((aligned(16))) static const
+#include <soc/qcom/qup3_proto3.h>
+
 #define SE_I2C_TX_TRANS_LEN		0x26c
 #define SE_I2C_RX_TRANS_LEN		0x270
 #define SE_I2C_SCL_COUNTERS		0x278
@@ -464,6 +467,101 @@ static u32 geni_i2c_get_tx_fifo_depth(struct geni_i2c_priv *geni)
 	return (val & tx_fifo_depth_mask) >> TX_FIFO_DEPTH_SHFT;
 }
 
+static void geni_i2c_load_firmware(struct geni_i2c_priv *geni)
+{
+	struct se_elf_header *hdr = (void*) qup3_proto3;
+	const u32 *fw_val_arr  = (const u32 *)((u8*) hdr + hdr->fw_offset);
+	const u8  *cfg_idx_arr = (const u8  *)hdr + hdr->cfg_idx_offset;
+	const u32 *cfg_val_arr = (const u32 *)((u8*) hdr + hdr->cfg_val_offset);
+	u32 cgc_ctrl = readl(geni->base + GENI_CGC_CTRL);
+	u32 dfs_if_cfg = readl(geni->base + GENI_DFS_IF_CFG);
+	u32 i;
+
+#define DFS_IF_EN BIT(0)
+	writel(0x00, geni->base + GENI_OUTPUT_CTRL);
+	writel(dfs_if_cfg & ~DFS_IF_EN, geni->base + GENI_DFS_IF_CFG);
+
+	writel(cgc_ctrl | PROG_RAM_HCLK_OFF | PROG_RAM_SCLK_OFF, geni->base + GENI_CGC_CTRL);
+	writel(0, geni->base + 0x2000); /* GENI_CLK_CTRL.SER_CLK_SEL = 0 */
+	writel(cgc_ctrl, geni->base + GENI_CGC_CTRL);
+
+	/* GENI_FW_REVISION / GENI_S_FW_REVISION */
+	writel((hdr->serial_protocol & 0xff) << 8 | (hdr->fw_version & 0xff), geni->base + 0x1000);
+	writel((hdr->serial_protocol & 0xff) << 8 | (hdr->fw_version & 0xff), geni->base + 0x1004);
+
+	/* GENI_CFG_RAM */
+	for (i = 0; i < hdr->fw_size_in_items; i++)
+		writel(fw_val_arr[i], geni->base + 0x1010 + i * 4);
+
+	writel(hdr->cfg_version, geni->base + GENI_INIT_CFG_REVISION);
+	writel(hdr->cfg_version, geni->base + GENI_S_INIT_CFG_REVISION);
+
+	for (i = 0; i < hdr->cfg_size_in_items; i++)
+		writel(cfg_val_arr[i], geni->base + 0x100 + cfg_idx_arr[i] * 4); /* GENI_CFG_REG0[i] */
+
+	writel(((readl(geni->base + SE_HW_PARAM_1) & RX_FIFO_DEPTH_MSK) >> RX_FIFO_DEPTH_SHFT) - 2,
+		geni->base + SE_GENI_RX_RFR_WATERMARK_REG);
+
+	writel(1, geni->base + GENI_FORCE_DEFAULT_REG);
+	writel(0x7f, geni->base + GENI_OUTPUT_CTRL);
+
+	cgc_ctrl |= EXT_CLK_CGC_ON | RX_CLK_CGC_ON | TX_CLK_CGC_ON | SCLK_CGC_ON |
+		DATA_AHB_CLK_CGC_ON | CFG_AHB_WR_ACLK_CGC_ON | CFG_AHB_CLK_CGC_ON;
+
+	writel(AHB_SEC_SLV_CLK_CGC_ON |
+		   DMA_AHB_SLV_CFG_ON | DMA_TX_CLK_CGC_ON | DMA_RX_CLK_CGC_ON,
+		   geni->base + SE_DMA_GENERAL_CFG);
+	writel(cgc_ctrl, geni->base + GENI_CGC_CTRL);
+
+	writel(0x00, geni->base + SE_GENI_DMA_MODE_EN); /* GENI_DMA_MODE_EN for CPU DMA enable */
+	writel(0xf, geni->base + SE_IRQ_EN);
+	writel(0, geni->base + SE_GSI_EVENT_EN);
+
+	writel(M_CMD_OVERRUN_EN |
+		M_ILLEGAL_CMD_EN |
+		M_CMD_FAILURE_EN |
+		M_CMD_CANCEL_EN |
+		M_CMD_ABORT_EN |
+		M_TIMESTAMP_EN |
+		M_IO_DATA_ASSERT_EN |
+		M_IO_DATA_DEASSERT_EN |
+		M_RX_FIFO_WR_ERR_EN |
+		M_RX_FIFO_RD_ERR_EN |
+		M_TX_FIFO_WR_ERR_EN |
+		M_TX_FIFO_RD_ERR_EN,
+		geni->base + SE_GENI_M_IRQ_EN);
+	// I3C add M_GP_SYNC_IRQ_0_EN
+
+	writel(S_CMD_OVERRUN_EN |
+		S_ILLEGAL_CMD_EN |
+		S_CMD_CANCEL_EN |
+		S_CMD_ABORT_EN |
+		S_GP_IRQ_0_EN |
+		S_GP_IRQ_1_EN |
+		S_GP_IRQ_2_EN |
+		S_GP_IRQ_3_EN |
+		S_RX_FIFO_WR_ERR_EN |
+		S_RX_FIFO_RD_ERR_EN,
+		geni->base + SE_GENI_S_IRQ_EN);
+
+#define RESET_DONE_EN_SET BIT(3)
+#define FLUSH_DONE_EN_SET BIT(4)
+	// skip for i2c hub
+	writel(RESET_DONE_EN_SET | GENI_SE_DMA_AHB_ERR_EN | GENI_SE_DMA_DONE_EN,
+		geni->base + SE_DMA_TX_IRQ_EN_SET);
+	writel(RESET_DONE_EN_SET | GENI_SE_DMA_AHB_ERR_EN | GENI_SE_DMA_DONE_EN,
+		geni->base + SE_DMA_RX_IRQ_EN_SET);
+
+	writel(1, geni->base + GENI_FORCE_DEFAULT_REG);
+	// skip for i2c hub
+	writel(cgc_ctrl | PROG_RAM_HCLK_OFF | PROG_RAM_SCLK_OFF, geni->base + GENI_CGC_CTRL);
+	writel(BIT(0), geni->base + 0x2000); /* GENI_CLK_CTRL.SER_CLK_SEL = 1 */
+	writel(cgc_ctrl, geni->base + GENI_CGC_CTRL);
+
+	writel(0x01, geni->base + 0x2004); /* DMA_IF_EN */
+	writel(0x00, geni->base + 0x2008); /* FIFO_IF_DISABLE */
+}
+
 static int geni_i2c_probe(struct udevice *dev)
 {
 	ofnode parent_node = ofnode_get_parent(dev_ofnode(dev));
@@ -500,6 +598,13 @@ static int geni_i2c_probe(struct udevice *dev)
 	proto = readl(geni->base + GENI_FW_REVISION_RO);
 	proto &= FW_REV_PROTOCOL_MSK;
 	proto >>= FW_REV_PROTOCOL_SHFT;
+
+	if (proto == 0xff) {
+		geni_i2c_load_firmware(geni);
+		proto = readl(geni->base + GENI_FW_REVISION_RO);
+		proto &= FW_REV_PROTOCOL_MSK;
+		proto >>= FW_REV_PROTOCOL_SHFT;
+	}
 
 	if (proto != GENI_SE_I2C) {
 		dev_err(dev, "Invalid proto %d\n", proto);
