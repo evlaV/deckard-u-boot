@@ -14,7 +14,32 @@
 static char pin_name[MAX_PIN_NAME_LEN] __section(".data");
 
 static const struct pinctrl_function msm_pinctrl_functions[] = {
+	{"qup1_se0", 1},
+	{"qup1_se1", 1},
+	{"qup1_se2", 1},
+	{"qup1_se3", 1},
+	{"qup1_se4", 1},
+	{"qup1_se5", 1},
+	{"qup1_se6", 1},
+	{"qup1_se7", 1},
+	{"qup2_se0", 1},
+	{"qup2_se1", 1},
+	{"qup2_se2", 1},
+	{"qup2_se3", 1},
+	{"qup2_se4", 1},
+	{"qup2_se5", 1},
+	{"qup2_se6", 1},
 	{"qup2_se7", 1},
+	{"i2chub0_se0", 1},
+	{"i2chub0_se1", 1},
+	{"i2chub0_se2", 1},
+	{"i2chub0_se3", 1},
+	{"i2chub0_se4", 1},
+	{"i2chub0_se5", 1},
+	{"i2chub0_se6", 1},
+	{"i2chub0_se7", 1},
+	{"i2chub0_se8", 1},
+	{"i2chub0_se9", 1},
 	{"gpio", 0},
 };
 
