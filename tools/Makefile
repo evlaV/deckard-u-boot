@@ -244,6 +244,9 @@ hostprogs-always-$(CONFIG_ARCH_MVEBU) += kwboot
 hostprogs-always-y += proftool
 proftool-objs = proftool.o generated/lib/abuf.o
 
+HOSTCFLAGS_symbols.o += -DCONFIG_TEXT_BASE=$(CONFIG_TEXT_BASE)
+hostprogs-$(CONFIG_SYMBOL_LOOKUP) += symbols
+
 hostprogs-always-$(CONFIG_STATIC_RELA) += relocate-rela
 hostprogs-always-$(CONFIG_RISCV) += prelink-riscv
 
