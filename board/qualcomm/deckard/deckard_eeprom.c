@@ -36,17 +36,17 @@ static eeprom_checksum_t _eeprom_calculate_checksum(uint8_t *data, uint32_t len)
 	return check;
 }
 
-static bool _eeprom_verify_core(eeprom_data_t *eeprom_data)
+static bool _eeprom_verify(eeprom_bootloader_t *eeprom_data)
 {
-	eeprom_checksum_t calc_checksum = _eeprom_calculate_checksum((uint8_t *)eeprom_data, sizeof(eeprom_data_t) - sizeof(eeprom_checksum_t));
+	eeprom_checksum_t calc_checksum = _eeprom_calculate_checksum((uint8_t *)eeprom_data, sizeof(eeprom_bootloader_t) - sizeof(eeprom_checksum_t));
 
-	if((eeprom_data->magic_number == EEPROM_CORE_MAGIC_NUMBER) && (calc_checksum.value == eeprom_data->checksum.value))
+	if((eeprom_data->hdr.magic_number == EEPROM_BOOTLOADER_MAGIC_NUMBER) && (calc_checksum.value == eeprom_data->checksum.value))
 	{
 		return true;
 	}
 
 	printf("EEPROM verify failed ( Magic Number %x ( expected %x ), CRC %x ( expected %x ) )\n", 
-			eeprom_data->magic_number, EEPROM_CORE_MAGIC_NUMBER,
+			eeprom_data->hdr.magic_number, EEPROM_BOOTLOADER_MAGIC_NUMBER,
 			eeprom_data->checksum.value, calc_checksum.value );
 
 	return false;
@@ -59,7 +59,7 @@ void deckard_eeprom_init(void)
 	int node;
 	ofnode eeprom;
 	const char *path;
-	eeprom_data_t eeprom_data;
+	eeprom_bootloader_t eeprom_data;
 
 	if (!gd->fdt_blob) {
 		printf("%s: don't have a valid gd->fdt_blob!\n", __func__);
@@ -90,16 +90,19 @@ void deckard_eeprom_init(void)
 		return;
 	}
 
-	ret = i2c_eeprom_read(dev, 0, (uint8_t*)&eeprom_data, sizeof(eeprom_data_t));
+	ret = i2c_eeprom_read(dev, EEPROM_BOOTLOADER_ADDRESS_START, (uint8_t*)&eeprom_data, sizeof(eeprom_bootloader_t));
 	if (ret) {
 		printf("%s: Could not read EEPROM\n", __func__);
 	}
 
-	if ( !_eeprom_verify_core(&eeprom_data) ) {
+	if ( !_eeprom_verify(&eeprom_data) ) {
 		return;
 	}
 
-	printf("EEPROM Board Revision: %s\n", eeprom_data.board_version );
-
-	env_set("EEPROM_BOARD",  eeprom_data.board_version);
+	if ( eeprom_data.board_revision_valid == EEPROM_VALID ) {
+		printf("EEPROM Board Revision: %s\n", eeprom_data.board_revision );
+		env_set("EEPROM_BOARD",  eeprom_data.board_revision);
+	} else {
+		printf("EEPROM Board Revision not valid\n" );
+	}
 }
