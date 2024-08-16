@@ -3,6 +3,8 @@
 #ifndef __QCOM_PRIV_H__
 #define __QCOM_PRIV_H__
 
+#include <stdbool.h>
+
 #if CONFIG_IS_ENABLED(OF_LIVE)
 /**
  * qcom_of_fixup_nodes() - Fixup Qualcomm DT nodes
@@ -17,6 +19,6 @@ static inline void qcom_of_fixup_nodes(void)
 }
 #endif /* OF_LIVE */
 
-void qcom_parse_memory(void);
+void qcom_parse_memory(bool fdt_is_internal);
 
 #endif /* __QCOM_PRIV_H__ */

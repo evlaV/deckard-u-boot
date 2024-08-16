@@ -76,7 +76,7 @@ void *board_fdt_blob_setup(int *err)
 	 */
 	gd->fdt_blob = (const void *) fdt;
 	/* First we take the chance to parse the memory configuration */
-	qcom_parse_memory();
+	qcom_parse_memory(true);
 
 	return (void *)fdt;
 }
