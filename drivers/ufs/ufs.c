@@ -1621,6 +1621,9 @@ static int ufs_scsi_exec(struct udevice *scsi_dev, struct scsi_cmd *pccb)
 			if (scsi_status)
 				return -EINVAL;
 
+			if (pccb->dma_dir == DMA_FROM_DEVICE) {
+				ufshcd_cache_flush(pccb->pdata, pccb->datalen);
+			}
 			break;
 		case UPIU_TRANSACTION_REJECT_UPIU:
 			/* TODO: handle Reject UPIU Response */
