@@ -173,7 +173,7 @@ void *board_fdt_blob_setup(int *err)
 	 * configuration to properly handle the multi-DTB FIT usecase. So
 	 * assign gd->fdt_blob here. It gets overriden again anyway.
 	 */
-	gd->fdt_blob = fdt;
+	gd->fdt_blob = (const void *) fdt;
 	/* First we take the chance to parse the memory configuration */
 	qcom_parse_memory();
 
