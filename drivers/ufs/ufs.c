@@ -1574,11 +1574,6 @@ static void prepare_prdt_table(struct ufs_hba *hba, struct scsi_cmd *pccb)
 		return;
 	}
 
-	if (pccb->dma_dir == DMA_TO_DEVICE)
-		ufshcd_cache_flush(pccb->pdata, datalen);
-	else
-		ufshcd_cache_invalidate(pccb->pdata, datalen);
-
 	table_length = DIV_ROUND_UP(pccb->datalen, MAX_PRDT_ENTRY);
 	buf = pccb->pdata;
 	i = table_length;
@@ -1607,7 +1602,11 @@ static int ufs_scsi_exec(struct udevice *scsi_dev, struct scsi_cmd *pccb)
 	ufshcd_prepare_utp_scsi_cmd_upiu(hba, pccb, upiu_flags);
 	prepare_prdt_table(hba, pccb);
 
+	ufshcd_cache_flush(pccb->pdata, pccb->datalen);
+
 	ufshcd_send_command(hba, TASK_TAG);
+
+	ufshcd_cache_invalidate(pccb->pdata, pccb->datalen);
 
 	ocs = ufshcd_get_tr_ocs(hba);
 	switch (ocs) {
