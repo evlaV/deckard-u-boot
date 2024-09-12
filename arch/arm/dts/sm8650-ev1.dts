@@ -13,7 +13,7 @@
 
 / {
 	model = "SM8650 EV1 rev1 4slam 2et";
-	compatible = "qcom,sm8650-pocf", "qcom,sm8650";
+	compatible = "qcom,sm8650-ev1", "qcom,sm8650";
 
 	aliases {
 		serial0 = &uart15;
