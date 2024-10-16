@@ -172,10 +172,10 @@ static int dwc3_generic_of_to_plat(struct udevice *dev)
 		/* might be a leaf so check the parent for mode */
 		node = dev_ofnode(dev->parent);
 		plat->dr_mode = usb_get_dr_mode(node);
-		if (plat->dr_mode == USB_DR_MODE_UNKNOWN) {
-			pr_err("Invalid usb mode setup\n");
-			return -ENODEV;
-		}
+
+		/* If none of the nodes have dr_mode, bindings says default is OTG */
+		if (!plat->dr_mode)
+			plat->dr_mode = USB_DR_MODE_OTG;
 	}
 
 	return 0;
@@ -515,6 +515,10 @@ static int dwc3_glue_bind_common(struct udevice *parent, ofnode node)
 	dr_mode = usb_get_dr_mode(dev_ofnode(parent));
 	if (!dr_mode)
 		dr_mode = usb_get_dr_mode(node);
+
+	/* If none of the nodes have dr_mode, bindings says default is OTG */
+	if (!dr_mode)
+		dr_mode = USB_DR_MODE_OTG;
 
 	if (CONFIG_IS_ENABLED(DM_USB_GADGET) &&
 	    (dr_mode == USB_DR_MODE_PERIPHERAL || dr_mode == USB_DR_MODE_OTG)) {
