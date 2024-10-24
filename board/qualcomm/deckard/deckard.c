@@ -21,9 +21,145 @@
 #include <linux/delay.h>
 #include <led.h>
 #include <button.h>
+#include <power/pmic.h>
 #include "deckard_eeprom.h"
 
 DECLARE_GLOBAL_DATA_PTR;
+
+#define CHGR_VBAT_STATUS			(0x2608)
+#define CHGR_VBAT_STATUS_LT_2V		(0x01)
+#define CHGR_VBAT_STATUS_GT_FULL_ON	(0x02)
+
+#define CHGR_CHG_EN_ADDR  (0x2646)
+#define CHGR_CHG_EN_CHARGING_ENABLE_CMD BIT(0)
+
+#define CHGR_IPRE_CFG_ADDR (0x2650)
+#define CHGR_ICHG_CFG_ADDR (0x2654)
+
+// NOTE These are 1s currents
+enum pre_charge_current {
+	IPRE_100MA,
+	IPRE_150MA,
+	IPRE_200MA,
+	IPRE_250MA,
+	// note: PM8550B has 100mA step size above 300mA
+	IPRE_300MA,
+	IPRE_400MA,
+	IPRE_500MA,
+	IPRE_600MA,
+};
+
+#define MAX_WAIT_COUNT                                      (5)
+#define SPMI_BRIDGE_DELAY                                   (30)
+#define SMB_SID          		 	(0xD)
+#define CMD_WRITE        		 	(0x20)
+#define CMD_READ          			(0x10)
+#define COMPLETE_STATUS_MASK        (0x40)
+#define SDAM_STATUS_IN_PROCESS      (0x00)
+#define SDAM_STATUS_COMPLETED       (0x40)
+#define PID(reg)          			((u32)(((reg) & 0xFF00) >> 8))
+#define OFFSET(reg)       			((u32)((reg) & 0x00FF))
+
+static int read_smb1510(struct udevice *pmic, uint16_t reg)
+{
+  	int cnt = 0;
+	int ret;
+
+  	//Set register SID/PID/Offset and data
+	pmic_reg_write(pmic, 0x7E4B, SMB_SID | CMD_READ);
+	pmic_reg_write(pmic, 0x7E4C, PID(reg));
+	pmic_reg_write(pmic, 0x7E4D, OFFSET(reg));
+
+	//Trigger PBS
+	pmic_reg_write(pmic, 0x2142, 0x10);
+
+	//Wait for read cmd completion
+	while(cnt++ < MAX_WAIT_COUNT)
+	{
+		udelay(SPMI_BRIDGE_DELAY);
+		ret = pmic_reg_read(pmic, 0x7E4B);
+		if((ret & COMPLETE_STATUS_MASK))
+		{
+			break;
+		}
+	}
+
+	if(!(ret & SDAM_STATUS_COMPLETED))
+	{
+		printf("bridge read not completed, cmd_status = 0x%02X, count = %d", ret, cnt);
+		return -1;
+	}
+
+  	ret = pmic_reg_read(pmic, 0x7E4E);
+
+  	return ret;
+}
+
+static int write_smb1510(struct udevice *pmic, uint16_t reg, uint8_t value)
+{
+  	int cnt = 0;
+	int ret;
+
+  	//Set register SID/PID/Offset and data
+	pmic_reg_write(pmic, 0x7E4B, SMB_SID | CMD_WRITE);
+	pmic_reg_write(pmic, 0x7E4C, PID(reg));
+	pmic_reg_write(pmic, 0x7E4D, OFFSET(reg));
+	pmic_reg_write(pmic, 0x7E4E, value);
+
+  	//Trigger PBS
+	pmic_reg_write(pmic, 0x2142, 0x10);
+
+	//Wait for read cmd completion
+	while(cnt++ < MAX_WAIT_COUNT)
+	{
+		udelay(SPMI_BRIDGE_DELAY);
+		ret = pmic_reg_read(pmic, 0x7E4B);
+		if((ret & COMPLETE_STATUS_MASK))
+		{
+			break;
+		}
+	}
+
+	if(!(ret & SDAM_STATUS_COMPLETED))
+	{
+		printf("bridge read not completed, cmd_status = 0x%02X, count = %d", ret, cnt);
+		return -1;
+	}
+
+  	return 0;
+}
+
+static void deckard_setup(void)
+{
+	int ret;
+	struct udevice *pmic;
+	struct udevice *pmic_pmk;
+	u32 voltage;
+
+	// Find the PM8550B
+	ret = pmic_get("pmic@7", &pmic);
+	if (ret != 0)
+	{
+		printf("Failed to Find PM8550B\n");
+		return;
+	}
+
+	// Find the PMK8650
+	ret = pmic_get("pmic@0", &pmic_pmk);
+	if (ret != 0)
+	{
+		printf("Failed to Find PMK8650\n");
+		return;
+	}
+
+	// Enable ADC
+	pmic_reg_write(pmic, 0x3646, 0x80);
+	// Enable FG
+	pmic_reg_write(pmic, 0x4F46, 0x80); 
+
+	printf("smb1510: enable fixed frequency at 500khz mode\n");
+	write_smb1510(pmic_pmk,0x30C9,0x0f);
+}
 
 /* Check for vol- button - if pressed - stop autoboot */
 int misc_init_r(void)
@@ -31,6 +167,8 @@ int misc_init_r(void)
 	struct udevice *btn,*led;
 	int ret;
 	enum button_state_t state;
+
+	deckard_setup();
 
 	ret = button_get_by_label("vol_down", &btn);
 	if (ret < 0) {
