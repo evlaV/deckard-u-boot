@@ -53,32 +53,25 @@ static void show_psci_version(void)
 
 void *board_fdt_blob_setup(int *err)
 {
-	phys_addr_t fdt;
-	/* Return DTB pointer passed by ABL */
+	struct fdt_header *fdt;
+	bool internal_valid, external_valid;
+
 	*err = 0;
 	fdt = get_prev_bl_fdt_addr();
+	external_valid = fdt && !fdt_check_header(fdt);
+	internal_valid = !fdt_check_header(gd->fdt_blob);
 
-	/*
-	 * If we bail then the board will simply not boot, instead let's
-	 * try and use the FDT built into U-Boot if there is one...
-	 * This avoids having a hard dependency on the previous stage bootloader
-	 */
+	if (!internal_valid && !external_valid)
+		panic("Internal FDT is invalid and no external FDT was provided! (fdt=%#llx)\n",
+		      (phys_addr_t)fdt);
 
-	if (IS_ENABLED(CONFIG_OF_SEPARATE) && (!fdt || fdt != ALIGN(fdt, SZ_4K) ||
-						   fdt_check_header((void *)fdt))) {
-		debug("%s: Using built in FDT, bootloader gave us %#llx\n", __func__, fdt);
-		return (void *)gd->fdt_blob;
-	}
+	if (external_valid)
+		gd->fdt_blob = (const void *) fdt;
 
-	/* We actually need to use this FDT to pre-emptively parse the memory
-	 * configuration to properly handle the multi-DTB FIT usecase. So
-	 * assign gd->fdt_blob here. It gets overriden again anyway.
-	 */
-	gd->fdt_blob = (const void *) fdt;
 	/* First we take the chance to parse the memory configuration */
 	qcom_parse_memory(true);
 
-	return (void *)fdt;
+	return (void *)gd->fdt_blob;
 }
 
 /*
