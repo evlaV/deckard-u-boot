@@ -26,6 +26,17 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
+static ulong boot_wrapper_version __section(".data");
+
+/**
+ * Save x0 register value, which should encode the boot wrapper version
+ */
+void save_boot_params(ulong r0)
+{
+	boot_wrapper_version = r0;
+	save_boot_params_ret();
+}
+
 #define CHGR_VBAT_STATUS			(0x2608)
 #define CHGR_VBAT_STATUS_LT_2V		(0x01)
 #define CHGR_VBAT_STATUS_GT_FULL_ON	(0x02)
@@ -167,6 +178,8 @@ int misc_init_r(void)
 	struct udevice *btn,*led;
 	int ret;
 	enum button_state_t state;
+
+	printf("Boot Wrapper version: %x\n", boot_wrapper_version);
 
 	deckard_setup();
 
