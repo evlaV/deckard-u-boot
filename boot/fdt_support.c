@@ -30,6 +30,7 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
+extern int g_boot_wrapper_version; 
 /**
  * fdt_getprop_u32_default_node - Return a node's property or a default
  *
@@ -383,6 +384,17 @@ int fdt_chosen(void *fdt)
 			  strlen(PLAIN_VERSION) + 1);
 	if (err < 0) {
 		printf("WARNING: could not set u-boot,version %s.\n",
+		       fdt_strerror(err));
+		return err;
+	}
+
+	char strbootwrapper[8];
+	snprintf(strbootwrapper,8,"%d",g_boot_wrapper_version);
+	/* add bootwrapper version */
+	err = fdt_setprop(fdt, nodeoffset, "bootwrapper,version", strbootwrapper,
+			  strlen(strbootwrapper) + 1);
+	if (err < 0) {
+		printf("WARNING: could not set bootwrapper,version %s.\n",
 		       fdt_strerror(err));
 		return err;
 	}
