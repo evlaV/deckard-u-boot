@@ -108,7 +108,7 @@ int board_fdt_blob_setup(void **fdtp)
 
 	/* Prefer memory information from internal DT if it's present */
 	if (internal_valid)
-		ret = qcom_parse_memory(internal_fdt);
+		ret = qcom_parse_memory(internal_fdt, true);
 
 	if (ret < 0 && external_valid) {
 		/* No internal FDT or it lacks a proper /memory node.
@@ -117,7 +117,7 @@ int board_fdt_blob_setup(void **fdtp)
 		if (internal_valid)
 			debug("No memory info in internal FDT, falling back to external\n");
 
-		ret = qcom_parse_memory(external_fdt);
+		ret = qcom_parse_memory(external_fdt, false);
 	}
 
 	if (ret < 0)

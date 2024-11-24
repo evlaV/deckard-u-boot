@@ -10,11 +10,44 @@
 #include <dm.h>
 #include <log.h>
 #include <sort.h>
+#include <soc/qcom/smem.h>
+
+#define SMEM_USABLE_RAM_PARTITION_TABLE 402
+#define RAM_PART_NAME_LENGTH            16
+#define RAM_NUM_PART_ENTRIES            32
+#define CATEGORY_SDRAM 0x0E
+#define TYPE_SYSMEM 0x01
 
 static struct {
 	phys_addr_t start;
 	phys_size_t size;
 } prevbl_ddr_banks[CONFIG_NR_DRAM_BANKS] __section(".data") = { 0 };
+
+struct smem_ram_ptable_hdr {
+	u32 magic[2];
+	u32 version;
+	u32 reserved;
+	u32 len;
+} __packed;
+
+struct smem_ram_ptn {
+	char name[RAM_PART_NAME_LENGTH];
+	u64 start;
+	u64 size;
+	u32 attr;
+	u32 category;
+	u32 domain;
+	u32 type;
+	u32 num_partitions;
+	u32 reserved[3];
+	u32 reserved2[2]; /* The struct grew by 8 bytes at some point */
+} __packed;
+
+struct smem_ram_ptable {
+	struct smem_ram_ptable_hdr hdr;
+	u32 reserved;     /* Added for 8 bytes alignment of header */
+	struct smem_ram_ptn parts[RAM_NUM_PART_ENTRIES];
+} __packed;
 
 int dram_init(void)
 {
@@ -48,6 +81,10 @@ static void qcom_configure_bi_dram(void)
 	for (i = 0; i < CONFIG_NR_DRAM_BANKS; i++) {
 		gd->bd->bi_dram[i].start = prevbl_ddr_banks[i].start;
 		gd->bd->bi_dram[i].size = prevbl_ddr_banks[i].size;
+		debug("Bank[%d]: start = %#011llx, size = %#011llx\n",
+		      i, gd->bd->bi_dram[i].start, gd->bd->bi_dram[i].size);
+		if (!prevbl_ddr_banks[i].size)
+			break;
 	}
 }
 
@@ -56,6 +93,46 @@ int dram_init_banksize(void)
 	qcom_configure_bi_dram();
 
 	return 0;
+}
+
+/* Parse memory map from SMEM, return the number of entries */
+static int qcom_parse_memory_smem(phys_addr_t *ram_end)
+{
+	size_t size;
+	int i, j = 0, ret;
+	struct smem_ram_ptable *ram_ptable;
+	struct smem_ram_ptn *p;
+
+	ret = qcom_smem_init();
+	if (ret) {
+		debug("Failed to initialize SMEM: %d.\n", ret);
+		return ret;
+	}
+
+	ram_ptable = qcom_smem_get(QCOM_SMEM_HOST_ANY, SMEM_USABLE_RAM_PARTITION_TABLE, &size);
+	if (!ram_ptable) {
+		debug("Failed to find SMEM partition.\n");
+		return -ENODEV;
+	}
+
+	/* Check validy of RAM */
+	for (i = 0; i < RAM_NUM_PART_ENTRIES && j < CONFIG_NR_DRAM_BANKS; i++) {
+		p = &ram_ptable->parts[i];
+		if (p->category != CATEGORY_SDRAM || p->type != TYPE_SYSMEM)
+			continue;
+		if (!p->size && !p->start)
+			break;
+
+		prevbl_ddr_banks[j].start = p->start;
+		prevbl_ddr_banks[j].size = p->size;
+		*ram_end = max(*ram_end, prevbl_ddr_banks[j].start + prevbl_ddr_banks[j].size);
+		j++;
+	}
+
+	if (j == CONFIG_NR_DRAM_BANKS)
+		log_err("SMEM: More than CONFIG_NR_DRAM_BANKS (%u) entries!", CONFIG_NR_DRAM_BANKS);
+
+	return j;
 }
 
 static void qcom_parse_memory_dt(const fdt64_t *memory, int banks, phys_addr_t *ram_end)
@@ -99,7 +176,7 @@ static void qcom_parse_memory_dt(const fdt64_t *memory, int banks, phys_addr_t *
  *
  * Return: 0 on success or -ENODATA if /memory node is missing or incomplete
  */
-int qcom_parse_memory(const void *fdt)
+int qcom_parse_memory(const void *fdt, bool fdt_is_internal)
 {
 	int offset;
 	const fdt64_t *memory;
@@ -124,6 +201,13 @@ int qcom_parse_memory(const void *fdt)
 		log_err("Provided more memory banks than we can handle\n");
 
 	qcom_parse_memory_dt(memory, banks, &ram_end);
+
+	/*
+	 * If using an internal FDT but the memory node is empty
+	 * then fall back to SMEM.
+	 */
+	if (!prevbl_ddr_banks[0].size && fdt_is_internal)
+		banks = qcom_parse_memory_smem(&ram_end);
 
 	if (!banks || !prevbl_ddr_banks[0].size)
 		return -ENODATA;
