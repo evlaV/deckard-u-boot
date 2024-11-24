@@ -1116,7 +1116,7 @@ config ARCH_SNAPDRAGON
 	select GPIO_EXTRA_HEADER
 	select MSM_SMEM
 	select OF_CONTROL
-	select SMEM
+	select OF_SEPARATE
 	select SPMI
 	select SYSRESET
 	select SYSRESET_PSCI
