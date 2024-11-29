@@ -20,7 +20,9 @@ static int dev_pci_iommu_enable(struct udevice *dev)
 	struct udevice *dev_iommu;
 	u32 *iommu_map;
 	u32 iommu_map_mask, length, phandle, rid, rid_base;
+	u32 sid, parent_rid;
 	int i, count, len, ret;
+	const struct iommu_ops *ops;
 
 	while (parent) {
 		len = dev_read_size(parent, "iommu-map");
@@ -44,12 +46,17 @@ static int dev_pci_iommu_enable(struct udevice *dev)
 	}
 
 	iommu_map_mask = dev_read_u32_default(parent, "iommu-map-mask", ~0);
+	parent_rid = (dev_seq(parent) << 8) & iommu_map_mask;
 	rid = (dm_pci_get_bdf(dev) >> 8) & iommu_map_mask;
+
+	/* Base bus number is allocated in sequence, substract the parent rid */
+	rid -= parent_rid;
 
 	/* Loop over entries until mapping is found. */
 	for (i = 0; i < count; i += 4) {
 		rid_base = iommu_map[i];
 		phandle = iommu_map[i + 1];
+		sid = iommu_map[i + 2];
 		length = iommu_map[i + 3];
 
 		if (rid < rid_base || rid >= rid_base + length)
@@ -63,7 +70,19 @@ static int dev_pci_iommu_enable(struct udevice *dev)
 			free(iommu_map);
 			return ret;
 		}
+		debug("%s: %s (rid %#06x): Found IOMMU device %s (%#06x - %#06x)\n", __func__, dev->name, rid,
+		       dev_iommu->name, sid, sid + length);
 		dev->iommu = dev_iommu;
+		ops = device_get_ops(dev->iommu);
+		if (ops && ops->connect) {
+			ret = ops->connect(dev, sid);
+			if (ret) {
+				log_err("%s: Failed to connect '%s' to IOMMU '%s': %d\n",
+					__func__, dev->name, dev->iommu->name, ret);
+				free(iommu_map);
+				return ret;
+			}
+		}
 		break;
 	}
 
@@ -104,7 +123,7 @@ int dev_iommu_enable(struct udevice *dev)
 
 		ops = device_get_ops(dev->iommu);
 		if (ops && ops->connect) {
-			ret = ops->connect(dev);
+			ret = ops->connect(dev, -1);
 			if (ret) {
 				log_err("%s: Failed to connect '%s' to IOMMU '%s': %d\n",
 					__func__, dev->name, dev->iommu->name, ret);
