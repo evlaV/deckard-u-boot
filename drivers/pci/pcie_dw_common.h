@@ -46,6 +46,8 @@
 #define PCIE_ATU_DEV(x)			(((x) & 0x1f) << 19)
 #define PCIE_ATU_FUNC(x)		(((x) & 0x7) << 16)
 
+#define PCIE_ATU_INCREASE_REGION_SIZE    BIT(13)
+
 /* Register address builder */
 #define PCIE_GET_ATU_OUTB_UNR_REG_OFFSET(region)	((region) << 9)
 
