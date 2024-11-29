@@ -16,6 +16,7 @@
 #include <lmb.h>
 #include <memalign.h>
 #include <asm/io.h>
+#include <linux/delay.h>
 
 #define ARM_SMMU_GR0 0
 #define ARM_SMMU_GR1 1
@@ -67,6 +68,18 @@ enum arm_smmu_cbar_type {
 #define ARM_SMMU_GR0_S2CR(n) (0xc00 + ((n) << 2))
 #define ARM_SMMU_S2CR_PRIVCFG GENMASK(25, 24)
 
+/* Global TLB invalidation */
+#define ARM_SMMU_GR0_TLBIVMID		0x64
+#define ARM_SMMU_GR0_TLBIALLNSNH	0x68
+#define ARM_SMMU_GR0_TLBIALLH		0x6c
+#define ARM_SMMU_GR0_sTLBGSYNC		0x70
+
+#define ARM_SMMU_GR0_sTLBGSTATUS	0x74
+#define ARM_SMMU_sTLBGSTATUS_GSACTIVE	BIT(0)
+
+#define TLB_LOOP_TIMEOUT		1000000	/* 1s! */
+#define TLB_SPIN_COUNT			10
+
 enum arm_smmu_s2cr_privcfg {
 	S2CR_PRIVCFG_DEFAULT,
 	S2CR_PRIVCFG_DIPAN,
@@ -107,6 +120,7 @@ struct mmu_dev {
 	u16 sid;
 	u16 cbx;
 	u16 smr;
+	u32 cbar;
 };
 
 #define page_addr(priv, page) ((priv)->base + ((page) << (priv)->pgshift))
@@ -145,13 +159,13 @@ static int get_stream_id(struct udevice *dev)
 	return args.args[0]; // Some mask from bit 16 onward?
 }
 
-static struct mmu_dev *alloc_dev(struct udevice *dev)
+static struct mmu_dev *alloc_dev(struct udevice *dev, int sid)
 {
 	struct qcom_smmu_priv *priv = dev_get_priv(dev->iommu);
 	struct mmu_dev *mmu_dev;
-	int sid;
 
-	sid = get_stream_id(dev);
+	if (sid < 0)
+		sid = get_stream_id(dev);
 	debug("%s %s has SID %#x\n", dev->iommu->name, dev->name, sid);
 	if (sid < 0 || sid > 0xffff) {
 		printf("\tSMMU: Invalid stream ID for %s\n", dev->name);
@@ -177,7 +191,7 @@ static struct mmu_dev *alloc_dev(struct udevice *dev)
 }
 
 /* Find and init the first free context bank */
-static int alloc_cb(struct qcom_smmu_priv *priv)
+static int alloc_cb(struct qcom_smmu_priv *priv, struct mmu_dev *mdev)
 {
 	u32 cbar, type, vmid, val;
 
@@ -205,6 +219,7 @@ static int alloc_cb(struct qcom_smmu_priv *priv)
 
 		val = IS_ENABLED(CONFIG_ARM64) == 1 ? ARM_SMMU_CBA2R_VA64 : 0;
 		gr1_setbits(priv, ARM_SMMU_GR1_CBA2R(i), val);
+		mdev->cbar = cbar;
 		return i;
 	}
 
@@ -267,13 +282,33 @@ static int configure_smr_s2cr(struct qcom_smmu_priv *priv, struct mmu_dev *mdev)
 	return 0;
 }
 
-static int qcom_smmu_connect(struct udevice *dev)
+static void qcom_smmu_tlb_sync(struct qcom_smmu_priv *priv, int page,
+				int sync, int status)
+{
+	unsigned int spin_cnt, delay;
+	u32 reg;
+
+	smmu_writel(priv, page, sync, -1);
+	for (delay = 1; delay < TLB_LOOP_TIMEOUT; delay *= 2) {
+		for (spin_cnt = TLB_SPIN_COUNT; spin_cnt > 0; spin_cnt--) {
+			reg = smmu_readl(priv, page, status);
+			if (!(reg & ARM_SMMU_sTLBGSTATUS_GSACTIVE))
+				return;
+			cpu_relax();
+		}
+		udelay(delay);
+	}
+
+	printf("SMMU: TLB sync timed out -- SMMU might be deadlocked\n");
+}
+
+static int qcom_smmu_connect(struct udevice *dev, int sid)
 {
 	struct mmu_dev *mdev;
 	struct qcom_smmu_priv *priv;
 	int ret;
 
-	debug("%s: %s -> %s\n", __func__, dev->name, dev->iommu->name);
+	debug("%s: %s -> %s (%#x)\n", __func__, dev->name, dev->iommu->name, sid > 0 ? sid : 0);
 
 	priv = dev_get_priv(dev->iommu);
 	if (WARN_ON(!priv))
@@ -282,7 +317,7 @@ static int qcom_smmu_connect(struct udevice *dev)
 	if (priv->disable)
 		return 0;
 
-	mdev = alloc_dev(dev);
+	mdev = alloc_dev(dev, sid);
 	if (IS_ERR(mdev) && PTR_ERR(mdev) != -EEXIST) {
 		printf("%s: %s Couldn't create mmu context\n", __func__,
 		       dev->name);
@@ -297,7 +332,7 @@ static int qcom_smmu_connect(struct udevice *dev)
 		return 0;
 	}
 
-	ret = alloc_cb(priv);
+	ret = alloc_cb(priv, mdev);
 	if (ret < 0 || ret > 0xff) {
 		printf("Error: %s: failed to allocate context bank for %s\n",
 		       __func__, dev->name);
@@ -319,6 +354,12 @@ static int qcom_smmu_connect(struct udevice *dev)
 	mb();
 
 	configure_smr_s2cr(priv, mdev);
+
+	/* Flush the SMMU or something?? this probably does nothing */
+	wmb();
+	gr0_writel(priv, ARM_SMMU_GR0_TLBIVMID, FIELD_GET(ARM_SMMU_CBAR_VMID, mdev->cbar));
+	qcom_smmu_tlb_sync(priv, ARM_SMMU_GR0, ARM_SMMU_GR0_sTLBGSYNC,
+			    ARM_SMMU_GR0_sTLBGSTATUS);
 
 	return 0;
 }
