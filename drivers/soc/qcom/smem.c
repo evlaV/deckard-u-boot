@@ -1055,10 +1055,6 @@ int qcom_smem_init(void)
 	}
 	smem->regions[0].size = reg_size;
 
-	/* On SM8550/SM8650 and newer SoCs smem might not be mapped */
-	mmu_map_region((fdt_addr_t)smem->regions[0].aux_base,
-			reg_size, false);
-
 	ret = qcom_smem_map_toc(smem, &smem->regions[0]);
 	if (ret) {
 		log_err("Failed to map toc\n");
