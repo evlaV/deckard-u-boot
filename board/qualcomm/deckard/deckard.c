@@ -23,10 +23,12 @@
 #include <button.h>
 #include <power/pmic.h>
 #include "deckard_eeprom.h"
+#include "smb1510.h"
 
 DECLARE_GLOBAL_DATA_PTR;
 
 static ulong boot_wrapper_version __section(".data");
+
 int g_boot_wrapper_version;
 /**
  * Save x0 register value, which should encode the boot wrapper version
@@ -134,88 +136,6 @@ void read_adc(struct udevice *pmic)
 			mdelay(10);
 		}
 	}
-}
-
-
-#define MAX_WAIT_COUNT                                      (5)
-#define SPMI_BRIDGE_DELAY                                   (30)
-#define SMB_SID          		 	(0xD)
-#define CMD_WRITE        		 	(0x20)
-#define CMD_READ          			(0x10)
-#define COMPLETE_STATUS_MASK        (0x40)
-#define SDAM_STATUS_IN_PROCESS      (0x00)
-#define SDAM_STATUS_COMPLETED       (0x40)
-#define PID(reg)          			((u32)(((reg) & 0xFF00) >> 8))
-#define OFFSET(reg)       			((u32)((reg) & 0x00FF))
-
-
-static int read_smb1510(struct udevice *pmic, uint16_t reg)
-{
-  	int cnt = 0;
-	int ret;
-
-  	//Set register SID/PID/Offset and data
-	pmic_reg_write(pmic, 0x7E4B, SMB_SID | CMD_READ);
-	pmic_reg_write(pmic, 0x7E4C, PID(reg));
-	pmic_reg_write(pmic, 0x7E4D, OFFSET(reg));
-
-	//Trigger PBS
-	pmic_reg_write(pmic, 0x2142, 0x10);
-
-	//Wait for read cmd completion
-	while(cnt++ < MAX_WAIT_COUNT)
-	{
-		udelay(SPMI_BRIDGE_DELAY);
-		ret = pmic_reg_read(pmic, 0x7E4B);
-		if((ret & COMPLETE_STATUS_MASK))
-		{
-			break;
-		}
-	}
-
-	if(!(ret & SDAM_STATUS_COMPLETED))
-	{
-		printf("bridge read not completed, cmd_status = 0x%02X, count = %d", ret, cnt);
-		return -1;
-	}
-
-  	ret = pmic_reg_read(pmic, 0x7E4E);
-
-  	return ret;
-}
-
-static int write_smb1510(struct udevice *pmic, uint16_t reg, uint8_t value)
-{
-  	int cnt = 0;
-	int ret;
-
-  	//Set register SID/PID/Offset and data
-	pmic_reg_write(pmic, 0x7E4B, SMB_SID | CMD_READ);
-	pmic_reg_write(pmic, 0x7E4C, PID(reg));
-	pmic_reg_write(pmic, 0x7E4D, OFFSET(reg));
-	pmic_reg_write(pmic, 0x7E4E, value);
-
-  	//Trigger PBS
-	pmic_reg_write(pmic, 0x2142, 0x10);
-
-	//Wait for read cmd completion
-	while(cnt++ < MAX_WAIT_COUNT)
-	{
-		udelay(SPMI_BRIDGE_DELAY);
-		ret = pmic_reg_read(pmic, 0x7E4B);
-		if((ret & COMPLETE_STATUS_MASK))
-		{
-			break;
-		}
-	}
-
-	if(!(ret & SDAM_STATUS_COMPLETED))
-	{
-		printf("bridge read not completed, cmd_status = 0x%02X, count = %d", ret, cnt);
-		return -1;
-	}
-
-  	return 0;
 }
 
 static u32 print_regs(struct udevice *pmic)
@@ -520,9 +440,7 @@ static void deckard_setup(void)
 	//print_smb1510_regs(pmic_pmk);
 
 	printf("smb1510: enable fixed frequency at 500khz mode\n");
-	write_smb1510(pmic_pmk,0x30C9,0x0f);
-
-
+	smb1510_set_switching_frequency(pmic_pmk, 0x0F);
 }
 
 static void deckard_dead_battery_recovery(void)

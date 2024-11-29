@@ -2,4 +2,4 @@
 #
 # (C) Copyright 2015 Mateusz Kulikowski <mateusz.kulikowski@gmail.com>
 
-obj-y := deckard.o deckard_eeprom.o
+obj-y := deckard.o deckard_eeprom.o smb1510.o
