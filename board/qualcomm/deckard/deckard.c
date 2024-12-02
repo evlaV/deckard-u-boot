@@ -140,6 +140,25 @@ static int write_smb1510(struct udevice *pmic, uint16_t reg, uint8_t value)
   	return 0;
 }
 
+static inline void write32(unsigned long addr, u32 value)
+{
+	*(volatile u32 *) addr = value;
+}
+
+static inline u32 read32(unsigned long addr)
+{
+	return *(volatile u32 *) addr;
+}
+
+// see BOOT.MXF.2.1/boot_images/boot/QcomPkg/SocPkg/Lanai/Include/HALbootHWIO.h
+// for watchdog register defines
+#define HWIO_APSS_WDT_TMR2_WDOG_CTL_ADDR  0x17411008
+static void deckard_disable_watchdog(void)
+{
+	// disable watchdog 2
+	write32(HWIO_APSS_WDT_TMR2_WDOG_CTL_ADDR, 0);
+}
+
 static void deckard_setup(void)
 {
 	int ret;
@@ -178,6 +197,8 @@ int misc_init_r(void)
 	struct udevice *btn,*led;
 	int ret;
 	enum button_state_t state;
+
+	deckard_disable_watchdog();
 
 	g_boot_wrapper_version = boot_wrapper_version;
 	printf("Boot Wrapper version: %d\n", g_boot_wrapper_version);
