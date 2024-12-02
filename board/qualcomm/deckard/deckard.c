@@ -195,6 +195,16 @@ int misc_init_r(void)
 		}
 	}
 
+	ret = button_get_by_label("Volume Up", &btn);
+	if (ret < 0) {
+		printf("Couldn't find Vol+ button!\n");
+	} else {
+		state = button_get_state(btn);
+		if (state == BUTTON_ON) {
+			printf("Vol+ button pressed - do nothing.\n");
+		}
+	}
+
 	ret = button_get_by_label("pwrkey", &btn);
 	if (ret < 0) {
 		printf("Couldn't find power button!\n");
