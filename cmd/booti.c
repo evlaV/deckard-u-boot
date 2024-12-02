@@ -170,3 +170,70 @@ U_BOOT_CMD(
 	booti,	CONFIG_SYS_MAXARGS,	1,	do_booti,
 	"boot Linux kernel 'Image' format from memory", booti_help_text
 );
+
+
+int do_booti_get_size(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
+{
+	int ret;
+    ulong ld;
+	ulong relocated_addr;
+	ulong image_size;
+	uint8_t *temp;
+	ulong dest;
+	ulong dest_end;
+	unsigned long comp_len;
+	unsigned long decomp_len;
+	int ctype;
+
+	/* Consume 'booti_get_size' */
+	argc--; argv++;
+
+    ld = hextoul(argv[0], NULL);
+    debug("*  kernel: cmdline image address = 0x%08lx\n", ld);
+
+	temp = map_sysmem(ld, 0);
+	ctype = image_decomp_type(temp, 2);
+	if (ctype > 0) {
+		dest = env_get_ulong("kernel_comp_addr_r", 16, 0);
+		comp_len = env_get_ulong("kernel_comp_size", 16, 0);
+		if (!dest || !comp_len) {
+			puts("kernel_comp_addr_r or kernel_comp_size is not provided!\n");
+			return -EINVAL;
+		}
+		if (dest < gd->ram_base || dest > gd->ram_top) {
+			puts("kernel_comp_addr_r is outside of DRAM range!\n");
+			return -EINVAL;
+		}
+
+		debug("kernel image compression type %d size = 0x%08lx address = 0x%08lx\n",
+			ctype, comp_len, (ulong)dest);
+		decomp_len = comp_len * 10;
+		ret = image_decomp(ctype, 0, ld, IH_TYPE_KERNEL,
+				 (void *)dest, (void *)ld, comp_len,
+				 decomp_len, &dest_end);
+		if (ret)
+			return ret;
+		/* dest_end contains the uncompressed Image size */
+		memmove((void *) ld, (void *)dest, dest_end);
+	}
+	unmap_sysmem((void *)ld);
+
+	ret = booti_get_image_size(ld, &image_size);
+	if (ret)
+		return 1;
+
+    env_set_hex("filesize", image_size);
+
+    return 0;
+}
+
+U_BOOT_LONGHELP(booti_get_size,
+	"[addr \n"
+	"    - get size of Linux flat or compressed 'Image' stored at 'addr'\n"
+	"\tThe size will be stored in the environment variable 'filesize'\n"
+	);
+
+U_BOOT_CMD(
+	booti_get_size,	CONFIG_SYS_MAXARGS,	1,	do_booti_get_size,
+	"get size of Linux 'Image' from memory", booti_get_size_help_text
+);
