@@ -62,6 +62,46 @@ enum pre_charge_current {
 	IPRE_600MA,
 };
 
+#if 0
+void check_pmic(const char *const pmic_dts, const char *const pmic_name)
+{
+	int             ret;
+	struct udevice *pmic = NULL;
+
+	ret = pmic_get(pmic_dts, &pmic);
+	if (ret != 0)
+	{
+		printf("Failed to Find %s - %s, ret: %d\n", pmic_dts, pmic_name, ret);
+		return;
+	}
+
+	ret = pmic_reg_read(pmic, 0x0105);
+	if (ret < 0)
+	{
+		printf("%s failed: %d\n", pmic_name, ret);
+	}
+	// else
+	// {
+	// 	printf("%s subtype: 0x%02X\n", pmic_name, ret);
+	// }
+}
+
+void check_pmics_comms(void)
+{
+	check_pmic("pmic@0", "PMK8550");
+	check_pmic("pmic@1", "PM8550");
+	check_pmic("pmic@2", "PM8550VS_c");
+	check_pmic("pmic@3", "PM8550VS_d");
+	check_pmic("pmic@4", "PM8550VS_e");
+	check_pmic("pmic@6", "PM8550VS_g");
+	check_pmic("pmic@7", "PM8550BHS");
+	check_pmic("pmic@8", "PM8550VE");
+	check_pmic("pmic@c", "PM8010_m");
+	check_pmic("pmic@d", "PM8010_n");
+}
+#endif
+
+#if 0
 void read_adc(struct udevice *pmic)
 {
 	int ret;
@@ -413,6 +453,10 @@ static void deckard_setup(void)
 	struct udevice *pmic;
 	struct udevice *pmic_pmk;
 	u32 voltage;
+
+#if 0
+	check_pmics_comms();
+#endif
 
 	// Find the PM8550B
 	ret = pmic_get("pmic@7", &pmic);
