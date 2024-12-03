@@ -12,23 +12,13 @@
 
 #include <power/pmic.h>
 
-#if 0
-// NOTE These are 1s currents
-enum pre_charge_current
-{
-	IPRE_100MA,
-	IPRE_150MA,
-	IPRE_200MA,
-	IPRE_250MA,
-	// note: PM8550B has 100mA step size above 300mA
-	IPRE_300MA,
-	IPRE_400MA,
-	IPRE_500MA,
-	IPRE_600MA,
-};
-#endif
-
 int pm8550b_enable_fuel_guage(struct udevice *pmic, bool enable);
 int pm8550b_get_battery_voltage(struct udevice *pmic, uint16_t *battery_mv);
+
+int pm8550b_set_fast_charge_current(struct udevice *pmic, uint16_t current_ma);
+int pm8550b_set_float_voltage(struct udevice *pmic, uint16_t voltage_mv);
+int pm8550b_set_termination_current(struct udevice *pmic, uint16_t current_ma);
+int pm8550b_enable_watchdog(struct udevice *pmic, bool enable);
+int pm8550b_enable_charging(struct udevice *pmic, bool enable);
 
 #endif /* __PM8550B_H */
