@@ -22,7 +22,9 @@
 #include <led.h>
 #include <button.h>
 #include <power/pmic.h>
+
 #include "deckard_eeprom.h"
+#include "deckard_battery.h"
 #include "smb1510.h"
 
 DECLARE_GLOBAL_DATA_PTR;
@@ -39,45 +41,22 @@ void save_boot_params(ulong r0)
 	save_boot_params_ret();
 }
 
-#define CHGR_VBAT_STATUS			(0x2608)
-#define CHGR_VBAT_STATUS_LT_2V		(0x01)
-#define CHGR_VBAT_STATUS_GT_FULL_ON	(0x02)
+// #define CHECK_PMICS
 
-#define CHGR_CHG_EN_ADDR  (0x2646)
-#define CHGR_CHG_EN_CHARGING_ENABLE_CMD BIT(0)
-
-#define CHGR_IPRE_CFG_ADDR (0x2650)
-#define CHGR_ICHG_CFG_ADDR (0x2654)
-
-// NOTE These are 1s currents
-enum pre_charge_current {
-	IPRE_100MA,
-	IPRE_150MA,
-	IPRE_200MA,
-	IPRE_250MA,
-	// note: PM8550B has 100mA step size above 300mA
-	IPRE_300MA,
-	IPRE_400MA,
-	IPRE_500MA,
-	IPRE_600MA,
-};
-
-#if 0
+#ifdef CHECK_PMICS
 void check_pmic(const char *const pmic_dts, const char *const pmic_name)
 {
 	int             ret;
 	struct udevice *pmic = NULL;
 
 	ret = pmic_get(pmic_dts, &pmic);
-	if (ret != 0)
-	{
+	if (ret != 0) {
 		printf("Failed to Find %s - %s, ret: %d\n", pmic_dts, pmic_name, ret);
 		return;
 	}
 
 	ret = pmic_reg_read(pmic, 0x0105);
-	if (ret < 0)
-	{
+	if (ret < 0) {
 		printf("%s failed: %d\n", pmic_name, ret);
 	}
 	// else
@@ -101,423 +80,43 @@ void check_pmics_comms(void)
 }
 #endif
 
-#if 0
-void read_adc(struct udevice *pmic)
-{
-	int ret;
-	int data[2];
-
-	int channels[5] = { 0x8E, 0x8F, 0x94, 0x96, 0x9D };
-	int channel_sf[5] = { 3, 6, 6, 3, 3 };
-	const char channel_str[5][11] = {
-		"VPH_PWR",
-		"VBAT_SNS_Q",
-		"VBAT_SNS_C",
-		"VBAT_MID_Q",
-		"VBAT_MID_C",		
-
-	};
-
-	// Enable ADC
-	//pmic_reg_write(pmic, 0x3646, 0x01);
-
-	printf("Reading ADC\n");
-
-	pmic_reg_write(pmic, 0x904A, 0x00);
-	pmic_reg_write(pmic, 0x9050, 0x00);
-	pmic_reg_write(pmic, 0x90E5, 0x01);
-
-	for (int i =0 ; i < 5; i++)
-	{
-		// pmic_reg_write(pmic, 0x904B, 0x01);
-		pmic_reg_write(pmic, 0x904F, 0x07);
-		pmic_reg_write(pmic, 0x9050, 0x80);
-		pmic_reg_write(pmic, 0x9051, 0x01);
-		ret = pmic_reg_read(pmic, 0x9052);
-		pmic_reg_write(pmic, 0x9052, (ret & ~0x3C) | 0x28);
-		pmic_reg_write(pmic, 0x9053, 0x81);
-		pmic_reg_write(pmic, 0x9054, channels[i]);
-		pmic_reg_write(pmic, 0x9055, 0x05);
-		pmic_reg_write(pmic, 0x90e5, 0x01);
-
-		int loops = 0;
-		while (loops < 10)
-		{
-			// ret = pmic_reg_read(pmic, 0x9010);
-			// printf("0x9010: 0x%02X\n", ret);
-			// ret = pmic_reg_read(pmic, 0x9046);
-			// printf("0x9046: 0x%02X\n", ret);
-			// ret = pmic_reg_read(pmic, 0x90e5);
-			// printf("0x90e5: 0x%02X\n", ret);
-			// ret = pmic_reg_read(pmic, 0x904B);
-			// printf("0x904B: 0x%02X\n", ret);
-			ret = pmic_reg_read(pmic, 0x904A);
-			// printf("ret: 0x%02X\n", ret);
-			// TODO Fix this so we have a valid return in here every loop
-			if (ret & 0x01)
-			{
-				u32 voltage;
-
-				data[0] = pmic_reg_read(pmic, 0x905C);
-				data[1] = pmic_reg_read(pmic, 0x905D);
-				voltage = data[1] << 8 | data[0];
-				if (voltage > 28900) {
-					voltage = 0;
-				}
-
-				// printf("PM8550B 0x%02X: 0x%02X%02X\n", channels[i], data[1], data[0]);
-				voltage *= 1875 * channel_sf[i];
-				voltage /= 28900;
-				printf("ADC: %s %d mV\n", channel_str[i], voltage);
-
-				break;
-			}
-			loops++;
-			mdelay(10);
-		}
-	}
-}
-
-static u32 print_regs(struct udevice *pmic)
-{
-	int ret;
-	u32 voltage;
-
-	ret = pmic_reg_read(pmic, 0x4FB1);
-	voltage = ret << 8;
-	voltage |= pmic_reg_read(pmic, 0x4FB0) & 0xFF;
-	if (voltage > 28900) {
-		voltage = 0;
-	}
-	voltage *= 1875 * 6;
-	voltage /= 28900;
-	printf("PM8550B VBAT: %d mV\n", voltage);
-
-	ret = pmic_reg_read(pmic, 0x4FB3);
-	voltage = ret << 8;
-	voltage |= pmic_reg_read(pmic, 0x4FB2) & 0xFF;
-	if (voltage > 28900) {
-		voltage = 0;
-	}
-	voltage *= 1875 * 6;
-	voltage /= 28900;
-	printf("PM8550B VBAT: %d mV\n", voltage);
-
-	ret = pmic_reg_read(pmic, 0x4FC3);
-	voltage = ret << 8;
-	voltage |= pmic_reg_read(pmic, 0x4FC2) & 0xFF;
-	if (voltage > 28900) {
-		voltage = 0;
-	}
-	voltage *= 1875 * 6;
-	voltage /= 28900;
-	printf("PM8550B VBAT: %d mV\n", voltage);
-
-	ret = pmic_reg_read(pmic, 0x2810);
-	// printf("PM8550B 0x2810: 0x%02X\n", ret);
-	if (ret & 0x04) {
-		printf("\tBATIF: Low Batt\n");
-	}
-
-	ret = pmic_reg_read(pmic, 0x2850);
-	// printf("PM8550B 0x2850: 0x%02X\n", ret);
-	if (ret & 0x01) {
-		printf("\tBATIF: BAT FET Body Diode On\n");
-	}
-	if (ret & 0x02) {
-		printf("\tBATIF: BAT FET On\n");
-	}
-
-
-	// ret = pmic_reg_read(pmic, 0x2862);
-	// printf("PM8550B 0x2862: 0x%02X\n", ret);
-
-	// TODO This should be enable once battery voltage is above Fast Charge Threshold to 0x01
-	ret = pmic_reg_read(pmic, 0x2868);
-	printf("PM8550B 0x2868: 0x%02X\n", ret);
-
-	ret = pmic_reg_read(pmic, 0x2950);
-	// printf("PM8550B 0x2950: 0x%02X\n", ret);
-	printf("\tUSB: High Current Mode %s\n", ret & 0x04 ? "On" : "Off");
-
-	// ret = pmic_reg_read(pmic, 0x2951);
-	// printf("PM8550B 0x2951: 0x%02X\n", ret);
-
-	ret = pmic_reg_read(pmic, 0x2952);
-	// printf("PM8550B 0x2952: 0x%02X\n", ret);
-	printf("\tUSB: Input Current Limit %d mA\n", ret * 50);
-
-	ret = pmic_reg_read(pmic, 0x2C10);
-	printf("PM8550B 0x2C10: 0x%02X\n", ret);
-
-	ret = pmic_reg_read(pmic, 0x2C40);
-	printf("\tMISC: Charger Block %s\n", ret & 0x01 ? "Shutdown" : "Active");
-	// printf("PM8550B 0x2C40: 0x%02X\n", ret);
-
-	ret = pmic_reg_read(pmic, 0x2C4E);
-	printf("PM8550B 0x2C4E: 0x%02X\n", ret);
-
-	ret = pmic_reg_read(pmic, 0x2C4F);
-	// printf("PM8550B 0x2C4F: 0x%02X\n", ret);
-	printf("\tMISC: X2D2 %s\n", ret & 0x02 ? "Enabled" : "Disabled");
-
-	ret = pmic_reg_read(pmic, 0x2606);
-	// printf("PM8550B 0x2606: 0x%02X\n", ret);
-	const char charger_modes[8][16] = {
-		"Inhibit",
-		"Trickle",
-		"Precharge",
-		"Full",
-		"Taper",
-		"Termination",
-		"Paused",
-		"Disabled"
-	};
-	printf("\tCharger: %s\n", charger_modes[ret & 0x07]);
-
-	// ret = pmic_reg_read(pmic, 0x2607);
-	// printf("PM8550B 0x2607: 0x%02X\n", ret);
-
-	ret = pmic_reg_read(pmic, 0x2608);
-	printf("PM8550B 0x2608: 0x%02X\n", ret);
-	if (ret & 0x01) {
-		printf("\tCharger: Batt < 2 VDC\n");
-	}
-	printf("\tCharger: Batt %s VSysMin\n", ret & 0x02 ? ">" : "<");
-
-	// ret = pmic_reg_read(pmic, 0x2609);
-	// printf("PM8550B 0x2609: 0x%02X\n", ret);
-
-	// ret = pmic_reg_read(pmic, 0x260A);
-	// printf("PM8550B 0x260A: 0x%02X\n", ret);
-
-	ret = pmic_reg_read(pmic, 0x260B);
-	// printf("PM8550B 0x260B: 0x%02X\n", ret);
-	printf("\tCharger: Float Voltage %d V\n", ret * 20 + 7200);
-
-	ret = pmic_reg_read(pmic, 0x260C);
-	printf("PM8550B 0x260C: 0x%02X\n", ret);
-
-	// TODO REVISIT
-	ret = pmic_reg_read(pmic, 0x260D);
-	printf("PM8550B 0x260D: 0x%02X\n", ret);
-
-	ret = pmic_reg_read(pmic, 0x260E);
-	// printf("PM8550B 0x260E: 0x%02X\n", ret);
-	printf("\tCharger: Fast Current %d mA\n", ret * 60);
-
-	// ret = pmic_reg_read(pmic, 0x260F);
-	// printf("PM8550B 0x260F: 0x%02X\n", ret);
-
-	ret = pmic_reg_read(pmic, 0x2610);
-	printf("PM8550B 0x2610: 0x%02X\n", ret);
-
-	ret = pmic_reg_read(pmic, 0x2640);
-	// printf("PM8550B 0x2640: 0x%02X\n", ret);
-	printf("\tCharger: VSysMin %d V\n", (ret & 0x07) * 200 + 2800);
-
-	// ret = pmic_reg_read(pmic, 0x2641);
-	// printf("PM8550B 0x2641: 0x%02X\n", ret);
-
-	ret = pmic_reg_read(pmic, 0x2650);
-	printf("PM8550B 0x2650: 0x%02X\n", ret);
-
-	// ret = pmic_reg_read(pmic, 0x2654);
-	// printf("PM8550B 0x2654: 0x%02X\n", ret);
-
-	// ret = pmic_reg_read(pmic, 0x2658);
-	// printf("PM8550B 0x2658: 0x%02X\n", ret);
-
-	ret = pmic_reg_read(pmic, 0x2678);
-	// printf("PM8550B 0x2678: 0x%02X\n", ret);
-	printf("\tCharger: Inhibit %s\n", ret & 0x80 ? "Disabled" : "Enabled");
-
-	// ret = pmic_reg_read(pmic, 0x2680);
-	// printf("PM8550B 0x2680: 0x%02X\n", ret);
-
-	ret = pmic_reg_read(pmic, 0x26B0);
-	printf("PM8550B 0x26B0: 0x%02X\n", ret);
-
-	// ret = pmic_reg_read(pmic, 0x26B2);
-	// printf("PM8550B 0x26B2: 0x%02X\n", ret);
-
-	// ret = pmic_reg_read(pmic, 0x26B4);
-	// printf("PM8550B 0x26B4: 0x%02X\n", ret);
-
-	ret = pmic_reg_read(pmic, 0x26B6);
-	printf("PM8550B 0x26B6: 0x%02X\n", ret);
-
-	ret = pmic_reg_read(pmic, 0x26B8);
-	printf("PM8550B 0x26B8: 0x%02X\n", ret);
-
-	ret = pmic_reg_read(pmic, 0x26BA);
-	printf("PM8550B 0x26BA: 0x%02X ..\n", ret);
-
-	ret = pmic_reg_read(pmic, 0x26BC);
-	printf("PM8550B 0x26BC: 0x%02X ..\n", ret);
-
-	ret = pmic_reg_read(pmic, 0x2540);
-	printf("PM8550B 0x2540: 0x%02X\n", ret);
-
-	ret = pmic_reg_read(pmic, 0x2550);
-	printf("PM8550B 0x2550: 0x%02X\n", ret);
-
-	ret = pmic_reg_read(pmic, 0x2560);
-	printf("PM8550B 0x2560: 0x%02X\n", ret);
-
-	ret = pmic_reg_read(pmic, 0x2570);
-	printf("PM8550B 0x2570: 0x%02X\n", ret);
-
-	// ret = pmic_reg_read(pmic, 0x2580);
-	// printf("PM8550B 0x2580: 0x%02X\n", ret);
-
-	// ret = pmic_reg_read(pmic, 0x9305);
-	// printf("PM8550B 0x9305: 0x%02X\n", ret);
-
-	// ret = pmic_reg_read(pmic, 0x9308);
-	// printf("PM8550B 0x9308: 0x%02X\n", ret);
-
-	// ret = pmic_reg_read(pmic, 0x9340);
-	// printf("PM8550B 0x9340: 0x%02X\n", ret);
-
-	// ret = pmic_reg_read(pmic, 0x9342);
-	// printf("PM8550B 0x9342: 0x%02X\n", ret);
-
-	// ret = pmic_reg_read(pmic, 0x9344);
-	// printf("PM8550B 0x9344: 0x%02X\n", ret);
-
-	// ret = pmic_reg_read(pmic, 0x9345);
-	// printf("PM8550B 0x9345: 0x%02X\n", ret);
-
-	// ret = pmic_reg_read(pmic, 0x9346);
-	// printf("PM8550B 0x9346: 0x%02X\n", ret);
-
-	return voltage;
-}
-
-void print_smb1510_regs(struct udevice *pmic)
-{
-	int ret;
-
-	// ret = pmic_reg_read(pmic, 0xFF04);
-	// printf("PMK8550 0x1208: 0x%02X\n", ret);
-
-	// ret = pmic_reg_read(pmic, 0x1208);
-	// printf("PMK8550 0x1208: 0x%02X\n", ret);
-
-	// ret = pmic_reg_read(pmic, 0x1246);
-	// printf("PMK8550 0x1242: 0x%02X\n", ret);
-
-	// pmic_reg_write(pmic, 0x1246, 0x88);
-
-	// ret = pmic_reg_read(pmic, 0x1246);
-	// printf("PMK8550 0x1242: 0x%02X\n", ret);
-
-	ret = read_smb1510(pmic, 0xFF04);
-	printf("SMB1510 0xFF04: 0x%02X\n", ret);
-
-	ret = read_smb1510(pmic, 0x3010);
-	printf("SMB1510 0x3010: 0x%02X\n", ret);
-
-	ret = read_smb1510(pmic, 0x3025);
-	printf("SMB1510 0x3025: 0x%02X\n", ret);
-
-	ret = read_smb1510(pmic, 0x3040);
-	printf("SMB1510 0x3040: 0x%02X\n", ret);
-
-	ret = read_smb1510(pmic, 0x3041);
-	printf("SMB1510 0x3041: 0x%02X\n", ret);
-
-	ret = read_smb1510(pmic, 0x3043);
-	printf("SMB1510 0x3043: 0x%02X\n", ret);
-
-	ret = read_smb1510(pmic, 0x3045);
-	printf("SMB1510 0x3045: 0x%02X\n", ret);
-
-	ret = read_smb1510(pmic, 0x3046);
-	printf("SMB1510 0x3046: 0x%02X\n", ret);
-
-	ret = read_smb1510(pmic, 0x304B);
-	printf("SMB1510 0x304B: 0x%02X\n", ret);
-
-	ret = read_smb1510(pmic, 0x304C);
-	printf("SMB1510 0x304C: 0x%02X\n", ret);
-
-	ret = read_smb1510(pmic, 0x3110);
-	printf("SMB1510 0x3110: 0x%02X\n", ret);
-}
-
 static void deckard_setup(void)
 {
-	int ret;
-	struct udevice *pmic;
-	struct udevice *pmic_pmk;
-	u32 voltage;
+	int             ret;
+	struct udevice *pmk8550;
+	struct udevice *pm8550b;
 
-#if 0
+#if CHECK_PMICS
 	check_pmics_comms();
 #endif
 
-	// Find the PM8550B
-	ret = pmic_get("pmic@7", &pmic);
-	if (ret != 0)
-	{
-		printf("Failed to Find PM8550B\n");
-		return;
-	}
-
 	// Find the PMK8650
-	ret = pmic_get("pmic@0", &pmic_pmk);
-	if (ret != 0)
-	{
+	ret = pmic_get("pmic@0", &pmk8550);
+	if (ret != 0) {
 		printf("Failed to Find PMK8650\n");
 		return;
 	}
 
-	// Enable ADC
-	pmic_reg_write(pmic, 0x3646, 0x80);
-	// Enable FG
-	pmic_reg_write(pmic, 0x4F46, 0x80); 
+	// Find the PM8550B
+	ret = pmic_get("pmic@7", &pm8550b);
+	if (ret != 0) {
+		printf("Failed to Find PM8550B\n");
+		return;
+	}
 
-	//voltage = print_regs(pmic);
-	//read_adc(pmic_pmk);
-	//print_smb1510_regs(pmic_pmk);
+	/* Ensure Battery is OK to proceed */
+	deckard_battery_recover_uvlo(pmk8550, pm8550b);
+
+	/* Setup Charging */
+	deckard_battery_enable_charging(pm8550b);
 
 	printf("smb1510: enable fixed frequency at 500khz mode\n");
-	smb1510_set_switching_frequency(pmic_pmk, 0x0F);
+	smb1510_set_switching_frequency(pmk8550, 0x0F);
 }
 
+#if 0
 static void deckard_dead_battery_recovery(void)
 {
-	int ret;
-	struct udevice *pmic;
-	struct udevice *pmic_pmk;
-	u32 voltage;
-
-	// Find the PM8550B
-	ret = pmic_get("pmic@7", &pmic);
-	if (ret != 0)
-	{
-		printf("Failed to Find PM8550B, skipping Dead Battery Check\n");
-		return;
-	}
-
-	// Find the PMK8650
-	ret = pmic_get("pmic@0", &pmic_pmk);
-	if (ret != 0)
-	{
-		printf("Failed to Find PMK8650, skipping Dead Battery Check\n");
-		return;
-	}
-
-	// Enable ADC
-	pmic_reg_write(pmic, 0x3646, 0x80);
-	// Enable FG
-	pmic_reg_write(pmic, 0x4F46, 0x80); 
-
-	voltage = print_regs(pmic);
-	read_adc(pmic_pmk);
-	print_smb1510_regs(pmic_pmk);
 
 #if 0
 	// Why isn't this alway working?
@@ -606,28 +205,27 @@ static void deckard_dead_battery_recovery(void)
 		mdelay(2000);
 	}
 }
+#endif
 
 /* Check for vol- button - if pressed - stop autoboot */
 int misc_init_r(void)
 {
-	struct udevice *btn,*led;
-	int ret;
+	struct udevice     *btn, *led;
+	int                 ret;
 	enum button_state_t state;
 
 	g_boot_wrapper_version = boot_wrapper_version;
 	printf("Boot Wrapper version: %d\n", g_boot_wrapper_version);
 
-	//deckard_dead_battery_recovery();
-
 	deckard_setup();
 
 	ret = button_get_by_label("vol_down", &btn);
 	if (ret < 0) {
-			printf("Couldn't find Vol- button!\n");
+		printf("Couldn't find Vol- button!\n");
 	} else {
 		state = button_get_state(btn);
 		if (state == BUTTON_ON) {
-			//env_set("BOOT_ORDER", "R");
+			// env_set("BOOT_ORDER", "R");
 			printf("Vol- button pressed - targeting rescue partition for boot.\n");
 		}
 	}
@@ -652,7 +250,7 @@ int misc_init_r(void)
 		}
 	}
 
-	ret  = led_get_by_label("blue", &led);
+	ret = led_get_by_label("blue", &led);
 	if (ret < 0) {
 		printf("Couldn't find blue led!\n");
 	} else {
