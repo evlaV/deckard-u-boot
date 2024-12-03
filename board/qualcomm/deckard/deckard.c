@@ -22,7 +22,9 @@
 #include <led.h>
 #include <button.h>
 #include <power/pmic.h>
+
 #include "deckard_eeprom.h"
+#include "deckard_battery.h"
 #include "smb1510.h"
 
 DECLARE_GLOBAL_DATA_PTR;
@@ -39,45 +41,22 @@ void save_boot_params(ulong r0)
 	save_boot_params_ret();
 }
 
-#define CHGR_VBAT_STATUS			(0x2608)
-#define CHGR_VBAT_STATUS_LT_2V		(0x01)
-#define CHGR_VBAT_STATUS_GT_FULL_ON	(0x02)
+// #define CHECK_PMICS
 
-#define CHGR_CHG_EN_ADDR  (0x2646)
-#define CHGR_CHG_EN_CHARGING_ENABLE_CMD BIT(0)
-
-#define CHGR_IPRE_CFG_ADDR (0x2650)
-#define CHGR_ICHG_CFG_ADDR (0x2654)
-
-// NOTE These are 1s currents
-enum pre_charge_current {
-	IPRE_100MA,
-	IPRE_150MA,
-	IPRE_200MA,
-	IPRE_250MA,
-	// note: PM8550B has 100mA step size above 300mA
-	IPRE_300MA,
-	IPRE_400MA,
-	IPRE_500MA,
-	IPRE_600MA,
-};
-
-#if 0
+#ifdef CHECK_PMICS
 void check_pmic(const char *const pmic_dts, const char *const pmic_name)
 {
 	int             ret;
 	struct udevice *pmic = NULL;
 
 	ret = pmic_get(pmic_dts, &pmic);
-	if (ret != 0)
-	{
+	if (ret != 0) {
 		printf("Failed to Find %s - %s, ret: %d\n", pmic_dts, pmic_name, ret);
 		return;
 	}
 
 	ret = pmic_reg_read(pmic, 0x0105);
-	if (ret < 0)
-	{
+	if (ret < 0) {
 		printf("%s failed: %d\n", pmic_name, ret);
 	}
 	// else
@@ -103,46 +82,43 @@ void check_pmics_comms(void)
 
 static void deckard_setup(void)
 {
-	int ret;
-	struct udevice *pmic;
-	struct udevice *pmic_pmk;
-	u32 voltage;
+	int             ret;
+	struct udevice *pmk8550;
+	struct udevice *pm8550b;
 
-#if 0
+#if CHECK_PMICS
 	check_pmics_comms();
 #endif
 
-	// Find the PM8550B
-	ret = pmic_get("pmic@7", &pmic);
-	if (ret != 0)
-	{
-		printf("Failed to Find PM8550B\n");
-		return;
-	}
-
 	// Find the PMK8650
-	ret = pmic_get("pmic@0", &pmic_pmk);
-	if (ret != 0)
-	{
+	ret = pmic_get("pmic@0", &pmk8550);
+	if (ret != 0) {
 		printf("Failed to Find PMK8650\n");
 		return;
 	}
 
-	// Enable ADC
-	pmic_reg_write(pmic, 0x3646, 0x80);
-	// Enable FG
-	pmic_reg_write(pmic, 0x4F46, 0x80); 
+	// Find the PM8550B
+	ret = pmic_get("pmic@7", &pm8550b);
+	if (ret != 0) {
+		printf("Failed to Find PM8550B\n");
+		return;
+	}
+
+	/* Ensure Battery is OK to proceed */
+	deckard_battery_recover_uvlo(pmk8550, pm8550b);
+
+	/* Setup Charging */
+	deckard_battery_enable_charging(pm8550b);
 
 	printf("smb1510: enable fixed frequency at 500khz mode\n");
-
-	smb1510_set_switching_frequency(pmic_pmk, 0x0F);
+	smb1510_set_switching_frequency(pmk8550, 0x0F);
 }
 
 /* Check for vol- button - if pressed - stop autoboot */
 int misc_init_r(void)
 {
-	struct udevice *btn,*led;
-	int ret;
+	struct udevice     *btn, *led;
+	int                 ret;
 	enum button_state_t state;
 
 	g_boot_wrapper_version = boot_wrapper_version;
@@ -152,11 +128,11 @@ int misc_init_r(void)
 
 	ret = button_get_by_label("vol_down", &btn);
 	if (ret < 0) {
-			printf("Couldn't find Vol- button!\n");
+		printf("Couldn't find Vol- button!\n");
 	} else {
 		state = button_get_state(btn);
 		if (state == BUTTON_ON) {
-			//env_set("BOOT_ORDER", "R");
+			// env_set("BOOT_ORDER", "R");
 			printf("Vol- button pressed - targeting rescue partition for boot.\n");
 		}
 	}
@@ -181,7 +157,7 @@ int misc_init_r(void)
 		}
 	}
 
-	ret  = led_get_by_label("blue", &led);
+	ret = led_get_by_label("blue", &led);
 	if (ret < 0) {
 		printf("Couldn't find blue led!\n");
 	} else {
