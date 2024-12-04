@@ -335,6 +335,21 @@ void part_print(struct blk_desc *desc)
 		drv->print(desc);
 }
 
+void part_print_fstype_uuid(struct blk_desc *desc)
+{
+	struct part_driver *drv;
+
+	drv = part_driver_lookup_type(desc);
+	if (!drv) {
+		printf("## Unknown partition table type %x\n",
+		       desc->part_type);
+		return;
+	}
+
+	if (drv->printfsuuids)
+		drv->printfsuuids(desc);
+}
+
 int part_get_info_by_type(struct blk_desc *desc, int part, int part_type,
 			  struct disk_partition *info)
 {

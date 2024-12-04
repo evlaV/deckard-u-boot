@@ -258,6 +258,72 @@ static void __maybe_unused part_print_efi(struct blk_desc *desc)
 	return;
 }
 
+//TODO use partition name -- like uboota or ubootb to determine if we are on "a" or "b"
+#define BOOTSLOTAIDX 1
+#define BOOTSLOTBIDX 3
+#define BOOTSLOTFSTYPEXBLTARGET "400ffdcd-22e0-47e7-9a23-f16ed9382388"
+extern int g_boot_wrapper_version; 
+
+void part_printfsuuids_efi(struct blk_desc *desc)
+{
+	ALLOC_CACHE_ALIGN_BUFFER_PAD(gpt_header, gpt_head, 1, desc->blksz);
+	gpt_entry *gpt_pte = NULL;
+	int i = 0;
+	unsigned char *uuid;
+	char buf[40];
+	int foundslot = 0;
+	char strbootwrapper[8];
+
+	snprintf(strbootwrapper,8,"%d",g_boot_wrapper_version);
+	env_set("bootwrapperver", strbootwrapper);		
+
+	if(g_boot_wrapper_version > 9000)
+	{
+		env_set("booted_slot", "R");
+		foundslot = 1;
+	}
+
+	/* This function validates AND fills in the GPT header and PTE */
+	if (find_valid_gpt(desc, gpt_head, &gpt_pte) != 1)
+		return;
+
+	for (i = 0; i < le32_to_cpu(gpt_head->num_partition_entries); i++) {
+		/* Skip invalid PTE */
+		if (!is_pte_valid(&gpt_pte[i]))
+			continue;
+
+		uuid = (unsigned char *)gpt_pte[i].partition_type_guid.b;
+		printf("[%d] type: %pUl\n", i+1, uuid);
+
+		snprintf(buf,40,"%pUl", uuid);
+		if(!foundslot && strcmp(BOOTSLOTFSTYPEXBLTARGET,buf) == 0) 
+		{
+			if( i+1 == BOOTSLOTAIDX )
+			{
+				env_set("booted_slot", "A");
+			}
+			else if( i+1 == BOOTSLOTBIDX )
+			{
+				env_set("booted_slot", "B");
+			}
+			else
+			{
+				env_set("booted_slot", "U");
+			}
+			foundslot = 1;
+		}
+	}
+
+	if(!foundslot)
+	{
+		env_set("booted_slot", "X");
+	}
+
+	/* Remember to free pte */
+	free(gpt_pte);
+	return;
+}
+
 static int __maybe_unused part_get_info_efi(struct blk_desc *desc, int part,
 					    struct disk_partition *info)
 {
@@ -1212,5 +1278,6 @@ U_BOOT_PART_TYPE(a_efi) = {
 	.max_entries	= GPT_ENTRY_NUMBERS,
 	.get_info	= part_get_info_ptr(part_get_info_efi),
 	.print		= part_print_ptr(part_print_efi),
+	.printfsuuids	= part_printfsuuids_ptr(part_printfsuuids_efi),
 	.test		= part_test_efi,
 };

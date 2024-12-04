@@ -114,6 +114,47 @@ static int do_part_list(int argc, char *const argv[])
 	return 0;
 }
 
+static int do_part_list_fstype_uuids(int argc, char *const argv[])
+{
+	int ret;
+	struct blk_desc *desc;
+	char *var = NULL;
+	bool bootable = false;
+	int i;
+
+	if (argc < 2)
+		return CMD_RET_USAGE;
+
+	if (argc > 2) {
+		for (i = 2; i < argc ; i++) {
+			if (argv[i][0] == '-') {
+				if (!strcmp(argv[i], "-bootable")) {
+					bootable = true;
+				} else {
+					printf("Unknown option %s\n", argv[i]);
+					return CMD_RET_USAGE;
+				}
+			} else {
+				var = argv[i];
+				break;
+			}
+		}
+
+		/* Loops should have been exited at the last argument, which
+		 * as it contained the variable */
+		if (argc != i + 1)
+			return CMD_RET_USAGE;
+	}
+
+	ret = blk_get_device_by_str(argv[0], argv[1], &desc);
+	if (ret < 0)
+		return 1;
+
+	part_print_fstype_uuid(desc);
+
+	return 0;
+}
+
 static int do_part_info(int argc, char *const argv[], enum cmd_part_info param)
 {
 	struct blk_desc *desc;
@@ -267,6 +308,8 @@ static int do_part(struct cmd_tbl *cmdtp, int flag, int argc,
 		return do_part_uuid(argc - 2, argv + 2);
 	else if (!strcmp(argv[1], "list"))
 		return do_part_list(argc - 2, argv + 2);
+	else if (!strcmp(argv[1], "listfstypeuuids"))
+		return do_part_list_fstype_uuids(argc - 2, argv + 2);		
 	else if (!strcmp(argv[1], "start"))
 		return do_part_start(argc - 2, argv + 2);
 	else if (!strcmp(argv[1], "size"))
@@ -293,6 +336,7 @@ U_BOOT_CMD(
 	"    - set environment variable to partition UUID\n"
 	"part list <interface> <dev>\n"
 	"    - print a device's partition table\n"
+	"part listfstypeuuids <interface> <dev> [flags] <varname>\n"
 	"part list <interface> <dev> [flags] <varname>\n"
 	"    - set environment variable to the list of partitions\n"
 	"      flags can be -bootable (list only bootable partitions)\n"
