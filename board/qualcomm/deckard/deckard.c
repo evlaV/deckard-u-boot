@@ -25,6 +25,7 @@
 
 #include "deckard_eeprom.h"
 #include "deckard_battery.h"
+#include "pm8550vs.h"
 #include "smb1510.h"
 
 DECLARE_GLOBAL_DATA_PTR;
@@ -103,6 +104,7 @@ static void deckard_setup(void)
 {
 	int             ret;
 	struct udevice *pmk8550;
+	struct udevice *pm8550vse;
 	struct udevice *pm8550b;
 
 #if CHECK_PMICS
@@ -116,12 +118,23 @@ static void deckard_setup(void)
 		return;
 	}
 
+	// Find the PM8550VS_e
+	ret = pmic_get("pmic@4", &pm8550vse);
+	if (ret != 0) {
+		printf("Failed to Find PM8550VS_e\n");
+		return;
+	}
+
 	// Find the PM8550B
 	ret = pmic_get("pmic@7", &pm8550b);
 	if (ret != 0) {
 		printf("Failed to Find PM8550B\n");
 		return;
 	}
+
+	/* Fix GPIO Levels that XBL continues to not let us */
+	pm8550vs_set_gpio_vin_level(pm8550vse, PM8550VS_GPIO_3, PM8550VS_GPIO_VIN_1);
+	pm8550vs_set_gpio_vin_level(pm8550vse, PM8550VS_GPIO_4, PM8550VS_GPIO_VIN_1);
 
 	/* Ensure Battery is OK to proceed */
 	deckard_battery_recover_uvlo(pmk8550, pm8550b);
