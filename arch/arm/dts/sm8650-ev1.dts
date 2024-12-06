@@ -839,6 +839,9 @@
 	dr_mode = "peripheral";
 };
 
+&usb_1_hsphy {
+	status = "okay";
+};
 
 &xo_board {
 	clock-frequency = <76800000>;
