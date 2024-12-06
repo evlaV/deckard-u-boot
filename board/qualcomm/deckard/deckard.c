@@ -27,6 +27,7 @@
 #include "deckard_battery.h"
 #include "pm8550vs.h"
 #include "smb1510.h"
+#include <part.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -245,6 +246,7 @@ int misc_init_r(void)
 	struct udevice     *btn, *led;
 	int                 ret;
 	enum button_state_t state;
+	struct blk_desc *desc;
 
 	deckard_disable_watchdog();
 
@@ -294,6 +296,21 @@ int misc_init_r(void)
 	deckard_eeprom_init();
 
 	//put code here for figuring out A/B/R partition that was booted
+//////
+	ret = blk_get_device_by_str("scsi", "2", &desc);
+	if( ret >= 0 )
+	{
+		part_print_fstype_uuid(desc);
+	}
+	else
+	{
+		printf("blk_get_device_by_str failed, ret = %d\n",ret);
+	}
+
+	printf("booted_slot: %s\n", env_get("booted_slot"));
+
+	printf("deckard init: done\n");
+///////
 
 	return 0;
 }
