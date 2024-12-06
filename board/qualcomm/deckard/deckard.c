@@ -259,8 +259,7 @@ int misc_init_r(void)
 	} else {
 		state = button_get_state(btn);
 		if (state == BUTTON_ON) {
-			// env_set("BOOT_ORDER", "R");
-			printf("Vol- button pressed - targeting rescue partition for boot.\n");
+			printf("Vol- button pressed\n");
 		}
 	}
 
@@ -270,7 +269,7 @@ int misc_init_r(void)
 	} else {
 		state = button_get_state(btn);
 		if (state == BUTTON_ON) {
-			printf("Vol+ button pressed - do nothing.\n");
+			printf("Vol+ button pressed\n");
 		}
 	}
 
@@ -280,7 +279,7 @@ int misc_init_r(void)
 	} else {
 		state = button_get_state(btn);
 		if (state == BUTTON_ON) {
-			printf("PWR button pressed - do nothing.\n");
+			printf("PWR button pressed\n");
 		}
 	}
 
@@ -293,6 +292,8 @@ int misc_init_r(void)
 
 	// get board data from eeprom
 	deckard_eeprom_init();
+
+	//put code here for figuring out A/B/R partition that was booted
 
 	return 0;
 }
