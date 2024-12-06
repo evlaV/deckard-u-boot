@@ -756,7 +756,7 @@ int gpt_verify_headers(struct blk_desc *desc, gpt_header *gpt_head,
 	if (is_gpt_valid(desc,
 			 GPT_PRIMARY_PARTITION_TABLE_LBA,
 			 gpt_head, gpt_pte) != 1) {
-		log_debug("Invalid GPT\n");
+		printf("Invalid GPT\n");
 		return -1;
 	}
 
@@ -767,13 +767,13 @@ int gpt_verify_headers(struct blk_desc *desc, gpt_header *gpt_head,
 	 * Check that the alternate_lba entry points to the last LBA
 	 */
 	if (le64_to_cpu(gpt_head->alternate_lba) != (desc->lba - 1)) {
-		log_debug("Misplaced Backup GPT\n");
+		printf("Misplaced Backup GPT\n");
 		return -1;
 	}
 
 	if (is_gpt_valid(desc, (desc->lba - 1),
 			 gpt_head, gpt_pte) != 1) {
-		log_debug("Invalid Backup GPT\n");
+		printf("Invalid Backup GPT\n");
 		return -1;
 	}
 
@@ -883,7 +883,7 @@ int gpt_verify_partitions(struct blk_desc *desc,
 
 	for (i = 0; i < parts; i++) {
 		if (i == gpt_head->num_partition_entries) {
-			pr_err("More partitions than allowed!\n");
+			printf("More partitions than allowed!\n");
 			return -1;
 		}
 
@@ -891,12 +891,12 @@ int gpt_verify_partitions(struct blk_desc *desc,
 		gpt_convert_efi_name_to_char(efi_str, gpt_e[i].partition_name,
 					     PARTNAME_SZ + 1);
 
-		debug("%s: part: %2d name - GPT: %16s, ENV: %16s ",
+		printf("%s: part: %2d name - GPT: %16s, ENV: %16s ",
 		      __func__, i, efi_str, partitions[i].name);
 
 		if (strncmp(efi_str, (char *)partitions[i].name,
 			    sizeof(partitions->name))) {
-			pr_err("Partition name: %s does not match %s!\n",
+			printf("Partition name: %s does not match %s!\n",
 			      efi_str, (char *)partitions[i].name);
 			return -1;
 		}
@@ -904,7 +904,7 @@ int gpt_verify_partitions(struct blk_desc *desc,
 		/* Check if GPT and ENV sizes match */
 		gpt_part_size = le64_to_cpu(gpt_e[i].ending_lba) -
 			le64_to_cpu(gpt_e[i].starting_lba) + 1;
-		debug("size(LBA) - GPT: %8llu, ENV: %8llu ",
+		printf("size(LBA) - GPT: %8llu, ENV: %8llu ",
 		      (unsigned long long)gpt_part_size,
 		      (unsigned long long)partitions[i].size);
 
@@ -913,7 +913,7 @@ int gpt_verify_partitions(struct blk_desc *desc,
 			if ((i == parts - 1) && (partitions[i].size == 0))
 				continue;
 
-			pr_err("Partition %s size: %llu does not match %llu!\n",
+			printf("Partition %s size: %llu does not match %llu!\n",
 			      efi_str, (unsigned long long)gpt_part_size,
 			      (unsigned long long)partitions[i].size);
 			return -1;
@@ -924,17 +924,17 @@ int gpt_verify_partitions(struct blk_desc *desc,
 		 * in '$partition' variable
 		 */
 		if (!partitions[i].start) {
-			debug("\n");
+			printf("\n");
 			continue;
 		}
 
 		/* Check if GPT and ENV start LBAs match */
-		debug("start LBA - GPT: %8llu, ENV: %8llu\n",
+		printf("start LBA - GPT: %8llu, ENV: %8llu\n",
 		      le64_to_cpu(gpt_e[i].starting_lba),
 		      (unsigned long long)partitions[i].start);
 
 		if (le64_to_cpu(gpt_e[i].starting_lba) != partitions[i].start) {
-			pr_err("Partition %s start: %llu does not match %llu!\n",
+			printf("Partition %s start: %llu does not match %llu!\n",
 			      efi_str, le64_to_cpu(gpt_e[i].starting_lba),
 			      (unsigned long long)partitions[i].start);
 			return -1;
