@@ -231,8 +231,12 @@ int misc_init_r(void)
 			env_set("stdout","usbacm");
 			env_set("bootdelay","20");
 		}
+		else
+		{
+			env_set("bootdelay","2");
+		}
 	}
-
+	
 	ret = button_get_by_label("pwrkey", &btn);
 	if (ret < 0) {
 		printf("Couldn't find power button!\n");
