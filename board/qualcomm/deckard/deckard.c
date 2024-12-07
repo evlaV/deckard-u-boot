@@ -225,6 +225,11 @@ int misc_init_r(void)
 		state = button_get_state(btn);
 		if (state == BUTTON_ON) {
 			printf("Vol+ button pressed\n");
+
+			env_set("stdin","usbacm");
+			env_set("stderr","usbacm");
+			env_set("stdout","usbacm");
+			env_set("bootdelay","20");
 		}
 	}
 
