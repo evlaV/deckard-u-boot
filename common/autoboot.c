@@ -253,6 +253,7 @@ static int passwd_abort_key(uint64_t etime)
 	int presskey_len = 0;
 	int presskey_max = 0;
 	int i;
+	uint64_t show_progress_timeout;
 
 #  ifdef CONFIG_AUTOBOOT_DELAY_STR
 	if (delaykey[0].str == NULL)
@@ -280,6 +281,7 @@ static int passwd_abort_key(uint64_t etime)
 	/* In order to keep up with incoming data, check timeout only
 	 * when catch up.
 	 */
+	show_progress_timeout = endtick(1); //1 second period
 	do {
 		if (tstc()) {
 			if (presskey_len < presskey_max) {
@@ -309,6 +311,13 @@ static int passwd_abort_key(uint64_t etime)
 			}
 		}
 		udelay(10000);
+
+		if(get_ticks() > show_progress_timeout) 
+		{
+			printf("."); fflush(stdout);
+			show_progress_timeout = endtick(1); //1 second period
+		}
+
 	} while (!abort && get_ticks() <= etime);
 
 	return abort;
