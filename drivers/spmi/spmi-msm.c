@@ -298,7 +298,8 @@ static int msm_spmi_probe(struct udevice *dev)
 		uint32_t periph = readl(priv->arb_chnl + ARB_CHANNEL_OFFSET(i));
 		uint8_t slave_id = (periph & 0xf0000) >> 16;
 		uint8_t pid = (periph & 0xff00) >> 8;
-#if 0
+#if 1
+		//this allows charging in kernel
 		priv->channel_map[slave_id][pid] = i;
 
 		/* Mark channels read-only when from different owner */
@@ -310,6 +311,7 @@ static int msm_spmi_probe(struct udevice *dev)
 				priv->channel_map[slave_id][pid] |= SPMI_CHANNEL_READ_ONLY;
 		}
 #else
+		//charging in kernel doesn't work when we use this
 		const uint32_t valid = priv->channel_map[slave_id][pid] & SPMI_CHANNEL_VALID;
 		const uint32_t read_only = priv->channel_map[slave_id][pid] & SPMI_CHANNEL_READ_ONLY;
 		uint32_t cnfg = readl(priv->spmi_cnfg + ARB_CHANNEL_OFFSET(i));
