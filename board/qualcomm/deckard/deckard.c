@@ -22,12 +22,17 @@
 #include <led.h>
 #include <button.h>
 #include <power/pmic.h>
+
 #include "deckard_eeprom.h"
+#include "deckard_battery.h"
+#include "pm8550vs.h"
+#include "smb1510.h"
 #include <part.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
 static ulong boot_wrapper_version __section(".data");
+
 int g_boot_wrapper_version;
 /**
  * Save x0 register value, which should encode the boot wrapper version
@@ -38,108 +43,43 @@ void save_boot_params(ulong r0)
 	save_boot_params_ret();
 }
 
-#define CHGR_VBAT_STATUS			(0x2608)
-#define CHGR_VBAT_STATUS_LT_2V		(0x01)
-#define CHGR_VBAT_STATUS_GT_FULL_ON	(0x02)
-
-#define CHGR_CHG_EN_ADDR  (0x2646)
-#define CHGR_CHG_EN_CHARGING_ENABLE_CMD BIT(0)
-
-#define CHGR_IPRE_CFG_ADDR (0x2650)
-#define CHGR_ICHG_CFG_ADDR (0x2654)
-
-// NOTE These are 1s currents
-enum pre_charge_current {
-	IPRE_100MA,
-	IPRE_150MA,
-	IPRE_200MA,
-	IPRE_250MA,
-	// note: PM8550B has 100mA step size above 300mA
-	IPRE_300MA,
-	IPRE_400MA,
-	IPRE_500MA,
-	IPRE_600MA,
-};
-
-#define MAX_WAIT_COUNT                                      (5)
-#define SPMI_BRIDGE_DELAY                                   (30)
-#define SMB_SID          		 	(0xD)
-#define CMD_WRITE        		 	(0x20)
-#define CMD_READ          			(0x10)
-#define COMPLETE_STATUS_MASK        (0x40)
-#define SDAM_STATUS_IN_PROCESS      (0x00)
-#define SDAM_STATUS_COMPLETED       (0x40)
-#define PID(reg)          			((u32)(((reg) & 0xFF00) >> 8))
-#define OFFSET(reg)       			((u32)((reg) & 0x00FF))
-
-static int read_smb1510(struct udevice *pmic, uint16_t reg)
+// #define CHECK_PMICS
+#ifdef CHECK_PMICS
+void check_pmic(const char *const pmic_dts, const char *const pmic_name)
 {
-  	int cnt = 0;
-	int ret;
+	int             ret;
+	struct udevice *pmic = NULL;
 
-  	//Set register SID/PID/Offset and data
-	pmic_reg_write(pmic, 0x7E4B, SMB_SID | CMD_READ);
-	pmic_reg_write(pmic, 0x7E4C, PID(reg));
-	pmic_reg_write(pmic, 0x7E4D, OFFSET(reg));
-
-	//Trigger PBS
-	pmic_reg_write(pmic, 0x2142, 0x10);
-
-	//Wait for read cmd completion
-	while(cnt++ < MAX_WAIT_COUNT)
-	{
-		udelay(SPMI_BRIDGE_DELAY);
-		ret = pmic_reg_read(pmic, 0x7E4B);
-		if((ret & COMPLETE_STATUS_MASK))
-		{
-			break;
-		}
+	ret = pmic_get(pmic_dts, &pmic);
+	if (ret != 0) {
+		printf("Failed to Find %s - %s, ret: %d\n", pmic_dts, pmic_name, ret);
+		return;
 	}
 
-	if(!(ret & SDAM_STATUS_COMPLETED))
-	{
-		printf("bridge read not completed, cmd_status = 0x%02X, count = %d", ret, cnt);
-		return -1;
+	ret = pmic_reg_read(pmic, 0x0105);
+	if (ret < 0) {
+		printf("%s failed: %d\n", pmic_name, ret);
 	}
-
-  	ret = pmic_reg_read(pmic, 0x7E4E);
-
-  	return ret;
+	// else
+	// {
+	// 	printf("%s subtype: 0x%02X\n", pmic_name, ret);
+	// }
 }
 
-static int write_smb1510(struct udevice *pmic, uint16_t reg, uint8_t value)
+void check_pmics_comms(void)
 {
-  	int cnt = 0;
-	int ret;
-
-  	//Set register SID/PID/Offset and data
-	pmic_reg_write(pmic, 0x7E4B, SMB_SID | CMD_WRITE);
-	pmic_reg_write(pmic, 0x7E4C, PID(reg));
-	pmic_reg_write(pmic, 0x7E4D, OFFSET(reg));
-	pmic_reg_write(pmic, 0x7E4E, value);
-
-  	//Trigger PBS
-	pmic_reg_write(pmic, 0x2142, 0x10);
-
-	//Wait for read cmd completion
-	while(cnt++ < MAX_WAIT_COUNT)
-	{
-		udelay(SPMI_BRIDGE_DELAY);
-		ret = pmic_reg_read(pmic, 0x7E4B);
-		if((ret & COMPLETE_STATUS_MASK))
-		{
-			break;
-		}
-	}
-
-	if(!(ret & SDAM_STATUS_COMPLETED))
-	{
-		printf("bridge read not completed, cmd_status = 0x%02X, count = %d", ret, cnt);
-		return -1;
-	}
-
-  	return 0;
+	check_pmic("pmic@0", "PMK8550");
+	check_pmic("pmic@1", "PM8550");
+	check_pmic("pmic@2", "PM8550VS_c");
+	check_pmic("pmic@3", "PM8550VS_d");
+	check_pmic("pmic@4", "PM8550VS_e");
+	check_pmic("pmic@6", "PM8550VS_g");
+	check_pmic("pmic@7", "PM8550BHS");
+	check_pmic("pmic@8", "PM8550VE");
+	check_pmic("pmic@c", "PM8010_m");
+	check_pmic("pmic@d", "PM8010_n");
 }
+#endif
 
 static inline void write32(unsigned long addr, u32 value)
 {
@@ -162,41 +102,55 @@ static void deckard_disable_watchdog(void)
 
 static void deckard_setup(void)
 {
-	int ret;
-	struct udevice *pmic;
-	struct udevice *pmic_pmk;
-	u32 voltage;
+	int             ret;
+	struct udevice *pmk8550;
+	struct udevice *pm8550vse;
+	struct udevice *pm8550b;
 
-	// Find the PM8550B
-	ret = pmic_get("pmic@7", &pmic);
-	if (ret != 0)
-	{
-		printf("Failed to Find PM8550B\n");
-		return;
-	}
+#if CHECK_PMICS
+	check_pmics_comms();
+#endif
 
 	// Find the PMK8650
-	ret = pmic_get("pmic@0", &pmic_pmk);
-	if (ret != 0)
-	{
+	ret = pmic_get("pmic@0", &pmk8550);
+	if (ret != 0) {
 		printf("Failed to Find PMK8650\n");
 		return;
 	}
 
-	// Enable ADC
-	pmic_reg_write(pmic, 0x3646, 0x80);
-	// Enable FG
-	pmic_reg_write(pmic, 0x4F46, 0x80); 
+	// Find the PM8550VS_e
+	ret = pmic_get("pmic@4", &pm8550vse);
+	if (ret != 0) {
+		printf("Failed to Find PM8550VS_e\n");
+		return;
+	}
+
+	// Find the PM8550B
+	ret = pmic_get("pmic@7", &pm8550b);
+	if (ret != 0) {
+		printf("Failed to Find PM8550B\n");
+		return;
+	}
+
+	/* Fix GPIO Levels that XBL continues to not let us */
+	pm8550vs_set_gpio_vin_level(pm8550vse, PM8550VS_GPIO_3, PM8550VS_GPIO_VIN_1);
+	pm8550vs_set_gpio_vin_level(pm8550vse, PM8550VS_GPIO_4, PM8550VS_GPIO_VIN_1);
+
+	/* Ensure Battery is OK to proceed */
+	deckard_battery_recover_uvlo(pmk8550, pm8550b);
+
+	/* Setup Charging */
+	deckard_battery_enable_charging(pm8550b);
 
 	printf("smb1510: enable fixed frequency at 500khz mode\n");
-	write_smb1510(pmic_pmk,0x30C9,0x0f);
+	smb1510_set_switching_frequency(pmk8550, 0x0F);
 }
 
 /* Check for vol- button - if pressed - stop autoboot */
 int misc_init_r(void)
 {
-	struct udevice *btn,*led;
-	int ret;
+	struct udevice     *btn, *led;
+	int                 ret;
 	enum button_state_t state;
 	struct blk_desc *desc;
 
@@ -209,11 +163,10 @@ int misc_init_r(void)
 
 	ret = button_get_by_label("vol_down", &btn);
 	if (ret < 0) {
-			printf("Couldn't find Vol- button!\n");
+		printf("Couldn't find Vol- button!\n");
 	} else {
 		state = button_get_state(btn);
 		if (state == BUTTON_ON) {
-			// env_set("BOOT_ORDER", "R");
 			printf("Vol- button pressed\n");
 		}
 	}
@@ -247,7 +200,7 @@ int misc_init_r(void)
 		}
 	}
 
-	ret  = led_get_by_label("blue", &led);
+	ret = led_get_by_label("blue", &led);
 	if (ret < 0) {
 		printf("Couldn't find blue led!\n");
 	} else {
