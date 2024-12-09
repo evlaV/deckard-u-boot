@@ -29,8 +29,14 @@ void deckard_battery_enable_charging(struct udevice *pm8550b)
 	/* Set Fast Charge Current to 2,040 mA (0.75C) */
 	ret |= pm8550b_set_fast_charge_current(pm8550b, 2040);
 
+	/* Set Max Fast Charge Current to 2,040 mA (0.75C) */
+	ret |= pm8550b_set_max_fast_charge_current(pm8550b, 2040);
+
 	/* Set Float Voltage to 8,900 mV */
 	ret |= pm8550b_set_float_voltage(pm8550b, 8900);
+
+	/* Set Max Float Voltage to 8,900 mV */
+	ret |= pm8550b_set_max_float_voltage(pm8550b, 8900);
 
 	/* Set Termination Current to 150 mA */
 	ret |= pm8550b_set_termination_current(pm8550b, 150);
