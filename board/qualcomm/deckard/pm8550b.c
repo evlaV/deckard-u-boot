@@ -8,7 +8,9 @@
 #define PM8550B_CHGR_CHG_EN_CHARGING_ENABLE_CMD                 0x01
 #define PM8550B_CHGR_IPRE_CFG_ADDR                              (PM8550B_CHGR_BASE + 0x50)
 #define PM8550B_CHGR_ICHG_CFG_ADDR                              (PM8550B_CHGR_BASE + 0x54)
+#define PM8550B_CHGR_ICHG_MAX_ADDR                              (PM8550B_CHGR_BASE + 0x55)
 #define PM8550B_CHGR_VFLT_CFG_ADDR                              (PM8550B_CHGR_BASE + 0x58)
+#define PM8550B_CHGR_VFLT_MAX_ADDR                              (PM8550B_CHGR_BASE + 0x59)
 #define PM8550B_CHGR_TERM_CFG_ADDR                              (PM8550B_CHGR_BASE + 0x60)
 #define PM8550B_CHGR_TERM_CFG_I_TERM                            0x80
 #define PM8550B_CHGR_TERM_CFG_USE_ANALOG_TERMINATION            0x08
@@ -143,6 +145,23 @@ int pm8550b_set_fast_charge_current(struct udevice *pmic, uint16_t current_ma)
 	return 0;
 }
 
+int pm8550b_set_max_fast_charge_current(struct udevice *pmic, uint16_t current_ma)
+{
+	uint8_t reg;
+	int     ret;
+
+	// Scale Current to Register Units (60 mA increments)
+	reg = (uint8_t)((current_ma + 30) / 60);
+
+	ret = pmic_reg_write(pmic, PM8550B_CHGR_ICHG_MAX_ADDR, reg);
+	if (ret != 0) {
+		printf("Failed to Set Max Fast Charge Current\n");
+		return ret;
+	}
+
+	return 0;
+}
+
 int pm8550b_set_float_voltage(struct udevice *pmic, uint16_t voltage_mv)
 {
 	uint8_t reg;
@@ -163,6 +182,28 @@ int pm8550b_set_float_voltage(struct udevice *pmic, uint16_t voltage_mv)
 
 	return 0;
 }
+
+int pm8550b_set_max_float_voltage(struct udevice *pmic, uint16_t voltage_mv)
+{
+	uint8_t reg;
+	int     ret;
+
+	if (voltage_mv < 7200) {
+		return -EINVAL;
+	}
+
+	// Scale Voltage to Register Units (20 mV increments)
+	reg = (uint8_t)((voltage_mv - 7200 + 10) / 20);
+
+	ret = pmic_reg_write(pmic, PM8550B_CHGR_VFLT_MAX_ADDR, reg);
+	if (ret != 0) {
+		printf("Failed to Set Max Float Voltage\n");
+		return ret;
+	}
+
+	return 0;
+}
+
 
 int pm8550b_set_termination_current(struct udevice *pmic, uint16_t current_ma)
 {
