@@ -210,9 +210,10 @@ int misc_init_r(void)
 	// get board data from eeprom
 	deckard_eeprom_init();
 
+#define DECKARD_UBOOT_LUNIDX "2"
 	//put code here for figuring out A/B/R partition that was booted
 //////
-	ret = blk_get_device_by_str("scsi", "2", &desc);
+	ret = blk_get_device_by_str("scsi", DECKARD_UBOOT_LUNIDX, &desc);
 	if( ret >= 0 )
 	{
 		part_print_fstype_uuid(desc);
