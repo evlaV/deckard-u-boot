@@ -717,4 +717,9 @@ static inline bool part_get_bootable(struct blk_desc *desc)
 
 #endif /* CONFIG_PARTITIONS */
 
+
+#ifdef CONFIG_CMD_GPT_RENAME
+int gpt_set_xbl_partition_bootable_partfstype(struct blk_desc *blk_dev_desc, char *const partname);
+#endif
+
 #endif /* _PART_H */

@@ -153,6 +153,9 @@ int misc_init_r(void)
 	int                 ret;
 	enum button_state_t state;
 	struct blk_desc *desc;
+	char * bootedslot;
+	char * bootorder;
+	char * rebootneeded;
 
 	deckard_disable_watchdog();
 
@@ -210,7 +213,10 @@ int misc_init_r(void)
 	// get board data from eeprom
 	deckard_eeprom_init();
 
+#define DECKARD_SYSTEM_LUNIDX "0"
 #define DECKARD_UBOOT_LUNIDX "2"
+#define DECKARD_RESCUE_LUNIDX "3"
+
 	//put code here for figuring out A/B/R partition that was booted
 //////
 	ret = blk_get_device_by_str("scsi", DECKARD_UBOOT_LUNIDX, &desc);
@@ -221,6 +227,50 @@ int misc_init_r(void)
 	else
 	{
 		printf("blk_get_device_by_str failed, ret = %d\n",ret);
+	}
+
+	env_set("UBOOTLUNIDX",DECKARD_UBOOT_LUNIDX);
+	env_set("SYSTEMLUNIDX",DECKARD_SYSTEM_LUNIDX);
+	env_set("RESCUELUNIDX",DECKARD_RESCUE_LUNIDX);
+
+	bootorder = env_get("BOOT_ORDER");
+	bootedslot = env_get("booted_slot");
+	rebootneeded = env_get("rebootneeded");
+
+	if(rebootneeded)
+	{
+		//if rebootneeded is set in env, nuke it,
+		// it should not be saved in disk env
+		env_set("rebootneeded","");
+		env_save();
+	}
+
+	if(!bootorder)
+	{
+		//BOOT_ORDER is unset, so set to a default value
+		printf("BOOT_ORDER was unset, setting to A\n");
+		env_set("BOOT_ORDER","A");
+		bootorder = env_get("BOOT_ORDER");
+		env_save();
+	}
+
+	//compare first character of these env vars to check for A or B
+	if( bootorder && bootedslot && ( bootorder[0] == bootedslot[0] ) ) 
+	{
+		printf("booted_slot matches BOOT_ORDER\n");
+	}
+	else
+	{
+		printf("booted_slot mismatch BOOT_ORDER\n");
+		if(!strncmp( env_get("booted_slot"),"A",1))
+		{
+			gpt_set_xbl_partition_bootable_partfstype(desc,"ubootb");
+		}
+		else
+		{
+			gpt_set_xbl_partition_bootable_partfstype(desc,"uboot");
+		}
+		env_set("rebootneeded","1");
 	}
 
 	printf("booted_slot: %s\n", env_get("booted_slot"));

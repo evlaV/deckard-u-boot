@@ -1112,6 +1112,91 @@ out:
 
 	return ret;
 }
+
+#define BOOTSLOTPARTTYPEXBLTARGET 	 "400ffdcd-22e0-47e7-9a23-f16ed9382388"
+#define BOOTSLOTPARTTYPEXBLNONTARGET "400ffdcd-22e0-47e7-9a23-f16ed938238d"
+
+/**
+ * gpt_set_xbl_partition_bootable_partfstype() - Set part fstype uuid to a magic value 
+ * used by qcom xbl, and also marks disk as bootable
+ *
+ * When this is called all partitions on current disk that have the magic xbl parttype uuid 
+ * will be set to a default value to ensure the xbl will not try to boot those partitions
+ *
+ * @desc: block device descriptor
+ * @name: partition name
+ *
+ * @Return: '0' on success and -ve error on failure
+ */
+int gpt_set_xbl_partition_bootable_partfstype(struct blk_desc *blk_dev_desc, char *const partname)
+{
+	char *name;
+	char disk_guid[UUID_STR_LEN + 1];
+	struct list_head *pos;
+	struct disk_part *curr;
+	struct disk_partition *partitions = NULL;
+	int part_count = 0;
+	int ret = get_disk_guid(blk_dev_desc, disk_guid);
+
+	if ( ! IS_ENABLED(CONFIG_PARTITION_TYPE_GUID) ) 
+	{
+		printf("Error: CONFIG_PARTITION_TYPE_GUID is required to use this function\n");
+		return ENOMEM;
+	}
+
+	if (ret < 0)
+		return ret;
+
+	ret = get_gpt_info(blk_dev_desc);
+	if (ret <= 0)
+		goto out;
+
+	part_count = ret;
+	partitions = malloc(sizeof(*partitions) * part_count);
+	if (!partitions) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	/* Copy partitions and clear bootable flag */
+	part_count = 0;
+	list_for_each(pos, &disk_partitions) {
+		curr = list_entry(pos, struct disk_part, list);
+		partitions[part_count] = curr->gpt_part_info;
+		partitions[part_count].bootable &= ~PART_BOOTABLE;
+		if(!strcmp(partitions[part_count].type_guid, BOOTSLOTPARTTYPEXBLTARGET))
+		{
+			//this is disabling xbl booting to this target partition by naming it a dummy value
+			strcpy(partitions[part_count].type_guid, BOOTSLOTPARTTYPEXBLNONTARGET);
+		}
+		part_count++;
+	}
+
+	name = partname;
+	
+	bool found = false;
+	for (int i = 0; i < part_count; i++) {
+		if (strcmp((char *)partitions[i].name, name) == 0) {
+			partitions[i].bootable |= PART_BOOTABLE;
+			strcpy(partitions[i].type_guid, BOOTSLOTPARTTYPEXBLTARGET);
+			found = true;
+		}
+	}
+
+	if (!found) {
+		printf("Warning: No partition matching '%s' found\n", name);
+	}
+
+	ret = gpt_restore(blk_dev_desc, disk_guid, partitions, part_count);
+
+out:
+	del_gpt_info();
+
+	if (partitions)
+		free(partitions);
+
+	return ret;
+}
 #endif
 
 /**
@@ -1174,6 +1259,8 @@ static int do_gpt(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 		ret = do_rename_gpt_parts(blk_dev_desc, argv[1], argv[4], argv[5]);
 	} else if ((strcmp(argv[1], "set-bootable") == 0)) {
 		ret = gpt_set_bootable(blk_dev_desc, argv[4]);
+	} else if ((strcmp(argv[1], "set-bootable-xbl") == 0)) {
+		ret = gpt_set_xbl_partition_bootable_partfstype(blk_dev_desc, argv[4]);		
 #endif
 	} else {
 		return CMD_RET_USAGE;
@@ -1229,6 +1316,8 @@ U_BOOT_CMD(gpt, CONFIG_SYS_MAXARGS, 1, do_gpt,
 	"    - rename the specified partition\n"
 	" gpt set-bootable <interface> <dev> <list>\n"
 	"    - make partition names in list bootable\n"
+	" gpt set-bootable-xbl <interface> <dev> <list>\n"
+	"    - make partition name bootable for xbl\n"	
 	" Example usage:\n"
 	" gpt swap mmc 0 foo bar\n"
 	" gpt rename mmc 0 3 foo\n"
