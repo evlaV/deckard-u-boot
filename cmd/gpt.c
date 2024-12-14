@@ -1158,6 +1158,8 @@ int gpt_set_xbl_partition_bootable_partfstype(struct blk_desc *blk_dev_desc, cha
 		goto out;
 	}
 
+	name = partname;
+
 	/* Copy partitions and clear bootable flag */
 	part_count = 0;
 	list_for_each(pos, &disk_partitions) {
@@ -1169,11 +1171,16 @@ int gpt_set_xbl_partition_bootable_partfstype(struct blk_desc *blk_dev_desc, cha
 			//this is disabling xbl booting to this target partition by naming it a dummy value
 			strcpy(partitions[part_count].type_guid, BOOTSLOTPARTTYPEXBLNONTARGET);
 		}
+		if( !strcmp((char *)partitions[part_count].name, "ubootenv") ) 
+		{
+			if( !strcmp( name, "uboot" ) )
+				strcpy(partitions[part_count].name, "ubootenvb");
+			else
+				strcpy(partitions[part_count].name, "ubootenva");
+		}
 		part_count++;
 	}
 
-	name = partname;
-	
 	bool found = false;
 	for (int i = 0; i < part_count; i++) {
 		if (strcmp((char *)partitions[i].name, name) == 0) {
@@ -1181,10 +1188,16 @@ int gpt_set_xbl_partition_bootable_partfstype(struct blk_desc *blk_dev_desc, cha
 			strcpy(partitions[i].type_guid, BOOTSLOTPARTTYPEXBLTARGET);
 			found = true;
 		}
+		if ( (!strcmp((char *)partitions[i].name, "ubootenva") && !strcmp( name, "uboot" ) ) ||
+			 (!strcmp((char *)partitions[i].name, "ubootenvb") && !strcmp( name, "ubootb") )  ) 
+		{
+			strcpy(partitions[i].name, "ubootenv");
+		}
 	}
 
 	if (!found) {
 		printf("Warning: No partition matching '%s' found\n", name);
+		goto out;
 	}
 
 	ret = gpt_restore(blk_dev_desc, disk_guid, partitions, part_count);
