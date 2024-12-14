@@ -231,6 +231,7 @@ int part_get_info_whole_disk(struct blk_desc *desc,
 
 void part_print(struct blk_desc *desc);
 void part_print_fstype_uuid(struct blk_desc *desc);
+char part_get_booted_slot(struct blk_desc *desc);
 void part_init(struct blk_desc *desc);
 void dev_print(struct blk_desc *desc);
 
@@ -499,6 +500,13 @@ struct part_driver {
 	 * @printfsuuids.desc:	Block device descriptor
 	 */
 	void (*printfsuuids)(struct blk_desc *desc);
+
+	/**
+	 * @get_booted_slot:		get uboot env
+	 *
+	 * @get_booted_slot.desc:	Block device descriptor
+	 */
+	char (*get_booted_slot)(struct blk_desc *desc);
 };
 
 /* Declare a new U-Boot partition 'driver' */

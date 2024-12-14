@@ -491,9 +491,13 @@ const char *bootdelay_process(void)
 	} else
 #endif /* CONFIG_POST */
 	if (bootcount_error())
+	{
 		s = env_get("altbootcmd");
+	}
 	else
+	{
 		s = env_get("bootcmd");
+	}
 
 	if (IS_ENABLED(CONFIG_OF_CONTROL))
 		process_fdt_options();

@@ -146,6 +146,60 @@ static void deckard_setup(void)
 	smb1510_set_switching_frequency(pmk8550, 0x0F);
 }
 
+#define DECKARD_SYSTEM_LUNIDX "0"
+#define DECKARD_UBOOT_LUNIDX "2"
+#define DECKARD_RESCUE_LUNIDX "3"
+//M slot is the master slot / default
+#define DECKARD_UBOOT_ENV_SLOT_M "2:5"
+#define DECKARD_UBOOT_ENV_SLOT_A "2:2"
+#define DECKARD_UBOOT_ENV_SLOT_B "2:4"
+#define DECKARD_UBOOT_ENV_SLOT_R "3:2"
+
+//returns an index that env_ext4_get_dev_part() can use (overrides weak ref func ptr)
+//and you can also get the 
+int deckard_get_boot(char * bootedslotref)
+{
+	struct blk_desc *desc;
+	int ret;
+
+	*bootedslotref = 'X';
+	ret = blk_get_device_by_str("scsi", DECKARD_UBOOT_LUNIDX, &desc);
+	if( ret >= 0 )
+	{
+		switch(part_get_booted_slot(desc))
+		{
+			case 'A':
+				*bootedslotref = 'A';
+				return 1;
+			case 'B':
+				*bootedslotref = 'B';
+				return 2;
+			case 'R':
+				*bootedslotref = 'R';
+				return 3;
+			default:
+				return 0;
+		}
+	}
+	else {
+		return 0;
+	}
+}
+
+//this overrides the built-in default function
+const char *env_ext4_get_dev_part(void)
+{
+	static char *const dev_part[] = { 
+										DECKARD_UBOOT_ENV_SLOT_M, 
+										DECKARD_UBOOT_ENV_SLOT_A, 
+										DECKARD_UBOOT_ENV_SLOT_B,
+										DECKARD_UBOOT_ENV_SLOT_R
+									};
+	char bootedslot;
+	int devpartidx = deckard_get_boot(&bootedslot);
+	return dev_part[devpartidx];
+}
+
 /* Check for vol- button - if pressed - stop autoboot */
 int misc_init_r(void)
 {
@@ -155,7 +209,10 @@ int misc_init_r(void)
 	struct blk_desc *desc;
 	char * bootedslot;
 	char * bootorder;
-	char * rebootneeded;
+	//char * rebootneeded;
+	int reboot_needed = 0;
+	char bootedslotquery;
+	int slotdiffers = 0;
 
 	deckard_disable_watchdog();
 
@@ -213,20 +270,32 @@ int misc_init_r(void)
 	// get board data from eeprom
 	deckard_eeprom_init();
 
-#define DECKARD_SYSTEM_LUNIDX "0"
-#define DECKARD_UBOOT_LUNIDX "2"
-#define DECKARD_RESCUE_LUNIDX "3"
-
-	//put code here for figuring out A/B/R partition that was booted
-//////
 	ret = blk_get_device_by_str("scsi", DECKARD_UBOOT_LUNIDX, &desc);
 	if( ret >= 0 )
 	{
-		part_print_fstype_uuid(desc);
+		//part_print_fstype_uuid(desc); // old way
+
+		deckard_get_boot(&bootedslotquery);
+		switch(bootedslotquery)
+		{
+			case 'A':
+				env_set("booted_slot","A");
+				break;
+			case 'B':
+				env_set("booted_slot","B");
+				break;
+			case 'R':
+				env_set("booted_slot","R");
+				break;				
+			default:
+				env_set("booted_slot","A");
+				break;		
+		}
 	}
 	else
 	{
 		printf("blk_get_device_by_str failed, ret = %d\n",ret);
+		env_set("booted_slot","A");
 	}
 
 	env_set("UBOOTLUNIDX",DECKARD_UBOOT_LUNIDX);
@@ -235,15 +304,6 @@ int misc_init_r(void)
 
 	bootorder = env_get("BOOT_ORDER");
 	bootedslot = env_get("booted_slot");
-	rebootneeded = env_get("rebootneeded");
-
-	if(rebootneeded)
-	{
-		//if rebootneeded is set in env, nuke it,
-		// it should not be saved in disk env
-		env_set("rebootneeded","");
-		env_save();
-	}
 
 	if(!bootorder)
 	{
@@ -257,11 +317,11 @@ int misc_init_r(void)
 	//compare first character of these env vars to check for A or B
 	if( bootorder && bootedslot && ( bootorder[0] == bootedslot[0] ) ) 
 	{
-		printf("booted_slot matches BOOT_ORDER\n");
+		//printf("booted_slot matches BOOT_ORDER\n");
 	}
 	else
 	{
-		printf("booted_slot mismatch BOOT_ORDER\n");
+		//printf("booted_slot mismatch BOOT_ORDER\n");
 		if(!strncmp( env_get("booted_slot"),"A",1))
 		{
 			gpt_set_xbl_partition_bootable_partfstype(desc,"ubootb");
@@ -270,10 +330,30 @@ int misc_init_r(void)
 		{
 			gpt_set_xbl_partition_bootable_partfstype(desc,"uboot");
 		}
-		env_set("rebootneeded","1");
+		//env_set("rebootneeded","1");
+		reboot_needed = 1;
+		slotdiffers = 1;
 	}
 
-	printf("booted_slot: %s\n", env_get("booted_slot"));
+	printf("booted_slot: %s %s\n", env_get("booted_slot"), (slotdiffers ? "(changed)" : "") );
+
+	if(reboot_needed) 
+	{
+		//this will make it so we get a countdown, it will fail to boot, fall back to altbootcmd, and reset
+		printf("reboot needed\n");
+		env_set_ulong("bootcount", 2);
+		env_set_ulong("bootlimit", 1);
+		env_set_ulong("upgrade_available", 1); //the bootcount_env stuff uses this as the hook to check the bootlimit
+		env_set("altbootcmd","reset");
+		//we could do a reset herewith do_reset(), but that would skip the user's ability to interrupt the reboot, which is not good
+	}
+	else
+	{
+		env_set_ulong("bootcount", 1);
+		env_set_ulong("bootlimit", 10);
+		env_set_ulong("upgrade_available", 0); 
+		env_set("altbootcmd","");
+	}
 
 	printf("deckard init: done\n");
 ///////

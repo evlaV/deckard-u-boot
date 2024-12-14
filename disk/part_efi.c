@@ -264,6 +264,63 @@ static void __maybe_unused part_print_efi(struct blk_desc *desc)
 #define BOOTSLOTFSTYPEXBLTARGET "400ffdcd-22e0-47e7-9a23-f16ed9382388"
 extern int g_boot_wrapper_version; 
 
+char part_get_booted_slot_efi(struct blk_desc *desc)
+{
+	ALLOC_CACHE_ALIGN_BUFFER_PAD(gpt_header, gpt_head, 1, desc->blksz);
+	gpt_entry *gpt_pte = NULL;
+	int i = 0;
+	unsigned char *uuid;
+	char buf[40];
+	int foundslot = 0;
+	char bootedslotname = 'U';
+
+	if(g_boot_wrapper_version > 9000)
+	{
+		bootedslotname = 'R';
+		foundslot = 1;
+	}
+
+	/* This function validates AND fills in the GPT header and PTE */
+	if (find_valid_gpt(desc, gpt_head, &gpt_pte) != 1)
+		return 'Z';
+
+	for (i = 0; i < le32_to_cpu(gpt_head->num_partition_entries); i++) {
+		/* Skip invalid PTE */
+		if (!is_pte_valid(&gpt_pte[i]))
+			continue;
+
+		uuid = (unsigned char *)gpt_pte[i].partition_type_guid.b;
+		//printf("[%d] type: %pUl\n", i+1, uuid);
+
+		snprintf(buf,40,"%pUl", uuid);
+		if(!foundslot && strcmp(BOOTSLOTFSTYPEXBLTARGET,buf) == 0) 
+		{
+			if( i+1 == BOOTSLOTAIDX )
+			{
+				bootedslotname = 'A';
+			}
+			else if( i+1 == BOOTSLOTBIDX )
+			{
+				bootedslotname = 'B';
+			}
+			else
+			{
+				bootedslotname = 'Q';
+			}
+			foundslot = 1;
+		}
+	}
+
+	if(!foundslot)
+	{
+		bootedslotname = 'X';
+	}
+
+	/* Remember to free pte */
+	free(gpt_pte);
+	return bootedslotname;
+}
+
 void part_printfsuuids_efi(struct blk_desc *desc)
 {
 	ALLOC_CACHE_ALIGN_BUFFER_PAD(gpt_header, gpt_head, 1, desc->blksz);
@@ -1279,5 +1336,6 @@ U_BOOT_PART_TYPE(a_efi) = {
 	.get_info	= part_get_info_ptr(part_get_info_efi),
 	.print		= part_print_ptr(part_print_efi),
 	.printfsuuids	= part_printfsuuids_ptr(part_printfsuuids_efi),
+	.get_booted_slot = part_get_booted_slot_efi,
 	.test		= part_test_efi,
 };
