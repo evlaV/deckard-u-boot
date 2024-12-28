@@ -13,7 +13,7 @@
 #include <power/pmic.h>
 
 int pm8550b_enable_fuel_guage(struct udevice *pmic, bool enable);
-int pm8550b_get_battery_voltage(struct udevice *pmic, uint16_t *battery_mv);
+// int pm8550b_get_battery_voltage(struct udevice *pmic, uint16_t *battery_mv);
 
 int pm8550b_set_fast_charge_current(struct udevice *pmic, uint16_t current_ma);
 int pm8550b_set_max_fast_charge_current(struct udevice *pmic, uint16_t current_ma);

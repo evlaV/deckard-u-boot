@@ -12,7 +12,6 @@
 
 #include <power/pmic.h>
 
-void deckard_battery_recover_uvlo(struct udevice *pmk8550, struct udevice *pm8550b);
-void deckard_battery_enable_charging(struct udevice *pm8550b);
+void deckard_battery_prep_for_boot(struct udevice *pmk8550, struct udevice *pm8550b);
 
 #endif /* __DECKARD_BATTERY_H */

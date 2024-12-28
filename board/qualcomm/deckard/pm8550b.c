@@ -97,6 +97,11 @@ int pm8550b_enable_fuel_guage(struct udevice *pmic, bool enable)
 	return 0;
 }
 
+#if 0
+/// @brief This doesn't work reliably at low voltages, so it is abandoned in place.
+/// @param pmic 
+/// @param battery_mv 
+/// @return 
 int pm8550b_get_battery_voltage(struct udevice *pmic, uint16_t *battery_mv)
 {
 	int      ret;
@@ -127,6 +132,7 @@ int pm8550b_get_battery_voltage(struct udevice *pmic, uint16_t *battery_mv)
 
 	return 0;
 }
+#endif
 
 int pm8550b_set_fast_charge_current(struct udevice *pmic, uint16_t current_ma)
 {
@@ -203,7 +209,6 @@ int pm8550b_set_max_float_voltage(struct udevice *pmic, uint16_t voltage_mv)
 
 	return 0;
 }
-
 
 int pm8550b_set_termination_current(struct udevice *pmic, uint16_t current_ma)
 {

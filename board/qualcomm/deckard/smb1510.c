@@ -27,10 +27,14 @@
 #define PMK8550_SDAM15_SPMI2_REGISTER   (PMK8550_SDAM15_BASE + 0x4D)
 #define PMK8550_SDAM15_SPMI2_VALUE      (PMK8550_SDAM15_BASE + 0x4E)
 
+#define SMB1510_REVID_BASE    (0x0100)
+#define SMB1510_REVID_SUBTYPE (SMB1510_REVID_BASE + 0x05)
+#define SMB_SVST_SUBTYPE      (0x54)
+
 #define SMB1510_SCHG_PERPH0_BASE          (0x3000)
 #define SMB1510_SCHG_PERPH0_DCDC_FREQ_SEL (SMB1510_SCHG_PERPH0_BASE + 0xC9)
 
-int smb1510_read(struct udevice *pmic, uint16_t reg)
+int smb1510_read(struct udevice *pmic, uint reg)
 {
 	int cnt = 0;
 	int ret;
@@ -44,19 +48,16 @@ int smb1510_read(struct udevice *pmic, uint16_t reg)
 	pmic_reg_write(pmic, PMK8550_PBS3_CLIENT2_BASE_TRIG_CTL, PMK8550_PBS3_CLIENT2_BASE_TRIG_BRG_PBS);
 
 	// Wait for read cmd completion
-	while (cnt++ < MAX_WAIT_COUNT)
-	{
+	while (cnt++ < MAX_WAIT_COUNT) {
 		udelay(SPMI_BRIDGE_DELAY);
 		ret = pmic_reg_read(pmic, PMK8550_SDAM15_SPMI2_COMMAND);
-		if ((ret & CMD_COMPLETE_STATUS_MASK))
-		{
+		if ((ret & CMD_COMPLETE_STATUS_MASK)) {
 			break;
 		}
 	}
 
-	if (!(ret & CMD_SDAM_STATUS_COMPLETED))
-	{
-		printf("SMB1510 bridge read not completed, cmd_status = 0x%02X, count = %d", ret, cnt);
+	if (!(ret & CMD_SDAM_STATUS_COMPLETED)) {
+		printf("SMB1510 bridge read not completed, cmd_status = 0x%02X, count = %d\n", ret, cnt);
 		return -ETIMEDOUT;
 	}
 
@@ -65,7 +66,7 @@ int smb1510_read(struct udevice *pmic, uint16_t reg)
 	return ret;
 }
 
-int smb1510_write(struct udevice *pmic, uint16_t reg, uint8_t value)
+int smb1510_write(struct udevice *pmic, uint reg, uint value)
 {
 	int cnt = 0;
 	int ret;
@@ -74,29 +75,57 @@ int smb1510_write(struct udevice *pmic, uint16_t reg, uint8_t value)
 	pmic_reg_write(pmic, PMK8550_SDAM15_SPMI2_COMMAND, SMB1510_SID | CMD_WRITE);
 	pmic_reg_write(pmic, PMK8550_SDAM15_SPMI2_PERIPHERAL, PERIPHERAL_ID(reg));
 	pmic_reg_write(pmic, PMK8550_SDAM15_SPMI2_REGISTER, REGISTER(reg));
-	pmic_reg_write(pmic, PMK8550_SDAM15_SPMI2_VALUE, value);
+	pmic_reg_write(pmic, PMK8550_SDAM15_SPMI2_VALUE, (uint8_t)value);
 
 	// Trigger PBS
 	pmic_reg_write(pmic, PMK8550_PBS3_CLIENT2_BASE_TRIG_CTL, PMK8550_PBS3_CLIENT2_BASE_TRIG_BRG_PBS);
 
 	// Wait for read cmd completion
-	while (cnt++ < MAX_WAIT_COUNT)
-	{
+	while (cnt++ < MAX_WAIT_COUNT) {
 		udelay(SPMI_BRIDGE_DELAY);
 		ret = pmic_reg_read(pmic, PMK8550_SDAM15_SPMI2_COMMAND);
-		if ((ret & CMD_COMPLETE_STATUS_MASK))
-		{
+		if ((ret & CMD_COMPLETE_STATUS_MASK)) {
 			break;
 		}
 	}
 
-	if (!(ret & CMD_SDAM_STATUS_COMPLETED))
-	{
-		printf("SMB1510 bridge read not completed, cmd_status = 0x%02X, count = %d", ret, cnt);
+	if (!(ret & CMD_SDAM_STATUS_COMPLETED)) {
+		printf("SMB1510 bridge read not completed, cmd_status = 0x%02X, count = %d\n", ret, cnt);
 		return -ETIMEDOUT;
 	}
 
 	return 0;
+}
+
+int smb1510_masked_write(struct udevice *pmic, uint reg, uint mask, uint value)
+{
+	int ret;
+
+	ret = smb1510_read(pmic, reg);
+	if (ret < 0) {
+		return ret;
+	}
+
+	value = ((uint8_t)ret & ~mask) | (value & mask);
+
+	return smb1510_write(pmic, reg, value);
+}
+
+int smb1510_check_subtype(struct udevice *pmic)
+{
+	int ret = smb1510_read(pmic, SMB1510_REVID_SUBTYPE);
+	if (ret < 0) {
+		return ret;
+	}
+
+	if (ret == SMB_SVST_SUBTYPE) {
+		printf("Found SMB1510\n");
+		return 0;
+	} else {
+		printf("SMB1510 read Failed - Check XBL Config!!!!\n");
+	}
+
+	return ret;
 }
 
 void smb1510_set_switching_frequency(struct udevice *pmic, uint8_t frequency)
