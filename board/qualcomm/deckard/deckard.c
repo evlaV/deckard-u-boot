@@ -132,15 +132,14 @@ static void deckard_setup(void)
 		return;
 	}
 
+	smb1510_check_subtype(pmk8550);
+
 	/* Fix GPIO Levels that XBL continues to not let us */
 	pm8550vs_set_gpio_vin_level(pm8550vse, PM8550VS_GPIO_3, PM8550VS_GPIO_VIN_1);
 	pm8550vs_set_gpio_vin_level(pm8550vse, PM8550VS_GPIO_4, PM8550VS_GPIO_VIN_1);
 
 	/* Ensure Battery is OK to proceed */
-	deckard_battery_recover_uvlo(pmk8550, pm8550b);
-
-	/* Setup Charging */
-	deckard_battery_enable_charging(pm8550b);
+	deckard_battery_prep_for_boot(pmk8550, pm8550b);
 
 	printf("smb1510: enable fixed frequency at 500khz mode\n");
 	smb1510_set_switching_frequency(pmk8550, 0x0F);
