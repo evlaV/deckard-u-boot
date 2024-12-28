@@ -1,12 +1,70 @@
 
-#include "pm8550b.h"
-#include "smb1510.h"
-
+#include <fs.h>
+#include <command.h>
 #include <linux/delay.h>
 
-#define BATT_2S_UV_OC_PROT_TH_4P4V 4400
+#include "pm8550b.h"
+#include "pmk8550.h"
+#include "smb1510.h"
 
-void deckard_battery_recover_uvlo(struct udevice *pmk8550, struct udevice *pm8550b)
+#define BATTERY_MIN_BOOT_VOLTAGE 7200
+#define BATTERY_DEAD_VOLTAGE     6000
+
+static void deckard_battery_enable_charging(struct udevice *pm8550b);
+
+typedef int (*printf_func_t)(const char *, ...);
+typedef void (*udelay_func_t)(unsigned long);
+typedef int (*pmic_write_t)(struct udevice *, uint reg, uint value);
+typedef int (*pmic_masked_write_t)(struct udevice *, uint reg, uint mask, uint value);
+typedef int (*pmic_read_t)(struct udevice *, uint reg);
+
+/// @brief  dead battery recovery pointer table that is shared with dead battery recovery program.
+///         Hopefully it is obvious that they must match
+typedef struct {
+	printf_func_t       printf_func;
+	udelay_func_t       udelay_func;
+	struct udevice     *pmic_pmk8550;
+	struct udevice     *pmic_pm8550b;
+	pmic_write_t        spmi_write_func;
+	pmic_masked_write_t spmi_masked_write_func;
+	pmic_read_t         spmi_read_func;
+	pmic_write_t        smb1510_write_func;
+	pmic_masked_write_t smb1510_masked_write_func;
+	pmic_read_t         smb1510_read_func;
+
+} dbr_pointer_table_t;
+
+static dbr_pointer_table_t s_pointer_table = {
+    .printf_func               = printf,
+    .udelay_func               = udelay,
+    .pmic_pmk8550              = NULL,
+    .pmic_pm8550b              = NULL,
+    .spmi_write_func           = pmic_reg_write,
+    .spmi_masked_write_func    = pmic_clrsetbits,
+    .spmi_read_func            = pmic_reg_read,
+    .smb1510_write_func        = smb1510_write,
+    .smb1510_masked_write_func = smb1510_masked_write,
+    .smb1510_read_func         = smb1510_read,
+};
+
+static int deckard_battery_load_recovery_program(void)
+{
+	// TODO Make "0xa7000000" from a macro of CONFIG_SYS_LOAD_ADDR... stringify #MACRO isn't working
+	int   argc    = 5;
+	char *argv[5] = {"do_the_dew", "scsi", "1:d", "0xa7000000", "dead_battery_recovery.bin"};
+
+	return do_load(NULL, 0, argc, argv, FS_TYPE_EXT);
+}
+
+static int deckard_battery_run_recovery_program(void)
+{
+	int   argc    = 1;
+	char *argv[1] = {(char *)&s_pointer_table};
+
+	return do_go_exec((void *)CONFIG_SYS_LOAD_ADDR, argc, argv);
+}
+
+void deckard_battery_prep_for_boot(struct udevice *pmk8550, struct udevice *pm8550b)
 {
 	int      ret;
 	uint16_t battery_mv;
@@ -15,14 +73,78 @@ void deckard_battery_recover_uvlo(struct udevice *pmk8550, struct udevice *pm855
 	pm8550b_enable_fuel_guage(pm8550b, true);
 
 	/* Get Battery Voltage to Check for UVLO */
-	ret = pm8550b_get_battery_voltage(pm8550b, &battery_mv);
-	if (ret < 0)
+	ret = pmk8550_get_battery_voltage(pmk8550, &battery_mv);
+	if (ret < 0) {
+		printf("Failed to read battery voltage\n");
+		printf("Attempting to boot anyway!\n");
 		return;
+	}
 
 	printf("Battery: %d mV\n", battery_mv);
+
+	if (battery_mv >= BATTERY_MIN_BOOT_VOLTAGE) {
+		// OK to boot
+
+		// Enable Charging
+		deckard_battery_enable_charging(pm8550b);
+		return;
+	}
+
+	bool battery_was_dead;
+
+	if (battery_mv < BATTERY_DEAD_VOLTAGE) {
+		// Fast Pulse Red LED
+		// TODO
+		battery_was_dead = true;
+	} else {
+		// Slow Pulse Red LED
+		// TODO
+		battery_was_dead = false;
+	}
+
+	// Check for UVLO (or charging and (trickle or precharge))
+	ret = deckard_battery_load_recovery_program();
+	if (ret != 0) {
+		printf("Dead Battery Recovery load failed on error: %d\n", ret);
+		printf("Attempting to boot anyway!\n");
+		return;
+	}
+
+	s_pointer_table.pmic_pmk8550 = pmk8550;
+	s_pointer_table.pmic_pm8550b = pm8550b;
+
+	ret = deckard_battery_run_recovery_program();
+	if (ret != 0) {
+		printf("Dead Battery Recovery Exec Failed on Error: %d\n", ret);
+		printf("Attempting to boot anyway!\n");
+		return;
+	}
+
+	// Check for <2%
+	if (battery_was_dead == true) {
+		// Slow Pulse Red LED
+		// TODO
+	}
+
+	// Enable Charging
+	deckard_battery_enable_charging(pm8550b);
+
+	// Charge to 2% here... (by voltage)
+	do {
+		ret = pmk8550_get_battery_voltage(pmk8550, &battery_mv);
+		if (ret < 0) {
+			printf("Failed to read battery voltage\n");
+			printf("Attempting to boot anyway!\n");
+			return;
+		}
+
+		mdelay(1000);
+		printf("Battery: %d mV\n", battery_mv);
+
+	} while (battery_mv < BATTERY_MIN_BOOT_VOLTAGE);
 }
 
-void deckard_battery_enable_charging(struct udevice *pm8550b)
+static void deckard_battery_enable_charging(struct udevice *pm8550b)
 {
 	int ret = 0;
 
