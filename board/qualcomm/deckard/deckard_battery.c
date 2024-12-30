@@ -2,6 +2,7 @@
 #include <fs.h>
 #include <command.h>
 #include <linux/delay.h>
+#include <led.h>
 
 #include "pm8550b.h"
 #include "pmk8550.h"
@@ -66,11 +67,9 @@ static int deckard_battery_run_recovery_program(void)
 
 void deckard_battery_prep_for_boot(struct udevice *pmk8550, struct udevice *pm8550b)
 {
-	int      ret;
-	uint16_t battery_mv;
-
-	/* Ensure Qualcomm Fuel Gauge is enabled */
-	pm8550b_enable_fuel_guage(pm8550b, true);
+	int             ret;
+	uint16_t        battery_mv;
+	struct udevice *led = NULL;
 
 	/* Get Battery Voltage to Check for UVLO */
 	ret = pmk8550_get_battery_voltage(pmk8550, &battery_mv);
@@ -92,6 +91,16 @@ void deckard_battery_prep_for_boot(struct udevice *pmk8550, struct udevice *pm85
 
 	bool battery_was_dead;
 
+	ret = led_get_by_label("red", &led);
+	if (ret < 0) {
+		printf("Couldn't find red led!\n");
+	}
+
+	if (led) {
+		printf("Enabling Red LED\n");
+		led_set_state(led, LEDST_ON);
+	}
+
 	if (battery_mv < BATTERY_DEAD_VOLTAGE) {
 		// Fast Pulse Red LED
 		// TODO
@@ -107,7 +116,7 @@ void deckard_battery_prep_for_boot(struct udevice *pmk8550, struct udevice *pm85
 	if (ret != 0) {
 		printf("Dead Battery Recovery load failed on error: %d\n", ret);
 		printf("Attempting to boot anyway!\n");
-		return;
+		goto complete;
 	}
 
 	s_pointer_table.pmic_pmk8550 = pmk8550;
@@ -117,7 +126,7 @@ void deckard_battery_prep_for_boot(struct udevice *pmk8550, struct udevice *pm85
 	if (ret != 0) {
 		printf("Dead Battery Recovery Exec Failed on Error: %d\n", ret);
 		printf("Attempting to boot anyway!\n");
-		return;
+		goto complete;
 	}
 
 	// Check for <2%
@@ -142,6 +151,13 @@ void deckard_battery_prep_for_boot(struct udevice *pmk8550, struct udevice *pm85
 		printf("Battery: %d mV\n", battery_mv);
 
 	} while (battery_mv < BATTERY_MIN_BOOT_VOLTAGE);
+
+complete:
+
+	if (led) {
+		printf("Disabling Red LED\n");
+		led_set_state(led, LEDST_OFF);
+	}
 }
 
 static void deckard_battery_enable_charging(struct udevice *pm8550b)
