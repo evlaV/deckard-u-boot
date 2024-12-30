@@ -620,8 +620,20 @@
 
 &pm8550_leds {
 	status = "okay";
+
 	led0: blue {
-			blink = <0>;
+		bit-mask = <0x20>;
+		pwm-base-addr = <0xea00>;
+	};
+
+	led1: green {
+		bit-mask = <0x40>;
+		pwm-base-addr = <0xe900>;
+	};
+
+	led2: red {
+		bit-mask = <0x80>;
+		pwm-base-addr = <0xe800>;
 	};
 };
 
