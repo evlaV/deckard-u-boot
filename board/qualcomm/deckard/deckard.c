@@ -28,6 +28,7 @@
 #include "pm8550vs.h"
 #include "smb1510.h"
 #include <part.h>
+#include "deckard.h"
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -197,6 +198,11 @@ const char *env_ext4_get_dev_part(void)
 	char bootedslot;
 	int devpartidx = deckard_get_boot(&bootedslot);
 	return dev_part[devpartidx];
+}
+
+const char *deckard_env_ext4_get_dev_part(void)
+{
+	return env_ext4_get_dev_part();
 }
 
 /* Check for vol- button - if pressed - stop autoboot */

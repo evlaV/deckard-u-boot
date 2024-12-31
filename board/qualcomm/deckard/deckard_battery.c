@@ -7,6 +7,7 @@
 #include "pm8550b.h"
 #include "pmk8550.h"
 #include "smb1510.h"
+#include "deckard.h"
 
 #define BATTERY_MIN_BOOT_VOLTAGE 7200
 #define BATTERY_DEAD_VOLTAGE     6000
@@ -50,10 +51,27 @@ static dbr_pointer_table_t s_pointer_table = {
 
 static int deckard_battery_load_recovery_program(void)
 {
-	// TODO Make "0xa7000000" from a macro of CONFIG_SYS_LOAD_ADDR... stringify #MACRO isn't working
-	int   argc    = 5;
-	char *argv[5] = {"do_the_dew", "scsi", "1:d", "0xa7000000", "dead_battery_recovery.bin"};
+	#define DEVPARTMAXLEN 16
+	#define LOADADDRMAXLEN 16
 
+	int  argc = 5;
+	char *argv[5];
+	char arg0[] = "do_the_dew";
+	char arg1[] = "scsi";
+	char arg2[DEVPARTMAXLEN];  //e.g. "1:d"
+	char arg3[LOADADDRMAXLEN]; //e.g. "0xa7000000"
+	char arg4[] = "dead_battery_recovery.bin";
+
+	strncpy(arg2, deckard_env_ext4_get_dev_part(), DEVPARTMAXLEN); //this returns 1:d for example
+	snprintf(arg3, LOADADDRMAXLEN, "0x%x", CONFIG_SYS_LOAD_ADDR); //this returns 1:d for example
+
+	argv[0]=arg0;
+	argv[1]=arg1;
+	argv[2]=arg2;
+	argv[3]=arg3;
+	argv[4]=arg4;
+
+	printf("loading dead battery program with args: %s, %s, %s, %s, %s\n",argv[0],argv[1],argv[2],argv[3],argv[4]);
 	return do_load(NULL, 0, argc, argv, FS_TYPE_EXT);
 }
 
