@@ -27,6 +27,7 @@
 #include "deckard_battery.h"
 #include "pm8550vs.h"
 #include "smb1510.h"
+#include "deckard.h"
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -143,6 +144,11 @@ static void deckard_setup(void)
 
 	printf("smb1510: enable fixed frequency at 500khz mode\n");
 	smb1510_set_switching_frequency(pmk8550, 0x0F);
+}
+
+const char *deckard_env_ext4_get_dev_part(void)
+{
+	return "1:d"; //ev1 this is hard coded
 }
 
 /* Check for vol- button - if pressed - stop autoboot */
