@@ -589,6 +589,7 @@ static int do_scsi_scan_one(struct udevice *dev, int id, int lun, bool verbose)
 	struct blk_desc bd;
 	struct blk_desc *bdesc;
 	char str[10], *name;
+	int memtype;
 
 	/*
 	 * detect the scsi driver to get information about its geometry (block
@@ -621,6 +622,7 @@ static int do_scsi_scan_one(struct udevice *dev, int id, int lun, bool verbose)
 	bdesc->removable = bd.removable;
 	bdesc->type = bd.type;
 	bdesc->bb = bd.bb;
+	bdesc->memtype = memtype;
 	memcpy(&bdesc->vendor, &bd.vendor, sizeof(bd.vendor));
 	memcpy(&bdesc->product, &bd.product, sizeof(bd.product));
 	memcpy(&bdesc->revision, &bd.revision,	sizeof(bd.revision));

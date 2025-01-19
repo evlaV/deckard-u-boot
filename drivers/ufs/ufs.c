@@ -1370,6 +1370,59 @@ out:
 	return ret;
 }
 
+static inline bool ufs_is_valid_unit_desc_lun(u8 lun)
+{
+	return lun == UFS_UPIU_RPMB_WLUN || (lun < UFS_UPIU_MAX_GENERAL_LUN);
+}
+
+static inline int ufshcd_read_unit_desc_param(struct ufs_hba *hba,
+					      int lun,
+					      enum unit_desc_param param_offset,
+					      u8 *param_read_buf,
+					      u32 param_size)
+{
+	/*
+	 * Unit descriptors are only available for general purpose LUs (LUN id
+	 * from 0 to 7) and RPMB Well known LU.
+	 */
+	if (!ufs_is_valid_unit_desc_lun(lun))
+		return -EOPNOTSUPP;
+
+	return ufshcd_read_desc_param(hba, QUERY_DESC_IDN_UNIT, lun,
+				      param_offset, param_read_buf, param_size);
+}
+
+static inline int scsi_is_wlun(u64 lun)
+{
+	return (lun & 0xff00) == SCSI_W_LUN_BASE;
+}
+
+static inline u8 ufshcd_scsi_to_upiu_lun(unsigned int scsi_lun)
+{
+	if (scsi_is_wlun(scsi_lun))
+		return (scsi_lun & UFS_UPIU_MAX_UNIT_NUM_ID)
+			| UFS_UPIU_WLUN_ID;
+	else
+		return scsi_lun & UFS_UPIU_MAX_UNIT_NUM_ID;
+}
+
+static int ufshcd_get_lu_mem_type(struct ufs_hba *hba,
+			    u8 lun,
+			    u8 *b_lu_mem_type)
+{
+	int ret;
+
+	if (lun >= UFS_UPIU_MAX_GENERAL_LUN)
+		ret = -ENOTSUPP;
+	else
+		ret = ufshcd_read_unit_desc_param(hba,
+					  lun,
+					  UNIT_DESC_PARAM_MEM_TYPE,
+					  b_lu_mem_type,
+					  sizeof(*b_lu_mem_type));
+	return ret;
+}
+
 /* replace non-printable or non-ASCII characters with spaces */
 static inline void ufshcd_remove_non_printable(uint8_t *val)
 {
@@ -1632,6 +1685,8 @@ static int ufs_get_device_desc(struct ufs_hba *hba,
 	size_t buff_len;
 	u8 model_index;
 	u8 *desc_buf;
+	u8 b_lu_mem_type;
+	u8 lunidx;
 
 	buff_len = max_t(size_t, hba->desc_size.dev_desc,
 			 QUERY_DESC_MAX_SIZE + 1);
@@ -1647,6 +1702,14 @@ static int ufs_get_device_desc(struct ufs_hba *hba,
 			__func__, err);
 		goto out;
 	}
+
+	printf("\n");
+	for(lunidx=0; lunidx<8; lunidx++) 
+	{
+		ufshcd_get_lu_mem_type(hba, lunidx, &b_lu_mem_type);
+		printf("GABE: LUN%d bMemoryType=%d\n", lunidx, b_lu_mem_type);
+	}
+	printf("\n");
 
 	/*
 	 * getting vendor (manufacturerID) and Bank Index in big endian

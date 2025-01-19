@@ -70,6 +70,7 @@ struct blk_desc {
 	unsigned char	atapi;		/* Use ATAPI protocol */
 	unsigned char	bb;		/* Use bounce buffer */
 	lbaint_t	lba;		/* number of blocks */
+	int memtype; /* ufs mem_type from UNIT_DESC_PARAM_MEM_TYPE */
 	unsigned long	blksz;		/* block size */
 	int		log2blksz;	/* for convenience: log2(blksz) */
 	char		vendor[BLK_VEN_SIZE + 1]; /* device vendor string */
