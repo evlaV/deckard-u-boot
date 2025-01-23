@@ -22,12 +22,6 @@ obj-$(CONFIG_AES) += aes.o
 obj-$(CONFIG_AES) += aes/
 obj-$(CONFIG_$(PHASE_)BINMAN_FDT) += binman.o
 
-ifndef API_BUILD
-ifneq ($(CONFIG_CHARSET),)
-obj-y += charset.o
-endif
-endif
-
 obj-$(CONFIG_CIRCBUF) += circbuf.o
 
 obj-y += crc8.o
@@ -51,6 +45,12 @@ obj-y += rc4.o
 obj-$(CONFIG_RBTREE)	+= rbtree.o
 obj-$(CONFIG_BITREVERSE) += bitrev.o
 obj-y += list_sort.o
+endif
+
+ifndef API_BUILD
+ifneq ($(CONFIG_CHARSET),)
+obj-y += charset.o
+endif
 endif
 
 obj-$(CONFIG_$(PHASE_)TPM) += tpm-common.o
