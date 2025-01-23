@@ -242,6 +242,7 @@ static inline void geni_serial_baud(phys_addr_t base_address, u32 clk_div,
 	writel(s_clk_cfg, base_address + GENI_SER_S_CLK_CFG);
 }
 
+#ifndef CONFIG_SPL_BUILD
 static int msm_serial_setbrg(struct udevice *dev, int baud)
 {
 	struct msm_serial_data *priv = dev_get_priv(dev);
@@ -261,6 +262,7 @@ static int msm_serial_setbrg(struct udevice *dev, int baud)
 
 	return 0;
 }
+#endif
 
 /**
  * qcom_geni_serial_poll_bit() - Poll reg bit until desired value or timeout.
@@ -486,7 +488,9 @@ static const struct dm_serial_ops msm_serial_ops = {
 	.putc = msm_serial_putc,
 	.pending = msm_serial_pending,
 	.getc = msm_serial_getc,
+#ifndef CONFIG_SPL_BUILD
 	.setbrg = msm_serial_setbrg,
+#endif
 };
 
 static int geni_set_oversampling(struct udevice *dev)
