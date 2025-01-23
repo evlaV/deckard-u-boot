@@ -43,6 +43,7 @@ obj-$(CONFIG_$(PHASE_)NVME) += nvme/
 obj-$(CONFIG_XEN) += xen/
 obj-$(CONFIG_$(PHASE_)FPGA) += fpga/
 obj-$(CONFIG_$(PHASE_)VIDEO) += video/
+obj-y += ufs/
 
 obj-y += bus/
 
@@ -119,7 +120,6 @@ obj-y += thermal/
 obj-$(CONFIG_TEE) += tee/
 obj-$(CONFIG_ARM_FFA_TRANSPORT) += firmware/arm-ffa/
 obj-y += axi/
-obj-y += ufs/
 obj-$(CONFIG_W1) += w1/
 obj-$(CONFIG_W1_EEPROM) += w1-eeprom/
 

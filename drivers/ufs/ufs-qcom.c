@@ -24,13 +24,37 @@
 #include "ufs.h"
 #include "ufs-qcom.h"
 
+#ifdef CONFIG_SPL_BUILD
+static int qcom_ufs_link_startup_notify(struct ufs_hba *hba,
+					enum ufs_notify_change_status status)
+{
+	return 0;
+}
+
+static int qcom_ufs_hce_enable_notify(struct ufs_hba *hba,
+				      enum ufs_notify_change_status status)
+{
+	return 0;
+}
+
+static int qcom_ufs_init(struct ufs_hba *hba)
+{
+	return 0;
+}
+
+static struct ufs_hba_ops ufs_qcom_hba_ops = {
+	.init = qcom_ufs_init,
+	.hce_enable_notify = qcom_ufs_hce_enable_notify,
+	.link_startup_notify = qcom_ufs_link_startup_notify,
+};
+#else
+
 #define ceil(freq, div) ((freq) % (div) == 0 ? ((freq) / (div)) : ((freq) / (div) + 1))
 
 static void ufs_qcom_dev_ref_clk_ctrl(struct ufs_hba *hba, bool enable);
 
 static int ufs_qcom_enable_clks(struct ufs_qcom_priv *priv)
 {
-#ifndef CONFIG_SPL_BUILD
 	int err;
 
 	if (priv->is_clks_enabled)
@@ -41,21 +65,18 @@ static int ufs_qcom_enable_clks(struct ufs_qcom_priv *priv)
 		return err;
 
 	priv->is_clks_enabled = true;
-#endif
 
 	return 0;
 }
 
 static int ufs_qcom_init_clks(struct ufs_qcom_priv *priv)
 {
-#ifndef CONFIG_SPL_BUILD
 	int err;
 	struct udevice *dev = priv->hba->dev;
 
 	err = clk_get_bulk(dev, &priv->clks);
 	if (err)
 		return err;
-#endif
 
 	return 0;
 }
@@ -109,7 +130,6 @@ static void ufs_qcom_select_unipro_mode(struct ufs_qcom_priv *priv)
  */
 static int ufs_qcom_reset(struct ufs_hba *hba)
 {
-#ifndef CONFIG_SPL_BUILD
 	struct ufs_qcom_priv *priv = dev_get_priv(hba->dev);
 	int ret;
 
@@ -133,7 +153,6 @@ static int ufs_qcom_reset(struct ufs_hba *hba)
 			__func__, ret);
 
 	udelay(1100);
-#endif
 
 	return 0;
 }
@@ -224,7 +243,6 @@ static int ufs_get_max_pwr_mode(struct ufs_hba *hba,
 static int ufs_qcom_power_up_sequence(struct ufs_hba *hba)
 {
 	struct ufs_qcom_priv *priv = dev_get_priv(hba->dev);
-#ifndef CONFIG_SPL_BUILD
 	struct phy phy;
 	int ret;
 
@@ -257,18 +275,15 @@ static int ufs_qcom_power_up_sequence(struct ufs_hba *hba)
 			__func__, ret);
 		goto out_disable_phy;
 	}
-#endif
 
 	ufs_qcom_select_unipro_mode(priv);
 
 	return 0;
 
-#ifndef CONFIG_SPL_BUILD
 out_disable_phy:
 	generic_phy_exit(&phy);
 
 	return ret;
-#endif
 }
 
 /*
@@ -631,15 +646,14 @@ static struct ufs_hba_ops ufs_qcom_hba_ops = {
 	.link_startup_notify	= ufs_qcom_link_startup_notify,
 	.device_reset		= ufs_qcom_device_reset,
 };
+#endif
 
 static int ufs_qcom_probe(struct udevice *dev)
 {
 #ifndef CONFIG_SPL_BUILD
 	struct ufs_qcom_priv *priv = dev_get_priv(dev);
-#endif
 	int ret;
 
-#ifndef CONFIG_SPL_BUILD
 	/* get resets */
 	ret = reset_get_by_name(dev, "rst", &priv->core_reset);
 	if (ret) {
@@ -651,6 +665,8 @@ static int ufs_qcom_probe(struct udevice *dev)
 	if (ret) {
 		dev_err(dev, "Warning: cannot get reset GPIO\n");
 	}
+#else
+	int ret;
 #endif
 
 	ret = ufshcd_probe(dev, &ufs_qcom_hba_ops);

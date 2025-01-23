@@ -8,6 +8,13 @@ config UFS
 	  This selects support for Universal Flash Subsystem (UFS).
 	  Say Y here if you want UFS Support.
 
+config SPL_UFS
+	bool "Enable UFS controllers in SPL"
+	depends on UFS
+	help
+	  This selects support for Universal Flash Subsystem (UFS).
+	  Say Y here if you want UFS Support in SPL.
+
 config CADENCE_UFS
 	bool "Cadence platform driver for UFS"
 	depends on UFS

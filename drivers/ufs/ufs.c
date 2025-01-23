@@ -60,10 +60,13 @@
 /* maximum bytes per request */
 #define UFS_MAX_BYTES	(128 * 256 * 1024)
 
+#ifndef CONFIG_SPL_BUILD
 static inline bool ufshcd_is_hba_active(struct ufs_hba *hba);
 static inline void ufshcd_hba_stop(struct ufs_hba *hba);
 static int ufshcd_hba_enable(struct ufs_hba *hba);
+#endif
 
+#ifndef CONFIG_SPL_BUILD
 /*
  * ufshcd_wait_for_register - wait for register value to change
  */
@@ -86,6 +89,7 @@ static int ufshcd_wait_for_register(struct ufs_hba *hba, u32 reg, u32 mask,
 
 	return err;
 }
+#endif
 
 /**
  * ufshcd_init_pwr_info - setting the POR (power on reset)
@@ -335,6 +339,7 @@ static inline int ufshcd_disable_device_tx_lcc(struct ufs_hba *hba)
 	return ufshcd_disable_tx_lcc(hba, true);
 }
 
+#ifndef CONFIG_SPL_BUILD
 /**
  * ufshcd_dme_link_startup - Notify Unipro to perform link startup
  *
@@ -352,6 +357,7 @@ static int ufshcd_dme_link_startup(struct ufs_hba *hba)
 			"dme-link-startup: error code %d\n", ret);
 	return ret;
 }
+#endif
 
 /**
  * ufshcd_disable_intr_aggr - Disables interrupt aggregation.
@@ -463,6 +469,7 @@ out:
 static int ufshcd_link_startup(struct ufs_hba *hba)
 {
 	int ret;
+#ifndef CONFIG_SPL_BUILD
 	int retries = DME_LINKSTARTUP_RETRIES;
 
 	do {
@@ -489,6 +496,7 @@ static int ufshcd_link_startup(struct ufs_hba *hba)
 	if (ret)
 		/* failed to get the link up... retire */
 		goto out;
+#endif
 
 	/* Mark that link is up in PWM-G1, 1-lane, SLOW-AUTO mode */
 	ufshcd_init_pwr_info(hba);
@@ -514,6 +522,7 @@ out:
 	return ret;
 }
 
+#ifndef CONFIG_SPL_BUILD
 /**
  * ufshcd_hba_stop - Send controller to reset state
  */
@@ -593,6 +602,7 @@ static int ufshcd_hba_enable(struct ufs_hba *hba)
 
 	return 0;
 }
+#endif
 
 /**
  * ufshcd_host_memory_configure - configure local reference block with
@@ -1746,6 +1756,7 @@ out:
 	return err;
 }
 
+#ifndef CONFIG_SPL_BUILD
 /**
  * ufshcd_get_max_pwr_mode - reads the max power mode negotiated with device
  */
@@ -1872,6 +1883,7 @@ static int ufshcd_change_power_mode(struct ufs_hba *hba,
 
 	return ret;
 }
+#endif
 
 /**
  * ufshcd_verify_dev_init() - Verify device initialization
@@ -1973,6 +1985,7 @@ static int ufs_start(struct ufs_hba *hba)
 		return ret;
 	}
 
+#ifndef CONFIG_SPL_BUILD
 	if (ufshcd_get_max_pwr_mode(hba)) {
 		dev_err(hba->dev,
 			"%s: Failed getting max supported power mode\n",
@@ -1989,6 +2002,7 @@ static int ufs_start(struct ufs_hba *hba)
 		debug("UFS Device %s is up!\n", hba->dev->name);
 		ufshcd_print_pwr_info(hba);
 	}
+#endif
 
 	return 0;
 }
@@ -2070,11 +2084,13 @@ int ufshcd_probe(struct udevice *ufs_dev, struct ufs_hba_ops *hba_ops)
 	/* Reset the attached device */
 	ufshcd_device_reset(hba);
 
+#ifndef CONFIG_SPL_BUILD
 	err = ufshcd_hba_enable(hba);
 	if (err) {
 		dev_err(hba->dev, "Host controller enable failed\n");
 		return err;
 	}
+#endif
 
 	err = ufs_start(hba);
 	if (err)
