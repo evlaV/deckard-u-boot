@@ -66,6 +66,7 @@ static int ufs_qcom_clk_enable(struct udevice *dev,
 
 static int ufs_qcom_enable_lane_clks(struct ufs_qcom_priv *priv)
 {
+#ifndef CONFIG_SPL_BUILD
 	int err;
 	struct udevice *dev = priv->hba->dev;
 
@@ -97,10 +98,14 @@ disable_rx_l0:
 	clk_disable_unprepare(priv->rx_l0_sync_clk);
 
 	return err;
+#else
+	return 0;
+#endif
 }
 
 static int ufs_qcom_init_lane_clks(struct ufs_qcom_priv *priv)
 {
+#ifndef CONFIG_SPL_BUILD
 	int err = 0;
 	struct udevice *dev = priv->hba->dev;
 
@@ -118,12 +123,14 @@ static int ufs_qcom_init_lane_clks(struct ufs_qcom_priv *priv)
 					&priv->rx_l1_sync_clk, false);
 	if (err)
 		return err;
+#endif
 
 	return 0;
 }
 
 static int ufs_qcom_enable_core_clks(struct ufs_qcom_priv *priv)
 {
+#ifndef CONFIG_SPL_BUILD
 	int err;
 	struct udevice *dev = priv->hba->dev;
 
@@ -158,10 +165,14 @@ disable_core_clk:
 	clk_disable_unprepare(priv->core_clk);
 
 	return err;
+#else
+	return 0;
+#endif
 }
 
 static int ufs_qcom_init_core_clks(struct ufs_qcom_priv *priv)
 {
+#ifndef CONFIG_SPL_BUILD
 	int err = 0;
 	struct udevice *dev = priv->hba->dev;
 
@@ -184,6 +195,7 @@ static int ufs_qcom_init_core_clks(struct ufs_qcom_priv *priv)
 		return err;
 
 	/* ref_clk is optional */
+#endif
 
 	return 0;
 }
@@ -206,6 +218,7 @@ static void ufs_qcom_select_unipro_mode(struct ufs_qcom_priv *priv)
  */
 static int ufs_qcom_reset(struct ufs_hba *hba)
 {
+#ifndef CONFIG_SPL_BUILD
 	struct ufs_qcom_priv *priv = dev_get_priv(hba->dev);
 	int ret = 0;
 
@@ -229,6 +242,7 @@ static int ufs_qcom_reset(struct ufs_hba *hba)
 				 __func__, ret);
 
 	udelay(1100);
+#endif
 
 	return 0;
 }
@@ -355,6 +369,7 @@ static int ufs_qcom_setup_clocks(struct ufs_hba *hba, bool on,
 static int ufs_qcom_power_up_sequence(struct ufs_hba *hba)
 {
 	struct ufs_qcom_priv *priv = dev_get_priv(hba->dev);
+#ifndef CONFIG_SPL_BUILD
 	struct phy phy;
 	int ret;
 
@@ -387,15 +402,18 @@ static int ufs_qcom_power_up_sequence(struct ufs_hba *hba)
 			__func__, ret);
 		goto out_disable_phy;
 	}
+#endif
 
 	ufs_qcom_select_unipro_mode(priv);
 
 	return 0;
 
+#ifndef CONFIG_SPL_BUILD
 out_disable_phy:
 	generic_phy_exit(&phy);
 
 	return ret;
+#endif
 }
 
 static int ufs_qcom_check_hibern8(struct ufs_hba *hba)
@@ -899,15 +917,19 @@ static struct ufs_hba_ops ufs_qcom_hba_ops = {
 
 static int ufs_qcom_probe(struct udevice *dev)
 {
+#ifndef CONFIG_SPL_BUILD
 	struct ufs_qcom_priv *priv = dev_get_priv(dev);
+#endif
 	int ret;
 
+#ifndef CONFIG_SPL_BUILD
 	/* get resets */
 	ret = reset_get_by_name(dev, "rst", &priv->core_reset);
 	if (ret) {
 		dev_err(dev, "failed to get reset, ret:%d\n", ret);
 		return ret;
 	}
+#endif
 
 	ret = ufshcd_probe(dev, &ufs_qcom_hba_ops);
 	if (ret) {
