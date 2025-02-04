@@ -22,6 +22,7 @@
 #include <led.h>
 #include <button.h>
 #include <power/pmic.h>
+#include <command.h>
 
 #include "deckard_eeprom.h"
 #include "deckard_battery.h"
@@ -218,6 +219,8 @@ int misc_init_r(void)
 	int reboot_needed = 0;
 	char bootedslotquery;
 	int slotdiffers = 0;
+	char * fastboot_envvar;
+	int fastbootmode = 0;
 
 	deckard_disable_watchdog();
 
@@ -225,6 +228,22 @@ int misc_init_r(void)
 	printf("Boot Wrapper version: %d\n", g_boot_wrapper_version);
 
 	deckard_setup();
+
+	//////////////////////////////////////////
+	//1. check vars that are set before calling any set_env()
+	//2. clear those variables by env_set(...,"")
+	//3. then env_save() if the value is set
+
+	fastboot_envvar = env_get("fastboot");
+	if( fastboot_envvar && ( fastboot_envvar[0] == '1' ) ) 
+	{
+		//clearing fastboot var to avoid getting trapped in fastboot mode
+		env_set("fastboot","");
+		env_save();
+		fastbootmode = 1;
+	}
+	//printf("done checking for auto-clear variables")
+	//////////////////////////////////////////
 
 	ret = button_get_by_label("vol_down", &btn);
 	if (ret < 0) {
@@ -358,6 +377,16 @@ int misc_init_r(void)
 		env_set_ulong("bootlimit", 10);
 		env_set_ulong("upgrade_available", 0); 
 		env_set("altbootcmd","");
+	}
+
+	//compare first character of these env vars to check for A or B
+	if( fastbootmode ) 
+	{
+		printf("Starting fastboot mode...\n");
+		env_set("fastboot","");
+		env_save();
+		env_set("kernel_addr_r","90000000");
+		run_command("fastboot -l 0x880000000 -s 0x10000000 usb 0", 0);
 	}
 
 	printf("deckard init: done\n");
