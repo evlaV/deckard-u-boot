@@ -1703,13 +1703,15 @@ static int ufs_get_device_desc(struct ufs_hba *hba,
 		goto out;
 	}
 
+#if 0
 	printf("\n");
 	for(lunidx=0; lunidx<8; lunidx++) 
 	{
 		ufshcd_get_lu_mem_type(hba, lunidx, &b_lu_mem_type);
-		printf("GABE: LUN%d bMemoryType=%d\n", lunidx, b_lu_mem_type);
+		printf("DEBUG: LUN%d bMemoryType=%d\n", lunidx, b_lu_mem_type);
 	}
 	printf("\n");
+#endif
 
 	/*
 	 * getting vendor (manufacturerID) and Bank Index in big endian
