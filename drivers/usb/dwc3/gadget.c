@@ -1168,8 +1168,10 @@ static int dwc3_gadget_ep_dequeue(struct usb_ep *ep,
 			dwc3_stop_active_transfer(dwc, dep->number, true);
 			goto out1;
 		}
-		dev_err(dwc->dev, "request %p was not queued to %s\n",
-				request, ep->name);
+#if 0
+		//nuke this error so it doesn't mess up fastboot oem console command		
+		dev_err(dwc->dev, "request %p was not queued to %s\n", request, ep->name);
+#endif		
 		ret = -EINVAL;
 		goto out0;
 	}
