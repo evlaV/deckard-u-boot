@@ -383,9 +383,8 @@ int misc_init_r(void)
 	if( fastbootmode ) 
 	{
 		printf("Starting fastboot mode...\n");
-		env_set("fastboot","");
-		env_save();
 		env_set("kernel_addr_r","90000000");
+		env_set("serial#","123456789"); //put dummy serial number here used by fastboot
 		run_command("fastboot -l 0x880000000 -s 0x10000000 usb 0", 0);
 	}
 
