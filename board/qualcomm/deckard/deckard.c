@@ -33,6 +33,7 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
+#define DECKARD_DUMMY_SERIAL_NUMB "123456789"
 static ulong boot_wrapper_version __section(".data");
 
 int g_boot_wrapper_version;
@@ -384,7 +385,17 @@ int misc_init_r(void)
 	{
 		printf("Starting fastboot mode...\n");
 		env_set("kernel_addr_r","90000000");
-		env_set("serial#","123456789"); //put dummy serial number here used by fastboot
+
+		/*
+		 * serial# is a special var, like ethaddr, they are defined as
+		 * write-once as a protection, we want to maintain that protection
+		 * writing it only once here, if not before, and avoid error after.
+		 */
+		if (!env_get("serial#")) {
+			printf("setting dummy serial number: %s\n", DECKARD_DUMMY_SERIAL_NUMB);
+			env_set("serial#", DECKARD_DUMMY_SERIAL_NUMB);
+			env_save();
+		}
 		run_command("fastboot -l 0x880000000 -s 0x10000000 usb 0", 0);
 	}
 
