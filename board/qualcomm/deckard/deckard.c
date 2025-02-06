@@ -61,7 +61,9 @@ enum combined_button_state_t {
 	VOLUP_ON__VOLDN_ON__SELECT_OFF   = 6,
 	VOLUP_ON__VOLDN_ON__SELECT_ON    = 7,
 };
- 
+
+#define DECKARD_DUMMY_SERIAL_NUMB "123456789"
+
 // #define CHECK_PMICS
 #ifdef CHECK_PMICS
 void check_pmic(const char *const pmic_dts, const char *const pmic_name)
@@ -418,7 +420,16 @@ int misc_init_r(void)
 	{
 		printf("Starting fastboot mode...\n");
 		env_set("kernel_addr_r","90000000"); //is this right?
-		env_set("serial#","123456789"); //put dummy serial number here used by fastboot
+		/*
+		 * serial# is a special var, like ethaddr, they are defined as
+		 * write-once as a protection, we want to maintain that protection
+		 * writing it only once here, if not before, and avoid error after.
+		 */
+		if (!env_get("serial#")) {
+			printf("setting dummy serial number: %s\n", DECKARD_DUMMY_SERIAL_NUMB);
+			env_set("serial#", DECKARD_DUMMY_SERIAL_NUMB);
+			env_save();
+		}
 		run_command("fastboot -l 0x880000000 -s 0x10000000 usb 0", 0);
 	}
 
