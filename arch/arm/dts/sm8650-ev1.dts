@@ -41,6 +41,10 @@
 		};
 	};
 
+	psci {
+		bootph-all;
+	};
+
 	vph_pwr: vph-pwr-regulator {
 		compatible = "regulator-fixed";
 
@@ -72,6 +76,14 @@
 		vin-supply = <&vph_pwr>;
 		regulator-always-on;
 	};
+
+	memory@a0000000 {
+		bootph-all;
+	};
+};
+
+&smem {
+	bootph-all;
 };
 
 &apps_rsc {
@@ -737,6 +749,7 @@
 
 &uart15 {
 	status = "okay";
+	bootph-all;
 };
 
 &tlmm {
@@ -832,6 +845,8 @@
 	vcc-max-microamp = <1300000>;
 	vccq-supply = <&vreg_l1c_1p2>;
 	vccq-max-microamp = <1200000>;
+
+	bootph-all;
 
 	status = "okay";
 };
