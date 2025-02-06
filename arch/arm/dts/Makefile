@@ -3,6 +3,10 @@
 dtb-$(CONFIG_ARCH_SNAPDRAGON) += sm8650-el2-hdk.dtb \
 	sm8650-ev1.dtb
 
+ifdef CONFIG_ARCH_SNAPDRAGON
+DTC_FLAGS += -p 0x1000
+endif
+
 dtb-$(CONFIG_TARGET_SMARTWEB) += at91sam9260-smartweb.dtb
 dtb-$(CONFIG_TARGET_TAURUS) += at91sam9g20-taurus.dtb
 dtb-$(CONFIG_TARGET_CORVUS) += at91sam9g45-corvus.dtb
