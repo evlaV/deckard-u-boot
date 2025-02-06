@@ -1345,6 +1345,7 @@ config SPL_RTC
 
 config SPL_SATA
 	bool "Support loading from SATA"
+	select SPL_SCSI
 	help
 	  Enable support for SATA (Serial AT attachment) in SPL. This allows
 	  use of SATA devices such as hard drives and flash drivers for
@@ -1399,6 +1400,13 @@ config SYS_NVME_BOOT_PARTITION
 	hex "NVMe boot partition number"
 	depends on SPL_NVME
 	default	0x1
+
+config SPL_SCSI
+	bool "Support SCSI drivers"
+	select SPL_LOAD_BLOCK
+	help
+	  Support SCSI drivers in SPL. This allows accessing SCSI backed
+	  devices like SATA or UFS disks.
 
 config SPL_SERIAL
 	bool "Support serial"
