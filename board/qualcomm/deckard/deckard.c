@@ -33,17 +33,14 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
-static ulong boot_wrapper_version __section(".data");
-
-int g_boot_wrapper_version;
-/**
- * Save x0 register value, which should encode the boot wrapper version
- */
-void save_boot_params(ulong r0)
-{
-	boot_wrapper_version = r0;
-	save_boot_params_ret();
-}
+#define DECKARD_SYSTEM_LUNIDX "0"
+#define DECKARD_UBOOT_LUNIDX "2"
+#define DECKARD_RESCUE_LUNIDX "3"
+//M slot is the master slot / default
+#define DECKARD_UBOOT_ENV_SLOT_M "2:5"
+#define DECKARD_UBOOT_ENV_SLOT_A "2:2"
+#define DECKARD_UBOOT_ENV_SLOT_B "2:4"
+#define DECKARD_UBOOT_ENV_SLOT_R "3:2"
 
 // #define CHECK_PMICS
 #ifdef CHECK_PMICS
@@ -147,58 +144,26 @@ static void deckard_setup(void)
 	smb1510_set_switching_frequency(pmk8550, 0x0F);
 }
 
-#define DECKARD_SYSTEM_LUNIDX "0"
-#define DECKARD_UBOOT_LUNIDX "2"
-#define DECKARD_RESCUE_LUNIDX "3"
-//M slot is the master slot / default
-#define DECKARD_UBOOT_ENV_SLOT_M "2:5"
-#define DECKARD_UBOOT_ENV_SLOT_A "2:2"
-#define DECKARD_UBOOT_ENV_SLOT_B "2:4"
-#define DECKARD_UBOOT_ENV_SLOT_R "3:2"
-
-//returns an index that env_ext4_get_dev_part() can use (overrides weak ref func ptr)
-//and you can also get the 
-int deckard_get_boot(char * bootedslotref)
-{
-	struct blk_desc *desc;
-	int ret;
-
-	*bootedslotref = 'X';
-	ret = blk_get_device_by_str("scsi", DECKARD_UBOOT_LUNIDX, &desc);
-	if( ret >= 0 )
-	{
-		switch(part_get_booted_slot(desc))
-		{
-			case 'A':
-				*bootedslotref = 'A';
-				return 1;
-			case 'B':
-				*bootedslotref = 'B';
-				return 2;
-			case 'R':
-				*bootedslotref = 'R';
-				return 3;
-			default:
-				return 0;
-		}
-	}
-	else {
-		return 0;
-	}
-}
-
-//this overrides the built-in default function
 const char *env_ext4_get_dev_part(void)
 {
-	static char *const dev_part[] = { 
-										DECKARD_UBOOT_ENV_SLOT_M, 
-										DECKARD_UBOOT_ENV_SLOT_A, 
-										DECKARD_UBOOT_ENV_SLOT_B,
-										DECKARD_UBOOT_ENV_SLOT_R
-									};
-	char bootedslot;
-	int devpartidx = deckard_get_boot(&bootedslot);
-	return dev_part[devpartidx];
+	char *booted_slot = env_get("booted_slot");
+
+	if (!booted_slot) {
+		printf("%s: Missing booted_slot, defaulting to Master env\n", __func__);
+		return DECKARD_UBOOT_ENV_SLOT_M;
+	}
+
+	switch (booted_slot[0]) {
+	case 'A':
+		return DECKARD_UBOOT_ENV_SLOT_A;
+	case 'B':
+		return DECKARD_UBOOT_ENV_SLOT_B;
+	case 'R':
+		return DECKARD_UBOOT_ENV_SLOT_R;
+	default:
+		printf("%s: Invalid booted_slot, defaulting to Master env\n", __func__);
+		return DECKARD_UBOOT_ENV_SLOT_M;
+	}
 }
 
 const char *deckard_env_ext4_get_dev_part(void)
@@ -212,20 +177,52 @@ int misc_init_r(void)
 	struct udevice     *btn, *led;
 	int                 ret;
 	enum button_state_t state;
-	struct blk_desc *desc;
 	char * bootedslot;
-	char * bootorder;
-	//char * rebootneeded;
-	int reboot_needed = 0;
-	char bootedslotquery;
-	int slotdiffers = 0;
 	char * fastboot_envvar;
 	int fastbootmode = 0;
+	ofnode node;
+
+	node = ofnode_path("/chosen");
+	if (ofnode_valid(node)) {
+		const char *bootdev;
+		u32 boot_wrapper_version;
+
+		bootdev = ofnode_read_string(node, "u-boot,spl-boot-device");
+		if (!bootdev) {
+			printf("No u-boot,spl-boot-device, considering rescue slot\n");
+			env_set("booted_slot","R");
+		} else {
+			printf("Booted on slot '%s'\n", bootdev);
+
+			switch (bootdev[0]) {
+			case 'A':
+				env_set("booted_slot","A");
+				break;
+			case 'B':
+				env_set("booted_slot","B");
+				break;
+			case 'R':
+				env_set("booted_slot","R");
+				break;
+			default:
+				env_set("booted_slot","A");
+				break;
+			}
+		}
+
+		ret = ofnode_read_u32(node, "boot-wrapper-version", &boot_wrapper_version);
+		if (ret)
+			printf("No boot wrapper version\n");
+		else {
+			printf("Boot Wrapper version: %d\n", boot_wrapper_version);
+			env_set_ulong("boot_wrapper_version", boot_wrapper_version);
+		}
+
+	} else {
+		panic("No chosen node !\n");
+	}
 
 	deckard_disable_watchdog();
-
-	g_boot_wrapper_version = boot_wrapper_version;
-	printf("Boot Wrapper version: %d\n", g_boot_wrapper_version);
 
 	deckard_setup();
 
@@ -294,90 +291,14 @@ int misc_init_r(void)
 	// get board data from eeprom
 	deckard_eeprom_init();
 
-	ret = blk_get_device_by_str("scsi", DECKARD_UBOOT_LUNIDX, &desc);
-	if( ret >= 0 )
-	{
-		//part_print_fstype_uuid(desc); // old way
+	env_set("UBOOTLUNIDX", DECKARD_UBOOT_LUNIDX);
+	env_set("SYSTEMLUNIDX", DECKARD_SYSTEM_LUNIDX);
+	env_set("RESCUELUNIDX", DECKARD_RESCUE_LUNIDX);
 
-		deckard_get_boot(&bootedslotquery);
-		switch(bootedslotquery)
-		{
-			case 'A':
-				env_set("booted_slot","A");
-				break;
-			case 'B':
-				env_set("booted_slot","B");
-				break;
-			case 'R':
-				env_set("booted_slot","R");
-				break;				
-			default:
-				env_set("booted_slot","A");
-				break;		
-		}
-	}
-	else
-	{
-		printf("blk_get_device_by_str failed, ret = %d\n",ret);
-		env_set("booted_slot","A");
-	}
-
-	env_set("UBOOTLUNIDX",DECKARD_UBOOT_LUNIDX);
-	env_set("SYSTEMLUNIDX",DECKARD_SYSTEM_LUNIDX);
-	env_set("RESCUELUNIDX",DECKARD_RESCUE_LUNIDX);
-
-	bootorder = env_get("BOOT_ORDER");
 	bootedslot = env_get("booted_slot");
+	env_set("BOOT_ORDER", bootedslot);
 
-	if(!bootorder)
-	{
-		//BOOT_ORDER is unset, so set to a default value
-		printf("BOOT_ORDER was unset, setting to A\n");
-		env_set("BOOT_ORDER","A");
-		bootorder = env_get("BOOT_ORDER");
-		env_save();
-	}
-
-	//compare first character of these env vars to check for A or B
-	if( bootorder && bootedslot && ( bootorder[0] == bootedslot[0] ) ) 
-	{
-		//printf("booted_slot matches BOOT_ORDER\n");
-	}
-	else
-	{
-		//printf("booted_slot mismatch BOOT_ORDER\n");
-		if(!strncmp( env_get("booted_slot"),"A",1))
-		{
-			gpt_set_xbl_partition_bootable_partfstype(desc,"ubootb");
-		}
-		else
-		{
-			gpt_set_xbl_partition_bootable_partfstype(desc,"uboot");
-		}
-		//env_set("rebootneeded","1");
-		reboot_needed = 1;
-		slotdiffers = 1;
-	}
-
-	printf("booted_slot: %s %s\n", env_get("booted_slot"), (slotdiffers ? "(changed)" : "") );
-
-	if(reboot_needed) 
-	{
-		//this will make it so we get a countdown, it will fail to boot, fall back to altbootcmd, and reset
-		printf("reboot needed\n");
-		env_set_ulong("bootcount", 2);
-		env_set_ulong("bootlimit", 1);
-		env_set_ulong("upgrade_available", 1); //the bootcount_env stuff uses this as the hook to check the bootlimit
-		env_set("altbootcmd","reset");
-		//we could do a reset herewith do_reset(), but that would skip the user's ability to interrupt the reboot, which is not good
-	}
-	else
-	{
-		env_set_ulong("bootcount", 1);
-		env_set_ulong("bootlimit", 10);
-		env_set_ulong("upgrade_available", 0); 
-		env_set("altbootcmd","");
-	}
+	printf("booted_slot: %s\n", env_get("booted_slot"));
 
 	//compare first character of these env vars to check for A or B
 	if( fastbootmode ) 
@@ -390,6 +311,33 @@ int misc_init_r(void)
 
 	printf("deckard init: done\n");
 ///////
+
+	return 0;
+}
+
+int ft_board_setup(void *fdt, struct bd_info *bd)
+{
+	char *boot_wrapper_version;
+	int nodeoffset;
+	int ret;
+
+	boot_wrapper_version = env_get("boot_wrapper_version");
+
+	if (!boot_wrapper_version)
+		return 0;
+
+	/* find or create "/chosen" node. */
+	nodeoffset = fdt_find_or_add_subnode(fdt, 0, "chosen");
+	if (nodeoffset < 0)
+		return nodeoffset;
+
+	/* add bootwrapper version */
+	ret = fdt_setprop_string(fdt, nodeoffset, "bootwrapper,version", boot_wrapper_version);
+	if (ret < 0) {
+		printf("WARNING: could not set bootwrapper,version %s.\n",
+		       fdt_strerror(ret));
+		return ret;
+	}
 
 	return 0;
 }

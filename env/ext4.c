@@ -43,7 +43,7 @@ __weak const char *env_ext4_get_intf(void)
 
 __weak const char *env_ext4_get_dev_part(void)
 {
-#ifdef CONFIG_MMC
+#if !defined(CONFIG_SPL_BUILD) && defined(CONFIG_MMC)
 	static char *part_str;
 
 	if (!part_str) {
@@ -141,9 +141,9 @@ static int env_ext4_load(void)
 	int err;
 	loff_t off;
 	const char *ifname = env_ext4_get_intf();
-	char *dev_and_part;
+	const char *dev_and_part = env_ext4_get_dev_part();
 
-#ifdef CONFIG_MMC
+#if !defined(CONFIG_SPL_BUILD) && defined(CONFIG_MMC)
 	if (!strcmp(ifname, "mmc"))
 		mmc_initialize(NULL);
 #endif
@@ -156,10 +156,7 @@ static int env_ext4_load(void)
 		virtio_init();
 #endif
 
-	//this needs to be run after doing a scsi scan in order to be able to check partition type uuids
- 	dev_and_part = (char *) env_ext4_get_dev_part();
-	
-	part = blk_get_device_part_str(ifname, (const char *) dev_and_part,
+	part = blk_get_device_part_str(ifname, dev_and_part,
 				       &dev_desc, &info, 1);
 	if (part < 0)
 		goto err_env_relocate;

@@ -230,8 +230,6 @@ int part_get_info_whole_disk(struct blk_desc *desc,
 			     struct disk_partition *info);
 
 void part_print(struct blk_desc *desc);
-void part_print_fstype_uuid(struct blk_desc *desc);
-char part_get_booted_slot(struct blk_desc *desc);
 void part_init(struct blk_desc *desc);
 void dev_print(struct blk_desc *desc);
 
@@ -444,7 +442,6 @@ ulong disk_blk_erase(struct udevice *dev, lbaint_t start, lbaint_t blkcnt);
  */
 #ifdef CONFIG_XPL_BUILD
 # define part_print_ptr(x)	NULL
-# define part_printfsuuids_ptr(x) NULL
 # if defined(CONFIG_SPL_FS_EXT4) || defined(CONFIG_SPL_FS_FAT) || \
 	defined(CONFIG_SYS_MMCSD_RAW_MODE_U_BOOT_PARTITION)
 #  define part_get_info_ptr(x)	x
@@ -453,7 +450,6 @@ ulong disk_blk_erase(struct udevice *dev, lbaint_t start, lbaint_t blkcnt);
 # endif
 #else
 #define part_print_ptr(x)	x
-#define part_printfsuuids_ptr(x) x
 #define part_get_info_ptr(x)	x
 #endif
 
@@ -493,20 +489,6 @@ struct part_driver {
 	 * -ve if not
 	 */
 	int (*test)(struct blk_desc *desc);
-
-	/**
-	 * @printfsuuids:		Print fstype uuid information
-	 *
-	 * @printfsuuids.desc:	Block device descriptor
-	 */
-	void (*printfsuuids)(struct blk_desc *desc);
-
-	/**
-	 * @get_booted_slot:		get uboot env
-	 *
-	 * @get_booted_slot.desc:	Block device descriptor
-	 */
-	char (*get_booted_slot)(struct blk_desc *desc);
 };
 
 /* Declare a new U-Boot partition 'driver' */
