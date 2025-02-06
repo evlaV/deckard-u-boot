@@ -64,4 +64,10 @@ config SNAPDRAGON_SPL
 	imply SPL_RAM_SUPPORT
 	imply SPL_FIT
 
+config SPL_BSS_START_ADDR
+	default 0xa7100000 if SNAPDRAGON_SPL
+
+config SPL_BSS_MAX_SIZE
+	default 0x8000 if SNAPDRAGON_SPL
+
 endif
