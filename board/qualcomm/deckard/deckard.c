@@ -9,11 +9,14 @@
 #include <dm.h>
 #include <dm/pinctrl.h>
 #include <env.h>
+#include <fastboot.h>
 #include <init.h>
 #include <mmc.h>
 #include <net.h>
 #include <usb.h>
 #include <asm/cache.h>
+#include <sysreset.h>
+#include <asm/io.h>
 #include <asm/global_data.h>
 #include <asm/gpio.h>
 #include <fdt_support.h>
@@ -63,6 +66,7 @@ enum combined_button_state_t {
 };
 
 #define DECKARD_DUMMY_SERIAL_NUMB "123456789"
+#define TCSR_BOOT_MISC_DETECT 0x01fd9000
 
 // #define CHECK_PMICS
 #ifdef CHECK_PMICS
@@ -198,7 +202,7 @@ int button_state_handler(enum combined_button_state_t total_button_state, int po
 		case VOLUP_OFF__VOLDN_OFF__SELECT_ON:
 			break;
 		case VOLUP_OFF__VOLDN_ON__SELECT_OFF:
-			env_set("fastboot","1");
+			env_set("reboot_mode", "f");
 			break;
 		case VOLUP_OFF__VOLDN_ON__SELECT_ON:
 			break;
@@ -276,6 +280,52 @@ const char *fs_firmware_get_partition(void)
 	return deckard_get_fw_part();
 }
 
+static void deckard_reboot_mode_clean(void)
+{
+	if (!env_get("reboot_mode"))
+		return;
+
+	env_set("reboot_mode", "");
+	env_save();
+	mdelay(1000);
+}
+
+static void deckard_reboot_mode_edl(void)
+{
+	/*
+	 * Setup the boot_misc to 0x1 for EDL, 0x10 is minidump,
+	 * 0x20 is dump. We may need to disalble PMIC watchdog
+	 * also to avoid trigger during EDL transfers, but
+	 * our platform has it disable by default.
+	 */
+	writel(0x1, TCSR_BOOT_MISC_DETECT);
+	sysreset_walk(SYSRESET_WARM);
+}
+
+#if IS_ENABLED(CONFIG_FASTBOOT) && !CONFIG_IS_ENABLED(ENV_IS_NOWHERE)
+int fastboot_set_reboot_flag(enum fastboot_reboot_reason reason)
+{
+	if ((reason != FASTBOOT_REBOOT_REASON_FASTBOOTD) &&
+			(reason != FASTBOOT_REBOOT_REASON_OEM_EDL) &&
+			(reason != FASTBOOT_REBOOT_REASON_BOOTLOADER))
+		return -ENOTSUPP;
+
+	if (reason == FASTBOOT_REBOOT_REASON_FASTBOOTD) {
+		printf("Setting reboot to fastboot flag ...\n");
+		env_set("reboot_mode", "f");
+		env_save();
+	} else if (reason == FASTBOOT_REBOOT_REASON_BOOTLOADER) {
+		printf("Setting reboot to bootloader flag ...\n");
+		env_set("reboot_mode", "b");
+		env_save();
+	} else if (reason == FASTBOOT_REBOOT_REASON_OEM_EDL) {
+		printf("Rebooting to EDL mode ...\n");
+		deckard_reboot_mode_edl();
+	}
+
+	return 0;
+}
+#endif
 
 /* Check for vol- button - if pressed - stop autoboot */
 int misc_init_r(void)
@@ -284,8 +334,10 @@ int misc_init_r(void)
 	int                 ret;
 	enum button_state_t state;
 	char * bootedslot;
-	char * fastboot_envvar;
+	char *reboot_mode;
 	int fastbootmode = 0;
+	int bootloadermode = 0;
+	int edlmode = 0;
 	ofnode node;
 	enum combined_button_state_t total_button_state = 0;
 	int power_button_state = 0;
@@ -382,21 +434,22 @@ int misc_init_r(void)
 
 	button_state_handler(total_button_state,power_button_state);
 
-	//////////////////////////////////////////
-	//1. check vars that are set before calling any set_env()
-	//2. clear those variables by env_set(...,"")
-	//3. then env_save() if the value is set
-
-	fastboot_envvar = env_get("fastboot");
-	if( fastboot_envvar && ( fastboot_envvar[0] == '1' ) ) 
-	{
-		//clearing fastboot var to avoid getting trapped in fastboot mode
-		env_set("fastboot","");
-		env_save();
+	/*
+	 * Check if we have a special boot command
+	 * f - for fastboot and b - to stay in bootloader
+	 * mode, i.e, interrupt autoboot
+	 * and e - for edl mode
+	 */
+	reboot_mode = env_get("reboot_mode");
+	if (reboot_mode && (reboot_mode[0] == 'f' ))
 		fastbootmode = 1;
-	}
-	//printf("done checking for auto-clear variables")
-	//////////////////////////////////////////
+	else if (reboot_mode && (reboot_mode[0] == 'b' ))
+		bootloadermode = 1;
+	else if (reboot_mode && (reboot_mode[0] == 'e' ))
+		edlmode = 1;
+
+	/* cleanup all reboot_mode setups if any */
+	deckard_reboot_mode_clean();
 
 	ret = led_get_by_label("blue", &led);
 	if (ret < 0) {
@@ -416,8 +469,8 @@ int misc_init_r(void)
 	env_set("BOOT_ORDER", bootedslot);
 	printf("booted_slot: %s\n", env_get("booted_slot"));
 
-	if( fastbootmode ) 
-	{
+	/* Check if special boot mode (fastboot, bootloader, edl) was setup */
+	if(fastbootmode) {
 		printf("Starting fastboot mode...\n");
 		env_set("kernel_addr_r","90000000"); //is this right?
 		/*
@@ -431,6 +484,16 @@ int misc_init_r(void)
 			env_save();
 		}
 		run_command("fastboot -l 0x880000000 -s 0x10000000 usb 0", 0);
+	}
+
+	if (bootloadermode) {
+		printf("Starting bootloader mode...\n");
+		env_set("bootdelay", "-1");
+	}
+
+	if (edlmode) {
+		printf("Rebooting to EDL mode...\n");
+		deckard_reboot_mode_edl();
 	}
 
 	// if requested, use the default env boot variables
