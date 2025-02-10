@@ -240,7 +240,7 @@ static int qcom_pon_request(struct udevice *dev, enum sysreset_t type)
 		pmic_reg_write(priv->pmic, PON_PBS_PS_HOLD_SW_CTL, PON_PS_HOLD_TYPE_SHUTDOWN);
 		break;
 	case SYSRESET_WARM:
-		pmic_reg_write(priv->pmic, PON_PBS_PS_HOLD_SW_CTL, PON_PS_HOLD_TYPE_MASK);
+		pmic_reg_write(priv->pmic, PON_PBS_PS_HOLD_SW_CTL, PON_PS_HOLD_TYPE_WARM_RESET);
 		break;
 	case SYSRESET_COLD:
 	case SYSRESET_POWER:
