@@ -43,6 +43,7 @@ static void oem_partconf(char *, char *);
 static void oem_bootbus(char *, char *);
 static void oem_console(char *, char *);
 static void oem_board(char *, char *);
+static void oem_reboot_edl(char *, char *);
 static void run_ucmd(char *, char *);
 static void run_acmd(char *, char *);
 
@@ -117,6 +118,10 @@ static const struct {
 	[FASTBOOT_COMMAND_OEM_BOARD] = {
 		.command = "oem board",
 		.dispatch = CONFIG_IS_ENABLED(FASTBOOT_OEM_BOARD, (oem_board), (NULL))
+	},
+	[FASTBOOT_COMMAND_OEM_REBOOT_EDL] = {
+		.command = "oem reboot-edl",
+		.dispatch = CONFIG_IS_ENABLED(FASTBOOT_CMD_OEM_REBOOT_EDL, (oem_reboot_edl), (NULL))
 	},
 	[FASTBOOT_COMMAND_UCMD] = {
 		.command = "UCmd",
@@ -547,6 +552,21 @@ static void __maybe_unused oem_console(char *cmd_parameter, char *response)
 		fastboot_fail("Empty console", response);
 	else
 		fastboot_response(FASTBOOT_MULTIRESPONSE_START, response, NULL);
+}
+
+/**
+ * oem_reboot_edl() - Execute the OEM reboot_edl command
+ *
+ * @cmd_parameter: Pointer to command parameter
+ * @response: Pointer to fastboot response buffer
+ */
+static void __maybe_unused oem_reboot_edl(char *cmd_parameter, char *response)
+{
+
+	if (fastboot_set_reboot_flag(FASTBOOT_REBOOT_REASON_OEM_EDL))
+		fastboot_fail("Cannot set recovery flag", response);
+	else
+		fastboot_okay(NULL, response);
 }
 
 /**

@@ -253,6 +253,12 @@ config FASTBOOT_CMD_OEM_CONSOLE
 	  Add support for the "oem console" command to input and read console
 	  record buffer.
 
+config FASTBOOT_CMD_OEM_REBOOT_EDL
+	bool "Enable the 'oem reboot-edl' command"
+	help
+	  Add support for the "oem reboot-edl" command to make the board reset
+	  in Emergency Download Mode (EDL)
+
 config FASTBOOT_OEM_BOARD
 	bool "Enable the 'oem board' command"
 	help
