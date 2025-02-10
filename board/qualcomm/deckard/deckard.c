@@ -158,7 +158,7 @@ static void deckard_setup(void)
 #define DECKARD_UBOOT_ENV_SLOT_R "3:2"
 
 //returns an index that env_ext4_get_dev_part() can use (overrides weak ref func ptr)
-//and you can also get the 
+//and you can also get the
 int deckard_get_boot(char * bootedslotref)
 {
 	struct blk_desc *desc;
@@ -191,12 +191,12 @@ int deckard_get_boot(char * bootedslotref)
 //this overrides the built-in default function
 const char *env_ext4_get_dev_part(void)
 {
-	static char *const dev_part[] = { 
-										DECKARD_UBOOT_ENV_SLOT_M, 
-										DECKARD_UBOOT_ENV_SLOT_A, 
-										DECKARD_UBOOT_ENV_SLOT_B,
-										DECKARD_UBOOT_ENV_SLOT_R
-									};
+	static char *const dev_part[] = {
+		DECKARD_UBOOT_ENV_SLOT_M,
+		DECKARD_UBOOT_ENV_SLOT_A,
+		DECKARD_UBOOT_ENV_SLOT_B,
+		DECKARD_UBOOT_ENV_SLOT_R
+	};
 	char bootedslot;
 	int devpartidx = deckard_get_boot(&bootedslot);
 	return dev_part[devpartidx];
@@ -274,7 +274,7 @@ int misc_init_r(void)
 			env_set("bootdelay","2");
 		}
 	}
-	
+
 	ret = button_get_by_label("pwrkey", &btn);
 	if (ret < 0) {
 		printf("Couldn't find power button!\n");
@@ -311,10 +311,10 @@ int misc_init_r(void)
 				break;
 			case 'R':
 				env_set("booted_slot","R");
-				break;				
+				break;
 			default:
 				env_set("booted_slot","A");
-				break;		
+				break;
 		}
 	}
 	else
@@ -340,7 +340,7 @@ int misc_init_r(void)
 	}
 
 	//compare first character of these env vars to check for A or B
-	if( bootorder && bootedslot && ( bootorder[0] == bootedslot[0] ) ) 
+	if( bootorder && bootedslot && ( bootorder[0] == bootedslot[0] ) )
 	{
 		//printf("booted_slot matches BOOT_ORDER\n");
 	}
@@ -362,7 +362,7 @@ int misc_init_r(void)
 
 	printf("booted_slot: %s %s\n", env_get("booted_slot"), (slotdiffers ? "(changed)" : "") );
 
-	if(reboot_needed) 
+	if(reboot_needed)
 	{
 		//this will make it so we get a countdown, it will fail to boot, fall back to altbootcmd, and reset
 		printf("reboot needed\n");
@@ -376,7 +376,7 @@ int misc_init_r(void)
 	{
 		env_set_ulong("bootcount", 1);
 		env_set_ulong("bootlimit", 10);
-		env_set_ulong("upgrade_available", 0); 
+		env_set_ulong("upgrade_available", 0);
 		env_set("altbootcmd","");
 	}
 
