@@ -643,6 +643,10 @@
 	vdd3-supply = <&vreg_l5b_3p1>;
 };
 
+&pm8550b_vbus {
+	status = "okay";
+};
+
 &pm8550ve_gpios {
 	gpio-line-names =
 		// GPIO01 - GPIO08
@@ -903,6 +907,7 @@
 
 &usb_1_dwc3 {
 	dr_mode = "peripheral";
+	vbus-supply = <&pm8550b_vbus>;
 };
 
 &usb_1_hsphy {
