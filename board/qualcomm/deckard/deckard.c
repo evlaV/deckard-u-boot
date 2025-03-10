@@ -146,22 +146,36 @@ static void deckard_setup(void)
 
 const char *env_ext4_get_dev_part(void)
 {
-	char *booted_slot = env_get("booted_slot");
+	ofnode node;
+	const char *bootdev;
 
-	if (!booted_slot) {
-		printf("%s: Missing booted_slot, defaulting to Master env\n", __func__);
-		return DECKARD_UBOOT_ENV_SLOT_M;
-	}
+	node = ofnode_path("/chosen");
+	if (ofnode_valid(node)) {
+		bootdev = ofnode_read_string(node, "u-boot,spl-boot-device");
+		if (!bootdev) {
+			printf("No u-boot,spl-boot-device, considering rescue slot\n");
+			return DECKARD_UBOOT_ENV_SLOT_R;
+		} else {
+			printf("Booted on slot '%s'\n", bootdev);
 
-	switch (booted_slot[0]) {
-	case 'A':
-		return DECKARD_UBOOT_ENV_SLOT_A;
-	case 'B':
-		return DECKARD_UBOOT_ENV_SLOT_B;
-	case 'R':
-		return DECKARD_UBOOT_ENV_SLOT_R;
-	default:
-		printf("%s: Invalid booted_slot, defaulting to Master env\n", __func__);
+			switch (bootdev[0]) {
+			case 'A':
+				return DECKARD_UBOOT_ENV_SLOT_A;
+				break;
+			case 'B':
+				return DECKARD_UBOOT_ENV_SLOT_B;
+				break;
+			case 'R':
+				return DECKARD_UBOOT_ENV_SLOT_R;
+				break;
+			default:
+				printf("%s: Invalid booted_slot, defaulting to Master env\n", __func__);
+				return DECKARD_UBOOT_ENV_SLOT_M;
+				break;
+			}
+		}
+	} else {
+		printf("No chosen node default to master!\n");
 		return DECKARD_UBOOT_ENV_SLOT_M;
 	}
 }
@@ -295,12 +309,11 @@ int misc_init_r(void)
 	env_set("SYSTEMLUNIDX", DECKARD_SYSTEM_LUNIDX);
 	env_set("RESCUELUNIDX", DECKARD_RESCUE_LUNIDX);
 
+	// do we still need this?
 	bootedslot = env_get("booted_slot");
 	env_set("BOOT_ORDER", bootedslot);
-
 	printf("booted_slot: %s\n", env_get("booted_slot"));
 
-	//compare first character of these env vars to check for A or B
 	if( fastbootmode ) 
 	{
 		printf("Starting fastboot mode...\n");
@@ -335,7 +348,7 @@ int ft_board_setup(void *fdt, struct bd_info *bd)
 	ret = fdt_setprop_string(fdt, nodeoffset, "bootwrapper,version", boot_wrapper_version);
 	if (ret < 0) {
 		printf("WARNING: could not set bootwrapper,version %s.\n",
-		       fdt_strerror(ret));
+			   fdt_strerror(ret));
 		return ret;
 	}
 
