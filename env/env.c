@@ -203,16 +203,7 @@ int env_load(void)
 			if (best_prio == -1)
 				best_prio = prio;
 		} else {
-			printf("Failed (%d), try again\n", ret);
-			ret = drv->load();
-			if (!ret) {
-				printf("OK\n");
-				gd->env_load_prio = prio;
-
-				return 0;
-			} else {
-				printf("Failed (%d)\n", ret);
-			}
+			printf("env_load() Failed (%d)\n", ret);
 		}
 	}
 
