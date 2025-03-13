@@ -224,12 +224,13 @@ void qcom_spl_board_init(void)
 	}
 
 	/* Export and write env in both partitions */
+    /* NOTE: blk_write() size is in blocks ( 4k )*/
 	ret = env_export(buf1);
 	if (!ret) {
-		ret = blk_write(blk_dev->bdev, info1.start, ENV_SIZE, buf1);
+		ret = blk_write(blk_dev->bdev, info1.start, info1.size, buf1);
 		if (!ret)
 			printf("Unable to write env\n");
-		ret = blk_write(blk_dev->bdev, info2.start, ENV_SIZE, buf1);
+		ret = blk_write(blk_dev->bdev, info2.start, info2.size, buf1);
 		if (!ret)
 			printf("Unable to write env_alt\n");
 	} else
