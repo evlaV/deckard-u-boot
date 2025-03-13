@@ -15,19 +15,19 @@
 #define BOOT_DEVICE_UFS_B	(BOOT_DEVICE_NONE + 2)
 #define BOOT_DEVICE_UFS_R	(BOOT_DEVICE_NONE + 3)
 
-#define DECKARD_UFS_ENV_LUN		1
-#define DECKARD_UFS_ENV_PART		12
-#define DECKARD_UFS_ENV_PART_ALT	13
+#define DECKARD_UFS_ENV_LUN		2
+#define DECKARD_UFS_ENV_PART		1
+#define DECKARD_UFS_ENV_PART_ALT	2
 
 #define DECKARD_UFS_BOOT_LUN		2
-#define DECKARD_UFS_BOOT_PART_A		1
-#define DECKARD_UFS_BOOT_PART_B		3
+#define DECKARD_UFS_BOOT_PART_A		3
+#define DECKARD_UFS_BOOT_PART_B		6
 
 #define DECKARD_UFS_RESCUE_LUN		3
 #define DECKARD_UFS_RESCUE_BOOT_PART	1
 
 #define BOOT_ATTEMPTS_SWAP		8
-#define BOOT_ATTEMPTS_RESCUE		6
+#define BOOT_ATTEMPTS_RESCUE	(BOOT_ATTEMPTS_SWAP*2)
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -83,14 +83,17 @@ void board_boot_order(u32 *spl_boot_list)
 
 	/* Try to go into rescue first if too much attempts */
 	if (env_get_ulong("FORCE_RESCUE", 10, 0)) {
+		printf("BOOT_ORDER set to Rescue as primary\n");
 		spl_boot_list[0] = BOOT_DEVICE_UFS_R;
 		spl_boot_list[1] = BOOT_DEVICE_UFS_A;
 		spl_boot_list[2] = BOOT_DEVICE_UFS_B;
 	} else if (!strcmp(boot_order, "A B")) {
+		printf("BOOT_ORDER set to A as primary\n");
 		spl_boot_list[0] = BOOT_DEVICE_UFS_A;
 		spl_boot_list[1] = BOOT_DEVICE_UFS_B;
 		spl_boot_list[2] = BOOT_DEVICE_UFS_R;
 	} else {
+		printf("BOOT_ORDER set to B as primary\n");
 		spl_boot_list[0] = BOOT_DEVICE_UFS_B;
 		spl_boot_list[1] = BOOT_DEVICE_UFS_A;
 		spl_boot_list[2] = BOOT_DEVICE_UFS_R;
