@@ -37,9 +37,8 @@ DECLARE_GLOBAL_DATA_PTR;
 #define DECKARD_UBOOT_LUNIDX "2"
 #define DECKARD_RESCUE_LUNIDX "3"
 //M slot is the master slot / default
-#define DECKARD_UBOOT_ENV_SLOT_M "2:5"
-#define DECKARD_UBOOT_ENV_SLOT_A "2:2"
-#define DECKARD_UBOOT_ENV_SLOT_B "2:4"
+#define DECKARD_UBOOT_ENV_SLOT_A "2:4"
+#define DECKARD_UBOOT_ENV_SLOT_B "2:7"
 #define DECKARD_UBOOT_ENV_SLOT_R "3:2"
 
 // #define CHECK_PMICS
@@ -169,14 +168,14 @@ const char *env_ext4_get_dev_part(void)
 				return DECKARD_UBOOT_ENV_SLOT_R;
 				break;
 			default:
-				printf("%s: Invalid booted_slot, defaulting to Master env\n", __func__);
-				return DECKARD_UBOOT_ENV_SLOT_M;
+				printf("%s: Invalid booted_slot, defaulting to Rescue env\n", __func__);
+				return DECKARD_UBOOT_ENV_SLOT_R;
 				break;
 			}
 		}
 	} else {
-		printf("No chosen node default to master!\n");
-		return DECKARD_UBOOT_ENV_SLOT_M;
+		printf("No chosen node default to rescue!\n");
+		return DECKARD_UBOOT_ENV_SLOT_R;
 	}
 }
 
