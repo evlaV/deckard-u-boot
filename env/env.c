@@ -37,6 +37,9 @@ static enum env_location env_locations[] = {
 #ifdef CONFIG_ENV_IS_IN_EXT4
 	ENVL_EXT4,
 #endif
+#ifdef CONFIG_ENV_IS_IN_SCSI
+	ENVL_SCSI,
+#endif
 #ifdef CONFIG_ENV_IS_IN_FAT
 	ENVL_FAT,
 #endif

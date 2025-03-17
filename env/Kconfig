@@ -74,7 +74,8 @@ config ENV_IS_DEFAULT
 		     !ENV_IS_IN_MMC && !ENV_IS_IN_NAND && \
 		     !ENV_IS_IN_NVRAM && !ENV_IS_IN_ONENAND && \
 		     !ENV_IS_IN_REMOTE && !ENV_IS_IN_SPI_FLASH && \
-		     !ENV_IS_IN_UBI && !ENV_IS_IN_MTD
+		     !ENV_IS_IN_UBI && !ENV_IS_IN_MTD && \
+		     !ENV_IS_IN_SCSI
 	select ENV_IS_NOWHERE
 
 config ENV_IS_NOWHERE
@@ -124,6 +125,12 @@ config ENV_IS_IN_EXT4
 	select EXT4_WRITE
 	help
 	  Define this if you want to use the EXT4 file system for the environment.
+
+config ENV_IS_IN_SCSI
+	bool "Environment is in a SCSI partition"
+	depends on !CHAIN_OF_TRUST
+	help
+	  Define this if you want to use the SCSI partition for the environment.
 
 config ENV_IS_IN_FLASH
 	bool "Environment in flash memory"
@@ -569,6 +576,24 @@ config ENV_EXT4_DEVICE_AND_PART
 	  If ENV_EXT4_INTERFACE is set to "mmc" then device 'D' can be omitted,
 	  leaving the string starting with a colon, and the boot device will
 	  be used.
+
+config ENV_SCSI_DEVICE_AND_PART
+	string "Device and partition for where to store the environemt"
+	depends on ENV_IS_IN_SCSI
+	help
+	  Define this to a string to specify the partition of the device. It can
+	  be as following:
+
+	    "D:P", "D:0", "D", "D:" or "D:auto" (D, P are integers. And P >= 1)
+	       - "D:P": device D partition P. Error occurs if device D has no
+	                partition table.
+	       - "D:0": device D.
+	       - "D" or "D:": device D partition 1 if device D has partition
+	                      table, or the whole device D if has no partition
+	                      table.
+	       - "D:auto": first partition in device D with bootable flag set.
+	                   If none, first valid partition in device D. If no
+	                   partition table then means device D.
 
 config ENV_EXT4_FILE
 	string "Name of the EXT4 file to use for the environment"

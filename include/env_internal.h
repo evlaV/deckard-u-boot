@@ -105,6 +105,7 @@ enum env_location {
 	ENVL_UNKNOWN,
 	ENVL_EEPROM,
 	ENVL_EXT4,
+    ENVL_SCSI,
 	ENVL_FAT,
 	ENVL_FLASH,
 	ENVL_MMC,
@@ -224,6 +225,16 @@ const char *env_ext4_get_intf(void);
  * Return: string of device and partition
  */
 const char *env_ext4_get_dev_part(void);
+
+/**
+ * env_scsi_get_dev_part() - Provide the device and partition for env in EXT4
+ *
+ * It is a weak function allowing board to overidde the default device and
+ * partition used for U-Boot env in SCSI: CONFIG_ENV_SCSI_DEVICE_AND_PART
+ *
+ * Return: string of device and partition
+ */
+const char *env_scsi_get_dev_part(void);
 
 /**
  * arch_env_get_location()- Provide the best location for the U-Boot environment

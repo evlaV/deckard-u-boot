@@ -578,6 +578,7 @@ void env_relocate(void)
 		env_set_default("bad CRC", 0);
 #endif
 	} else {
+        printf("env_load");
 		env_load();
 	}
 }
