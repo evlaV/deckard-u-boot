@@ -148,7 +148,7 @@ static void deckard_setup(void)
 	smb1510_set_switching_frequency(pmk8550, 0x0F);
 }
 
-const char *env_ext4_get_dev_part(void)
+const char *env_scsi_get_dev_part(void)
 {
 	ofnode node;
 	const char *bootdev;
@@ -182,11 +182,6 @@ const char *env_ext4_get_dev_part(void)
 		printf("No chosen node default to rescue!\n");
 		return DECKARD_UBOOT_ENV_SLOT_R;
 	}
-}
-
-const char *deckard_env_ext4_get_dev_part(void)
-{
-	return env_ext4_get_dev_part();
 }
 
 const char *deckard_get_fw_part(void)
@@ -434,6 +429,10 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	char * temp_bootargs;
 
 	printf("Deckard custom boot function\n");
+
+	// TODO is there a way to only do this if needed?
+	// If we haven't already scanned the SCSI devices we need to do it here
+	//scsi_scan(true);
 
 	// Get partition and label from booted slot
 	// booted_slot set after parsing DTS modified by SPL
