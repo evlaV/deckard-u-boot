@@ -62,7 +62,7 @@ static int deckard_battery_load_recovery_program(void)
 	char arg3[LOADADDRMAXLEN]; //e.g. "0xa7000000"
 	char arg4[] = "dead_battery_recovery.bin";
 
-	strncpy(arg2, deckard_env_ext4_get_dev_part(), DEVPARTMAXLEN); //this returns 1:d for example
+	strncpy(arg2, deckard_get_fw_part(), DEVPARTMAXLEN); //this returns 1:d for example
 	snprintf(arg3, LOADADDRMAXLEN, "0x%x", CONFIG_SYS_LOAD_ADDR); //this returns 1:d for example
 
 	argv[0]=arg0;

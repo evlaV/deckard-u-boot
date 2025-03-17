@@ -23,6 +23,8 @@
 #include <button.h>
 #include <power/pmic.h>
 #include <command.h>
+#include <fs.h>
+#include <image.h>
 
 #include "deckard_eeprom.h"
 #include "deckard_battery.h"
@@ -38,8 +40,11 @@ DECLARE_GLOBAL_DATA_PTR;
 #define DECKARD_RESCUE_LUNIDX "3"
 //M slot is the master slot / default
 #define DECKARD_UBOOT_ENV_SLOT_A "2:4"
+#define DECKARD_UBOOT_FW_SLOT_A "2:5"
 #define DECKARD_UBOOT_ENV_SLOT_B "2:7"
+#define DECKARD_UBOOT_FW_SLOT_B "2:8"
 #define DECKARD_UBOOT_ENV_SLOT_R "3:2"
+#define DECKARD_UBOOT_FW_SLOT_R "3:3"
 
 // #define CHECK_PMICS
 #ifdef CHECK_PMICS
@@ -184,6 +189,26 @@ const char *deckard_env_ext4_get_dev_part(void)
 	return env_ext4_get_dev_part();
 }
 
+const char *deckard_get_fw_part(void)
+{
+	char * bootedslot;
+	// Get partition and label from booted slot
+	// booted_slot set after parsing DTS modified by SPL
+	bootedslot = env_get("booted_slot");
+	switch(bootedslot[0]){
+		case 'A':
+			return DECKARD_UBOOT_ENV_SLOT_A;
+			break;
+		case 'B':
+			return DECKARD_UBOOT_ENV_SLOT_B;
+			break;
+		case 'R':
+		default:
+			return DECKARD_UBOOT_ENV_SLOT_R;
+			break;
+	}
+}
+
 /* Check for vol- button - if pressed - stop autoboot */
 int misc_init_r(void)
 {
@@ -321,6 +346,12 @@ int misc_init_r(void)
 		run_command("fastboot -l 0x880000000 -s 0x10000000 usb 0", 0);
 	}
 
+	// if requested, use the default env boot variables
+	// otherwise override with deckard custom boot command
+	if ( !env_get("use_custom_boot") ){
+		env_set("bootcmd", "deckard_boot");
+	}
+
 	printf("deckard init: done\n");
 ///////
 
@@ -353,3 +384,153 @@ int ft_board_setup(void *fdt, struct bd_info *bd)
 
 	return 0;
 }
+
+#define SLOT_A_PARTITION "0:1"
+#define SLOT_B_PARTITION "0:2"
+#define SLOT_R_PARTITION "3:4"
+
+#define DEVPARTMAXLEN 16
+#define LOADADDRMAXLEN 16
+#define PATHMAXLEN 256
+
+int scsi_do_load_helper(char * partition, char * addr, char * path)
+{
+	int  argc = 5;
+	char *argv[5];
+	char arg0[] = "do_the_dew"; // ?
+	char arg1[] = "scsi";
+
+	argv[0]=arg0;
+	argv[1]=arg1;
+	argv[2]=partition; //e.g. "1:d"
+	argv[3]=addr; //e.g. "0xa7000000"
+	argv[4]=path; // e.g. "/boot/maindtb.dtb"
+
+	return do_load(NULL, 0, argc, argv, FS_TYPE_EXT);
+}
+
+// per arm64 linux boot documenation, default text_offset is 0x80000
+#define ADDR_KERNEL "0x88000000"
+// this gives us roughly 290 Megabytes for kernel, dtb, and initrd
+#define MAX_ADDR_INITRD 0x99000000
+
+// Deckard boot command.  Executes sequence that would normally be in the boot.scr
+int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
+{
+	char * bootedslot;
+	char * dtb_qcom;
+	char * eeprom_board;
+	char * KERNEL_TARGET = "/boot/Image";
+	char * INITRD_TARGET = "/boot/initrd.uImage";
+	char partition[DEVPARTMAXLEN];
+	char label[DEVPARTMAXLEN];
+	char DTB_TARGET[PATHMAXLEN];
+	int ret;
+	ulong image_size, addr_kernel, addr_dtb, addr_initrd;
+	char DTB_ADDR[DEVPARTMAXLEN];
+	char INITRD_ADDR[DEVPARTMAXLEN];
+	char bootargs[PATHMAXLEN]; // how long can this be?
+	char * default_bootargs;
+	char * temp_bootargs;
+
+	printf("Deckard custom boot function\n");
+
+	// Get partition and label from booted slot
+	// booted_slot set after parsing DTS modified by SPL
+	bootedslot = env_get("booted_slot");
+	switch(bootedslot[0]){
+		case 'A':
+			strncpy(partition, SLOT_A_PARTITION, DEVPARTMAXLEN);
+			strncpy(label, "system0", DEVPARTMAXLEN);
+			break;
+		case 'B':
+			strncpy(partition, SLOT_B_PARTITION, DEVPARTMAXLEN);
+			strncpy(label, "system1", DEVPARTMAXLEN);
+			break;
+		case 'R':
+		default:
+			strncpy(partition, SLOT_R_PARTITION, DEVPARTMAXLEN);
+			strncpy(label, "rescue", DEVPARTMAXLEN);
+			break;
+	}
+
+	// Get DTB
+	dtb_qcom = env_get("DTB_QCOM");
+	eeprom_board = env_get("EEPROM_BOARD");
+	if (dtb_qcom) {
+		snprintf(DTB_TARGET, PATHMAXLEN, "/boot/dtbqcom/%s", dtb_qcom);
+	} else if (eeprom_board) {
+		snprintf(DTB_TARGET, PATHMAXLEN, "/boot/dtbqcom/sm8650-%s.dtb", eeprom_board);
+	} else {
+		snprintf(DTB_TARGET, PATHMAXLEN, "/boot/maindtb.dtb");
+	}
+
+	// Load kernel
+	if ( scsi_do_load_helper(partition, ADDR_KERNEL, KERNEL_TARGET) ) {
+		goto fail;
+	}
+	// Get kernel size.  TODO for now we are assuming an uncompressed linux image
+	addr_kernel = hextoul(ADDR_KERNEL, NULL);
+	ret = booti_get_image_size(addr_kernel, &image_size);
+	if (ret)
+		printf("Could not get linux image size ( %d )\n", ret);
+    // get dtb address.  kernel will expand to the nearest 2MB boundary, so we give us a 10MB buffer
+	addr_dtb = addr_kernel + image_size + 0xA00000;
+	// align to next 2MB address
+	addr_dtb += 0x200000 - ( addr_dtb % 0x200000 );
+	sprintf(DTB_ADDR, "0x%lX", addr_dtb);
+	printf("DTB_ADDR %s\n", DTB_ADDR); // debug
+	// load dtb
+	if ( scsi_do_load_helper(partition, DTB_ADDR, DTB_TARGET) ) {
+		goto fail;
+	}
+	// get address for initrd
+	image_size = hextoul(env_get("filesize"), NULL);
+	addr_initrd = addr_dtb + image_size + + 0xA00000;
+	addr_initrd += 0x200000 - ( addr_initrd % 0x200000 );
+	sprintf(INITRD_ADDR, "0x%lX", addr_initrd);
+	printf("INITRD_ADDR %s\n", INITRD_ADDR); // debug
+	// load inird
+	if ( scsi_do_load_helper(partition, INITRD_ADDR, INITRD_TARGET) ) {
+		goto fail;
+	}
+
+	// check for max file sizes
+	image_size = hextoul(env_get("filesize"), NULL);
+	if ( addr_initrd + image_size > MAX_ADDR_INITRD ) {
+		printf("DANGER!! exceeded maximum memory allocated for kernel, dtb, and initrd!!!");
+	}
+
+	// prep bootargs
+	default_bootargs = env_get("default_bootargs");
+	temp_bootargs = env_get("temp_bootargs");
+	snprintf(bootargs, PATHMAXLEN, "%s %s root=PARTLABEL=%s init=/sbin/init ro rauc.slot=%s noresume rootwait earlycon",
+									default_bootargs, temp_bootargs, label, bootedslot );
+	env_set("bootargs", bootargs);
+
+	// erase temp bootargs which is used for Testing
+	env_set("temp_bootargs", "");
+
+	env_set("kernel_addr_r", ADDR_KERNEL);
+	env_set("ramdisk_addr_r", INITRD_ADDR);
+	env_set("fdtcontroladdr", DTB_ADDR);
+	run_command("booti ${kernel_addr_r} ${ramdisk_addr_r} ${fdtcontroladdr}", 0);
+
+	printf("!!Boot Failed, Reset!!");
+
+fail:
+	// should not get here, if we do, we should reset
+	run_command("reset", 0);
+	return -1;
+}
+
+// set deckard boot as uboot command so that it can be called from CLI or by
+// normal autoboot process
+U_BOOT_LONGHELP(deckard_boot,
+    "Boot Deckard system image. TODO required inputs and return values\n"
+);
+
+U_BOOT_CMD(
+	deckard_boot, CONFIG_SYS_MAXARGS,     1,      do_deckard_boot,
+    "Boot Deckard system image.", deckard_boot_help_text
+);
