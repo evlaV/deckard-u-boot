@@ -228,6 +228,7 @@ U_BOOT_DRIVER(qcom_pwrkey) = {
 	.priv_auto = sizeof(struct qcom_pmic_btn_priv),
 };
 
+#ifndef CONFIG_SPL_BUILD
 static int qcom_pon_request(struct udevice *dev, enum sysreset_t type)
 {
 	struct qcom_pmic_btn_priv *priv = dev_get_priv(dev);
@@ -295,3 +296,4 @@ U_BOOT_DRIVER(qcom_pon) = {
 	.ops = &qcom_pon_ops,
 	.priv_auto = sizeof(struct qcom_pmic_btn_priv),
 };
+#endif
