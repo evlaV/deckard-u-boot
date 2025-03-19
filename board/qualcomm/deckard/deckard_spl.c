@@ -26,8 +26,7 @@
 #define DECKARD_UFS_RESCUE_LUN		3
 #define DECKARD_UFS_RESCUE_BOOT_PART	1
 
-#define BOOT_ATTEMPTS_SWAP		8
-#define BOOT_ATTEMPTS_RESCUE	(BOOT_ATTEMPTS_SWAP*2)
+#define BOOT_ATTEMPTS_MAX			8
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -50,6 +49,12 @@ void spl_perform_fixups(struct spl_image_info *spl_image)
 	int chosen;
 	int ret;
 
+	//cleanup some env vars
+	if (env_get("FORCE_RESCUE")) {
+		env_set("FORCE_RESCUE",NULL); //delete this variable once we consume it
+	}
+
+	//now do fdt stuff
 	chosen = fdt_find_or_add_subnode(blob, 0, "chosen");
 	if (chosen < 0) {
 		printf("%s: could not find/create '/chosen'\n", __func__);
@@ -125,27 +130,59 @@ static char *check_boot_order(void)
 	return boot_order;
 }
 
-static ulong increase_boot_count(void)
+static uint get_boot_order_first_entry(void)
 {
-	char *boot_count = env_get("BOOT_COUNT");
-	ulong count;
+	char *boot_order;
+	u32 spl_boot_list[5];
+	boot_order = check_boot_order();
+	board_boot_order(spl_boot_list);
+	return spl_boot_list[0];
+}
 
-	if (!boot_count) {
-		printf("Missing BOOT_COUNT, restarting from 0\n");
-		count = 0;
-	} else
-		count = simple_strtoul(boot_count, NULL, 10);
+static ulong iterate_boot_count(void)
+{
+	char *boot_count;
+	ulong count = 0;
+	ulong boot_count_max = BOOT_ATTEMPTS_MAX;
+	uint boot_target;
+	char * boot_count_target = NULL;
+	boot_target = get_boot_order_first_entry();
 
-	count += 1;
-
-	/* Set back BOOT_COUNT to 0, so we can retry after getting back from rescue */
-	if (count > BOOT_ATTEMPTS_RESCUE) {
-		printf("Attempting Rescue & resetting BOOT_COUNT to 0\n");
-		env_set_ulong("BOOT_COUNT", 0);
-	} else {
-		printf("Increasing BOOT_COUNT to %ld\n", count);
-		env_set_ulong("BOOT_COUNT", count);
+	switch(boot_target)
+	{
+		case BOOT_DEVICE_UFS_A:
+			boot_count_target = "BOOT_COUNT_A";
+			boot_count_max = BOOT_ATTEMPTS_MAX;
+			break;
+		case BOOT_DEVICE_UFS_B:
+			boot_count_target = "BOOT_COUNT_B";
+			boot_count_max = BOOT_ATTEMPTS_MAX;
+			break;
+		case BOOT_DEVICE_UFS_R:
+			return BOOT_ATTEMPTS_MAX;
+			break;
+		default:
+			return BOOT_ATTEMPTS_MAX;
+			break;
 	}
+
+	boot_count = env_get(boot_count_target);
+
+	if (!boot_count) { 
+		//variable doesnt exist, so set max boot count
+		count = boot_count_max;
+	}
+	else
+	{
+		//variable exists, so decrement it until it hits 0
+		count = simple_strtoul(boot_count, NULL, 10);
+		if(count > 0)
+		{
+			count--;
+		}
+	}
+
+	env_set_ulong(boot_count_target, count);
 
 	return count;
 }
@@ -158,10 +195,15 @@ void qcom_spl_board_init(void)
 	struct blk_desc *blk_dev;
 	void *buf1 = (void *)(CONFIG_SYS_LOAD_ADDR);
 	void *buf2 = NULL;
-	ulong boot_count = 0;
 	char *boot_order;
 	long count;
 	int ret;
+	int go_to_rescue = 0;
+	ulong boot_count = 0;
+	ulong boot_count_a = 0;
+	ulong boot_count_b = 0;
+	int boot_state_a = 0;
+	int boot_state_b = 0;
 
 	printf("Hello from deckard_spl, boot wrapper version %ld\n", boot_wrapper_version);
 
@@ -185,7 +227,10 @@ void qcom_spl_board_init(void)
 	blk_show_device(UCLASS_SCSI, 0);
 
 	if (boot_wrapper_version == 9001)
+	{
+		go_to_rescue = 1;
 		goto skip_env_update;
+	}
 
 	/* Read spl_env partition */
 	ret = part_get_info(blk_dev, DECKARD_UFS_ENV_PART, &info1);
@@ -220,20 +265,76 @@ void qcom_spl_board_init(void)
 
 	/* Sanitize BOOT_ORDER && BOOT_COUNT */
 	boot_order = check_boot_order();
-	boot_count = increase_boot_count();
 
 	printf("Environment Variables:\n");
-	printf("- BOOT_ORDER = '%s'\n", boot_order);
-	printf("- BOOT_COUNT = '%ld'\n", boot_count);
+	printf("- BOOT_ORDER   = '%s'\n", env_get("BOOT_ORDER"));
+	printf("- BOOT_COUNT_A = '%s'\n", env_get("BOOT_COUNT_A"));
+	printf("- BOOT_COUNT_B = '%s'\n", env_get("BOOT_COUNT_B"));
+	printf("- BOOT_STATE_A = '%s'\n", env_get("BOOT_STATE_A"));
+	printf("- BOOT_STATE_B = '%s'\n", env_get("BOOT_STATE_B"));
 
-	/* Swap back after a certain amount of attempts */
-	if (boot_count == BOOT_ATTEMPTS_SWAP) {
-		printf("Swapping back boot_order\n");
-		if (!strcmp(boot_order, "A B"))
-			env_set("BOOT_ORDER", "B A");
+	if(env_get("BOOT_STATE_A"))
+	{
+		boot_state_a = env_get_ulong("BOOT_STATE_A", 10, 0);
+		if(boot_state_a)
+		{
+			//set boot count to max to allow it to be used
+			env_set_ulong("BOOT_COUNT_A", BOOT_ATTEMPTS_MAX);
+		}
 		else
-			env_set("BOOT_ORDER", "A B");
+		{
+			//set boot count to 0 so it won't try to be used
+			env_set_ulong("BOOT_COUNT_A", 0);
+		}
+		env_set("BOOT_STATE_A",NULL); //always delete this variable after we process it
 	}
+
+	if(env_get("BOOT_STATE_B"))
+	{
+		boot_state_b = env_get_ulong("BOOT_STATE_B", 10, 0);
+		if(boot_state_b)
+		{
+			//set boot count to max to allow it to be used
+			env_set_ulong("BOOT_COUNT_B", BOOT_ATTEMPTS_MAX);
+		}
+		else
+		{	
+			//set boot count to 0 so it won't try to be used
+			env_set_ulong("BOOT_COUNT_B", 0);
+		}
+		env_set("BOOT_STATE_B",NULL); //always delete this variable after we process it
+	}
+
+	if(env_get("BOOT_COUNT_A"))
+	{
+		boot_count_a = env_get_ulong("BOOT_COUNT_A", 10, 0);
+	}
+
+	if(env_get("BOOT_COUNT_B"))
+	{
+		boot_count_b = env_get_ulong("BOOT_COUNT_B", 10, 0);
+	}
+
+	//change BOOT_ORDER if we have exhausted boot attempts
+	if (      boot_count_a == 0  &&  boot_count_b == 0 ) 
+	{
+		go_to_rescue = 1;
+	}
+	else if ( boot_count_a == 0  &&  boot_count_b  > 0 ) 
+	{
+		env_set("BOOT_ORDER", "B A");
+	}
+	else if ( boot_count_a >  0  &&  boot_count_b == 0 ) 
+	{
+		env_set("BOOT_ORDER", "A B");
+	}
+	else
+	{
+		//do nothing, normal state
+	}
+
+	boot_count = iterate_boot_count();
+	printf("Boot count on target slot is %lu\n",boot_count);
 
 	/* Export and write env in both partitions */
     /* NOTE: blk_write() size is in blocks ( 4k )*/
@@ -249,8 +350,7 @@ void qcom_spl_board_init(void)
 		printf("Failed to export environment");
 	
 skip_env_update:
-	/* If it still fails after a certain amount of attempts, go into rescue */
-	if (boot_wrapper_version == 9001 || boot_count > BOOT_ATTEMPTS_RESCUE) {
+	if (go_to_rescue) {
 		printf("Forcing rescue boot\n");
 		env_set_ulong("FORCE_RESCUE", 1);
 	}
