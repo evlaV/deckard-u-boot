@@ -276,7 +276,7 @@ void qcom_spl_board_init(void)
 	if(env_get("BOOT_STATE_A"))
 	{
 		boot_state_a = env_get_ulong("BOOT_STATE_A", 10, 0);
-		if(boot_state_a)
+		if(boot_state_a == 1)
 		{
 			//set boot count to max to allow it to be used
 			env_set_ulong("BOOT_COUNT_A", BOOT_ATTEMPTS_MAX);
@@ -292,7 +292,7 @@ void qcom_spl_board_init(void)
 	if(env_get("BOOT_STATE_B"))
 	{
 		boot_state_b = env_get_ulong("BOOT_STATE_B", 10, 0);
-		if(boot_state_b)
+		if(boot_state_b == 1)
 		{
 			//set boot count to max to allow it to be used
 			env_set_ulong("BOOT_COUNT_B", BOOT_ATTEMPTS_MAX);
@@ -309,10 +309,20 @@ void qcom_spl_board_init(void)
 	{
 		boot_count_a = env_get_ulong("BOOT_COUNT_A", 10, 0);
 	}
+	else
+	{
+		env_set_ulong("BOOT_COUNT_A", BOOT_ATTEMPTS_MAX);
+		boot_count_a = BOOT_ATTEMPTS_MAX;
+	}
 
 	if(env_get("BOOT_COUNT_B"))
 	{
 		boot_count_b = env_get_ulong("BOOT_COUNT_B", 10, 0);
+	}
+	else
+	{
+		env_set_ulong("BOOT_COUNT_B", BOOT_ATTEMPTS_MAX);
+		boot_count_b = BOOT_ATTEMPTS_MAX;
 	}
 
 	//change BOOT_ORDER if we have exhausted boot attempts
