@@ -38,6 +38,7 @@
 			debounce-interval = <15>;
 			linux,can-disable;
 			wakeup-source;
+			bootph-all;
 		};
 	};
 
@@ -586,6 +587,7 @@
 };
 
 &pm8550_gpios {
+	bootph-all;
 	sdc2_card_det_n: sdc2-card-det-state {
 		pins = "gpio12";
 		function = "normal";
@@ -622,12 +624,14 @@
 
 &pon_pwrkey {
 	status = "okay";
+	bootph-all;
 };
 
 &pon_resin {
 	linux,code = <KEY_VOLUMEDOWN>;
 
 	status = "okay";
+	bootph-all;
 };
 
 &pm8550_leds {
