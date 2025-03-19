@@ -277,7 +277,7 @@ static const struct dm_gpio_ops qcom_gpio_ops = {
 
 static int qcom_gpio_bind(struct udevice *dev)
 {
-
+#if CONFIG_IS_ENABLED(PINCTRL)
 	struct qcom_pmic_gpio_data *plat = dev_get_plat(dev);
 	ulong quirks = dev_get_driver_data(dev);
 	struct udevice *child;
@@ -298,6 +298,7 @@ static int qcom_gpio_bind(struct udevice *dev)
 		return log_msg_ret("bind", ret);
 
 	dev_set_plat(child, plat);
+#endif
 
 	return 0;
 }
@@ -381,6 +382,7 @@ U_BOOT_DRIVER(qcom_pmic_gpio) = {
 	.flags = DM_FLAG_ALLOC_PDATA,
 };
 
+#if CONFIG_IS_ENABLED(PINCTRL)
 static const struct pinconf_param qcom_pmic_pinctrl_conf_params[] = {
 	{ "output-high", PIN_CONFIG_OUTPUT_ENABLE, 1 },
 	{ "output-low", PIN_CONFIG_OUTPUT, 0 },
@@ -446,3 +448,4 @@ U_BOOT_DRIVER(qcom_pmic_pinctrl) = {
 	.id	= UCLASS_PINCTRL,
 	.ops	= &qcom_pmic_pinctrl_ops,
 };
+#endif
