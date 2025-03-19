@@ -10,6 +10,7 @@
 #include <spl.h>
 #include <stdlib.h>
 #include <env_internal.h>
+#include <button.h>
 
 #define BOOT_DEVICE_UFS_A	(BOOT_DEVICE_NONE + 1)
 #define BOOT_DEVICE_UFS_B	(BOOT_DEVICE_NONE + 2)
@@ -187,6 +188,44 @@ static ulong iterate_boot_count(void)
 	return count;
 }
 
+static int show_button_state(struct udevice *dev)
+{
+	int ret;
+
+	ret = button_get_state(dev);
+	if (ret >= BUTTON_COUNT)
+		ret = -EINVAL;
+	if (ret >= 0)
+		printf("%s\n", ret ? "on" : "off");
+
+	return ret;
+}
+
+static void list_buttons(void)
+{
+	struct udevice *dev;
+	int ret;
+
+	for (ret = uclass_first_device_check(UCLASS_BUTTON, &dev);
+	     dev;
+	     ret = uclass_next_device_check(&dev)) {
+		struct button_uc_plat *plat = dev_get_uclass_plat(dev);
+
+		if (ret) {
+			printf("BUTTON device %s probe error %i\n",
+			       dev->name, ret);
+			continue;
+		}
+
+		if (!plat->label)
+			continue;
+		printf("%-15s ", plat->label);
+		ret = show_button_state(dev);
+		if (ret < 0)
+			printf("Error %d\n", ret);
+	}
+}
+
 void qcom_spl_board_init(void)
 {
 	struct udevice *dev;
@@ -206,6 +245,8 @@ void qcom_spl_board_init(void)
 	int boot_state_b = 0;
 
 	printf("Hello from deckard_spl, boot wrapper version %ld\n", boot_wrapper_version);
+
+	list_buttons();
 
 	ret = ufs_probe();
 	if (ret)
