@@ -44,6 +44,7 @@ obj-$(CONFIG_XEN) += xen/
 obj-$(CONFIG_$(PHASE_)FPGA) += fpga/
 obj-$(CONFIG_$(PHASE_)VIDEO) += video/
 obj-y += ufs/
+obj-y += spmi/
 
 obj-y += bus/
 
@@ -104,7 +105,6 @@ obj-$(CONFIG_DM_REBOOT_MODE) += reboot-mode/
 obj-y += rtc/
 obj-y += scsi/
 obj-y += sound/
-obj-y += spmi/
 obj-y += watchdog/
 obj-$(CONFIG_QE) += qe/
 obj-$(CONFIG_U_QE) += qe/
