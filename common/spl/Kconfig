@@ -828,6 +828,11 @@ config SPL_GPIO
 	  for example. Enable this option to build the drivers in
 	  drivers/gpio as part of an SPL build.
 
+config SPL_BUTTON
+	bool "Support BUTTON in SPL"
+	help
+	  Enable support for Buttons in SPL.
+
 config SPL_I2C
 	bool "Support I2C"
 	help
