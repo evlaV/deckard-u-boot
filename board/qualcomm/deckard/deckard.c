@@ -45,6 +45,9 @@ DECLARE_GLOBAL_DATA_PTR;
 #define DECKARD_UBOOT_FW_SLOT_B "2:8"
 #define DECKARD_UBOOT_ENV_SLOT_R "3:2"
 #define DECKARD_UBOOT_FW_SLOT_R "3:3"
+#define DECKARD_SLOT_A_PARTITION "0:1"
+#define DECKARD_SLOT_B_PARTITION "0:2"
+#define DECKARD_SLOT_R_PARTITION "3:4"
 
 // #define CHECK_PMICS
 #ifdef CHECK_PMICS
@@ -192,14 +195,14 @@ const char *deckard_get_fw_part(void)
 	bootedslot = env_get("booted_slot");
 	switch(bootedslot[0]){
 		case 'A':
-			return DECKARD_UBOOT_ENV_SLOT_A;
+			return DECKARD_UBOOT_FW_SLOT_A;
 			break;
 		case 'B':
-			return DECKARD_UBOOT_ENV_SLOT_B;
+			return DECKARD_UBOOT_FW_SLOT_B;
 			break;
 		case 'R':
 		default:
-			return DECKARD_UBOOT_ENV_SLOT_R;
+			return DECKARD_UBOOT_FW_SLOT_R;
 			break;
 	}
 }
@@ -380,9 +383,7 @@ int ft_board_setup(void *fdt, struct bd_info *bd)
 	return 0;
 }
 
-#define SLOT_A_PARTITION "0:1"
-#define SLOT_B_PARTITION "0:2"
-#define SLOT_R_PARTITION "3:4"
+
 
 #define DEVPARTMAXLEN 16
 #define LOADADDRMAXLEN 16
@@ -439,16 +440,16 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	bootedslot = env_get("booted_slot");
 	switch(bootedslot[0]){
 		case 'A':
-			strncpy(partition, SLOT_A_PARTITION, DEVPARTMAXLEN);
+			strncpy(partition, DECKARD_SLOT_A_PARTITION, DEVPARTMAXLEN);
 			strncpy(label, "system0", DEVPARTMAXLEN);
 			break;
 		case 'B':
-			strncpy(partition, SLOT_B_PARTITION, DEVPARTMAXLEN);
+			strncpy(partition, DECKARD_SLOT_B_PARTITION, DEVPARTMAXLEN);
 			strncpy(label, "system1", DEVPARTMAXLEN);
 			break;
 		case 'R':
 		default:
-			strncpy(partition, SLOT_R_PARTITION, DEVPARTMAXLEN);
+			strncpy(partition, DECKARD_SLOT_R_PARTITION, DEVPARTMAXLEN);
 			strncpy(label, "rescue", DEVPARTMAXLEN);
 			break;
 	}
