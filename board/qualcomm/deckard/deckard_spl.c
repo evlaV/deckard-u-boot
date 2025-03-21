@@ -212,12 +212,12 @@ static void list_buttons(void)
 			continue;
 		}
 
-		if (!plat->label)
-			continue;
-		printf("%-15s ", plat->label);
-		ret = show_button_state(dev);
-		if (ret < 0)
-			printf("Error %d\n", ret);
+		if (plat->label) {
+			printf("%-15s ", plat->label);
+			ret = show_button_state(dev);
+			if (ret < 0)
+				printf("Error %d\n", ret);
+		}
 	}
 }
 
@@ -237,26 +237,20 @@ static void check_for_recovery_button(void)
 			continue;
 		}
 
-		if (!plat->label)
-			continue;
-
-		ret = button_get_state(dev);
-		if (ret >= BUTTON_COUNT)
-			ret = -EINVAL;
-		if( (ret >= 0) && !strncmp(plat->label,RESCUE_BUTTON,sizeof(RESCUE_BUTTON)) )
-		{
-			printf("recovery_check: %-15s %s\n", plat->label, ret ? "on" : "off");
-			if(ret)
+		if (plat->label) {
+			ret = button_get_state(dev);
+			if (ret >= BUTTON_COUNT)
+				ret = -EINVAL;
+			if( (ret >= 0) && !strncmp(plat->label,RESCUE_BUTTON,sizeof(RESCUE_BUTTON)) )
 			{
-				printf("Rescue mode chosen by button press: %s\n", RESCUE_BUTTON);
-				go_to_rescue = 1;
+				printf("recovery_check: %-15s %s\n", plat->label, ret ? "on" : "off");
+				if(ret)
+				{
+					printf("Rescue mode chosen by button press: %s\n", RESCUE_BUTTON);
+					go_to_rescue = 1;
+				}
 			}
 		}
-		
-		if (ret >= 0)
-			printf("%s\n", ret ? "on" : "off");
-		if (ret < 0)
-			printf("Error %d\n", ret);
 	}
 }
 	
