@@ -86,17 +86,6 @@ void spl_perform_fixups(struct spl_image_info *spl_image)
 void board_boot_order(u32 *spl_boot_list)
 {
 	char *boot_order = env_get("BOOT_ORDER");
-	struct udevice *dev;
-	int ret;
-
-	/* Scan u-boot lun to load fit image */
-	ret = uclass_get_device_by_seq(UCLASS_SCSI, 0, &dev);
-	if (ret)
-		panic("SCSI device not found (%d)\n", ret);
-
-	ret = scsi_scan_dev_lun(dev, true, DECKARD_UFS_BOOT_LUN);
-	if (ret)
-		panic("Failed to scan SCSI LUN (%d)\n", ret);
 
 	/* Try to go into rescue first if too much attempts */
 	if (env_get_ulong("FORCE_RESCUE", 10, 0)) {
@@ -252,20 +241,19 @@ void qcom_spl_board_init(void)
 	if (ret)
 		panic("Failed to probe for UFS (%d)\n", ret);
 
-	/* Scan boot lun to load env */
 	ret = uclass_get_device_by_seq(UCLASS_SCSI, 0, &dev);
 	if (ret)
 		panic("SCSI device not found (%d)\n", ret);
 
-	ret = scsi_scan_dev_lun(dev, true, DECKARD_UFS_ENV_LUN);
+	ret = scsi_scan_dev(dev, true);
 	if (ret)
-		panic("Failed to scan SCSI LUN (%d)\n", ret);	
+		panic("Failed to scan SCSI (%d)\n", ret);	
 
-	blk_dev = blk_get_devnum_by_uclass_id(UCLASS_SCSI, 0);
+	blk_dev = blk_get_devnum_by_uclass_id(UCLASS_SCSI, DECKARD_UFS_ENV_LUN);
 	if (!blk_dev)
 		panic("blk desc for env not found\n");
 
-	blk_show_device(UCLASS_SCSI, 0);
+	blk_show_device(UCLASS_SCSI, DECKARD_UFS_ENV_LUN);
 
 	if (boot_wrapper_version == 9001)
 	{
@@ -439,30 +427,17 @@ static int deckard_ufs_load_image(struct spl_image_info *spl_image,
 
 	if (bootdev->boot_device == BOOT_DEVICE_UFS_A ||
 	    bootdev->boot_device == BOOT_DEVICE_UFS_B) {
-		/* Since we scan a second LUN, it gets added as seq id 1 */
-		blk_dev = blk_get_devnum_by_uclass_id(UCLASS_SCSI, 1);
+		blk_dev = blk_get_devnum_by_uclass_id(UCLASS_SCSI, DECKARD_UFS_BOOT_LUN);
 		if (!blk_dev) {
-			printf("blk desc for %d %d not found\n", UCLASS_SCSI, 1);
+			printf("blk desc for %d %d not found\n", UCLASS_SCSI, DECKARD_UFS_BOOT_LUN);
 			return -ENODEV;
 		}
 
 		blk_show_device(UCLASS_SCSI, 1);
 	} else {
-		struct udevice *dev;
-
-		/* Scan the rescue LUN */
-		ret = uclass_get_device_by_seq(UCLASS_SCSI, 0, &dev);
-		if (ret)
-			panic("SCSI device not found (%d)\n", ret);
-
-		ret = scsi_scan_dev_lun(dev, true, DECKARD_UFS_RESCUE_LUN);
-		if (ret)
-			panic("Failed to scan rescue SCSI LUN (%d)\n", ret);
-
-		/* Since we scan a third LUN, it gets added as seq id 2 */
-		blk_dev = blk_get_devnum_by_uclass_id(UCLASS_SCSI, 2);
+		blk_dev = blk_get_devnum_by_uclass_id(UCLASS_SCSI, DECKARD_UFS_RESCUE_LUN);
 		if (!blk_dev) {
-			printf("blk desc for %d %d not found\n", UCLASS_SCSI, 2);
+			printf("blk desc for %d %d not found\n", UCLASS_SCSI, DECKARD_UFS_RESCUE_LUN);
 			return -ENODEV;
 		}
 
