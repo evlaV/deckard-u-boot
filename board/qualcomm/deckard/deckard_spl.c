@@ -29,9 +29,15 @@
 
 #define BOOT_ATTEMPTS_MAX			8
 
+#define BUTTON_VOL_UP_NAME "Volume Up"
+
+#define RESCUE_BUTTON BUTTON_VOL_UP_NAME
+
 DECLARE_GLOBAL_DATA_PTR;
 
 static ulong boot_wrapper_version __section(".data");
+
+int go_to_rescue = 0;
 
 int g_boot_wrapper_version;
 /**
@@ -215,6 +221,47 @@ static void list_buttons(void)
 	}
 }
 
+static void check_for_recovery_button(void)
+{
+	struct udevice *dev;
+	int ret;
+
+	for (ret = uclass_first_device_check(UCLASS_BUTTON, &dev);
+	     dev;
+	     ret = uclass_next_device_check(&dev)) {
+		struct button_uc_plat *plat = dev_get_uclass_plat(dev);
+
+		if (ret) {
+			printf("BUTTON device %s probe error %i\n",
+			       dev->name, ret);
+			continue;
+		}
+
+		if (!plat->label)
+			continue;
+
+		ret = button_get_state(dev);
+		if (ret >= BUTTON_COUNT)
+			ret = -EINVAL;
+		if( (ret >= 0) && !strncmp(plat->label,RESCUE_BUTTON,sizeof(RESCUE_BUTTON)) )
+		{
+			printf("recovery_check: %-15s %s\n", plat->label, ret ? "on" : "off");
+			if(ret)
+			{
+				printf("Rescue mode chosen by button press: %s\n", RESCUE_BUTTON);
+				go_to_rescue = 1;
+			}
+		}
+		
+		if (ret >= 0)
+			printf("%s\n", ret ? "on" : "off");
+		if (ret < 0)
+			printf("Error %d\n", ret);
+	}
+}
+	
+
+
 void qcom_spl_board_init(void)
 {
 	struct udevice *dev;
@@ -226,7 +273,7 @@ void qcom_spl_board_init(void)
 	char *boot_order;
 	long count;
 	int ret;
-	int go_to_rescue = 0;
+
 	ulong boot_count = 0;
 	ulong boot_count_a = 0;
 	ulong boot_count_b = 0;
@@ -236,6 +283,8 @@ void qcom_spl_board_init(void)
 	printf("Hello from deckard_spl, boot wrapper version %ld\n", boot_wrapper_version);
 
 	list_buttons();
+	
+	check_for_recovery_button();
 
 	ret = ufs_probe();
 	if (ret)
