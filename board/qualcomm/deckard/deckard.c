@@ -450,7 +450,7 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 		case 'R':
 		default:
 			strncpy(partition, DECKARD_SLOT_R_PARTITION, DEVPARTMAXLEN);
-			strncpy(label, "rescue", DEVPARTMAXLEN);
+			strncpy(label, "system_r", DEVPARTMAXLEN);
 			break;
 	}
 
@@ -505,7 +505,7 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	default_bootargs = env_get("default_bootargs");
 	temp_bootargs = env_get("temp_bootargs");
 	snprintf(bootargs, PATHMAXLEN, "%s %s root=PARTLABEL=%s init=/sbin/init ro rauc.slot=%s noresume rootwait earlycon",
-									default_bootargs, temp_bootargs, label, bootedslot );
+									default_bootargs ? default_bootargs : "", temp_bootargs ? temp_bootargs : "", label, bootedslot );
 	env_set("bootargs", bootargs);
 
 	// erase temp bootargs which is used for Testing
