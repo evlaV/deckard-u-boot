@@ -49,6 +49,21 @@ DECLARE_GLOBAL_DATA_PTR;
 #define DECKARD_SLOT_B_PARTITION "0:2"
 #define DECKARD_SLOT_R_PARTITION "3:4"
 
+//these are set as a bit-mask typically when we detect a button is enabled
+#define VOLUP_BUTTON_MASK 0b100
+#define VOLDN_BUTTON_MASK 0b010
+#define SELECT_BUTTON_MASK 0b001
+enum combined_button_state_t {
+	VOLUP_OFF__VOLDN_OFF__SELECT_OFF = 0,
+	VOLUP_OFF__VOLDN_OFF__SELECT_ON  = 1,
+	VOLUP_OFF__VOLDN_ON__SELECT_OFF  = 2,
+	VOLUP_OFF__VOLDN_ON__SELECT_ON   = 3,
+	VOLUP_ON__VOLDN_OFF__SELECT_OFF  = 4,
+	VOLUP_ON__VOLDN_OFF__SELECT_ON   = 5,
+	VOLUP_ON__VOLDN_ON__SELECT_OFF   = 6,
+	VOLUP_ON__VOLDN_ON__SELECT_ON    = 7,
+};
+
 // #define CHECK_PMICS
 #ifdef CHECK_PMICS
 void check_pmic(const char *const pmic_dts, const char *const pmic_name)
@@ -151,6 +166,48 @@ static void deckard_setup(void)
 	smb1510_set_switching_frequency(pmk8550, 0x0F);
 }
 
+int enable_usb_serial_console(void) 
+{
+	env_set("stdin","usbacm");
+	env_set("stderr","usbacm");
+	env_set("stdout","usbacm");
+	return 0;
+}
+
+int button_state_handler(enum combined_button_state_t total_button_state, int power_button_state) 
+{
+	printf("total button state = %d, power button = %d\n", total_button_state, power_button_state);
+	//note power button is handled separately since holding power button might be required for other button combo's 
+	//to get the device to reboot, so we don't want it to be part of the possible button combos
+	//otherwise it would require people to be holding power button down for a long period, 
+	//or removing it at just the right time to avoid the power button being part of a combo or not
+
+	switch(total_button_state)
+	{
+		case VOLUP_OFF__VOLDN_OFF__SELECT_OFF:
+			break;
+		case VOLUP_OFF__VOLDN_OFF__SELECT_ON:
+			break;
+		case VOLUP_OFF__VOLDN_ON__SELECT_OFF:
+			break;
+		case VOLUP_OFF__VOLDN_ON__SELECT_ON:
+			break;
+		case VOLUP_ON__VOLDN_OFF__SELECT_OFF:
+			//enable_usb_serial_console();
+			//env_set("bootdelay","20");
+			break;
+		case VOLUP_ON__VOLDN_OFF__SELECT_ON:
+			break;
+		case VOLUP_ON__VOLDN_ON__SELECT_OFF:
+			break;
+		case VOLUP_ON__VOLDN_ON__SELECT_ON:
+			break;
+		default:
+			break;
+	}
+	return 0;
+}
+
 const char *env_scsi_get_dev_part(void)
 {
 	ofnode node;
@@ -217,7 +274,9 @@ int misc_init_r(void)
 	char * fastboot_envvar;
 	int fastbootmode = 0;
 	ofnode node;
-
+	enum combined_button_state_t total_button_state;
+	int power_button_state = 0;
+	
 	node = ofnode_path("/chosen");
 	if (ofnode_valid(node)) {
 		const char *bootdev;
@@ -285,6 +344,7 @@ int misc_init_r(void)
 		state = button_get_state(btn);
 		if (state == BUTTON_ON) {
 			printf("Vol- button pressed\n");
+			total_button_state |= VOLUP_BUTTON_MASK;
 		}
 	}
 
@@ -295,11 +355,7 @@ int misc_init_r(void)
 		state = button_get_state(btn);
 		if (state == BUTTON_ON) {
 			printf("Vol+ button pressed\n");
-
-			env_set("stdin","usbacm");
-			env_set("stderr","usbacm");
-			env_set("stdout","usbacm");
-			env_set("bootdelay","20");
+			total_button_state |= VOLDN_BUTTON_MASK;
 		}
 		else
 		{
@@ -314,8 +370,22 @@ int misc_init_r(void)
 		state = button_get_state(btn);
 		if (state == BUTTON_ON) {
 			printf("PWR button pressed\n");
+			power_button_state = 1;
 		}
 	}
+
+	ret = button_get_by_label("select", &btn);
+	if (ret < 0) {
+		printf("Couldn't find select button!\n");
+	} else {
+		state = button_get_state(btn);
+		if (state == BUTTON_ON) {
+			printf("Select button pressed\n");
+			total_button_state |= SELECT_BUTTON_MASK;
+		}
+	}
+
+	button_state_handler(total_button_state,power_button_state);
 
 	ret = led_get_by_label("blue", &led);
 	if (ret < 0) {
