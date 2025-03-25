@@ -28,13 +28,23 @@
 	gpio-keys {
 		compatible = "gpio-keys";
 
-		pinctrl-0 = <&volume_up_n>;
+		pinctrl-0 = <&volume_up_n &select_n>;
 		pinctrl-names = "default";
 
 		key-volume-up {
 			label = "Volume Up";
 			linux,code = <KEY_VOLUMEUP>;
 			gpios = <&pm8550_gpios 6 GPIO_ACTIVE_LOW>;
+			debounce-interval = <15>;
+			linux,can-disable;
+			wakeup-source;
+			bootph-all;
+		};
+
+		key-select {
+			label = "select";
+			linux,code = <KEY_SELECT>;
+			gpios = <&pm8550b_gpios 5 GPIO_ACTIVE_LOW>;
 			debounce-interval = <15>;
 			linux,can-disable;
 			wakeup-source;
@@ -584,6 +594,17 @@
 	vdda-pll-supply = <&vreg_l3i_1p2>;
 
 	status = "okay";
+};
+
+&pm8550b_gpios {
+	bootph-all;
+	select_n: select-n-state {
+		pins = "gpio5";
+		function = "normal";
+		power-source = <1>;
+		bias-pull-up;
+		input-enable;
+	};
 };
 
 &pm8550_gpios {
