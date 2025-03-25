@@ -287,27 +287,44 @@ static int do_set_primary(struct cmd_tbl *cmdtp, int flag, int argc,
 	
 	ret = env_spl_scsi_load();
 
+	if (ret)
+		return ret;
+
 	//printf(ret == 0 ? "OK\n" : "error\n");
 	if(!strcmp(target,"A"))
 	{
 		env_spl_set("BOOT_STATE_A","1");
 		env_spl_set("BOOT_ORDER","A B");
-		env_scsi_save();
+		ret = env_scsi_save();
 	}
 	else if(!strcmp(target,"B"))
 	{
 		env_spl_set("BOOT_STATE_B","1");
 		env_spl_set("BOOT_ORDER","B A");
-		env_scsi_save();
+		ret = env_scsi_save();
 	}
 	else
 	{
 		printf("invalid target\n");
 	} 
 
-	return CMD_RET_SUCCESS;
+	return ret;
 }
 
+
+static int do_force_rescue(struct cmd_tbl *cmdtp, int flag, int argc,
+			      char *const argv[])
+{
+	int ret = 0;
+	ret = env_spl_scsi_load();
+	if(ret)	return ret;
+	ret = env_spl_set("FORCE_RESCUE","1");
+	if(ret)	return ret;
+	ret = env_scsi_save();
+	if(ret)	return ret;
+	
+	return ret;
+}
 
 static int do_print_spl_env(struct cmd_tbl *cmdtp, int flag, int argc,
 			      char *const argv[])
@@ -318,12 +335,13 @@ static int do_print_spl_env(struct cmd_tbl *cmdtp, int flag, int argc,
 		env_spl_print(NULL,0);
 	else 
 		printf("error\n");
-	return CMD_RET_SUCCESS;
+	return ret;
 }
 
 
 static struct cmd_tbl cmd_splctl_sub[] = {
 	U_BOOT_CMD_MKENT(set-primary, 2, 1, do_set_primary, "", ""),
+	U_BOOT_CMD_MKENT(force-rescue, 1, 1, do_force_rescue, "", ""),
 	U_BOOT_CMD_MKENT(env, 1, 1, do_print_spl_env, "", ""),
 };
 
@@ -347,7 +365,8 @@ static int do_splctl(struct cmd_tbl *cmdtp, int flag, int argc,
 }
 
 U_BOOT_LONGHELP(splctl,
-	"set-primary - SPL set primary partition\n"
+	"set-primary [A/B] - SPL set primary partition\n"
+	"       force-rescue - SPL force booting to rescue\n"
 	"       env - SPL print env\n"
 	);
 
