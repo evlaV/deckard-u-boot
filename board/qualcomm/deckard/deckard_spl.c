@@ -183,6 +183,9 @@ static ulong iterate_boot_count(void)
 	return count;
 }
 
+/*
+Removing show/list buttons for now as it reports invalid values for some buttons.
+
 static int show_button_state(struct udevice *dev)
 {
 	int ret;
@@ -196,6 +199,10 @@ static int show_button_state(struct udevice *dev)
 	return ret;
 }
 
+TODO Select button is on pm8550b which needs a pull-up enabled to be 
+     read correctly.  SPL does not currently support pinctrl so this is
+     not getting set.  To correctly list all suppported buttons we would
+     need to import pinctrl ( or some pin setup ).  
 static void list_buttons(void)
 {
 	struct udevice *dev;
@@ -220,6 +227,7 @@ static void list_buttons(void)
 		}
 	}
 }
+*/
 
 static void check_for_recovery_button(void)
 {
@@ -276,8 +284,6 @@ void qcom_spl_board_init(void)
 
 	printf("Hello from deckard_spl, boot wrapper version %ld\n", boot_wrapper_version);
 
-	list_buttons();
-	
 	check_for_recovery_button();
 
 	ret = ufs_probe();
