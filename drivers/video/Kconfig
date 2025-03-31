@@ -821,6 +821,13 @@ config BACKLIGHT_LP855x
 	  supported for now, PWM mode can be added if there will be any need in
 	  it. Supported backlight level range is from 0 to 255 with step of 1.
 
+config BACKLIGHT_EV2
+	bool "Backlight Driver for EV2"
+	depends on BACKLIGHT
+	select DM_I2C
+	help
+	  Say Y to enable the backlight driver for headset EV2.
+
 source "drivers/video/ti/Kconfig"
 
 source "drivers/video/exynos/Kconfig"
