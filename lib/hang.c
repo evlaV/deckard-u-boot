@@ -28,6 +28,8 @@ void hang(void)
 	puts("### ERROR ### Please RESET the board ###\n");
 #endif
 	bootstage_error(BOOTSTAGE_ID_NEED_RESET);
+	udelay(9000000);
+	do_reset(NULL, 0, 0, NULL);
 	if (IS_ENABLED(CONFIG_SANDBOX))
 		os_exit(1);
 	for (;;)
