@@ -56,11 +56,6 @@ void spl_perform_fixups(struct spl_image_info *spl_image)
 	int chosen;
 	int ret;
 
-	//cleanup some env vars
-	if (env_get("FORCE_RESCUE")) {
-		env_set("FORCE_RESCUE",NULL); //delete this variable once we consume it
-	}
-
 	//now do fdt stuff
 	chosen = fdt_find_or_add_subnode(blob, 0, "chosen");
 	if (chosen < 0) {
@@ -421,21 +416,37 @@ void qcom_spl_board_init(void)
 		//do nothing, normal state
 	}
 
+	//FORCE_RESCUE we want to delete from environment on disk once we detect it is set
+	//we do that by removing from environment in memory, then env_export() writes the env to disk (below this)
+	//then go_to_rescue == 1 will enable it (below) so that spl can know we want to go to rescue
+	if (env_get("FORCE_RESCUE")) {
+		printf("FORCE_RESCUE set in environment, going to rescue\n");
+		go_to_rescue = 1;
+		env_set("FORCE_RESCUE",NULL); //delete this variable now that we've consumed it
+	}
+
 	boot_count = iterate_boot_count();
 	printf("Boot count on target slot is %lu\n",boot_count);
 
 	/* Export and write env in both partitions */
     /* NOTE: blk_write() size is in blocks ( 4k )*/
 	ret = env_export(buf1);
-	if (!ret) {
+	if (!ret) 
+	{
+		//write env primary
 		ret = blk_write(blk_dev->bdev, info1.start, info1.size, buf1);
-		if (!ret)
-			printf("Unable to write env\n");
+		if (!ret) printf("SPL: Unable to write env\n");
+		else printf("SPL: env written OK\n");
+		
+		//write env alternate
 		ret = blk_write(blk_dev->bdev, info2.start, info2.size, buf1);
-		if (!ret)
-			printf("Unable to write env_alt\n");
-	} else
+		if (!ret) printf("SPL: Unable to write env_alt\n");
+		else printf("SPL: env_alt written OK\n");
+	} 
+	else
+	{
 		printf("Failed to export environment");
+	}
 	
 skip_env_update:
 	if (go_to_rescue) {
