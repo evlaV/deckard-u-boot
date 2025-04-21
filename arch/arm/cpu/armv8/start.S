@@ -58,6 +58,22 @@ reset:
 .globl	save_boot_params_ret
 save_boot_params_ret:
 
+	/* if u-boot was started as EL1, try to get EL2
+	 * using TZ_CONFIGURE_MILESTONE_SERVICE_ID
+	 */
+#define CURRENTEL_EL1		(1 << 2)
+	mrs	x0, CurrentEL
+	cmp	x0, #CURRENTEL_EL1
+	b.ne	1f
+
+	ldr 	x0, =0x02000121 // TZ_CONFIGURE_MILESTONE_SERVICE_ID
+	mov 	x1, 0x23 // TZ_CONFIGURE_MILESTONE_SERVICE_PARAM_ID
+	mov 	x2, 0
+	mov 	x3, 0
+	mov 	x4, 1 // NON_GUNYAH_BASED_OS
+	smc 	0
+1:
+
 #if CONFIG_POSITION_INDEPENDENT && !defined(CONFIG_XPL_BUILD)
 	/* Verify that we're 4K aligned.  */
 	adr	x0, _start

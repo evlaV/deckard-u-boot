@@ -2253,7 +2253,19 @@ int fit_image_load(struct bootm_headers *images, ulong addr,
 		image_start = addr;
 		image_end = addr + fit_get_size(fit);
 
+		printf("   >> Trying to load %s : image = 0x%08lx .. 0x%08lx\n", prop_name, image_start, image_end);
+
+		if (image_type != IH_TYPE_KERNEL) 
+		{
+			printf("   >> not IH_TYPE_KERNEL\n");
+		}
+
 		load_end = load + len;
+
+		printf("   >> Trying to load %s : load = 0x%08lx .. 0x%08lx\n", prop_name, load, load_end);
+		
+		printf("   >> Trying to load %s : len = 0x%08lx\n", prop_name, len);
+
 		if (image_type != IH_TYPE_KERNEL &&
 		    load < image_end && load_end > image_start) {
 			printf("Error: %s overwritten\n", prop_name);
