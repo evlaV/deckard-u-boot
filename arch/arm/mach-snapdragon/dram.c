@@ -123,6 +123,10 @@ static int qcom_parse_memory_smem(phys_addr_t *ram_end)
 		if (!p->size && !p->start)
 			break;
 
+		// XXX: the start of this region is reserved for cpucp
+		if (p->start == 0xd8040000ull)
+			continue;
+
 		prevbl_ddr_banks[j].start = p->start;
 		prevbl_ddr_banks[j].size = p->size;
 		*ram_end = max(*ram_end, prevbl_ddr_banks[j].start + prevbl_ddr_banks[j].size);

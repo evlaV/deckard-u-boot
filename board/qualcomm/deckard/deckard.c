@@ -114,9 +114,13 @@ static inline u32 read32(unsigned long addr)
 
 // see BOOT.MXF.2.1/boot_images/boot/QcomPkg/SocPkg/Lanai/Include/HALbootHWIO.h
 // for watchdog register defines
+#define HWIO_APSS_WDT_TMR1_WDOG_CTL_ADDR  0x17410008
 #define HWIO_APSS_WDT_TMR2_WDOG_CTL_ADDR  0x17411008
 static void deckard_disable_watchdog(void)
 {
+	// disable watchdog 1
+	write32(HWIO_APSS_WDT_TMR1_WDOG_CTL_ADDR, 0);
+
 	// disable watchdog 2
 	write32(HWIO_APSS_WDT_TMR2_WDOG_CTL_ADDR, 0);
 }
@@ -317,6 +321,7 @@ int misc_init_r(void)
 		panic("No chosen node !\n");
 	}
 
+	printf("watchdog disable!!!!!!!!!!!!\n");
 	deckard_disable_watchdog();
 
 	deckard_setup();
