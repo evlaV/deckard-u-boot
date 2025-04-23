@@ -27,6 +27,8 @@ struct mpq3367_regulator_pdata {
 	struct gpio_desc en;
 };
 
+static int preboost_done = 0;
+
 static int mpq3367_regulator_set_enable(struct udevice *dev, bool enable)
 {
 	u8 regval = CTL0_DEFAULT;
@@ -35,7 +37,6 @@ static int mpq3367_regulator_set_enable(struct udevice *dev, bool enable)
 
 
 	udelay(1);
-	//dm_gpio_set_value(&pdata->en, 0);
 
 	ret = dm_i2c_write(pdata->i2c, MPQ3367_REG_CTL0, &regval, 1);
 	if (ret) {
@@ -46,23 +47,23 @@ static int mpq3367_regulator_set_enable(struct udevice *dev, bool enable)
 	return 0;
 }
 
+#define RETRY_CNT 20
 static int mpq3367_regulator_probe(struct udevice *dev)
 {
 	struct mpq3367_regulator_pdata *pdata = dev_get_plat(dev);
-	u8 regval;
-	int ret, cnt = 20;
+	u8 regval = CTL0_DEFAULT;
+	int ret, cnt;
 
-printf("=======================%s dev %s called\n", __func__, dev->name);
+	if (preboost_done)
+		goto skip_preboost;
 
-	ret = gpio_request_by_name(dev, "enable-gpios", 0, &pdata->en,
-				   GPIOD_IS_OUT);
-
+	preboost_done = 1;
 	ret = gpio_request_by_name(dev, "preboost-gpios", 0, &pdata->preboost,
 				   GPIOD_IS_OUT);
 	if (ret)
 		return ret;
 
-	for (cnt = 20; cnt; cnt--) {
+	for (cnt = RETRY_CNT; cnt; cnt--) {
 		dm_gpio_set_value(&pdata->preboost, 0);
 		udelay(300);
 		dm_gpio_set_value(&pdata->preboost, 1);
@@ -70,6 +71,14 @@ printf("=======================%s dev %s called\n", __func__, dev->name);
 	}
 
 	udelay(250000);
+
+skip_preboost:
+	ret = gpio_request_by_name(dev, "enable-gpios", 0, &pdata->en,
+				   GPIOD_IS_OUT);
+	if (ret) {
+		dev_err(dev, "get enable-gpio failed.\n");
+		return ret;
+	}
 	dm_gpio_set_value(&pdata->en, 1);
 	udelay(10);
 
@@ -79,10 +88,16 @@ printf("=======================%s dev %s called\n", __func__, dev->name);
 		return ret;
 	}
 
-	dm_gpio_set_value(&pdata->preboost, 1);
+	for (cnt = RETRY_CNT; cnt; cnt--) {
+		ret = dm_i2c_write(pdata->i2c, MPQ3367_REG_CTL0, &regval, 1);
+		if (ret >= 0)
+			break;
+		udelay(80000);
+	}
+	if (!cnt)
+		dev_err(dev, "init retry %d ret %d\n", RETRY_CNT - cnt, ret);
 
 	ret = dm_i2c_read(pdata->i2c, MPQ3367_REG_VID, &regval, 1);
-printk("=======i2c read vendor ID: 0x%x, ret %d\n", regval, ret);
 	if (ret) {
 		dev_err(dev, "i2c read VID failed: %d\n", ret);
 		return ret;
