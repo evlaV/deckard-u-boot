@@ -55,8 +55,7 @@ static int nex100011ub_regulator_set_value(struct udevice *dev, int uV)
 
 	regval = (uV - pdata->config->vmin) / NEX10001UB_VSEL_STEPSIZE;
 
-	ret = dm_i2c_write(pdata->i2c, NEX10001UB_REG_VPOS,
-			    &regval, 1);
+	ret = dm_i2c_write(pdata->i2c, NEX10001UB_REG_VPOS, &regval, 1);
 	if (ret) {
 		dev_err(dev, "i2c failed to set Vpos: %d\n", ret);
 		return ret;
@@ -86,12 +85,12 @@ static int nex100011ub_regulator_probe(struct udevice *dev)
 	u8 regval;
 	int ret;
 
-printf("=======================%s dev %s called\n", __func__, dev->name);
 	pdata->config = (void *)dev_get_driver_data(dev);
 
 	if (gpio_done)
 		goto skip_gpio;
 
+	gpio_done = 1;
 	ret = gpio_request_by_name(dev, "biasp-gpios", 0, &pdata->biasp_gpio, GPIOD_IS_OUT);
 	if (ret) {
 		dev_err(dev, "biasp gpio get failed.\n");
@@ -121,8 +120,19 @@ skip_gpio:
 		return ret;
 	}
 	dev_info(dev, "i2c read vendor ID: 0x%x\n", regval);
-printf("nex1000 i2c read vendor ID: 0x%x\n", regval);
 
+	regval = 0x11;
+	ret = dm_i2c_write(pdata->i2c, NEX10001UB_REG_VPOS, &regval, 1); //+5.7v
+	if (ret) {
+		dev_err(dev, "i2c failed to set Vpos: %d\n", ret);
+		return ret;
+	}
+
+	return dm_i2c_write(pdata->i2c, NEX10001UB_REG_VNEG, &regval, 1); //-5.7v
+	if (ret) {
+		dev_err(dev, "i2c failed to set Vpos: %d\n", ret);
+		return ret;
+	}
 	return 0;
 }
 
