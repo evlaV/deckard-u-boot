@@ -19,3 +19,4 @@ obj-$(CONFIG_REMOTEPROC_TI_K3_R5F) += ti_k3_r5f_rproc.o
 obj-$(CONFIG_REMOTEPROC_TI_POWER) += ti_power_proc.o
 obj-$(CONFIG_REMOTEPROC_TI_PRU) += pru_rproc.o
 obj-$(CONFIG_REMOTEPROC_TI_IPU) += ipu_rproc.o
+obj-$(CONFIG_REMOTEPROC_QCOM_DSP) += qcom_dsp.o
