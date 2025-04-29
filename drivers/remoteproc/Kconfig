@@ -23,6 +23,14 @@ config K3_SYSTEM_CONTROLLER
 	help
 	  Say 'y' here to add support for TI' K3 System Controller.
 
+config REMOTEPROC_QCOM_DSP
+	bool "Support for Qualcomm DSP"
+	select REMOTEPROC
+	depends on DM
+	depends on OF_CONTROL
+	help
+	  Say 'y' here to add support for Qualcomm remote hexagon DSP.
+
 config REMOTEPROC_ADI_SC5XX
 	bool "Support for ADI SC5xx SHARC cores"
 	select REMOTEPROC

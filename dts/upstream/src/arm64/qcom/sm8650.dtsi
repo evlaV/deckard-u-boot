@@ -5707,7 +5707,7 @@
 					 &mc_virt SLAVE_EBI1 QCOM_ICC_TAG_ALWAYS>;
 			interconnect-names = "mem";
 
-			firmware-name = "qcom/sm8650/adsp_spmi.mbn";
+			firmware-name = "qcom/sm8650/adsp_lite_sm8650.mbn";
 
 			// missing: power domains
 			iommus =  <&apps_smmu 0x1000 0x0>, // ADSP
