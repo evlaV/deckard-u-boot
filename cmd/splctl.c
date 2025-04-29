@@ -250,6 +250,9 @@ static int env_spl_scsi_save_buffer(env_t *env_new)
 	if (!ret)
 		printf("Unable to write env\n");
 
+	ret = env_spl_scsi_load();
+	if (ret != 0)
+		printf("Unable to read back env after writing\n");
 
 	return 0;
 }
@@ -287,27 +290,37 @@ static int do_set_primary(struct cmd_tbl *cmdtp, int flag, int argc,
 	
 	ret = env_spl_scsi_load();
 
-	if (ret)
-		return ret;
+	if(ret)	goto fail;
 
-	//printf(ret == 0 ? "OK\n" : "error\n");
 	if(!strcmp(target,"A"))
 	{
-		env_spl_set("BOOT_STATE_A","1");
-		env_spl_set("BOOT_ORDER","A B");
+		ret = env_spl_set("BOOT_STATE_A","1");
+		if(ret)	goto fail;
+		ret = env_spl_set("BOOT_ORDER","A B");
+		if(ret)	goto fail;
 		ret = env_scsi_save();
+		if(ret)	goto fail;
 	}
 	else if(!strcmp(target,"B"))
 	{
-		env_spl_set("BOOT_STATE_B","1");
-		env_spl_set("BOOT_ORDER","B A");
+		ret = env_spl_set("BOOT_STATE_B","1");
+		if(ret)	goto fail;
+		ret = env_spl_set("BOOT_ORDER","B A");
+		if(ret)	goto fail;
 		ret = env_scsi_save();
+		if(ret)	goto fail;
 	}
 	else
 	{
 		printf("invalid target\n");
+		return 0;
 	} 
 
+	//no error, don't print anything
+	return ret;
+
+fail:
+	printf("err %d\n",ret);
 	return ret;
 }
 
@@ -317,12 +330,17 @@ static int do_force_rescue(struct cmd_tbl *cmdtp, int flag, int argc,
 {
 	int ret = 0;
 	ret = env_spl_scsi_load();
-	if(ret)	return ret;
+	if(ret)	goto fail;
 	ret = env_spl_set("FORCE_RESCUE","1");
-	if(ret)	return ret;
+	if(ret)	goto fail;
 	ret = env_scsi_save();
-	if(ret)	return ret;
+	if(ret)	goto fail;
 	
+	//no error, don't print anything
+	return ret;
+
+fail:
+	printf("err %d\n",ret);
 	return ret;
 }
 
