@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <env_internal.h>
 #include <button.h>
+#include "deckard_battery.h"
 
 #define BOOT_DEVICE_UFS_A	(BOOT_DEVICE_NONE + 1)
 #define BOOT_DEVICE_UFS_B	(BOOT_DEVICE_NONE + 2)
@@ -256,7 +257,6 @@ static void check_for_recovery_button(void)
 		}
 	}
 }
-	
 
 
 void qcom_spl_board_init(void)
@@ -278,6 +278,8 @@ void qcom_spl_board_init(void)
 	int boot_state_b = 0;
 
 	printf("Hello from deckard_spl, boot wrapper version %ld\n", boot_wrapper_version);
+
+	deckard_spl_battery_charging_setup();
 
 	check_for_recovery_button();
 

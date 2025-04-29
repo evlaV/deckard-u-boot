@@ -205,3 +205,86 @@ static void deckard_battery_enable_charging(struct udevice *pm8550b)
 
 	printf("Charger: %s\n", ret == 0 ? "Enabled" : "Setup Failure");
 }
+
+int deckard_spl_battery_enable_charging(struct udevice *pm8550b)
+{
+	int ret = 0;
+
+	/* Set Fast Charge Current to 2,040 mA (0.75C) */
+	ret |= pm8550b_set_fast_charge_current(pm8550b, 2040);
+
+	/* Set Max Fast Charge Current to 2,040 mA (0.75C) */
+	ret |= pm8550b_set_max_fast_charge_current(pm8550b, 2040);
+
+	/* Set Float Voltage to 8,900 mV */
+	ret |= pm8550b_set_float_voltage(pm8550b, 8900);
+
+	/* Set Max Float Voltage to 8,900 mV */
+	ret |= pm8550b_set_max_float_voltage(pm8550b, 8900);
+
+	/* Set Termination Current to 150 mA */
+	ret |= pm8550b_set_termination_current(pm8550b, 150);
+
+	/* Ensure Charging Watchdog is Off */
+	ret |= pm8550b_enable_watchdog(pm8550b, false);
+
+	/* Enable Charging */
+	ret |= pm8550b_enable_charging(pm8550b, true);
+
+	printf("Charger: %s\n", ret == 0 ? "Enabled" : "Setup Failure");
+
+	return ret;
+}
+
+#define SPL_BATTERY_MIN_BOOT_VOLTAGE 7200
+
+int deckard_spl_battery_charging_setup(void)
+{
+	int             ret;
+	struct udevice *pmk8550;
+	struct udevice *pm8550vse;
+	struct udevice *pm8550b;
+	uint16_t        battery_mv;
+	struct udevice *led = NULL;
+
+	// Find the PMK8650
+	ret = pmic_get("pmic@0", &pmk8550);
+	if (ret != 0) {
+		printf("Failed to Find PMK8650\n");
+		return ret;
+	}
+
+	// Find the PM8550B
+	ret = pmic_get("pmic@7", &pm8550b);
+	if (ret != 0) {
+		printf("Failed to Find PM8550B\n");
+		return ret;
+	}
+
+	// Find the smb1510
+	ret = smb1510_read_revid(pmk8550);
+	if (ret != 0) {
+		printf("Failed to Find SMB1510\n");
+		return ret;
+	}
+
+	/* Get Battery Voltage to Check for UVLO */
+	ret = pmk8550_get_battery_voltage(pmk8550, &battery_mv);
+	if (ret < 0) {
+		printf("Failed to read battery voltage\n");
+		printf("Attempting to boot anyway!\n");
+		return ret;
+	}
+
+	printf("Battery: %d mV\n", battery_mv);
+
+	if (battery_mv >= SPL_BATTERY_MIN_BOOT_VOLTAGE) 
+	{
+		// OK to boot
+
+		// Enable Charging
+		deckard_spl_battery_enable_charging(pm8550b);
+		return 0;
+	}
+
+}

@@ -132,3 +132,13 @@ void smb1510_set_switching_frequency(struct udevice *pmic, uint8_t frequency)
 {
 	smb1510_write(pmic, SMB1510_SCHG_PERPH0_DCDC_FREQ_SEL, frequency);
 }
+
+int smb1510_read_revid(struct udevice *pmic)
+{
+	int ret;
+	ret = smb1510_read(pmic, SMB1510_REVID_SUBTYPE);
+	if (ret == SMB_SVST_SUBTYPE)
+		return 0; //success
+	else
+		return 1; //fail
+}
