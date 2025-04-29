@@ -19,4 +19,6 @@ int smb1510_check_subtype(struct udevice *pmic);
 
 void smb1510_set_switching_frequency(struct udevice *pmic, uint8_t frequency);
 
+int smb1510_read_revid(struct udevice *pmic);
+
 #endif /* __SMB1510_H */
