@@ -129,6 +129,17 @@ static int qcom_parse_memory_smem(phys_addr_t *ram_end)
 
 		prevbl_ddr_banks[j].start = p->start;
 		prevbl_ddr_banks[j].size = p->size;
+
+		// for booting with LCP enabled:
+		// 0x81200000 to 0x816E0000 is hyp tags
+		// 0xd8800000 size 0x93b0000 is tz tags
+		// also for performance need ignore the whole region starting at 0x80000000 because
+		// it will be affected by LCP, but skipping it seems to make u-boot not work (why?)
+		if (p->start == 0x80000000ull && p->size == 0x16e0000)
+			prevbl_ddr_banks[j].size = 0x1200000;
+		if (p->start == 0xd8800000ull && p->size == 0x93b0000)
+			continue;
+
 		*ram_end = max(*ram_end, prevbl_ddr_banks[j].start + prevbl_ddr_banks[j].size);
 		j++;
 	}
