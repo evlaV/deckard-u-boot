@@ -276,10 +276,11 @@ void qcom_spl_board_init(void)
 	ulong boot_count_b = 0;
 	int boot_state_a = 0;
 	int boot_state_b = 0;
+	uint16_t battery_voltage;
 
 	printf("Hello from deckard_spl, boot wrapper version %ld\n", boot_wrapper_version);
 
-	deckard_spl_battery_charging_setup();
+	deckard_spl_battery_charging_setup(&battery_voltage);
 
 	check_for_recovery_button();
 
@@ -427,7 +428,10 @@ void qcom_spl_board_init(void)
 		env_set("FORCE_RESCUE",NULL); //delete this variable now that we've consumed it
 	}
 
-	boot_count = iterate_boot_count();
+	// Only iterate boot count if we believe this should be a successful boot based on battery level
+	if ( battery_voltage >= SPL_BATTERY_MIN_BOOT_VOLTAGE ) {
+		boot_count = iterate_boot_count();
+	}
 	printf("Boot count on target slot is %lu\n",boot_count);
 
 	/* Export and write env in both partitions */
