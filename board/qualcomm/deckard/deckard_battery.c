@@ -277,13 +277,8 @@ int deckard_spl_battery_charging_setup(uint16_t * battery_voltage)
 	*battery_voltage = battery_mv;
 	printf("Battery: %d mV\n", battery_mv);
 
-	if (battery_mv >= SPL_BATTERY_MIN_BOOT_VOLTAGE) 
-	{
-		// OK to boot
-
-		// Enable Charging
-		deckard_spl_battery_enable_charging(pm8550b);
-	}
+	// Enable Charging
+	deckard_spl_battery_enable_charging(pm8550b);
 
 	return 0;
 }
