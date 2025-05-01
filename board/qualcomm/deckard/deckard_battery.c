@@ -8,6 +8,7 @@
 #include "pmk8550.h"
 #include "smb1510.h"
 #include "deckard.h"
+#include "deckard_battery.h"
 
 #define BATTERY_MIN_BOOT_VOLTAGE 7200
 #define BATTERY_DEAD_VOLTAGE     6000
@@ -236,16 +237,12 @@ int deckard_spl_battery_enable_charging(struct udevice *pm8550b)
 	return ret;
 }
 
-#define SPL_BATTERY_MIN_BOOT_VOLTAGE 7200
-
-int deckard_spl_battery_charging_setup(void)
+int deckard_spl_battery_charging_setup(uint16_t * battery_voltage)
 {
 	int             ret;
 	struct udevice *pmk8550;
-	struct udevice *pm8550vse;
 	struct udevice *pm8550b;
-	uint16_t        battery_mv;
-	struct udevice *led = NULL;
+	uint16_t		battery_mv;
 
 	// Find the PMK8650
 	ret = pmic_get("pmic@0", &pmk8550);
@@ -273,9 +270,11 @@ int deckard_spl_battery_charging_setup(void)
 	if (ret < 0) {
 		printf("Failed to read battery voltage\n");
 		printf("Attempting to boot anyway!\n");
+		*battery_voltage = SPL_BATTERY_MIN_BOOT_VOLTAGE;
 		return ret;
 	}
 
+	*battery_voltage = battery_mv;
 	printf("Battery: %d mV\n", battery_mv);
 
 	if (battery_mv >= SPL_BATTERY_MIN_BOOT_VOLTAGE) 
@@ -284,7 +283,7 @@ int deckard_spl_battery_charging_setup(void)
 
 		// Enable Charging
 		deckard_spl_battery_enable_charging(pm8550b);
-		return 0;
 	}
 
+	return 0;
 }
