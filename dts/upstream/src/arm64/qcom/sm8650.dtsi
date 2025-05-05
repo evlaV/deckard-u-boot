@@ -10,6 +10,7 @@
 #include <dt-bindings/clock/qcom,sm8650-gpucc.h>
 #include <dt-bindings/clock/qcom,sm8650-tcsr.h>
 #include <dt-bindings/clock/qcom,sm8650-videocc.h>
+#include <dt-bindings/clock/qcom,lpasscorecc-sm8550.h>
 #include <dt-bindings/dma/qcom-gpi.h>
 #include <dt-bindings/firmware/qcom,scm.h>
 #include <dt-bindings/gpio/gpio.h>
@@ -5659,6 +5660,62 @@
 			qcom,bcm-voters = <&apps_bcm_voter>;
 
 			#interconnect-cells = <2>;
+		};
+
+		lpass_hm: clock-controller@7e00000 {
+			compatible = "qcom,sm8550-lpasshm";
+			reg = <0 0x07e00000 0 0xa000>;
+			clocks = <&gcc GCC_LPASS_CFG_NOC_SWAY_CLK>,
+				 <&rpmhcc RPMH_CXO_CLK>;
+			clock-names = "iface", "bi_tcxo";
+			#clock-cells = <1>;
+			#power-domain-cells = <1>;
+			power-domains = <&rpmhpd RPMHPD_LCX>;
+		};
+
+		aoncc: clock-controller@6e08000 {
+			reg = <0 0x06e08000 0 0x30000>;
+			compatible = "qcom,sm8550-aoncc";
+			clocks = <&gcc GCC_LPASS_CFG_NOC_SWAY_CLK>,
+				 <&rpmhcc RPMH_CXO_CLK>;
+			clock-names = "iface", "bi_tcxo";
+			power-domains = <&lpass_hm LPASS_CORE_HM_GDSCR>;
+			#clock-cells = <1>;
+			#power-domain-cells = <1>;
+		};
+
+		adsp: adsp@6800000 {
+			compatible = "qcom,sm8650-hexagon";
+			reg = <0 0x06800000 0 0x50000>,
+			      <0 0x06eeb000 0 4>;
+			reg-names = "base", "evb_sel";
+
+			interrupts-extended = <&ipcc IPCC_CLIENT_LPASS 0 IRQ_TYPE_EDGE_RISING>,
+					      <&ipcc IPCC_CLIENT_LPASS 1 IRQ_TYPE_EDGE_RISING>,
+					      <&ipcc IPCC_CLIENT_LPASS 2 IRQ_TYPE_EDGE_RISING>,
+					      <&ipcc IPCC_CLIENT_LPASS 3 IRQ_TYPE_EDGE_RISING>;
+			mboxes = <&ipcc IPCC_CLIENT_LPASS 0>,
+				 <&ipcc IPCC_CLIENT_LPASS 1>,
+				 <&ipcc IPCC_CLIENT_LPASS 2>,
+				 <&ipcc IPCC_CLIENT_LPASS 3>;
+
+			clocks = <&aoncc LPASS_AON_CC_LPI_NOC_HS_CLK>,
+				 <&aoncc LPASS_AON_CC_Q6_AXIM_CLK>;
+			clock-names = "lpi_noc_hs", "q6_axim";
+
+			interconnects = <&lpass_lpicx_noc MASTER_LPASS_PROC QCOM_ICC_TAG_ALWAYS
+					 &mc_virt SLAVE_EBI1 QCOM_ICC_TAG_ALWAYS>;
+			interconnect-names = "mem";
+
+			firmware-name = "qcom/sm8650/adsp_spmi.mbn";
+
+			// missing: power domains
+			iommus =  <&apps_smmu 0x1000 0x0>, // ADSP
+				  <&apps_smmu 0x1060 0x0>, // LPMLA_0 config ?
+				  <&apps_smmu 0x1068 0x0>, // LPMLA_0 act/wgt/out ?
+				  <&apps_smmu 0x10e4 0x0>, // ASC bus client 0
+				  <&apps_smmu 0x10e5 0x0>; // ASC bus client 1
+			//core-max-rate = <1401600000>;
 		};
 
 		remoteproc_cdsp: remoteproc@32300000 {
