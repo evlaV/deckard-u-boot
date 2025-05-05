@@ -18,6 +18,9 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
+#define dev_dbgx(dev, fmt, ...) \
+	printf(fmt, ##__VA_ARGS__)
+
 /* PMIC Arbiter configuration registers */
 #define PMIC_ARB_VERSION 0x0000
 #define PMIC_ARB_VERSION_V2_MIN 0x20010000
@@ -39,6 +42,7 @@ DECLARE_GLOBAL_DATA_PTR;
 #define SPMI_V7_RW_CH_OFFSET(chnl) ((chnl) * 0x1000)
 
 #define SPMI_OWNERSHIP_PERIPH2OWNER(x)	((x) & 0x7)
+#define PMIC_ARB_CHAN_IS_IRQ_OWNER(reg)	((reg) & BIT(24))
 
 #define SPMI_REG_CMD0 0x0
 #define SPMI_REG_CONFIG 0x4
@@ -65,6 +69,7 @@ DECLARE_GLOBAL_DATA_PTR;
 
 #define SPMI_CHANNEL_READ_ONLY	BIT(31)
 #define SPMI_CHANNEL_VALID	BIT(30)
+#define SPMI_CHANNEL_IRQ_EE	BIT(29)
 #define SPMI_CHANNEL_MASK	0xffff
 
 enum arb_ver {
@@ -255,6 +260,30 @@ static struct dm_spmi_ops msm_spmi_ops = {
 	.write = msm_spmi_write,
 };
 
+static void spmi_dump_channel_map(struct msm_spmi_priv *priv)
+{
+	int i, j;
+	uint32_t (*spmi_channel_map)[SPMI_MAX_PERIPH];
+	spmi_channel_map = priv->channel_map;
+
+	printk("SPMI channel map\n");
+	for (i = 0; i < SPMI_MAX_SLAVES; i++) {
+		for (j = 0; j < SPMI_MAX_PERIPH; ++j) {
+			u32 map = spmi_channel_map[i][j];
+
+			if (!(map & SPMI_CHANNEL_VALID))
+				continue;
+			
+			bool writable = !(map & SPMI_CHANNEL_READ_ONLY);
+		
+			printk("%s ch: 0x%04x sid 0x%02x pid 0x%02x irq:%d\n",
+				   writable ? "[RW]" : "[R] ",
+			       map & SPMI_CHANNEL_MASK, i, j,
+				   !!(map & SPMI_CHANNEL_IRQ_EE));
+		}
+	}
+}
+
 /*
  * In order to allow multiple EEs to write to a single PPID in arbiter
  * version 5 and 7, there is more than one APID mapped to each PPID.
@@ -268,15 +297,23 @@ static void msm_spmi_channel_map_v5(struct msm_spmi_priv *priv, unsigned int ch,
 	uint32_t read_only = priv->channel_map[slave_id][pid] & SPMI_CHANNEL_READ_ONLY;
 	uint32_t cnfg = readl(priv->spmi_cnfg + ARB_CHANNEL_OFFSET(ch));
 	uint8_t owner = SPMI_OWNERSHIP_PERIPH2OWNER(cnfg);
+	uint32_t periph = readl(priv->arb_chnl + ARB_CHANNEL_OFFSET(ch));
+	bool is_irq_ee = PMIC_ARB_CHAN_IS_IRQ_OWNER(periph);
 
 	if (!valid) {
 		/* First PPID mapping */
 		priv->channel_map[slave_id][pid] = ch | SPMI_CHANNEL_VALID;
 		if (owner != priv->owner)
 			priv->channel_map[slave_id][pid] |= SPMI_CHANNEL_READ_ONLY;
+		else if (is_irq_ee)
+			priv->channel_map[slave_id][pid] |= SPMI_CHANNEL_IRQ_EE;			
 	} else if ((owner == priv->owner) && read_only) {
 		/* Read only and we found one we own, switch */
 		priv->channel_map[slave_id][pid] = ch | SPMI_CHANNEL_VALID;
+	} else if ((owner == priv->owner) && !read_only) {
+		/* Writable and we found one we own, set IRQ bit */
+		priv->channel_map[slave_id][pid] = ch | SPMI_CHANNEL_VALID;
+		priv->channel_map[slave_id][pid] |= SPMI_CHANNEL_IRQ_EE;
 	}
 }
 
@@ -319,16 +356,16 @@ static int msm_spmi_probe(struct udevice *dev)
 		priv->spmi_cnfg = dev_read_addr_name(dev, "cnfg");
 	}
 
-	dev_dbg(dev, "PMIC Arb Version-%d (%#x)\n", hw_ver >> 28, hw_ver);
+	dev_dbgx(dev, "PMIC Arb Version-%d (%#x)\n", hw_ver >> 28, hw_ver);
 
 	if (priv->arb_chnl == FDT_ADDR_T_NONE ||
 	    priv->spmi_chnls == FDT_ADDR_T_NONE ||
 	    priv->spmi_obs == FDT_ADDR_T_NONE)
 		return -EINVAL;
 
-	dev_dbg(dev, "priv->arb_chnl address (%#08llx)\n", priv->arb_chnl);
-	dev_dbg(dev, "priv->spmi_chnls address (%#08llx)\n", priv->spmi_chnls);
-	dev_dbg(dev, "priv->spmi_obs address (%#08llx)\n", priv->spmi_obs);
+	dev_dbgx(dev, "priv->arb_chnl address (%#08llx)\n", priv->arb_chnl);
+	dev_dbgx(dev, "priv->spmi_chnls address (%#08llx)\n", priv->spmi_chnls);
+	dev_dbgx(dev, "priv->spmi_obs address (%#08llx)\n", priv->spmi_obs);
 	/* Scan peripherals connected to each SPMI channel */
 	for (i = 0; i < priv->max_channels; i++) {
 		uint32_t periph = readl(priv->arb_chnl + ARB_CHANNEL_OFFSET(i));
@@ -347,6 +384,8 @@ static int msm_spmi_probe(struct udevice *dev)
 			break;
 		}
 	}
+
+	//spmi_dump_channel_map(priv);
 
 	return 0;
 }
