@@ -14,6 +14,7 @@
 #include <linux/bitops.h>
 #include <dt-bindings/clock/qcom,sm8650-gcc.h>
 #include <dt-bindings/clock/qcom,sm8650-tcsr.h>
+#include <dt-bindings/clock/qcom,lpasscorecc-sm8550.h>
 
 #include "clock-qcom.h"
 
@@ -193,6 +194,10 @@ static const struct gate_clk sm8650_clks[] = {
 	GATE_CLK(GCC_USB3_PRIM_PHY_AUX_CLK,		0x39060, BIT(0)),
 	GATE_CLK(GCC_USB3_PRIM_PHY_COM_AUX_CLK,		0x39064, BIT(0)),
 	GATE_CLK(GCC_USB3_PRIM_PHY_PIPE_CLK,		0x39068, BIT(0)),
+	// extra
+	GATE_CLK(GCC_LPASS_CFG_NOC_SWAY_CLK,		0x47000, BIT(0)),
+	GATE_CLK(GCC_TURING_CFG_AHB_CLK,		0x45008, BIT(0)),
+	GATE_CLK(GCC_TURING_Q6_AXI_CLK,			0x45004, BIT(0)),
 };
 
 static int sm8650_enable(struct clk *clk)
@@ -364,3 +369,62 @@ U_BOOT_DRIVER(tcsrcc_sm8650) = {
 	.probe		= tcsrcc_sm8650_clk_probe,
 	.flags		= DM_FLAG_PRE_RELOC | DM_FLAG_DEFAULT_PD_CTRL_OFF,
 };
+
+/* AONCC */
+
+static const struct gate_clk sm8550_aoncc_clks[] = {
+	GATE_CLK(LPASS_AON_CC_TX_MCLK_CLK,	0x13014, BIT(0)),
+	GATE_CLK(LPASS_AON_CC_LPI_NOC_HS_CLK,	0x19008, BIT(0)),
+	GATE_CLK(LPASS_AON_CC_Q6_AXIM_CLK,	0x19034, BIT(0)),
+};
+
+static struct msm_clk_data sm8550_aoncc_data = {
+	.clks = sm8550_aoncc_clks,
+	.num_clks = ARRAY_SIZE(sm8550_aoncc_clks),
+};
+
+static int aoncc_sm8550_clk_enable(struct clk *clk)
+{
+	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
+
+	qcom_gate_clk_en(priv, clk->id);
+
+	return 0;
+}
+
+static int aoncc_sm8550_clk_probe(struct udevice *dev)
+{
+	struct msm_clk_data *data = (struct msm_clk_data *)dev_get_driver_data(dev);
+	struct msm_clk_priv *priv = dev_get_priv(dev);
+
+	priv->base = dev_read_addr(dev);
+	if (priv->base == FDT_ADDR_T_NONE)
+		return -EINVAL;
+
+	priv->data = data;
+
+	return 0;
+}
+
+static struct clk_ops aoncc_sm8550_clk_ops = {
+	.enable = aoncc_sm8550_clk_enable,
+};
+
+static const struct udevice_id aoncc_sm8550_of_match[] = {
+	{
+		.compatible = "qcom,sm8550-aoncc",
+		.data = (ulong)&sm8550_aoncc_data,
+	},
+	{ }
+};
+
+U_BOOT_DRIVER(aoncc_sm8550) = {
+	.name		= "aoncc_sm8550",
+	.id		= UCLASS_CLK,
+	.of_match	= aoncc_sm8550_of_match,
+	.ops		= &aoncc_sm8550_clk_ops,
+	.priv_auto	= sizeof(struct msm_clk_priv),
+	.probe		= aoncc_sm8550_clk_probe,
+	.flags		= DM_FLAG_PRE_RELOC | DM_FLAG_DEFAULT_PD_CTRL_OFF,
+};
+
