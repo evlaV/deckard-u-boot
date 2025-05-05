@@ -205,6 +205,8 @@ static void deckard_battery_enable_charging(struct udevice *pm8550b)
 	ret |= pm8550b_enable_charging(pm8550b, true);
 
 	printf("Charger: %s\n", ret == 0 ? "Enabled" : "Setup Failure");
+
+	//pm8550b_test(pm8550b, true);
 }
 
 int deckard_spl_battery_enable_charging(struct udevice *pm8550b)
