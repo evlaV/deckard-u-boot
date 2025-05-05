@@ -3,6 +3,10 @@
 #include <power/pmic.h>
 
 #define PM8550B_CHGR_BASE                                       0x2600
+#define PM8550B_SCSCPQ_PK_CHGR2_ADDR                            (PM8550B_CHGR_BASE + 0x25)
+#define PM8550B_BUS_ADDR                            			(PM8550B_CHGR_BASE + 0x04)
+#define PM8550B_ADC_CAL		                            		(PM8550B_CHGR_BASE + 0x3A)
+#define PM8550B_XXX		                            			(PM8550B_CHGR_BASE + 0x3B)
 #define PM8550B_CHGR_CHG_EN_ADDR                                (PM8550B_CHGR_BASE + 0x46)
 #define PM8550B_CHGR_CHG_EN_CHARGING_PAUSE_CMD                  0x10
 #define PM8550B_CHGR_CHG_EN_CHARGING_ENABLE_CMD                 0x01
@@ -283,6 +287,34 @@ int pm8550b_enable_charging(struct udevice *pmic, bool enable)
 		printf("Failed to %s Charging.\n", enable ? "Enable" : "Disable");
 		return ret;
 	}
+
+	return 0;
+}
+
+
+
+int pm8550b_test(struct udevice *pmic, bool enable)
+{
+	int ret;
+	int write_val; 
+
+
+	printf("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
+	
+	ret = pmic_reg_read(pmic, PM8550B_ADC_CAL);
+	printf("PM8550B_ADC_CAL READ: ret = %d\n", ret);
+	write_val = ret; 
+	ret = pmic_reg_write(pmic, PM8550B_ADC_CAL, write_val);
+	printf("PM8550B_ADC_CAL WRITE : ret = %d\n", ret);
+
+	ret = pmic_reg_read(pmic, PM8550B_XXX);
+	printf("PM8550B_XXX READ: ret = %d\n", ret);
+	write_val = 0x01; 
+	ret = pmic_reg_write(pmic, PM8550B_XXX, write_val);
+	printf("PM8550B_XXX WRITE : ret = %d\n", ret);
+	ret = pmic_reg_read(pmic, PM8550B_XXX);
+	printf("PM8550B_XXX READ: ret = %d\n", ret);
+	printf("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
 
 	return 0;
 }
