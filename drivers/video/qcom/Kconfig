@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: GPL-2.0+
+#
+# Copyright (C) 2025 Linaro.Ltd
+#
+# Author: Jun Nie <jun.nie@linaro.org>
+
+config VIDEO_QCOM
+	bool "Enable Qualcomm video support"
+	depends on VIDEO
+	select DISPLAY
+	help
+	  Enable Qualcomm Video Processing Unit video support.

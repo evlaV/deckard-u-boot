@@ -244,6 +244,7 @@ static inline int mipi_dsi_pixel_format_to_bpp(enum mipi_dsi_pixel_format fmt)
  */
 struct mipi_dsi_panel_plat {
 	struct mipi_dsi_device *device;
+	struct mipi_dsi_device *device2;
 	unsigned int lanes;
 	enum mipi_dsi_pixel_format format;
 	unsigned long mode_flags;
