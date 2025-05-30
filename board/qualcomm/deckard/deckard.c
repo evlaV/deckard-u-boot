@@ -44,8 +44,8 @@ DECLARE_GLOBAL_DATA_PTR;
 #define DECKARD_UBOOT_FW_SLOT_B "2:8"
 #define DECKARD_UBOOT_ENV_SLOT_R "3:2"
 #define DECKARD_UBOOT_FW_SLOT_R "3:3"
-#define DECKARD_SLOT_A_PARTITION "0:1"
-#define DECKARD_SLOT_B_PARTITION "0:2"
+#define DECKARD_SLOT_A_PARTITION "0:4"
+#define DECKARD_SLOT_B_PARTITION "0:5"
 #define DECKARD_SLOT_R_PARTITION "3:4"
 
 //these are set as a bit-mask typically when we detect a button is enabled
@@ -515,11 +515,11 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	switch(bootedslot[0]){
 		case 'A':
 			strncpy(partition, DECKARD_SLOT_A_PARTITION, DEVPARTMAXLEN);
-			strncpy(label, "system0", DEVPARTMAXLEN);
+			strncpy(label, "rootfs-A", DEVPARTMAXLEN);
 			break;
 		case 'B':
 			strncpy(partition, DECKARD_SLOT_B_PARTITION, DEVPARTMAXLEN);
-			strncpy(label, "system1", DEVPARTMAXLEN);
+			strncpy(label, "rootfs-B", DEVPARTMAXLEN);
 			break;
 		case 'R':
 		default:
