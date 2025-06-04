@@ -7,7 +7,7 @@
 #ifndef __DECKARD_EEPROM_H
 #define __DECKARD_EEPROM_H
 
-#include <common.h>
+#include <init.h>
 
 // BOOTLODAER DATA //
 #define EEPROM_BOOTLOADER_EXPECTED_VERSION (0x00000001)

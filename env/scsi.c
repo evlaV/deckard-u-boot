@@ -4,7 +4,6 @@
  * saved on raw partition, not mountable ( eg ext4 )
 */
 
-#include <common.h>
 #include <part.h>
 
 #include <command.h>

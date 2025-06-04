@@ -1,4 +1,3 @@
-#include <common.h>
 #include <dm.h>
 #include <env.h>
 #include <init.h>

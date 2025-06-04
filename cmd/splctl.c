@@ -4,7 +4,6 @@
   * Valve Software
  */
 
-#include <common.h>
 #include <command.h>
 #include <cmd_spl.h>
 #include <env.h>

@@ -1,5 +1,4 @@
 #include "deckard_eeprom.h"
-#include <common.h>
 #include <dm.h>
 #include <fdt_support.h>
 #include <asm/global_data.h>
