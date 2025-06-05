@@ -341,7 +341,7 @@ int misc_init_r(void)
 	//printf("done checking for auto-clear variables")
 	//////////////////////////////////////////
 
-	ret = button_get_by_label("vol_down", &btn);
+	ret = button_get_by_label("Volume Down", &btn);
 	if (ret < 0) {
 		printf("Couldn't find Vol- button!\n");
 	} else {
@@ -367,7 +367,7 @@ int misc_init_r(void)
 		}
 	}
 	
-	ret = button_get_by_label("pwrkey", &btn);
+	ret = button_get_by_label("Power Button", &btn);
 	if (ret < 0) {
 		printf("Couldn't find power button!\n");
 	} else {
