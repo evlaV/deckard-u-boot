@@ -277,7 +277,7 @@ int misc_init_r(void)
 	char * fastboot_envvar;
 	int fastbootmode = 0;
 	ofnode node;
-	enum combined_button_state_t total_button_state;
+	enum combined_button_state_t total_button_state = 0;
 	int power_button_state = 0;
 	
 	node = ofnode_path("/chosen");
