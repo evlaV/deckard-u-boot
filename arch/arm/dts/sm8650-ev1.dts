@@ -604,6 +604,7 @@
 		power-source = <1>;
 		bias-pull-up;
 		input-enable;
+		bootph-all;
 	};
 };
 
@@ -624,6 +625,7 @@
 		bias-pull-up;
 		input-enable;
 		power-source = <1>;
+		bootph-all;
 	};
 };
 
