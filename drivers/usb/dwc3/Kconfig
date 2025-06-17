@@ -30,6 +30,13 @@ config USB_DWC3_GENERIC
 	  Select this for Xilinx ZynqMP and similar Platforms.
 	  This wrapper supports Host and Peripheral operation modes.
 
+config SPL_USB_DWC3
+	bool "Generic implementation of a DWC3"
+	depends on SPL_DM_USB
+	help
+	  Say Y here if your system has a Dual Role SuperSpeed
+	  USB controller based on the DesignWare USB3 IP Core.
+
 config SPL_USB_DWC3_GENERIC
 	bool "Generic implementation of a DWC3 wrapper (aka dwc3 glue) for the SPL"
 	depends on SPL_DM_USB && USB_DWC3 && SPL_MISC
