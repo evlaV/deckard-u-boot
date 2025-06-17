@@ -2,9 +2,12 @@
 #include <env.h>
 #include <init.h>
 #include <asm/system.h>
+#include <dm/of_access.h>
+#include <dm/of.h>
 #include <dm/device-internal.h>
 #include <ufs.h>
 #include <scsi.h>
+#include <fdt_support.h>
 #include <spl_load.h>
 #include <spl.h>
 #include <stdlib.h>
@@ -65,9 +68,9 @@ enum combined_button_state_t {
 DECLARE_GLOBAL_DATA_PTR;
 
 static ulong boot_wrapper_version __section(".data");
+extern void qcom_of_fixup_nodes(void);
+static int force_usb;
 
-static char *name = "uboot_a";
-static char *ifname = "scsi";
 
 static struct pon_on_off_reason pon_poff_reason;
 
@@ -122,6 +125,40 @@ static int deckard_spl_get_part(const char *part_name)
 	return simple_strtoul(part_str, NULL, 10);
 }
 
+static int deckard_spl_fixup_usb_boot(const void *fdt_blob)
+{
+	void *blob = (void *)fdt_blob;
+	uint32_t phy_offset;
+	int phy_phandle;
+
+	do_fixup_by_compat(blob, "qcom,sm8650-dwc3",
+			    "qcom,select-utmi-as-pipe-clk", NULL, 0, 1);
+
+	do_fixup_by_compat(blob, "snps,dwc3",
+		  "dr_mode", "host", strlen("host") + 1, 1);
+
+	do_fixup_by_compat(blob, "snps,dwc3",
+		  "maximum-speed", "high-speed", strlen("high-speed") + 1, 1);
+
+	phy_offset = fdt_path_offset(blob, "/soc@0/phy@88e3000");
+
+	phy_phandle = fdt_get_phandle(blob, phy_offset);
+
+	do_fixup_by_compat_u32(blob, "snps,dwc3",
+			"phys", phy_phandle, 1);
+
+	do_fixup_by_compat(blob, "snps,dwc3",
+			"phy-names", "usb2-phy", strlen("usb2-phy") + 1, 1);
+
+	return 0;
+}
+
+/* This is called very early and allow us to apply fixups to the spl dtb */
+int fdtdec_board_setup(const void *fdt_blob)
+{
+	return deckard_spl_fixup_usb_boot(fdt_blob);
+}
+
 void spl_perform_fixups(struct spl_image_info *spl_image)
 {
 	/* Use relocated FDT */
@@ -142,6 +179,9 @@ void spl_perform_fixups(struct spl_image_info *spl_image)
 	else if (spl_image->boot_device == BOOT_DEVICE_UFS_B)
 		ret = fdt_setprop_string(blob, chosen,
 				"u-boot,spl-boot-device", "B");
+	else if (spl_image->boot_device == BOOT_DEVICE_USB)
+		ret = fdt_setprop_string(blob, chosen,
+				"u-boot,spl-boot-device", "U");
 	else
 	{
 		ret = fdt_setprop_string(blob, chosen,
@@ -166,28 +206,24 @@ void board_boot_order(u32 *spl_boot_list)
 
 	char *boot_order = env_get("BOOT_TARGET");
 
-	if (!strcmp(boot_order, "A B")) 
-	{
+
+	if (force_usb) {
+		spl_boot_list[0] = BOOT_DEVICE_USB;
+		spl_boot_list[1] = BOOT_DEVICE_UFS_A;
+		spl_boot_list[2] = BOOT_DEVICE_UFS_B;
+	} else if (!strcmp(boot_order, "A B")) {
 		spl_boot_list[0] = BOOT_DEVICE_UFS_A;
 		spl_boot_list[1] = BOOT_DEVICE_UFS_B;
-	} 
-	else if(!strcmp(boot_order, "B A")) 
-	{
+	} else if(!strcmp(boot_order, "B A")) {
 		spl_boot_list[0] = BOOT_DEVICE_UFS_B;
 		spl_boot_list[1] = BOOT_DEVICE_UFS_A;
-	}
-	else if(!strcmp(boot_order, "A")) 
-	{
+	} else if(!strcmp(boot_order, "A")) {
 		spl_boot_list[0] = BOOT_DEVICE_UFS_A;
 		spl_boot_list[1] = BOOT_DEVICE_NONE;
-	}
-	else if(!strcmp(boot_order, "B")) 
-	{
+	} else if(!strcmp(boot_order, "B")) {
 		spl_boot_list[0] = BOOT_DEVICE_UFS_B;
 		spl_boot_list[1] = BOOT_DEVICE_NONE;
-	}
-	else
-	{
+	} else {
 		spl_boot_list[0] = BOOT_DEVICE_UFS_A;
 		spl_boot_list[1] = BOOT_DEVICE_UFS_B;
 	}
@@ -197,7 +233,7 @@ static char *check_boot_order(void)
 {
 	char *boot_order = env_get("BOOT_ORDER");
 
-	if (!boot_order || 
+	if (!boot_order ||
 	    (strcmp(boot_order, "A B") && strcmp(boot_order, "B A"))) {
 		printf("Invalid BOOT_ORDER (%s), default to 'A B'\n", boot_order);
 		env_set("BOOT_ORDER", "A B");
@@ -233,7 +269,7 @@ static ulong iterate_boot_count(void)
 
 	boot_count = env_get(boot_count_target);
 
-	if (!boot_count) { 
+	if (!boot_count) {
 		//variable doesnt exist, so set max boot count
 		count = boot_count_max;
 	}
@@ -810,7 +846,6 @@ void qcom_spl_board_init(void)
 
 			//if we get here, then it appears the user is still holding the button, so just continue booting
 		}
-			
 	}
 
 	//this needs to be after we check if we are currently holding the button down for a power button hard shutdown
@@ -897,8 +932,13 @@ void qcom_spl_board_init(void)
 	}
 	printf("Boot count on target slot is %d\n",boot_count);
 
+	if (env_get_ulong("FORCE_USB", 10, 0)) {
+		printf("FORCE_USB set in environment, going to try to boot from USB\n");
+		env_set("FORCE_USB", NULL);
+		force_usb = 1;
+	}
+
 	spl_env_save(blk_dev, &mainenv_info, &altenv_info, mainbuf, altbuf);
-	
 }
 
 static ulong deckard_ufs_fit_read(struct spl_load_info *load, ulong file_offset,

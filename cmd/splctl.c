@@ -393,6 +393,25 @@ fail:
 	return ret;
 }
 
+static int do_force_usb(struct cmd_tbl *cmdtp, int flag, int argc,
+			char *const argv[])
+{
+	int ret = 0;
+
+	ret = env_spl_scsi_load();
+	if(ret)	goto fail;
+	ret = env_spl_set("FORCE_USB","1");
+	if(ret)	goto fail;
+	ret = env_scsi_save();
+	if(ret)	goto fail;
+
+ 	//no error, don't print anything
+ 	return ret;
+fail:
+	printf("err %d\n",ret);
+	return ret;
+}
+
 static int do_print_spl_env(struct cmd_tbl *cmdtp, int flag, int argc,
 			      char *const argv[])
 {
@@ -408,6 +427,7 @@ static int do_print_spl_env(struct cmd_tbl *cmdtp, int flag, int argc,
 static struct cmd_tbl cmd_splctl_sub[] = {
 	U_BOOT_CMD_MKENT(set-primary, 2, 1, do_set_primary, "", ""),
 	U_BOOT_CMD_MKENT(set-bootfw-slot, 2, 1, do_set_bootfw_slot, "", ""),
+	U_BOOT_CMD_MKENT(force-usb, 1, 1, do_force_usb, "", ""),
 	U_BOOT_CMD_MKENT(env, 1, 1, do_print_spl_env, "", ""),
 	U_BOOT_CMD_MKENT(set-uboot-poweroff-reason, 2, 1, do_set_uboot_poweroff_reason, "", ""),
 };
@@ -434,6 +454,7 @@ static int do_splctl(struct cmd_tbl *cmdtp, int flag, int argc,
 U_BOOT_LONGHELP(splctl,
 	"set-primary [A/B] - SPL set primary partition\n"
 	"       env - SPL print env\n"
+	"       force-usb    - SPL force booting from usb\n"
 	);
 
 #define SPLCTL_CMD_MAXARGS 3
