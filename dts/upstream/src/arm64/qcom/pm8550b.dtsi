@@ -49,6 +49,7 @@
 			compatible = "qcom,pm8550b-vbus-reg", "qcom,pm8150b-vbus-reg";
 			status = "disabled";
 			reg = <0x2700>;
+			bootph-all;
 		};
 
 		pm8550b_gpios: gpio@8800 {
