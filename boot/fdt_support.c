@@ -446,6 +446,7 @@ void do_fixup_by_compat(void *fdt, const char *compat,
 			const char *prop, const void *val, int len, int create)
 {
 	int off = -1;
+	int rc;
 #if defined(DEBUG)
 	int i;
 	debug("Updating property '%s' = ", prop);
@@ -454,8 +455,12 @@ void do_fixup_by_compat(void *fdt, const char *compat,
 	debug("\n");
 #endif
 	fdt_for_each_node_by_compatible(off, fdt, -1, compat)
-		if (create || (fdt_get_property(fdt, off, prop, NULL) != NULL))
-			fdt_setprop(fdt, off, prop, val, len);
+		if (create || (fdt_get_property(fdt, off, prop, NULL) != NULL)) {
+			rc = fdt_setprop(fdt, off, prop, val, len);
+			if (rc)
+				printf("Unable to update property %s:%s, err=%s\n",
+					compat, prop, fdt_strerror(rc));
+		}
 }
 
 void do_fixup_by_compat_u32(void *fdt, const char *compat,
