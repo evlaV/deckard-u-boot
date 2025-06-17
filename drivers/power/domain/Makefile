@@ -21,4 +21,4 @@ obj-$(CONFIG_TEGRA186_POWER_DOMAIN) += tegra186-power-domain.o
 obj-$(CONFIG_TI_SCI_POWER_DOMAIN) += ti-sci-power-domain.o
 obj-$(CONFIG_TI_POWER_DOMAIN) += ti-power-domain.o
 obj-$(CONFIG_ZYNQMP_POWER_DOMAIN) += zynqmp-power-domain.o
-obj-$(CONFIG_QCOM_POWER_DOMAIN) += qcom-rpmhpd.o
+obj-$(CONFIG_$(PHASE_)QCOM_POWER_DOMAIN) += qcom-rpmhpd.o
