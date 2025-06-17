@@ -429,6 +429,30 @@ config OF_SPL_REMOVE_PROPS
 	  can be discarded. This option defines the list of properties to
 	  discard.
 
+config OF_SPL_DTB_PADSIZE
+	string "padding to the blob of <bytes> long (extra space)"
+	depends on SPL_OF_CONTROL
+	default "0"
+	help
+	  Since SPL normally runs in a reduced memory space, the device tree
+	  is cut down to only what is needed to load and start U-Boot. Only
+	  nodes marked with the property "bootph-all" will be
+	  included. In addition, some properties are not used by U-Boot and
+	  can be discarded. However we my need to do some of_fixups for some
+	  hardware to work as expected, so we need to make room for new nodes/
+	  properties to be add if needed in the flat tree.
+
+config OF_SPL_DTB_ALIGN
+	string "the blob to align to the <bytes> long (extra space)"
+	depends on SPL_OF_CONTROL
+	default "0"
+	help
+	  Since SPL normally runs in a reduced memory space, the device tree
+	  is cut down to only what is needed to load and start U-Boot. Only
+	  nodes marked with the property "bootph-all" will be
+	  included. Some bootloader may require to this blob to be aligned
+	  to proper loading. (ex: qcom xbl in ufs)
+
 config OF_DTB_PROPS_REMOVE
 	bool "Enable removal of device tree properties"
 	depends on OF_CONTROL

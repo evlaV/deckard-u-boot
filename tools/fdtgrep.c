@@ -29,6 +29,8 @@
 #define debug(a, b...)
 #endif
 
+#define ALIGN(x, a)	(((x) + (a) - 1) & ~((a) - 1))
+
 /* A linked list of values we are grepping for */
 struct value_node {
 	int type;		/* Types this value matches (FDT_IS... mask) */
@@ -64,6 +66,8 @@ struct display_info {
 	int types_exc;		/* Mask of types that we exclude (FDT_IS...) */
 	int invert;		/* Invert polarity of match */
 	int props_up;		/* Imply properties up to supernodes */
+	int pad;                /* Pad the blob for n_bytes (extra space) */
+	int align;              /* Align blob to the byte (extra space) */
 	struct value_node *value_head;	/* List of values to match */
 	const char *output_fname;	/* Output filename */
 	FILE *fout;		/* File to write dts/dtb output */
@@ -913,6 +917,14 @@ static int do_fdtgrep(struct display_info *disp, const char *filename)
 			size = fdt_totalsize(fdt);
 		}
 
+		if (disp->pad)
+			size += disp->pad;
+
+		if (disp->align)
+			size = ALIGN(size, disp->align);
+
+		fdt_set_totalsize(fdt, size);
+
 		if ((size_t)size != fwrite(fdt, 1, size, disp->fout)) {
 			fprintf(stderr, "Write failure, %d bytes\n", size);
 			free(fdt);
@@ -965,7 +977,7 @@ static const char usage_synopsis[] =
 	case '?': usage("unknown option");
 
 static const char usage_short_opts[] =
-		"haAc:b:C:defg:G:HIlLmn:N:o:O:p:P:rRsStTuv"
+		"haAc:b:C:defg:G:HIlLmn:N:o:O:p:P:rRsStTuvx:X:"
 		USAGE_COMMON_SHORT_OPTS;
 static const struct option usage_long_opts[] = {
 	{"show-address",	no_argument, NULL, 'a'},
@@ -997,6 +1009,8 @@ static const struct option usage_long_opts[] = {
 	{"show-aliases",	no_argument, NULL, 'T'},
 	{"props-up-to-supernode", no_argument, NULL, 'u'},
 	{"invert-match",	no_argument, NULL, 'v'},
+	{"pad",                 a_argument, NULL, 'x'},
+	{"align",               a_argument, NULL, 'X'},
 	USAGE_COMMON_LONG_OPTS,
 };
 static const char * const usage_opts_help[] = {
@@ -1029,6 +1043,8 @@ static const char * const usage_opts_help[] = {
 	"Include matching aliases in output",
 	"Add -p properties to supernodes too",
 	"Invert the sense of matching (select non-matching lines)",
+	"Add padding to the blob of <bytes> long (extra space)",
+	"Make the blob align to the <bytes> (extra space)",
 	USAGE_COMMON_OPTS_HELP
 };
 
@@ -1219,6 +1235,12 @@ static void scan_args(struct display_info *disp, int argc, char *argv[])
 			break;
 		case 'v':
 			disp->invert = 1;
+			break;
+		case 'x':
+			disp->pad = strtol(optarg, NULL, 0);
+			break;
+		case 'X':
+			disp->align = strtol(optarg, NULL, 0);
 			break;
 		}
 
