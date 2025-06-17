@@ -645,6 +645,7 @@
 
 &pm8550b_vbus {
 	status = "okay";
+	bootph-all;
 };
 
 &pm8550ve_gpios {
@@ -939,6 +940,15 @@
 	status = "okay";
 };
 
+&gcc {
+	bootph-all;
+};
+
+&tcsr {
+	bootph-all;
+};
+
+
 &ufs_mem_phy {
 	vdda-phy-supply = <&vreg_l1d_0p9>;
 	vdda-pll-supply = <&vreg_l3i_1p2>;
@@ -948,15 +958,19 @@
 
 &usb_1 {
 	status = "okay";
+	bootph-all;
 };
 
 &usb_1_dwc3 {
 	dr_mode = "peripheral";
 	vbus-supply = <&pm8550b_vbus>;
+	status = "okay";
+	bootph-all;
 };
 
 &usb_1_hsphy {
 	status = "okay";
+	bootph-all;
 };
 
 &xo_board {
