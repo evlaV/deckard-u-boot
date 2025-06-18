@@ -16,6 +16,53 @@
 
 static int usb_stor_curr_dev = -1; /* current device */
 
+#ifndef CONFIG_SPL_OS_BOOT
+int spl_start_uboot(void)
+{
+	return 1;
+}
+#endif
+
+#ifdef CONFIG_SPL_FS_FAT
+int spl_usb_load_fat(struct blk_desc *stor_dev, struct spl_image_info *spl_image,
+		     struct spl_boot_device *bootdev, int partition, const char *filename)
+{
+	int ret;
+
+	if (!spl_start_uboot()) {
+		ret = spl_load_image_fat_os(spl_image, bootdev, stor_dev, partition);
+		if (!ret)
+			return 0;
+	}
+
+	ret = spl_load_image_fat(spl_image, bootdev, stor_dev, partition, filename);
+	if (ret)
+		return ret;
+
+	return 0;
+}
+#endif
+
+#ifdef CONFIG_SPL_FS_EXT4
+int spl_usb_load_ext(struct blk_desc *stor_dev, struct spl_image_info *spl_image,
+		     struct spl_boot_device *bootdev, int partition, const char *filename)
+{
+	int ret;
+
+	if (!spl_start_uboot()) {
+		ret = spl_load_image_ext_os(spl_image, bootdev, stor_dev, partition);
+		if (!ret)
+			return 0;
+	}
+
+	ret = spl_load_image_ext(spl_image, bootdev, stor_dev, partition, filename);
+	if (ret)
+		return ret;
+
+	return 0;
+}
+#endif
+
 int spl_usb_load(struct spl_image_info *spl_image,
 		 struct spl_boot_device *bootdev, int partition,
 		 const char *filename)
@@ -43,15 +90,20 @@ int spl_usb_load(struct spl_image_info *spl_image,
 	if (!stor_dev)
 		return -ENODEV;
 
-	debug("boot mode - FAT\n");
 
-#if CONFIG_IS_ENABLED(OS_BOOT)
-	if (spl_start_uboot() ||
-	    spl_load_image_fat_os(spl_image, bootdev, stor_dev, partition))
+#ifdef CONFIG_SPL_FS_FAT
+	debug("boot mode - FAT\n");
+	err = spl_usb_load_fat(stor_dev, spl_image, bootdev, partition, filename);
+	if (!err)
+		return 0;
 #endif
-	{
-		err = spl_load_image_fat(spl_image, bootdev, stor_dev, partition, filename);
-	}
+
+#ifdef CONFIG_SPL_FS_EXT4
+	debug("boot mode - EXT4\n");
+	err = spl_usb_load_ext(stor_dev, spl_image, bootdev, partition, filename);
+	if (!err)
+		return 0;
+#endif
 
 	if (err) {
 		puts("Error loading from USB device\n");
