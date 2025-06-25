@@ -4,4 +4,4 @@
 #
 # Author: Neil Armstrong <narmstrong@baylibre.com>
 
-obj-$(CONFIG_VIDEO_QCOM) = qcom_dsi.o qcom_dsi_phy.o qcom_dsi_phy_pll.o qcom_mdss.o
+obj-$(CONFIG_VIDEO_QCOM) = dpu_hw_catalog.o qcom_dsi.o qcom_dsi_phy.o qcom_dsi_phy_pll.o qcom_mdss.o qcom_dpu.o
