@@ -28,7 +28,6 @@
 #include "qcom_mipi_dsi.h"
 #include "qcom_dsi_phy.h"
 
-
 #define DSI_DMA_STREAM1 0x0
 #define DSI_EMBED_MODE1 0x1
 #define DSI_POWER_MODE2 0x1
@@ -65,6 +64,7 @@ struct qcom_dsi_priv {
 	struct udevice *dsi_host;
 };
 
+
 static inline void dsi_write(void *addr, u32 val)
 {
 	writel(val, addr);
@@ -75,6 +75,7 @@ static inline u32 dsi_read(void *addr)
 	return readl(addr);
 }
 
+#if 0
 static inline void dsi_set(void *addr, u32 mask)
 {
 	dsi_write(addr, dsi_read(addr) | mask);
@@ -198,7 +199,7 @@ void mdss_dsi_video_mode_config(struct display_timing *timings, uint32_t bpp)
 	dsi_write(dsi_reg->ctrl, lane_en << 4 | DSI_VIDEO_EN << 1 | DSI_EN | DSI_CLKLN_EN << 8);
 }
 
-enum cb_err mdss_dsi_config(struct display_timing *timings, uint32_t num_of_lanes, uint32_t bpp)
+int mdss_dsi_config(struct display_timing *timings, uint32_t num_of_lanes, uint32_t bpp)
 {
 	mdss_dsi_reset();
 	if ((mdss_dsi_phy_10nm_init(timings, num_of_lanes, bpp)) != 0) {
@@ -264,12 +265,12 @@ static int mdss_dsi_cmd_dma_trigger_for_panel(struct dsi_regs *dsi_reg)
 	return status;
 }
 
-static enum cb_err mdss_dsi_send_init_cmd(enum mipi_dsi_transaction type, const u8 *body,
+static int mdss_dsi_send_init_cmd(enum mipi_dsi_transaction type, const u8 *body,
 					  u8 len)
 {
 	uint8_t *pload = _dma_coherent;
 	uint32_t size;
-	enum cb_err ret = CB_SUCCESS;
+	int ret = CB_SUCCESS;
 	int data = 0;
 	uint32_t *bp = NULL;
 
@@ -337,7 +338,7 @@ static void mdss_dsi_clear_intr(struct dsi_regs *dsi_reg)
 	dsi_write(dsi_reg->err_int_mask0, 0x13FF3BFF);
 }
 
-enum cb_err mdss_dsi_panel_initialize(struct dsi_regs *dsi_reg, const u8 *init_cmds)
+int mdss_dsi_panel_initialize(struct dsi_regs *dsi_reg, const u8 *init_cmds)
 {
 	uint32_t ctrl_mode = 0;
 
@@ -348,7 +349,7 @@ enum cb_err mdss_dsi_panel_initialize(struct dsi_regs *dsi_reg, const u8 *init_c
 	dsi_write(dsi_reg->ctrl, ctrl_mode | 0x04);
 
 /* TODO: send cmds in panel driver
-	enum cb_err ret = mipi_panel_parse_init_commands(init_cmds, mdss_dsi_send_init_cmd);
+	int ret = mipi_panel_parse_init_commands(init_cmds, mdss_dsi_send_init_cmd);
 */
 	dsi_write(dsi_reg->ctrl, ctrl_mode);
 	mdss_dsi_clear_intr(dsi_reg);
@@ -444,6 +445,7 @@ static int dsi_pll_get_params(struct qcom_dsi_priv *dsi,
 
 	return 0;
 }
+#endif
 
 static int dsi_phy_init(void *priv_data)
 {
@@ -455,6 +457,7 @@ static int dsi_phy_init(void *priv_data)
 
 	dev_dbg(dev, "Initialize DSI physical layer\n");
 
+#if 0
 	/* Enable the regulator */
 	dsi_set(dsi, DSI_WRPCR, WRPCR_REGEN | WRPCR_BGREN);
 	ret = readl_poll_timeout(dsi->base + DSI_WISR, val, val & WISR_RRS,
@@ -472,6 +475,7 @@ static int dsi_phy_init(void *priv_data)
 		dev_dbg(dev, "!TIMEOUT! waiting PLL\n");
 		return ret;
 	}
+#endif
 
 	return 0;
 }
@@ -494,10 +498,12 @@ static void dsi_phy_post_set_mode(void *priv_data, unsigned long mode_flags)
 	 * register access will hang.
 	 */
 
+/*
 	if (mode_flags & MIPI_DSI_MODE_VIDEO)
 		dsi_set(dsi, DSI_WCR, WCR_DSIEN);
 	else
 		dsi_clear(dsi, DSI_WCR, WCR_DSIEN);
+*/
 }
 
 static int dsi_get_lane_mbps(void *priv_data, struct display_timing *timings,
@@ -598,7 +604,6 @@ static int qcom_dsi_set_backlight(struct udevice *dev, int percent)
 
 	return 0;
 }
-*/
 
 static int qcom_dsi_bind(struct udevice *dev)
 {
@@ -611,23 +616,28 @@ static int qcom_dsi_bind(struct udevice *dev)
 
 	return dm_scan_fdt_dev(dev);
 }
+*/
 
 static int qcom_dsi_probe(struct udevice *dev)
 {
 	struct qcom_dsi_priv *priv = dev_get_priv(dev);
 	struct mipi_dsi_device *device = &priv->device;
 	struct reset_ctl rst;
-	struct clk clk;
+	struct clk_bulk bulk;
+	struct dsi_regs *dsi_reg;
 	int ret;
 
 	device->dev = dev;
 
+dev_err(dev, "=============%s enter\n", __func__);
 	priv->base = dev_read_addr_ptr(dev);
+	dsi_reg = priv->base;
 	if (!priv->base) {
 		dev_err(dev, "dsi dt register address error\n");
 		return -EINVAL;
 	}
 
+/*
 	ret =  device_get_supply_regulator(dev, "phy-dsi-supply",
 					   &priv->vdd_reg);
 	if (ret && ret != -ENOENT) {
@@ -641,26 +651,20 @@ static int qcom_dsi_probe(struct udevice *dev)
 			return ret;
 	}
 
-	ret = clk_get_by_name(device->dev, "pclk", &clk);
+	ret = clk_get_bulk(device->dev, &bulk);
 	if (ret) {
 		dev_err(dev, "peripheral clock get error %d\n", ret);
 		goto err_reg;
 	}
 
-	ret = clk_enable(&clk);
+	ret = clk_enable_bulk(&bulk);
 	if (ret) {
 		dev_err(dev, "peripheral clock enable error %d\n", ret);
 		goto err_reg;
 	}
+*/
 
-	ret = clk_get_by_name(dev, "ref", &clk);
-	if (ret) {
-		dev_err(dev, "pll reference clock get error %d\n", ret);
-		goto err_clk;
-	}
-
-	priv->pllref_clk = (unsigned int)clk_get_rate(&clk);
-
+#if 0
 	ret = reset_get_by_index(device->dev, 0, &rst);
 	if (ret) {
 		dev_err(dev, "missing dsi hardware reset\n");
@@ -669,11 +673,11 @@ static int qcom_dsi_probe(struct udevice *dev)
 
 	/* Reset */
 	reset_deassert(&rst);
+#endif
 
 	/* check hardware version */
-	priv->hw_version = dsi_read(priv, DSI_VERSION) & VERSION;
-	if (priv->hw_version != HWVER_130 &&
-	    priv->hw_version != HWVER_131) {
+	priv->hw_version = dsi_read(dsi_reg->hw_version);
+	if (priv->hw_version != 0x20080000) {
 		dev_err(dev, "DSI version 0x%x not supported\n", priv->hw_version);
 		dev_dbg(dev, "remove and unbind all DSI child\n");
 		device_chld_remove(dev, NULL, DM_REMOVE_NORMAL);
@@ -682,12 +686,14 @@ static int qcom_dsi_probe(struct udevice *dev)
 		goto err_clk;
 	}
 
+dev_err(dev, "=============%s ret 0\n", __func__);
 	return 0;
 err_clk:
-	clk_disable(&clk);
+	clk_disable_bulk(&bulk);
 err_reg:
-	regulator_set_enable(priv->vdd_reg, false);
+//	regulator_set_enable(priv->vdd_reg, false);
 
+dev_err(dev, "=============%s ret %d\n", __func__, ret);
 	return ret;
 }
 
@@ -697,15 +703,15 @@ struct video_bridge_ops qcom_dsi_ops = {
 };
 
 static const struct udevice_id qcom_dsi_ids[] = {
-	{ .compatible = "st,qcom-dsi"},
+	{ .compatible = "qcom,mdss-dsi-ctrl"},
 	{ }
 };
 
 U_BOOT_DRIVER(qcom_dsi) = {
-	.name				= "qcom-display-dsi",
+	.name				= "qcom,mdss-dsi-ctrl",
 	.id				= UCLASS_VIDEO_BRIDGE,
 	.of_match			= qcom_dsi_ids,
-	.bind				= qcom_dsi_bind,
+//	.bind				= qcom_dsi_bind,
 	.probe				= qcom_dsi_probe,
 	.ops				= &qcom_dsi_ops,
 	.priv_auto		= sizeof(struct qcom_dsi_priv),

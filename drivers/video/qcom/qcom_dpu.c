@@ -3,6 +3,7 @@
 /* this file handles configuration of VBIF/CTL/SSPP/INTF/LM/PP/DSC in DPU */
 
 #include <dm/device.h>
+#include <dm/read.h>
 #include <video.h>
 
 #include "dpu_hw_mdss.h"
@@ -405,6 +406,7 @@
 
 struct qcom_dpu_priv {
 	void *regs_base;
+	void *vbif_base;
 /*
 	struct mdp_sspp_regs *mdp_sspp[2];
 	struct mdp_layer_mixer_regs *mdp_layer_mixer[4];
@@ -814,7 +816,8 @@ int qcom_dpu_probe(struct udevice *dev)
 printf("=========%s enter\n", __func__);
 	struct qcom_dpu_priv *priv = dev_get_priv(dev);
 
-	priv->regs_base = dev_read_addr_ptr(dev);
+	priv->regs_base = dev_remap_addr_name(dev, "mdp");
+	priv->vbif_base = dev_remap_addr_name(dev, "vbif");
 #if 0
 	struct rkvop_driverdata *ops =
 		(struct rkvop_driverdata *)dev_get_driver_data(dev);

@@ -9,7 +9,7 @@
 
 /* MDP External Clocks Entry */
 struct mdp_external_clock_entry {
-	enum mdss_clock clk_type;
+//	enum mdss_clock clk_type;
 
 	/* Primary Clock Source */
 	uint32_t clk_source;

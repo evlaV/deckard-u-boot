@@ -3,6 +3,7 @@
 #ifndef _SOC_DISPLAY_MDSS_REG_H_
 #define _SOC_DISPLAY_MDSS_REG_H_
 
+#include <linux/bitops.h>
 #include <linux/types.h>
 
 #define INTF_FLUSH	INTF_FLUSH_1
@@ -66,6 +67,7 @@ struct dsi_regs {
 	uint32_t cmd_compression_mode_ctrl3;
 };
 
+#if 0
 check_member(dsi_regs, video_mode_active_h, 0x24);
 check_member(dsi_regs, cmd_mode_mdp_stream0_ctrl, 0x58);
 check_member(dsi_regs, trig_ctrl, 0x84);
@@ -78,6 +80,7 @@ check_member(dsi_regs, test_pattern_gen_cmd_dma_init_val, 0x17c);
 check_member(dsi_regs, cmd_mode_mdp_ctrl2, 0x1B8);
 check_member(dsi_regs, tpg_dma_fifo_reset, 0x1EC);
 check_member(dsi_regs, video_compression_mode_ctrl, 0x2A0);
+#endif
 
 struct dsi_phy_regs {
 		uint32_t phy_cmn_revision_id0;
@@ -114,6 +117,7 @@ struct dsi_phy_regs {
 		} phy_ln_regs[5];
 };
 
+#if 0
 check_member(dsi_phy_regs, phy_cmn_clk_cfg0, 0x10);
 check_member(dsi_phy_regs, phy_cmn_dsi_lane_ctrl0, 0x98);
 check_member(dsi_phy_regs, phy_cmn_timing_ctrl[0], 0xAC);
@@ -123,6 +127,7 @@ check_member(dsi_phy_regs, phy_ln_regs[1], 0x280);
 check_member(dsi_phy_regs, phy_ln_regs[2], 0x300);
 check_member(dsi_phy_regs, phy_ln_regs[3], 0x380);
 check_member(dsi_phy_regs, phy_ln_regs[4], 0x400);
+#endif
 
 struct dsi_phy_pll_qlink_regs {
 		uint32_t pll_analog_ctrls_one;
@@ -212,10 +217,12 @@ struct dsi_phy_pll_qlink_regs {
 		uint32_t pll_common_status_one;
 };
 
+#if 0
 check_member(dsi_phy_pll_qlink_regs, pll_mash_ctrl, 0xEC);
 check_member(dsi_phy_pll_qlink_regs, pll_ssc_mux_ctrl, 0x108);
 check_member(dsi_phy_pll_qlink_regs, pll_ssc_ctrl, 0x13C);
 check_member(dsi_phy_pll_qlink_regs, pll_freq_tune_accum_init_mux, 0x17C);
+#endif
 
 struct mdp_intf_regs {
 		uint32_t timing_eng_enable;
@@ -252,9 +259,11 @@ struct mdp_intf_regs {
 		uint32_t intf_mux;
 };
 
+#if 0
 check_member(mdp_intf_regs, intf_panel_format, 0x90);
 check_member(mdp_intf_regs, intf_prof_fetch_start, 0x170);
 check_member(mdp_intf_regs, intf_mux, 0x25C);
+#endif
 
 struct mdp_ctl_regs {
 	uint32_t ctl_layer0;
@@ -271,9 +280,11 @@ struct mdp_ctl_regs {
 	uint32_t ctl_intf_flush;
 };
 
+#if 0
 check_member(mdp_ctl_regs, ctl_top, 0x14);
 check_member(mdp_ctl_regs, ctl_intf_active, 0xF4);
 check_member(mdp_ctl_regs, ctl_intf_flush, 0x110);
+#endif
 
 struct mdp_layer_mixer_regs {
 		uint32_t layer_op_mode;
@@ -315,9 +326,11 @@ struct mdp_sspp_regs {
 	uint32_t sspp_sw_pic_ext_c3_req_pixels;
 };
 
+#if 0
 check_member(mdp_sspp_regs, sspp_sw_pic_ext_c0_req_pixels, 0x108);
 check_member(mdp_sspp_regs, sspp_sw_pic_ext_c1c2_req_pixels, 0x118);
 check_member(mdp_sspp_regs, sspp_sw_pic_ext_c3_req_pixels, 0x128);
+#endif
 
 struct mdss_hw_regs {
 	uint32_t hw_version;
@@ -338,8 +351,10 @@ struct vbif_rt_regs {
 	} qos_lvl_remap[8];
 };
 
+#if 0
 check_member(vbif_rt_regs, vbif_out_axi_amemtype_conf0, 0x160);
 check_member(vbif_rt_regs, qos_rp_remap[0], 0x550);
+#endif
 
 enum {
 	MDSS_BASE = 0xAE00000,

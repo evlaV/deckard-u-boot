@@ -3,7 +3,7 @@
 #include <stdint.h>
 
 #include "mdssreg.h"
-#include "dsi_phy_pll.h"
+//#include "dsi_phy_pll.h"
 
 #define VCO_DELAY_USEC 1
 
@@ -11,6 +11,7 @@
 #define SSC_CENTER		BIT(0)
 #define SSC_EN			BIT(1)
 
+#if 0
 struct dsi_pll_regs {
 	u32 pll_prop_gain_rate;
 	u32 decimal_div_start;
@@ -141,3 +142,4 @@ void dsi_phy_pll_vco_7nm_set_rate(unsigned long rate)
 	dsi_pll_commit(&regs);
 	dsi_pll_config_hzindep_reg(&regs);
 }
+#endif

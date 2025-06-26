@@ -4,7 +4,7 @@
 #define _SOC_DISPLAY_DSI_PHY_H
 
 #include <stdint.h>
-#include <soc/display/dsi_phy_pll.h>
+//#include <soc/display/dsi_phy_pll.h>
 
 #define MAX_REGULATOR_CONFIG            7
 #define MAX_BIST_CONFIG                 6

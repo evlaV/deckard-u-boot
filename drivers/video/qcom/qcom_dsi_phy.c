@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
 #include <linux/delay.h>
-#include <lib.h>
+//#include <lib.h>
 #include <string.h>
 #include <timer.h>
 
@@ -32,6 +32,7 @@
 #define write32(addr, val) writel(val, addr)
 #define read32(addr) readl(addr)
 
+#if 0
 struct dsi_phy_divider_lut_entry_type {
 	uint16_t        pll_post_div;
 	uint16_t        phy_post_div;
@@ -103,7 +104,7 @@ static void mdss_dsi_phy_reset(struct dsi_phy_regs *phy_reg)
 	write32(phy_reg->phy_cmn_ctrl1, 0x0);
 }
 
-static void mdss_dsi_power_down(void)
+static void mdss_dsi_power_down(struct dsi_phy_regs *phy_reg)
 {
 	/* power up DIGTOP & PLL */
 	write32(phy_reg->phy_cmn_ctrl0, 0x60);
@@ -115,7 +116,8 @@ static void mdss_dsi_power_down(void)
 	write32(phy_reg->phy_cmn_rbuf_ctrl, 0x0);
 }
 
-static void mdss_dsi_phy_setup_lanephy(enum dsi_laneid_type lane)
+static void mdss_dsi_phy_setup_lanephy(struct dsi_phy_regs *phy_reg,
+	    enum dsi_laneid_type lane)
 {
 	uint32_t reg_val = 0;
 	uint32_t lprx_ctrl = 0;
@@ -282,7 +284,7 @@ static void mdss_dsi_calculate_phy_timings(struct msm_dsi_phy_ctrl *timing,
 	timing->ta_sure = 0;
 	timing->ta_get = 4;
 
-	printk(BIOS_INFO, "PHY timings: %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d\n",
+	printf("PHY timings: %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d\n",
 		timing->clk_pre, timing->clk_post,
 		timing->clk_pre_inc_by_2, timing->clk_zero,
 		timing->clk_trail, timing->clk_prepare, timing->hs_exit,
@@ -290,7 +292,8 @@ static void mdss_dsi_calculate_phy_timings(struct msm_dsi_phy_ctrl *timing,
 		timing->hs_rqst);
 }
 
-static int mdss_dsi_phy_timings(struct msm_dsi_phy_ctrl *phy_timings)
+static int mdss_dsi_phy_timings(struct dsi_phy_regs *phy_reg,
+				struct msm_dsi_phy_ctrl *phy_timings)
 {
 	uint32_t reg_val = 0;
 
@@ -348,14 +351,14 @@ static int mdss_dsi_phy_timings(struct msm_dsi_phy_ctrl *phy_timings)
 	/* DCTRL */
 	write32(phy_reg->phy_cmn_ctrl2, 0x40);
 
-	return CB_SUCCESS;
+	return 0;
 }
 
-static int dsi_phy_waitforrefgen(void)
+static int dsi_phy_waitforrefgen(struct dsi_phy_regs *phy_reg)
 {
 	uint32_t timeout = HAL_DSI_PHY_REFGEN_TIMEOUT_MS;
 	uint32_t refgen  = 0;
-	int ret = CB_SUCCESS;
+	int ret = 0;
 
 	while (!refgen) {
 		refgen = (read32(phy_reg->phy_cmn_phy_status) & 0x1);
@@ -364,7 +367,7 @@ static int dsi_phy_waitforrefgen(void)
 			timeout--;
 			if (!timeout) {
 				/* timeout while polling the lock status */
-				ret = CB_ERR;
+				ret = -1;
 				break;
 			}
 		}
@@ -375,15 +378,15 @@ static int dsi_phy_waitforrefgen(void)
 
 static int mdss_dsi_phy_commit(struct dsi_phy_regs *phy_reg)
 {
-	int ret = CB_SUCCESS;
+	int ret = 0;
 
-	ret = dsi_phy_waitforrefgen();
+	ret = dsi_phy_waitforrefgen(phy_reg);
 	if (ret) {
-		printk(BIOS_ERR, "%s: waitforrefgen error\n", __func__);
+		printf("%s: waitforrefgen error\n", __func__);
 		return ret;
 	}
 
-	mdss_dsi_power_down();
+	mdss_dsi_power_down(phy_reg);
 
 	/* Remove PLL, DIG and all lanes from pwrdn */
 	write32(phy_reg->phy_cmn_ctrl0, 0x7F);
@@ -391,11 +394,11 @@ static int mdss_dsi_phy_commit(struct dsi_phy_regs *phy_reg)
 	/* Lane enable */
 	write32(phy_reg->phy_cmn_dsi_lane_ctrl0, 0x1F);
 
-	mdss_dsi_phy_setup_lanephy(DSI_LANEID_0);
-	mdss_dsi_phy_setup_lanephy(DSI_LANEID_1);
-	mdss_dsi_phy_setup_lanephy(DSI_LANEID_2);
-	mdss_dsi_phy_setup_lanephy(DSI_LANEID_3);
-	mdss_dsi_phy_setup_lanephy(DSI_LANEID_CLK);
+	mdss_dsi_phy_setup_lanephy(phy_reg, DSI_LANEID_0);
+	mdss_dsi_phy_setup_lanephy(phy_reg, DSI_LANEID_1);
+	mdss_dsi_phy_setup_lanephy(phy_reg, DSI_LANEID_2);
+	mdss_dsi_phy_setup_lanephy(phy_reg, DSI_LANEID_3);
+	mdss_dsi_phy_setup_lanephy(phy_reg, DSI_LANEID_CLK);
 
 	return ret;
 }
@@ -409,13 +412,13 @@ static void mdss_dsi_phy_setup(struct dsi_phy_regs *phy_reg)
 	mdss_dsi_phy_commit(phy_reg);
 }
 
-static void dsi_phy_resync_fifo(void)
+static void dsi_phy_resync_fifo(struct dsi_phy_regs *phy_reg)
 {
 	/* Resync FIFO*/
 	write32(phy_reg->phy_cmn_rbuf_ctrl, 0x1);
 }
 
-static void dsi_phy_pll_global_clk_enable(bool enable)
+static void dsi_phy_pll_global_clk_enable(struct dsi_phy_regs *phy_reg, bool enable)
 {
 	uint32_t clk_cfg = read32(phy_reg->phy_cmn_clk_cfg1);
 	uint32_t clk_enable = 0;
@@ -431,9 +434,9 @@ static void dsi_phy_pll_global_clk_enable(bool enable)
 	write32(phy_reg->phy_cmn_clk_cfg1, clk_cfg);
 }
 
-static int dsi_phy_pll_lock_detect(void)
+static int dsi_phy_pll_lock_detect(struct dsi_phy_regs *phy_reg)
 {
-	int ret = CB_SUCCESS;
+	int ret = 0;
 
 	/* Enable PLL */
 	write32(phy_reg->phy_cmn_pll_ctrl, 0x1);
@@ -441,14 +444,14 @@ static int dsi_phy_pll_lock_detect(void)
 	/* Wait for Lock */
 	if (!wait_us(15000, read32(&phy_pll_qlink->pll_common_status_one) & 0x1)) {
 		/* timeout while polling the lock status */
-		ret = CB_ERR;
-		printk(BIOS_ERR, "dsi pll lock detect timedout, error.\n");
+		ret = -1;
+		printf("dsi pll lock detect timedout, error.\n");
 	}
 
 	return ret;
 }
 
-static void dsi_phy_toggle_dln3_tx_dctrl(void)
+static void dsi_phy_toggle_dln3_tx_dctrl(struct dsi_phy_regs *phy_reg)
 {
 	uint32_t reg_val = 0;
 
@@ -462,7 +465,7 @@ static void dsi_phy_toggle_dln3_tx_dctrl(void)
 	write32(phy_reg->phy_ln_regs[DSI_LANEID_3].dln0_tx_dctrl, 0x4);
 }
 
-static void dsi_phy_pll_set_source(void)
+static void dsi_phy_pll_set_source(struct dsi_phy_regs *phy_reg)
 {
 	uint32_t clk_cfg = read32(phy_reg->phy_cmn_clk_cfg1);
 	uint32_t dsi_clksel = 1;
@@ -533,7 +536,8 @@ static uint32_t dsi_phy_dsiclk_divider(struct dsi_phy_configtype *phy_cfg)
 }
 
 
-static unsigned long dsi_phy_calc_clk_divider(struct dsi_phy_configtype *phy_cfg)
+static unsigned long dsi_phy_calc_clk_divider(struct dsi_phy_regs *phy_reg,
+						struct dsi_phy_configtype *phy_cfg)
 {
 	bool div_found = false;
 	uint32_t div_ctrl = 0;
@@ -614,53 +618,54 @@ static void dsi_phy_pll_outputdiv_rate(struct dsi_phy_configtype *pll_cfg)
 	write32(&phy_pll_qlink->pll_outdiv_rate, reg_val);
 }
 
-static int dsi_phy_pll_calcandcommit(struct dsi_phy_configtype *phy_cfg)
+static int dsi_phy_pll_calcandcommit(struct dsi_phy_regs *phy_reg,
+					struct dsi_phy_configtype *phy_cfg)
 {
 	unsigned long vco_freq_hz;
-	int ret = CB_SUCCESS;
+	int ret = 0;
 
 	/* validate input parameters */
 	if (!phy_cfg) {
-		return CB_ERR;
+		return -1;
 	} else if ((phy_cfg->bits_per_pixel != 16) &&
 		   (phy_cfg->bits_per_pixel != 18) &&
 		   (phy_cfg->bits_per_pixel != 24)) {
 		/* Unsupported pixel bit depth */
-		return CB_ERR;
+		return -1;
 	} else if ((phy_cfg->num_data_lanes == 0) ||
 		   (phy_cfg->num_data_lanes > 4)) {
 		/* Illegal number of DSI data lanes */
-		return CB_ERR;
+		return -1;
 	}
 
-	vco_freq_hz = dsi_phy_calc_clk_divider(phy_cfg);
+	vco_freq_hz = dsi_phy_calc_clk_divider(phy_reg, phy_cfg);
 	if (!vco_freq_hz) {
 		/* bitclock too low  - unsupported */
-		printk(BIOS_ERR, "vco_freq_hz is 0, unsupported\n");
-		return CB_ERR;
+		printf("vco_freq_hz is 0, unsupported\n");
+		return -1;
 	}
 
 	/* Enable PLL bias */
 	dsi_phy_pll_bias_enable(true);
 
 	/* Set byte clk source */
-	dsi_phy_pll_set_source();
+	dsi_phy_pll_set_source(phy_cfg);
 
 	dsi_phy_pll_outputdiv_rate(phy_cfg);
 	dsi_phy_pll_vco_10nm_set_rate(vco_freq_hz);
-	dsi_phy_toggle_dln3_tx_dctrl();
+	dsi_phy_toggle_dln3_tx_dctrl(phy_reg);
 
 	/* Steps 6,7 Start PLL & Lock */
-	if (ret == CB_SUCCESS)
-		ret = dsi_phy_pll_lock_detect();
+	if (ret == 0)
+		ret = dsi_phy_pll_lock_detect(phy_reg);
 
 	/* Step 8 - Resync Data Paths */
-	if (ret == CB_SUCCESS) {
+	if (ret == 0) {
 		/* Global clock enable */
-		dsi_phy_pll_global_clk_enable(true);
+		dsi_phy_pll_global_clk_enable(phy_cfg, true);
 
 		/* Resync FIFOs */
-		dsi_phy_resync_fifo();
+		dsi_phy_resync_fifo(phy_reg);
 	}
 
 	return ret;
@@ -677,12 +682,13 @@ static uint32_t dsi_calc_desired_bitclk(struct edid *edid, uint32_t num_lines, u
 		desired_bclk = desired_bclk/(uint64_t)(num_lines);
 	}
 
-	printk(BIOS_INFO, "Desired bitclock: %uHz\n", (uint32_t)desired_bclk);
+	printf("Desired bitclock: %uHz\n", (uint32_t)desired_bclk);
 	return (uint32_t)desired_bclk;
 }
 
 static int mdss_dsi_phy_pll_setup(struct edid *edid,
-					  uint32_t num_of_lanes, uint32_t bpp)
+					struct dsi_phy_regs *phy_reg,
+					uint32_t num_of_lanes, uint32_t bpp)
 {
 	struct dsi_phy_configtype phy_cfg;
 	struct msm_dsi_phy_ctrl phy_timings;
@@ -698,7 +704,7 @@ static int mdss_dsi_phy_pll_setup(struct edid *edid,
 	/* desired DSI PLL bit clk freq in Hz */
 	phy_cfg.desired_bitclk_freq = dsi_calc_desired_bitclk(edid, num_of_lanes, bpp);
 
-	ret = dsi_phy_pll_calcandcommit(&phy_cfg);
+	ret = dsi_phy_pll_calcandcommit(phy_reg, &phy_cfg);
 	if (ret)
 		return ret;
 	mdss_dsi_calculate_phy_timings(&phy_timings, &phy_cfg);
@@ -707,14 +713,16 @@ static int mdss_dsi_phy_pll_setup(struct edid *edid,
 	return ret;
 }
 
-int mdss_dsi_phy_10nm_init(struct edid *edid, uint32_t num_of_lanes, uint32_t bpp)
+int mdss_dsi_phy_10nm_init(struct edid *edid, struct dsi_phy_regs *phy_reg,
+			   uint32_t num_of_lanes, uint32_t bpp)
 {
 	int ret;
 
 	/* Phy set up */
 	mdss_dsi_phy_setup();
-	ret = mdss_dsi_phy_pll_setup(edid, num_of_lanes, bpp);
+	ret = mdss_dsi_phy_pll_setup(edid, phy_reg, num_of_lanes, bpp);
 	enable_dsi_clk(); // TODO: call clk framework api
 
 	return ret;
 }
+#endif
