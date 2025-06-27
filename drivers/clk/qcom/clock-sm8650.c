@@ -117,6 +117,7 @@ static ulong sm8650_set_rate(struct clk *clk, ulong rate)
 
 static const struct gate_clk sm8650_clks[] = {
 	GATE_CLK(GCC_AGGRE_NOC_PCIE_AXI_CLK,		0x52000, BIT(12)),
+	GATE_CLK(GCC_DISP_HF_AXI_CLK,			0x2700c, BIT(0)),
 	GATE_CLK(GCC_AGGRE_UFS_PHY_AXI_CLK,		0x770e4, BIT(0)),
 	GATE_CLK(GCC_AGGRE_UFS_PHY_AXI_HW_CTL_CLK,	0x770e4, BIT(1)),
 	GATE_CLK(GCC_AGGRE_USB3_PRIM_AXI_CLK,		0x3908c, BIT(0)),
