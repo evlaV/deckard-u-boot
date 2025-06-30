@@ -4,25 +4,16 @@
  * Copyright (c) 2023, Linaro Ltd.
  */
 
-#include <linux/clk-provider.h>
-#include <linux/err.h>
-#include <linux/kernel.h>
-#include <linux/mod_devicetable.h>
-#include <linux/module.h>
-#include <linux/platform_device.h>
-#include <linux/regmap.h>
+#include <clk-uclass.h>
+#include <dm.h>
+#include <linux/delay.h>
+#include <errno.h>
+#include <asm/io.h>
+#include <linux/bug.h>
+#include <linux/bitops.h>
+#include <dt-bindings/clock/qcom,sm8650-dispcc.h>
 
-#include <dt-bindings/clock/qcom,sm8550-dispcc.h>
-
-#include "clk-alpha-pll.h"
-#include "clk-branch.h"
-#include "clk-pll.h"
-#include "clk-rcg.h"
-#include "clk-regmap.h"
-#include "clk-regmap-divider.h"
-#include "clk-regmap-mux.h"
-#include "reset.h"
-#include "gdsc.h"
+#include "clock-qcom.h"
 
 /* Need to match the order of clocks in DT binding */
 enum {
@@ -51,6 +42,7 @@ enum {
 	P_SLEEP_CLK,
 };
 
+#if 0
 static struct pll_vco lucid_ole_vco[] = {
 	{ 249600000, 2000000000, 0 },
 };
@@ -81,7 +73,7 @@ static struct clk_alpha_pll disp_cc_pll0 = {
 				.index = DT_BI_TCXO,
 			},
 			.num_parents = 1,
-			.ops = &clk_alpha_pll_reset_lucid_ole_ops,
+			.ops = &clk_alpha_pll_reset_lucid_ole_ops,  /* is clk_alpha_pll_reset_lucid_evo_ops actually */
 		},
 	},
 };
@@ -257,29 +249,10 @@ static const struct freq_tbl ftbl_disp_cc_mdss_ahb_clk_src[] = {
 	F(19200000, P_BI_TCXO, 1, 0, 0),
 	F(37500000, P_DISP_CC_PLL1_OUT_MAIN, 16, 0, 0),
 	F(75000000, P_DISP_CC_PLL1_OUT_MAIN, 8, 0, 0),
-	{ }
+	{ },
 };
 
-static struct clk_rcg2 disp_cc_mdss_ahb_clk_src = {
-	.cmd_rcgr = 0x82e8,
-	.mnd_width = 0,
-	.hid_width = 5,
-	.parent_map = disp_cc_parent_map_6,
-	.freq_tbl = ftbl_disp_cc_mdss_ahb_clk_src,
-	.clkr.hw.init = &(const struct clk_init_data) {
-		.name = "disp_cc_mdss_ahb_clk_src",
-		.parent_data = disp_cc_parent_data_6,
-		.num_parents = ARRAY_SIZE(disp_cc_parent_data_6),
-		.flags = CLK_SET_RATE_PARENT,
-		.ops = &clk_rcg2_shared_ops,
-	},
-};
-
-static const struct freq_tbl ftbl_disp_cc_mdss_byte0_clk_src[] = {
-	F(19200000, P_BI_TCXO, 1, 0, 0),
-	{ }
-};
-
+/* there is only 1 entry in ftbl_disp_cc_mdss_byte0_clk_src, why need 4 entry in disp_cc_parent_map_2 */
 static struct clk_rcg2 disp_cc_mdss_byte0_clk_src = {
 	.cmd_rcgr = 0x8108,
 	.mnd_width = 0,
@@ -338,20 +311,6 @@ static struct clk_rcg2 disp_cc_mdss_esc1_clk_src = {
 		.flags = CLK_SET_RATE_PARENT,
 		.ops = &clk_rcg2_shared_ops,
 	},
-};
-
-static const struct freq_tbl ftbl_disp_cc_mdss_mdp_clk_src[] = {
-	F(19200000, P_BI_TCXO, 1, 0, 0),
-	F(85714286, P_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
-	F(100000000, P_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
-	F(150000000, P_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
-	F(172000000, P_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
-	F(200000000, P_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
-	F(325000000, P_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
-	F(375000000, P_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
-	F(514000000, P_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
-	F(690000000, P_DISP_CC_PLL0_OUT_MAIN, 2, 0, 0),
-	{ }
 };
 
 static const struct freq_tbl ftbl_disp_cc_mdss_mdp_clk_src_sar2130p[] = {
@@ -496,60 +455,6 @@ static struct clk_regmap_div disp_cc_mdss_byte1_div_clk_src = {
 	},
 };
 
-static struct clk_branch disp_cc_mdss_accu_clk = {
-	.halt_reg = 0xe058,
-	.halt_check = BRANCH_HALT_VOTED,
-	.clkr = {
-		.enable_reg = 0xe058,
-		.enable_mask = BIT(0),
-		.hw.init = &(const struct clk_init_data) {
-			.name = "disp_cc_mdss_accu_clk",
-			.parent_hws = (const struct clk_hw*[]) {
-				&disp_cc_xo_clk_src.clkr.hw,
-			},
-			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
-			.ops = &clk_branch2_ops,
-		},
-	},
-};
-
-static struct clk_branch disp_cc_mdss_ahb1_clk = {
-	.halt_reg = 0xa020,
-	.halt_check = BRANCH_HALT,
-	.clkr = {
-		.enable_reg = 0xa020,
-		.enable_mask = BIT(0),
-		.hw.init = &(const struct clk_init_data) {
-			.name = "disp_cc_mdss_ahb1_clk",
-			.parent_hws = (const struct clk_hw*[]) {
-				&disp_cc_mdss_ahb_clk_src.clkr.hw,
-			},
-			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
-			.ops = &clk_branch2_ops,
-		},
-	},
-};
-
-static struct clk_branch disp_cc_mdss_ahb_clk = {
-	.halt_reg = 0x80a4,
-	.halt_check = BRANCH_HALT,
-	.clkr = {
-		.enable_reg = 0x80a4,
-		.enable_mask = BIT(0),
-		.hw.init = &(const struct clk_init_data) {
-			.name = "disp_cc_mdss_ahb_clk",
-			.parent_hws = (const struct clk_hw*[]) {
-				&disp_cc_mdss_ahb_clk_src.clkr.hw,
-			},
-			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
-			.ops = &clk_branch2_ops,
-		},
-	},
-};
-
 static struct clk_branch disp_cc_mdss_byte0_clk = {
 	.halt_reg = 0x8028,
 	.halt_check = BRANCH_HALT,
@@ -560,24 +465,6 @@ static struct clk_branch disp_cc_mdss_byte0_clk = {
 			.name = "disp_cc_mdss_byte0_clk",
 			.parent_hws = (const struct clk_hw*[]) {
 				&disp_cc_mdss_byte0_clk_src.clkr.hw,
-			},
-			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
-			.ops = &clk_branch2_ops,
-		},
-	},
-};
-
-static struct clk_branch disp_cc_mdss_byte0_intf_clk = {
-	.halt_reg = 0x802c,
-	.halt_check = BRANCH_HALT,
-	.clkr = {
-		.enable_reg = 0x802c,
-		.enable_mask = BIT(0),
-		.hw.init = &(const struct clk_init_data) {
-			.name = "disp_cc_mdss_byte0_intf_clk",
-			.parent_hws = (const struct clk_hw*[]) {
-				&disp_cc_mdss_byte0_div_clk_src.clkr.hw,
 			},
 			.num_parents = 1,
 			.flags = CLK_SET_RATE_PARENT,
@@ -658,24 +545,6 @@ static struct clk_branch disp_cc_mdss_esc1_clk = {
 	},
 };
 
-static struct clk_branch disp_cc_mdss_mdp1_clk = {
-	.halt_reg = 0xa004,
-	.halt_check = BRANCH_HALT,
-	.clkr = {
-		.enable_reg = 0xa004,
-		.enable_mask = BIT(0),
-		.hw.init = &(const struct clk_init_data) {
-			.name = "disp_cc_mdss_mdp1_clk",
-			.parent_hws = (const struct clk_hw*[]) {
-				&disp_cc_mdss_mdp_clk_src.clkr.hw,
-			},
-			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
-			.ops = &clk_branch2_ops,
-		},
-	},
-};
-
 static struct clk_branch disp_cc_mdss_mdp_clk = {
 	.halt_reg = 0x800c,
 	.halt_check = BRANCH_HALT,
@@ -684,24 +553,6 @@ static struct clk_branch disp_cc_mdss_mdp_clk = {
 		.enable_mask = BIT(0),
 		.hw.init = &(const struct clk_init_data) {
 			.name = "disp_cc_mdss_mdp_clk",
-			.parent_hws = (const struct clk_hw*[]) {
-				&disp_cc_mdss_mdp_clk_src.clkr.hw,
-			},
-			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
-			.ops = &clk_branch2_ops,
-		},
-	},
-};
-
-static struct clk_branch disp_cc_mdss_mdp_lut1_clk = {
-	.halt_reg = 0xa010,
-	.halt_check = BRANCH_HALT,
-	.clkr = {
-		.enable_reg = 0xa010,
-		.enable_mask = BIT(0),
-		.hw.init = &(const struct clk_init_data) {
-			.name = "disp_cc_mdss_mdp_lut1_clk",
 			.parent_hws = (const struct clk_hw*[]) {
 				&disp_cc_mdss_mdp_clk_src.clkr.hw,
 			},
@@ -722,24 +573,6 @@ static struct clk_branch disp_cc_mdss_mdp_lut_clk = {
 			.name = "disp_cc_mdss_mdp_lut_clk",
 			.parent_hws = (const struct clk_hw*[]) {
 				&disp_cc_mdss_mdp_clk_src.clkr.hw,
-			},
-			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
-			.ops = &clk_branch2_ops,
-		},
-	},
-};
-
-static struct clk_branch disp_cc_mdss_non_gdsc_ahb_clk = {
-	.halt_reg = 0xc004,
-	.halt_check = BRANCH_HALT_VOTED,
-	.clkr = {
-		.enable_reg = 0xc004,
-		.enable_mask = BIT(0),
-		.hw.init = &(const struct clk_init_data) {
-			.name = "disp_cc_mdss_non_gdsc_ahb_clk",
-			.parent_hws = (const struct clk_hw*[]) {
-				&disp_cc_mdss_ahb_clk_src.clkr.hw,
 			},
 			.num_parents = 1,
 			.flags = CLK_SET_RATE_PARENT,
@@ -784,60 +617,6 @@ static struct clk_branch disp_cc_mdss_pclk1_clk = {
 	},
 };
 
-static struct clk_branch disp_cc_mdss_rscc_ahb_clk = {
-	.halt_reg = 0xc00c,
-	.halt_check = BRANCH_HALT,
-	.clkr = {
-		.enable_reg = 0xc00c,
-		.enable_mask = BIT(0),
-		.hw.init = &(const struct clk_init_data) {
-			.name = "disp_cc_mdss_rscc_ahb_clk",
-			.parent_hws = (const struct clk_hw*[]) {
-				&disp_cc_mdss_ahb_clk_src.clkr.hw,
-			},
-			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
-			.ops = &clk_branch2_ops,
-		},
-	},
-};
-
-static struct clk_branch disp_cc_mdss_rscc_vsync_clk = {
-	.halt_reg = 0xc008,
-	.halt_check = BRANCH_HALT,
-	.clkr = {
-		.enable_reg = 0xc008,
-		.enable_mask = BIT(0),
-		.hw.init = &(const struct clk_init_data) {
-			.name = "disp_cc_mdss_rscc_vsync_clk",
-			.parent_hws = (const struct clk_hw*[]) {
-				&disp_cc_mdss_vsync_clk_src.clkr.hw,
-			},
-			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
-			.ops = &clk_branch2_ops,
-		},
-	},
-};
-
-static struct clk_branch disp_cc_mdss_vsync1_clk = {
-	.halt_reg = 0xa01c,
-	.halt_check = BRANCH_HALT,
-	.clkr = {
-		.enable_reg = 0xa01c,
-		.enable_mask = BIT(0),
-		.hw.init = &(const struct clk_init_data) {
-			.name = "disp_cc_mdss_vsync1_clk",
-			.parent_hws = (const struct clk_hw*[]) {
-				&disp_cc_mdss_vsync_clk_src.clkr.hw,
-			},
-			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
-			.ops = &clk_branch2_ops,
-		},
-	},
-};
-
 static struct clk_branch disp_cc_mdss_vsync_clk = {
 	.halt_reg = 0x8024,
 	.halt_check = BRANCH_HALT,
@@ -874,72 +653,32 @@ static struct clk_branch disp_cc_sleep_clk = {
 	},
 };
 
-static struct gdsc mdss_gdsc = {
-	.gdscr = 0x9000,
-	.pd = {
-		.name = "mdss_gdsc",
-	},
-	.pwrsts = PWRSTS_OFF_ON,
-	.flags = POLL_CFG_GDSCR | HW_CTRL | RETAIN_FF_ENABLE,
-};
-
-static struct gdsc mdss_int2_gdsc = {
-	.gdscr = 0xb000,
-	.pd = {
-		.name = "mdss_int2_gdsc",
-	},
-	.pwrsts = PWRSTS_OFF_ON,
-	.flags = POLL_CFG_GDSCR | HW_CTRL | RETAIN_FF_ENABLE,
-};
-
 static struct clk_regmap *disp_cc_sm8550_clocks[] = {
-	[DISP_CC_MDSS_ACCU_CLK] = &disp_cc_mdss_accu_clk.clkr,
-	[DISP_CC_MDSS_AHB1_CLK] = &disp_cc_mdss_ahb1_clk.clkr,
-	[DISP_CC_MDSS_AHB_CLK] = &disp_cc_mdss_ahb_clk.clkr,
-	[DISP_CC_MDSS_AHB_CLK_SRC] = &disp_cc_mdss_ahb_clk_src.clkr,
-	[DISP_CC_MDSS_BYTE0_CLK] = &disp_cc_mdss_byte0_clk.clkr,
-	[DISP_CC_MDSS_BYTE0_CLK_SRC] = &disp_cc_mdss_byte0_clk_src.clkr,
-	[DISP_CC_MDSS_BYTE0_DIV_CLK_SRC] = &disp_cc_mdss_byte0_div_clk_src.clkr,
-	[DISP_CC_MDSS_BYTE0_INTF_CLK] = &disp_cc_mdss_byte0_intf_clk.clkr,
-	[DISP_CC_MDSS_BYTE1_CLK] = &disp_cc_mdss_byte1_clk.clkr,
-	[DISP_CC_MDSS_BYTE1_CLK_SRC] = &disp_cc_mdss_byte1_clk_src.clkr,
+y	[DISP_CC_MDSS_BYTE0_CLK _SRC] = &disp_cc_mdss_byte0_clk_src.clkr,
+
+y	[DISP_CC_MDSS_BYTE0_INTF_CLK] = &disp_cc_mdss_byte0_intf_clk.clkr, <-disp_cc_mdss_byte0_div_clk_src:DISP_CC_MDSS_BYTE0_DIV_CLK_SRC
+y	[DISP_CC_MDSS_BYTE1_CLK] = &disp_cc_mdss_byte1_clk.clkr, <- disp_cc_mdss_byte1_clk_src
+y	[DISP_CC_MDSS_BYTE1_CLK _SRC] = &disp_cc_mdss_byte1_clk_src.clkr,
 	[DISP_CC_MDSS_BYTE1_DIV_CLK_SRC] = &disp_cc_mdss_byte1_div_clk_src.clkr,
-	[DISP_CC_MDSS_BYTE1_INTF_CLK] = &disp_cc_mdss_byte1_intf_clk.clkr,
-	[DISP_CC_MDSS_ESC0_CLK] = &disp_cc_mdss_esc0_clk.clkr,
+y	[DISP_CC_MDSS_BYTE1_INTF_CLK] = &disp_cc_mdss_byte1_intf_clk.clkr, <-disp_cc_mdss_byte1_div_clk_src:DISP_CC_MDSS_BYTE1_DIV_CLK_SRC
+y	[DISP_CC_MDSS_ESC0_CLK] = &disp_cc_mdss_esc0_clk.clkr, <=disp_cc_mdss_esc0_clk_src
 	[DISP_CC_MDSS_ESC0_CLK_SRC] = &disp_cc_mdss_esc0_clk_src.clkr,
-	[DISP_CC_MDSS_ESC1_CLK] = &disp_cc_mdss_esc1_clk.clkr,
+y	[DISP_CC_MDSS_ESC1_CLK] = &disp_cc_mdss_esc1_clk.clkr, <-disp_cc_mdss_esc1_clk_src
 	[DISP_CC_MDSS_ESC1_CLK_SRC] = &disp_cc_mdss_esc1_clk_src.clkr,
-	[DISP_CC_MDSS_MDP1_CLK] = &disp_cc_mdss_mdp1_clk.clkr,
-	[DISP_CC_MDSS_MDP_CLK] = &disp_cc_mdss_mdp_clk.clkr,
+y	[DISP_CC_MDSS_MDP_CLK] = &disp_cc_mdss_mdp_clk.clkr, <= disp_cc_mdss_mdp_clk_src
 	[DISP_CC_MDSS_MDP_CLK_SRC] = &disp_cc_mdss_mdp_clk_src.clkr,
-	[DISP_CC_MDSS_MDP_LUT1_CLK] = &disp_cc_mdss_mdp_lut1_clk.clkr,
-	[DISP_CC_MDSS_MDP_LUT_CLK] = &disp_cc_mdss_mdp_lut_clk.clkr,
-	[DISP_CC_MDSS_NON_GDSC_AHB_CLK] = &disp_cc_mdss_non_gdsc_ahb_clk.clkr,
-	[DISP_CC_MDSS_PCLK0_CLK] = &disp_cc_mdss_pclk0_clk.clkr,
-	[DISP_CC_MDSS_PCLK0_CLK_SRC] = &disp_cc_mdss_pclk0_clk_src.clkr,
-	[DISP_CC_MDSS_PCLK1_CLK] = &disp_cc_mdss_pclk1_clk.clkr,
-	[DISP_CC_MDSS_PCLK1_CLK_SRC] = &disp_cc_mdss_pclk1_clk_src.clkr,
-	[DISP_CC_MDSS_RSCC_AHB_CLK] = &disp_cc_mdss_rscc_ahb_clk.clkr,
-	[DISP_CC_MDSS_RSCC_VSYNC_CLK] = &disp_cc_mdss_rscc_vsync_clk.clkr,
-	[DISP_CC_MDSS_VSYNC1_CLK] = &disp_cc_mdss_vsync1_clk.clkr,
-	[DISP_CC_MDSS_VSYNC_CLK] = &disp_cc_mdss_vsync_clk.clkr,
+y	[DISP_CC_MDSS_MDP_LUT_CLK] = &disp_cc_mdss_mdp_lut_clk.clkr, <= disp_cc_mdss_mdp_clk_src
+y	[DISP_CC_MDSS_PCLK0_CLK] = &disp_cc_mdss_pclk0_clk.clkr, <= disp_cc_mdss_pclk0_clk_src
+y	[DISP_CC_MDSS_PCLK0_CLK_SRC] = &disp_cc_mdss_pclk0_clk_src.clkr,
+y	[DISP_CC_MDSS_PCLK1_CLK] = &disp_cc_mdss_pclk1_clk.clkr, <= disp_cc_mdss_pclk1_clk_src
+y	[DISP_CC_MDSS_PCLK1_CLK_SRC] = &disp_cc_mdss_pclk1_clk_src.clkr,
+y	[DISP_CC_MDSS_VSYNC_CLK] = &disp_cc_mdss_vsync_clk.clkr, <= disp_cc_mdss_vsync_clk_src
 	[DISP_CC_MDSS_VSYNC_CLK_SRC] = &disp_cc_mdss_vsync_clk_src.clkr,
-	[DISP_CC_PLL0] = &disp_cc_pll0.clkr,
-	[DISP_CC_PLL1] = &disp_cc_pll1.clkr,
-	[DISP_CC_SLEEP_CLK] = &disp_cc_sleep_clk.clkr,
-	[DISP_CC_SLEEP_CLK_SRC] = &disp_cc_sleep_clk_src.clkr,
-	[DISP_CC_XO_CLK_SRC] = &disp_cc_xo_clk_src.clkr,
-};
-
-static const struct qcom_reset_map disp_cc_sm8550_resets[] = {
-	[DISP_CC_MDSS_CORE_BCR] = { 0x8000 },
-	[DISP_CC_MDSS_CORE_INT2_BCR] = { 0xa000 },
-	[DISP_CC_MDSS_RSCC_BCR] = { 0xc000 },
-};
-
-static struct gdsc *disp_cc_sm8550_gdscs[] = {
-	[MDSS_GDSC] = &mdss_gdsc,
-	[MDSS_INT2_GDSC] = &mdss_int2_gdsc,
+	[DISP_CC_PLL0] = &disp_cc_pll0.clkr, <= DT_BI_TCXO /* it is needed by disp_cc_mdss_mdp_clk@0x800c */
+	[DISP_CC_PLL1] = &disp_cc_pll1.clkr, <= DT_BI_TCXO
+	[DISP_CC_SLEEP_CLK] = &disp_cc_sleep_clk.clkr, /* not used */
+	[DISP_CC_SLEEP_CLK_SRC] = &disp_cc_sleep_clk_src.clkr, /* not used */
+	[DISP_CC_XO_CLK_SRC] = &disp_cc_xo_clk_src.clkr, /* not used */
 };
 
 static const struct regmap_config disp_cc_sm8550_regmap_config = {
@@ -949,85 +688,164 @@ static const struct regmap_config disp_cc_sm8550_regmap_config = {
 	.max_register = 0x11008,
 	.fast_io = true,
 };
+#endif
 
-static const struct qcom_cc_desc disp_cc_sm8550_desc = {
-	.config = &disp_cc_sm8550_regmap_config,
-	.clks = disp_cc_sm8550_clocks,
-	.num_clks = ARRAY_SIZE(disp_cc_sm8550_clocks),
-	.resets = disp_cc_sm8550_resets,
-	.num_resets = ARRAY_SIZE(disp_cc_sm8550_resets),
-	.gdscs = disp_cc_sm8550_gdscs,
-	.num_gdscs = ARRAY_SIZE(disp_cc_sm8550_gdscs),
+/* We need to look up the cfg val from parent_map with the src index from
+ * freq table in Linux to merge the 2 tables into CFG_xx in 1 table in u-boot */
+#define CFG_BI_TCXO			(0 << 8)
+#define CFG_DISP_CC_PLL1_OUT_MAIN	(4 << 8)
+static const struct freq_tbl ftbl_disp_cc_mdss_ahb_clk_src[] = {
+	F(19200000, CFG_BI_TCXO, 1, 0, 0),
+	F(37500000, CFG_DISP_CC_PLL1_OUT_MAIN, 16, 0, 0),
+	F(75000000, CFG_DISP_CC_PLL1_OUT_MAIN, 8, 0, 0),
+	{ }
 };
 
-static int disp_cc_sm8550_clk_enable(struct clk *clk)
+/* hard code per dual-dsi case */
+#define CFG_DSI0_PHY_PLL_OUT_BYTECLK (2 << 8)
+#define CFG_DSI1_PHY_PLL_OUT_BYTECLK (4 << 8)
+static const struct freq_tbl ftbl_disp_cc_mdss_byte0_clk_src[] = {
+//	F(19200000, P_BI_TCXO, 1, 0, 0),
+	F(121574874,  CFG_DSI0_PHY_PLL_OUT_BYTECLK, 1, 0, 0),
+//	{ P_DSI1_PHY_PLL_OUT_DSICLK, 1 },
+//	{ P_DSI1_PHY_PLL_OUT_BYTECLK, 1 },
+	{ }
+};
+
+#define CFG_DISP_CC_PLL0_OUT_MAIN (1 << 8)
+static const struct freq_tbl ftbl_disp_cc_mdss_mdp_clk_src[] = {
+	F(19200000, CFG_BI_TCXO, 1, 0, 0),
+	F(85714286, CFG_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
+	F(100000000, CFG_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
+	F(150000000, CFG_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
+	F(172000000, CFG_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
+	F(200000000, CFG_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
+	F(325000000, CFG_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
+	F(375000000, CFG_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
+	F(514000000, CFG_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
+	F(690000000, CFG_DISP_CC_PLL0_OUT_MAIN, 2, 0, 0),
+	{ }
+};
+
+static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 {
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
+	const struct freq_tbl *freq;
+
+	switch (clk->id) {
+	case DISP_CC_MDSS_AHB_CLK:
+		freq = qcom_find_freq(ftbl_disp_cc_mdss_ahb_clk_src, rate);
+		clk_rcg_set_rate(priv->base, 0x82e8, freq->pre_div, freq->src);
+		return freq->freq;
+
+	case DISP_CC_MDSS_BYTE0_INTF_CLK:
+		/* Assume the divider is 1 in parent disp_cc_mdss_byte0_div_clk_src:
+		 * .reg = 0x8120, .shift = 0, .width = 4 with test. Due to DSC ?
+		 * So we just fall thru into the grand parent disp_cc_mdss_byte0_clk_src
+		 * at 0x8108 */
+	case DISP_CC_MDSS_BYTE0_CLK:
+		/* There is only 1 entry in ftbl_disp_cc_mdss_byte0_clk_src, why
+		 * parent is dsi0_phy_pll_out_byteclk with rate 121574874 in
+		 * kernel test, but re-parent can link it to dsi phy. We just
+		 * hard coding the re-parent.
+		 */
+		freq = qcom_find_freq(ftbl_disp_cc_mdss_byte0_clk_src, 121574874);
+		clk_rcg_set_rate(priv->base, 0x8108, freq->pre_div, freq->src);
+		return freq->freq;
+
+	case DISP_CC_MDSS_BYTE1_INTF_CLK:
+		/* Assume the divider is 1 in parent disp_cc_mdss_byte1_div_clk_src:
+		 * .reg = 0x813c, .shift = 0, .width = 4 with test. Due to DSC ?
+		 * So we just fall thru into the grand parent disp_cc_mdss_byte1_clk_src
+		 * at 0x8124 */
+	case DISP_CC_MDSS_BYTE1_CLK:
+		/* Assume the divider is 1 in parent disp_cc_mdss_byte1_clk_src:
+		 * .cmd_rcgr = 0x8124, .mnd_width = 0, .hid_width = 5,
+		 *  Due to DSC ?
+		 * kernel test, but re-parent can link it to dsi phy. We just
+		 * hard coding the re-parent.
+		 */
+		freq = qcom_find_freq(ftbl_disp_cc_mdss_byte0_clk_src, 121574874);
+		clk_rcg_set_rate(priv->base, 0x8124, freq->pre_div, freq->src);
+		return freq->freq;
+
+	case DISP_CC_MDSS_MDP_CLK:
+		freq = qcom_find_freq(ftbl_disp_cc_mdss_mdp_clk_src, rate);
+		/* Per test, it is 514000000 and grand parent disp_cc_pll0 rate should
+		 * be 1542000000 */
+		clk_rcg_set_rate(priv->base, 0x80d8, freq->pre_div, freq->src);
+		return freq->freq;
+
+	default:
+		return 0;
+	}
+}
+
+static int sm8650_disp_cc_enable(struct clk *clk)
+{
+	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
+
+/*
+	switch (clk->id) {
+	case GCC_AGGRE_USB3_PRIM_AXI_CLK:
+		qcom_gate_clk_en(priv, GCC_USB30_PRIM_MASTER_CLK);
+		fallthrough;
+	case GCC_USB30_PRIM_MASTER_CLK:
+		qcom_gate_clk_en(priv, GCC_USB3_PRIM_PHY_AUX_CLK);
+		qcom_gate_clk_en(priv, GCC_USB3_PRIM_PHY_COM_AUX_CLK);
+		break;
+	}
+*/
 
 	qcom_gate_clk_en(priv, clk->id);
 
 	return 0;
 }
 
-static ulong disp_cc_sm8550_clk_get_rate(struct clk *clk)
-{
-	return TCXO_RATE;
-}
+static const struct gate_clk sm8650_disp_clks[] = {
+	GATE_CLK(DISP_CC_MDSS_AHB_CLK,		0x80a4, BIT(0)),
+	GATE_CLK(DISP_CC_MDSS_BYTE0_CLK,	0x8028, BIT(0)),
+	GATE_CLK(DISP_CC_MDSS_BYTE0_INTF_CLK,	0x802c, BIT(0)),
+	GATE_CLK(DISP_CC_MDSS_BYTE1_CLK,	0x8030, BIT(0)),
+	GATE_CLK(DISP_CC_MDSS_BYTE1_INTF_CLK,	0x8034, BIT(0)),
 
-static int disp_cc_sm8550_probe(struct platform_device *pdev)
-{
-	struct regmap *regmap;
-	int ret;
+	GATE_CLK(DISP_CC_MDSS_MDP_CLK,		0x800c, BIT(0)),
+};
 
-	regmap = qcom_cc_map(pdev, &disp_cc_sm8550_desc);
-	if (IS_ERR(regmap)) {
-		ret = PTR_ERR(regmap);
-		goto err_put_rpm;
-	}
+static const struct qcom_reset_map disp_cc_sm8550_resets[] = {
+	[DISP_CC_MDSS_CORE_BCR] = { 0x8000 },
+	[DISP_CC_MDSS_CORE_INT2_BCR] = { 0xa000 },
+	[DISP_CC_MDSS_RSCC_BCR] = { 0xc000 },
+};
 
-	if (of_device_is_compatible(pdev->dev.of_node, "qcom,sm8650-dispcc")) {
-		lucid_ole_vco[0].max_freq = 2100000000;
-		disp_cc_mdss_mdp_clk_src.freq_tbl = ftbl_disp_cc_mdss_mdp_clk_src_sm8650;
-	}
+static const struct qcom_power_map sm8650_disp_gdscs[] = {
+	[MDSS_GDSC] = { 0x9000 },
+	[MDSS_INT2_GDSC] = { 0xb000 },
+};
 
-	clk_lucid_ole_pll_configure(&disp_cc_pll0, regmap, &disp_cc_pll0_config);
-	clk_lucid_ole_pll_configure(&disp_cc_pll1, regmap, &disp_cc_pll1_config);
+static struct msm_clk_data sm8650_disp_cc_data = {
+	.resets = disp_cc_sm8550_resets,
+	.num_resets = ARRAY_SIZE(disp_cc_sm8550_resets),
+	.clks = sm8650_disp_clks,
+	.num_clks = ARRAY_SIZE(sm8650_disp_clks),
+	.power_domains = sm8650_disp_gdscs,
+	.num_power_domains = ARRAY_SIZE(sm8650_disp_gdscs),
 
-	/* Enable clock gating for MDP clocks */
-	regmap_update_bits(regmap, DISP_CC_MISC_CMD, 0x10, 0x10);
-
-	/* Keep some clocks always-on */
-	qcom_branch_set_clk_en(regmap, 0xe054); /* DISP_CC_XO_CLK */
-
-	ret = qcom_cc_really_probe(&pdev->dev, &disp_cc_sm8550_desc, regmap);
-	if (ret)
-		goto err_put_rpm;
-
-	return 0;
-
-err_put_rpm:
-	return ret;
-}
-
-static struct clk_ops disp_cc_sm8550_clk_ops = {
-	.enable = disp_cc_sm8550_clk_enable,
-	.get_rate = disp_cc_sm8550_clk_get_rate,
+	.enable = sm8650_disp_cc_enable,
+	.set_rate = sm8650_disp_cc_set_rate,
 };
 
 static const struct udevice_id disp_cc_sm8550_of_match[] = {
-	{ .compatible = "qcom,sm8550-dispcc" },
-	{ .compatible = "qcom,sm8650-dispcc" },
+	{	.compatible = "qcom,sm8650-dispcc",
+		.data = (ulong)&sm8650_disp_cc_data,
+	},
 	{ }
 };
-MODULE_DEVICE_TABLE(of, disp_cc_sm8550_match_table);
-
 
 U_BOOT_DRIVER(disp_cc_sm8550) = {
 	.name		= "disp_cc-sm8550",
-	.id		= UCLASS_CLK,
+	.id		= UCLASS_NOP,
 	.of_match	= disp_cc_sm8550_of_match,
-	.ops		= &disp_cc_sm8550_clk_ops,
-	.priv_auto	= sizeof(struct msm_clk_priv),
-	.probe		= disp_cc_sm8550_clk_probe,
+	.bind		= qcom_cc_bind,
 	.flags		= DM_FLAG_PRE_RELOC | DM_FLAG_DEFAULT_PD_CTRL_OFF,
 };
