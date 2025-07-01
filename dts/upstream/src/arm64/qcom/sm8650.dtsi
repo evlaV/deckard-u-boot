@@ -3650,7 +3650,6 @@
 
 			interrupts = <GIC_SPI 83 IRQ_TYPE_LEVEL_HIGH>;
 
-/*
 			clocks = <&dispcc DISP_CC_MDSS_AHB_CLK>,
 				 <&gcc GCC_DISP_HF_AXI_CLK>,
 				 <&dispcc DISP_CC_MDSS_MDP_CLK>;
@@ -3664,7 +3663,6 @@
 			power-domains = <&dispcc MDSS_GDSC>;
 
 			iommus = <&apps_smmu 0x1c00 0x2>;
-*/
 
 			interrupt-controller;
 			#interrupt-cells = <1>;
@@ -3684,7 +3682,6 @@
 
 				interrupts-extended = <&mdss 0>;
 
-/*
 				clocks = <&gcc GCC_DISP_HF_AXI_CLK>,
 					 <&dispcc DISP_CC_MDSS_AHB_CLK>,
 					 <&dispcc DISP_CC_MDSS_MDP_LUT_CLK>,
@@ -3698,7 +3695,6 @@
 
 				assigned-clocks = <&dispcc DISP_CC_MDSS_VSYNC_CLK>;
 				assigned-clock-rates = <19200000>;
-*/
 
 				operating-points-v2 = <&mdp_opp_table>;
 
