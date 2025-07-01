@@ -641,6 +641,7 @@ static int video_post_probe(struct udevice *dev)
 	struct udevice *cons;
 	int ret;
 
+printf("================%s enter\n", __func__);
 	/* Set up the line and display size */
 	priv->fb = map_sysmem(plat->base, plat->size);
 	if (!priv->line_length)
@@ -668,6 +669,7 @@ static int video_post_probe(struct udevice *dev)
 		ho->bpix = priv->bpix;
 		ho->format = priv->format;
 	}
+printf("================%s line %d\n", __func__, __LINE__);
 
 	if (IS_ENABLED(CONFIG_VIDEO_COPY) && plat->copy_base)
 		priv->copy_fb = map_sysmem(plat->copy_base, plat->size);
@@ -705,6 +707,7 @@ static int video_post_probe(struct udevice *dev)
 	str = strdup(name);
 	if (!str)
 		return -ENOMEM;
+printf("================%s line %d\n", __func__, __LINE__);
 	if (priv->vidconsole_drv_name)
 		drv_name = priv->vidconsole_drv_name;
 	ret = device_bind_driver(dev, drv_name, str, &cons);
@@ -713,12 +716,14 @@ static int video_post_probe(struct udevice *dev)
 		return ret;
 	}
 
+printf("================%s line %d\n", __func__, __LINE__);
 	ret = device_probe(cons);
 	if (ret) {
 		debug("%s: Cannot probe console driver\n", __func__);
 		return ret;
 	}
 
+printf("================%s line %d\n", __func__, __LINE__);
 	if (CONFIG_IS_ENABLED(VIDEO_LOGO) &&
 	    !CONFIG_IS_ENABLED(SPLASH_SCREEN) && !plat->hide_logo) {
 		ret = show_splash(dev);
@@ -738,6 +743,7 @@ static int video_post_probe(struct udevice *dev)
 		uc_priv->cyc_active = true;
 	}
 
+printf("================%s exit 0\n", __func__);
 	return 0;
 };
 
@@ -748,6 +754,7 @@ static int video_post_bind(struct udevice *dev)
 	ulong addr;
 	ulong size;
 
+printf("================%s enter\n", __func__);
 	/* Before relocation there is nothing to do here */
 	if (!(gd->flags & GD_FLG_RELOC))
 		return 0;

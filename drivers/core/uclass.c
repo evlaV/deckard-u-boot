@@ -795,6 +795,7 @@ int uclass_post_probe_device(struct udevice *dev)
 	struct uclass_driver *uc_drv;
 	int ret;
 
+printf("=========%s : dev %s\n", __func__, dev->name);
 	if (dev->parent) {
 		uc_drv = dev->parent->uclass->uc_drv;
 		if (uc_drv->child_post_probe) {
@@ -806,6 +807,7 @@ int uclass_post_probe_device(struct udevice *dev)
 
 	uc_drv = dev->uclass->uc_drv;
 	if (uc_drv->post_probe) {
+printf("=========%s : dev %s have post_probe\n", __func__, dev->name);
 		ret = uc_drv->post_probe(dev);
 		if (ret)
 			return ret;

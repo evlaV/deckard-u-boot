@@ -482,10 +482,15 @@ int device_probe(struct udevice *dev)
 {
 	const struct driver *drv;
 	int ret;
+int  dbg_f = 0;
 
 	if (!dev)
 		return -EINVAL;
 
+if (!strncmp(dev->name, "dis", 3) || !strncmp(dev->name, "dsi", 3) || !strncmp(dev->name, "phy", 3))
+	dbg_f = 1;
+
+if(dbg_f) printf("--------%s enter for dev %s\n", __func__, dev->name);
 	if (dev_get_flags(dev) & DM_FLAG_ACTIVATED)
 		return 0;
 
@@ -493,6 +498,7 @@ int device_probe(struct udevice *dev)
 	if (ret)
 		return ret;
 
+if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE__);
 	drv = dev->driver;
 	assert(drv);
 
@@ -500,6 +506,7 @@ int device_probe(struct udevice *dev)
 	if (ret)
 		goto fail;
 
+if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE__);
 	/* Ensure all parents are probed */
 	if (dev->parent) {
 		ret = device_probe(dev->parent);
@@ -516,6 +523,7 @@ int device_probe(struct udevice *dev)
 			return 0;
 	}
 
+if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE__);
 	dev_or_flags(dev, DM_FLAG_ACTIVATED);
 
 	if (CONFIG_IS_ENABLED(POWER_DOMAIN) && dev->parent &&
@@ -548,6 +556,7 @@ int device_probe(struct udevice *dev)
 				  dev->name, ret, errno_str(ret));
 	}
 
+if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE__);
 	if (CONFIG_IS_ENABLED(IOMMU) && dev->parent &&
 	    (device_get_uclass_id(dev) != UCLASS_IOMMU)) {
 		ret = dev_iommu_enable(dev);
@@ -555,20 +564,24 @@ int device_probe(struct udevice *dev)
 			goto fail;
 	}
 
+if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE__);
 	ret = device_get_dma_constraints(dev);
 	if (ret)
 		goto fail;
 
+if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE__);
 	ret = uclass_pre_probe_device(dev);
 	if (ret)
 		goto fail;
 
+if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE__);
 	if (dev->parent && dev->parent->driver->child_pre_probe) {
 		ret = dev->parent->driver->child_pre_probe(dev);
 		if (ret)
 			goto fail;
 	}
 
+if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE__);
 	/* Only handle devices that have a valid ofnode */
 	if (dev_has_ofnode(dev)) {
 		/*
@@ -580,12 +593,14 @@ int device_probe(struct udevice *dev)
 			goto fail;
 	}
 
+if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE__);
 	if (drv->probe) {
 		ret = drv->probe(dev);
 		if (ret)
 			goto fail;
 	}
 
+if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE__);
 	ret = uclass_post_probe_device(dev);
 	if (ret)
 		goto fail_uclass;
@@ -597,10 +612,12 @@ int device_probe(struct udevice *dev)
 				  dev->name, ret, errno_str(ret));
 	}
 
+if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE__);
 	ret = device_notify(dev, EVT_DM_POST_PROBE);
 	if (ret)
 		goto fail_event;
 
+if(dbg_f) printf("--------%s ok for %s\n", __func__, dev->name);
 	return 0;
 fail_event:
 fail_uclass:
@@ -613,6 +630,7 @@ fail:
 
 	device_free(dev);
 
+if(dbg_f) printf("--------%s fail %d for %s\n", __func__, ret, dev->name);
 	return ret;
 }
 
