@@ -3,6 +3,9 @@
 /* MDSS handles UBWC in linux. But coreboot does not care UBWC coreboot for sc7180, revisit it later */
 
 #include <dm/device.h>
+#include <dm/device_compat.h>
+#include <clk.h>
+#include <reset.h>
 #include <video.h>
 
 #include "mdssreg.h"
@@ -86,9 +89,25 @@ printf("=========%s enter\n", __func__);
 
 	return ret;
 #endif
-//	priv->regs = dev_read_addr_ptr(dev);
+	struct reset_ctl reset;
+	struct clk_bulk bulk;
+	int ret;
 
-	return 0;
+	ret = reset_get_by_index(dev, 0, &reset);
+	if (ret) {
+		dev_err(dev, "reset get error %d\n", ret);
+		return ret;
+	}
+	reset_assert(&reset);
+	reset_deassert(&reset);
+
+	ret = clk_get_bulk(dev, &bulk);
+	if (ret) {
+		dev_err(dev, "clk bulk get error %d\n", ret);
+		return ret;
+	}
+
+	return clk_enable_bulk(&bulk);
 }
 
 static int qcom_mdss_bind(struct udevice *dev)
