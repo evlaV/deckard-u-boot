@@ -57,10 +57,6 @@ int qcom_wdt_start(struct udevice *dev, u64 timeout_ms, ulong flags)
 	writel(0, wdt_addr(wdt, WDT_EN));
 	writel(1, wdt_addr(wdt, WDT_RST));
 	writel(1, wdt_addr(wdt, WDT_EN));
-	if (readl(wdt_addr(wdt, WDT_EN)) != 1) {
-		dev_err(dev, "Failed to enable Qualcomm watchdog!\n");
-		return -EIO;
-	}
 	return 0;
 }
 
