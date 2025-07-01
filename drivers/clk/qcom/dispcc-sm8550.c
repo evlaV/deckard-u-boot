@@ -6,6 +6,7 @@
 
 #include <clk-uclass.h>
 #include <dm.h>
+#include <dm/device_compat.h>
 #include <linux/delay.h>
 #include <errno.h>
 #include <asm/io.h>
@@ -701,6 +702,10 @@ static const struct freq_tbl ftbl_disp_cc_mdss_ahb_clk_src[] = {
 	{ }
 };
 
+static const struct freq_tbl ftbl_disp_cc_mdss_vsync_clk_src[] = {
+	F(19200000, CFG_BI_TCXO, 1, 0, 0),
+};
+
 /* hard code per dual-dsi case */
 #define CFG_DSI0_PHY_PLL_OUT_BYTECLK (2 << 8)
 #define CFG_DSI1_PHY_PLL_OUT_BYTECLK (4 << 8)
@@ -732,6 +737,8 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
 	const struct freq_tbl *freq;
 
+	dev_err(clk->dev, "set clk %d rate: %d\n", clk->id, rate);
+
 	switch (clk->id) {
 	case DISP_CC_MDSS_AHB_CLK:
 		freq = qcom_find_freq(ftbl_disp_cc_mdss_ahb_clk_src, rate);
@@ -744,12 +751,12 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		 * So we just fall thru into the grand parent disp_cc_mdss_byte0_clk_src
 		 * at 0x8108 */
 	case DISP_CC_MDSS_BYTE0_CLK:
-		/* There is only 1 entry in ftbl_disp_cc_mdss_byte0_clk_src, why
+		/* There is only 1 entry in ftbl_disp_cc_mdss_byte0_clk_src, while
 		 * parent is dsi0_phy_pll_out_byteclk with rate 121574874 in
-		 * kernel test, but re-parent can link it to dsi phy. We just
+		 * kernel test, because re-parent can link it to dsi phy. We just
 		 * hard coding the re-parent.
 		 */
-		freq = qcom_find_freq(ftbl_disp_cc_mdss_byte0_clk_src, 121574874);
+		freq = qcom_find_freq(ftbl_disp_cc_mdss_byte0_clk_src, rate);
 		clk_rcg_set_rate(priv->base, 0x8108, freq->pre_div, freq->src);
 		return freq->freq;
 
@@ -765,10 +772,15 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		 * kernel test, but re-parent can link it to dsi phy. We just
 		 * hard coding the re-parent.
 		 */
-		freq = qcom_find_freq(ftbl_disp_cc_mdss_byte0_clk_src, 121574874);
+		freq = qcom_find_freq(ftbl_disp_cc_mdss_byte0_clk_src, rate);
 		clk_rcg_set_rate(priv->base, 0x8124, freq->pre_div, freq->src);
 		return freq->freq;
 
+	case DISP_CC_MDSS_MDP_LUT_CLK:
+		/* Assume the divider is 1 in parent disp_cc_mdss_mdp_clk_src:
+		 * .cmd_rcgr = 0x80d8, .mnd_width = 0, .hid_width = 5,
+		 * So fall thru to DISP_CC_MDSS_MDP_CLK.
+		 */
 	case DISP_CC_MDSS_MDP_CLK:
 		freq = qcom_find_freq(ftbl_disp_cc_mdss_mdp_clk_src, rate);
 		/* Per test, it is 514000000 and grand parent disp_cc_pll0 rate should
@@ -776,6 +788,18 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		clk_rcg_set_rate(priv->base, 0x80d8, freq->pre_div, freq->src);
 		return freq->freq;
 
+
+#if 0
+	case DISP_CC_MDSS_VSYNC_CLK:
+		/* Assume the divider is 1 in parent disp_cc_mdss_vsync_clk_src :
+		 * .cmd_rcgr = 0x80f0, .mnd_width = 0, .hid_width = 5,
+		 * rate is 19200000, same with its parent bi-tcxo-div2-clk per test.
+		 * so ignore this handling.
+		 */
+		freq = qcom_find_freq(ftbl_disp_cc_mdss_vsync_clk_src, rate);
+		clk_rcg_set_rate(priv->base, 0x80f0, freq->pre_div, freq->src);
+		return freq->freq;
+#endif
 	default:
 		return 0;
 	}
@@ -797,6 +821,7 @@ static int sm8650_disp_cc_enable(struct clk *clk)
 	}
 */
 
+	dev_err(clk->dev, "enable clk %d\n", clk->id);
 	qcom_gate_clk_en(priv, clk->id);
 
 	return 0;
@@ -810,6 +835,10 @@ static const struct gate_clk sm8650_disp_clks[] = {
 	GATE_CLK(DISP_CC_MDSS_BYTE1_INTF_CLK,	0x8034, BIT(0)),
 
 	GATE_CLK(DISP_CC_MDSS_MDP_CLK,		0x800c, BIT(0)),
+	GATE_CLK(DISP_CC_MDSS_MDP_LUT_CLK,	0x8018, BIT(0)),
+
+	GATE_CLK(DISP_CC_MDSS_VSYNC_CLK,	0x8024, BIT(0)),
+
 };
 
 static const struct qcom_reset_map disp_cc_sm8550_resets[] = {

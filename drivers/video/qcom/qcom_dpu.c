@@ -2,7 +2,9 @@
 
 /* this file handles configuration of VBIF/CTL/SSPP/INTF/LM/PP/DSC in DPU */
 
+#include <clk.h>
 #include <dm/device.h>
+#include <dm/device_compat.h>
 #include <dm/read.h>
 #include <video.h>
 
@@ -812,12 +814,22 @@ with referencing bootdev_get_sibling_blk() to get sub-nodes device */
 int qcom_dpu_probe(struct udevice *dev)
 {
 	struct video_uc_plat *plat = dev_get_uclass_plat(dev);
+	struct qcom_dpu_priv *priv = dev_get_priv(dev);
+	struct clk_bulk bulk;
+	int ret;
 
 printf("=========%s enter\n", __func__);
-	struct qcom_dpu_priv *priv = dev_get_priv(dev);
-
 	priv->regs_base = dev_remap_addr_name(dev, "mdp");
 	priv->vbif_base = dev_remap_addr_name(dev, "vbif");
+
+	ret = clk_get_bulk(dev, &bulk);
+	if (ret) {
+		dev_err(dev, "clk bulk get error %d\n", ret);
+		return ret;
+	}
+
+	return clk_enable_bulk(&bulk);
+
 #if 0
 	struct rkvop_driverdata *ops =
 		(struct rkvop_driverdata *)dev_get_driver_data(dev);
