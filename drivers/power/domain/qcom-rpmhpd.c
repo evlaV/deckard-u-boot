@@ -12,6 +12,8 @@
 #include <soc/qcom/cmd-db.h>
 #include <soc/qcom/rpmh.h>
 #include <dt-bindings/power/qcom-rpmpd.h>
+#include <dt-bindings/power/qcom,rpmhpd.h>
+
 #include <dm/device_compat.h>
 
 #define RPMH_ARC_MAX_LEVELS	16
@@ -59,6 +61,26 @@ static struct rpmhpd mmcx_ao = {
 	.res_name = "mmcx.lvl",
 };
 
+static struct rpmhpd cx_ao;
+static struct rpmhpd cx = {
+	.res_name = "cx.lvl",
+};
+
+static struct rpmhpd cx_ao = {
+	.res_name = "cx.lvl",
+};
+
+static struct rpmhpd mmcx_ao_w_cx_parent;
+static struct rpmhpd mmcx_w_cx_parent = {
+	.parent = &cx,
+	.res_name = "mmcx.lvl",
+};
+
+static struct rpmhpd mmcx_ao_w_cx_parent = {
+	.parent = &cx_ao,
+	.res_name = "mmcx.lvl",
+};
+
 /* SA8775P RPMH power domains */
 static struct rpmhpd *sa8775p_rpmhpds[] = {
 	[SA8775P_MMCX] = &mmcx,
@@ -68,6 +90,19 @@ static struct rpmhpd *sa8775p_rpmhpds[] = {
 static const struct rpmhpd_desc sa8775p_desc = {
 	.rpmhpds = sa8775p_rpmhpds,
 	.num_pds = ARRAY_SIZE(sa8775p_rpmhpds),
+};
+
+/* SM8650 RPMH power domains */
+static struct rpmhpd *sm8650_rpmhpds[] = {
+	[RPMHPD_CX] = &cx,
+	[RPMHPD_CX_AO] = &cx_ao,
+	[RPMHPD_MMCX] = &mmcx_w_cx_parent,
+	[RPMHPD_MMCX_AO] = &mmcx_ao_w_cx_parent,
+};
+
+static const struct rpmhpd_desc sm8650_desc = {
+	.rpmhpds = sm8650_rpmhpds,
+	.num_pds = ARRAY_SIZE(sm8650_rpmhpds),
 };
 
 /* stub RPMH power domains mapped for unsupported platforms */
@@ -103,7 +138,7 @@ static const struct udevice_id rpmhpd_match_table[] = {
 	{ .compatible = "qcom,sm8350-rpmhpd", .data = (ulong)&stub_desc },
 	{ .compatible = "qcom,sm8450-rpmhpd", .data = (ulong)&stub_desc },
 	{ .compatible = "qcom,sm8550-rpmhpd", .data = (ulong)&stub_desc },
-	{ .compatible = "qcom,sm8650-rpmhpd", .data = (ulong)&stub_desc },
+	{ .compatible = "qcom,sm8650-rpmhpd", .data = (ulong)&sm8650_desc },
 	{ .compatible = "qcom,sm8750-rpmhpd", .data = (ulong)&stub_desc },
 	{ .compatible = "qcom,x1e80100-rpmhpd", .data = (ulong)&stub_desc },
 	{ }
