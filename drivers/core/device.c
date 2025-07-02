@@ -478,16 +478,18 @@ static int device_get_dma_constraints(struct udevice *dev)
 	return 0;
 }
 
+int  dbg_f = 0;
 int device_probe(struct udevice *dev)
 {
 	const struct driver *drv;
 	int ret;
-int  dbg_f = 0;
 
 	if (!dev)
 		return -EINVAL;
 
-if (!strncmp(dev->name, "dis", 3) || !strncmp(dev->name, "dsi", 3) || !strncmp(dev->name, "phy", 3))
+dbg_f = 0;
+if (!strncmp(dev->name, "dis", 3) || !strncmp(dev->name, "dsi", 3) || !strncmp(dev->name, "phy", 3) ||
+    !strncmp(dev->name, "power", 5) || !strncmp(dev->name, "rpmh", 4) || !strncmp(dev->name, "rsc", 3))
 	dbg_f = 1;
 
 if(dbg_f) printf("--------%s enter for dev %s\n", __func__, dev->name);
@@ -529,6 +531,7 @@ if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE_
 	if (CONFIG_IS_ENABLED(POWER_DOMAIN) && dev->parent &&
 	    (device_get_uclass_id(dev) != UCLASS_POWER_DOMAIN) &&
 	    !(drv->flags & DM_FLAG_DEFAULT_PD_CTRL_OFF)) {
+if(dbg_f) printf("--------%s for dev %s call dev_power_domain_on\n", __func__, dev->name);
 		ret = dev_power_domain_on(dev);
 		if (ret)
 			goto fail;
