@@ -192,7 +192,7 @@ void clk_rcg_set_rate_div(phys_addr_t base, uint32_t cmd_rcgr,
 	u32 cfg;
 
 	cfg  = readl(base + cmd_rcgr);
-	cfg &= ~(BIT(width) << shfit);
+	cfg &= ~(BIT(width) << shift);
 	cfg |= 1 << shift;
 	writel(cfg, base + cmd_rcgr);
 }
