@@ -161,6 +161,11 @@ static void fixup_power_domains(struct device_node *root)
 			    (val[1] != cpu_to_fdt32(SA8775P_CX)))
 					continue;
 
+		if (!strncmp(np->name, "display", 7) ||
+		    !strncmp(np->name, "dsi", 3) ||
+		    !strcmp(np->name, "clock-controller@af00000"))
+			continue;
+
 			of_remove_property(np, prop);
 	}
 }
