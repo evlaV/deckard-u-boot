@@ -748,13 +748,14 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 	case DISP_CC_MDSS_BYTE0_INTF_CLK:
 		/* Assume the divider is 1 in parent disp_cc_mdss_byte0_div_clk_src:
 		 * .reg = 0x8120, .shift = 0, .width = 4 with test. Due to DSC ?
-		 * So we just fall thru into the grand parent disp_cc_mdss_byte0_clk_src
-		 * at 0x8108 */
+		 * Or we just fall thru into the grand parent disp_cc_mdss_byte0_clk_src
+		 * at 0x8108? */
+		clk_rcg_set_rate_div(priv->base, 0x8120, 4, 0);
 	case DISP_CC_MDSS_BYTE0_CLK:
-		/* There is only 1 entry in ftbl_disp_cc_mdss_byte0_clk_src, while
-		 * parent is dsi0_phy_pll_out_byteclk with rate 121574874 in
+		/* There is only 1 entry in original ftbl_disp_cc_mdss_byte0_clk_src,
+		 *while parent is dsi0_phy_pll_out_byteclk with rate 121574874 in
 		 * kernel test, because re-parent can link it to dsi phy. We just
-		 * hard coding the re-parent.
+		 * force the re-parent with the table.
 		 */
 		freq = qcom_find_freq(ftbl_disp_cc_mdss_byte0_clk_src, rate);
 		clk_rcg_set_rate(priv->base, 0x8108, freq->pre_div, freq->src);
@@ -763,21 +764,22 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 	case DISP_CC_MDSS_BYTE1_INTF_CLK:
 		/* Assume the divider is 1 in parent disp_cc_mdss_byte1_div_clk_src:
 		 * .reg = 0x813c, .shift = 0, .width = 4 with test. Due to DSC ?
-		 * So we just fall thru into the grand parent disp_cc_mdss_byte1_clk_src
+		 * Or we just fall thru into the grand parent disp_cc_mdss_byte1_clk_src
 		 * at 0x8124 */
+		clk_rcg_set_rate_div(priv->base, 0x813c, 4, 0);
 	case DISP_CC_MDSS_BYTE1_CLK:
-		/* Assume the divider is 1 in parent disp_cc_mdss_byte1_clk_src:
+		/* Its parent is disp_cc_mdss_byte1_clk_src:
 		 * .cmd_rcgr = 0x8124, .mnd_width = 0, .hid_width = 5,
-		 *  Due to DSC ?
-		 * kernel test, but re-parent can link it to dsi phy. We just
-		 * hard coding the re-parent.
+		 * The rate of it and grand parent's(dsi0_phy_pll_out_byteclk) rate
+		 * are both 121574874 in kernel test.
+		 * Force with the table to re-parent to dsi phy.
 		 */
 		freq = qcom_find_freq(ftbl_disp_cc_mdss_byte0_clk_src, rate);
 		clk_rcg_set_rate(priv->base, 0x8124, freq->pre_div, freq->src);
 		return freq->freq;
 
 	case DISP_CC_MDSS_MDP_LUT_CLK:
-		/* Assume the divider is 1 in parent disp_cc_mdss_mdp_clk_src:
+		/* Its parent is disp_cc_mdss_mdp_clk_src at 0x80d8:
 		 * .cmd_rcgr = 0x80d8, .mnd_width = 0, .hid_width = 5,
 		 * So fall thru to DISP_CC_MDSS_MDP_CLK.
 		 */
@@ -788,8 +790,6 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		clk_rcg_set_rate(priv->base, 0x80d8, freq->pre_div, freq->src);
 		return freq->freq;
 
-
-#if 0
 	case DISP_CC_MDSS_VSYNC_CLK:
 		/* Assume the divider is 1 in parent disp_cc_mdss_vsync_clk_src :
 		 * .cmd_rcgr = 0x80f0, .mnd_width = 0, .hid_width = 5,
@@ -799,7 +799,6 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		freq = qcom_find_freq(ftbl_disp_cc_mdss_vsync_clk_src, rate);
 		clk_rcg_set_rate(priv->base, 0x80f0, freq->pre_div, freq->src);
 		return freq->freq;
-#endif
 	default:
 		return 0;
 	}
@@ -876,5 +875,5 @@ U_BOOT_DRIVER(disp_cc_sm8550) = {
 	.id		= UCLASS_NOP,
 	.of_match	= disp_cc_sm8550_of_match,
 	.bind		= qcom_cc_bind,
-	.flags		= DM_FLAG_PRE_RELOC | DM_FLAG_DEFAULT_PD_CTRL_OFF,
+	.flags		= DM_FLAG_PRE_RELOC,
 };
