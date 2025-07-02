@@ -182,6 +182,7 @@ static int dev_power_domain_ctrl(struct udevice *dev, bool on)
 
 	count = dev_count_phandle_with_args(dev, "power-domains",
 					    "#power-domain-cells", 0);
+printf("-----dev %s power domain cnt %d\n", dev->name, count);
 	for (i = 0; i < count; i++) {
 		ret = power_domain_get_by_index(dev, &pd, i);
 		if (ret)
@@ -212,6 +213,7 @@ static int dev_power_domain_ctrl(struct udevice *dev, bool on)
 	if (count > 0 && !on)
 		device_remove(pd.dev, DM_REMOVE_NORMAL);
 
+printf("-----dev %s power ctrl ret %d\n", dev->name, ret);
 	return ret;
 }
 
