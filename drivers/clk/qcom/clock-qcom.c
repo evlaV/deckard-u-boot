@@ -181,7 +181,19 @@ void clk_phy_mux_enable(phys_addr_t base, uint32_t cmd_rcgr, bool enabled)
 		cfg |= FIELD_PREP(PHY_MUX_MASK, PHY_MUX_PHY_SRC);
 	else
 		cfg |= FIELD_PREP(PHY_MUX_MASK, PHY_MUX_REF_SRC);
+	writel(cfg, base + cmd_rcgr);
+}
 
+/* only divider 1 is supported so far. Because get_rate is missing and cannot
+ * calculate div with parent rate. */
+void clk_rcg_set_rate_div(phys_addr_t base, uint32_t cmd_rcgr,
+			  int width, int shift)
+{
+	u32 cfg;
+
+	cfg  = readl(base + cmd_rcgr);
+	cfg &= ~(BIT(width) << shfit);
+	cfg |= 1 << shift;
 	writel(cfg, base + cmd_rcgr);
 }
 
