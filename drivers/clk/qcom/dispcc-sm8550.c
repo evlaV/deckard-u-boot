@@ -707,14 +707,16 @@ static const struct freq_tbl ftbl_disp_cc_mdss_vsync_clk_src[] = {
 };
 
 /* hard code per dual-dsi case */
+#define CFG_DSI0_PHY_PLL_OUT_DSICLK (1 << 8)
 #define CFG_DSI0_PHY_PLL_OUT_BYTECLK (2 << 8)
 #define CFG_DSI1_PHY_PLL_OUT_BYTECLK (4 << 8)
 static const struct freq_tbl ftbl_disp_cc_mdss_byte0_clk_src[] = {
-//	F(19200000, P_BI_TCXO, 1, 0, 0),
 	F(121574874,  CFG_DSI0_PHY_PLL_OUT_BYTECLK, 1, 0, 0),
-//	{ P_DSI1_PHY_PLL_OUT_DSICLK, 1 },
-//	{ P_DSI1_PHY_PLL_OUT_BYTECLK, 1 },
 	{ }
+};
+
+static const struct freq_tbl ftbl_disp_cc_mdss_pclk0_clk_src[] = {
+	F(243149748,  CFG_DSI0_PHY_PLL_OUT_DSICLK, 1, 0, 0),
 };
 
 #define CFG_DISP_CC_PLL0_OUT_MAIN (1 << 8)
@@ -799,6 +801,26 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		freq = qcom_find_freq(ftbl_disp_cc_mdss_vsync_clk_src, rate);
 		clk_rcg_set_rate(priv->base, 0x80f0, freq->pre_div, freq->src);
 		return freq->freq;
+
+	case DISP_CC_MDSS_PCLK0_CLK:
+		/* The rate of its parent disp_cc_mdss_pclk0_clk_src and grand parent
+		 * dsi0_phy_pll_out_dsiclk and GGrand-parent dsi0_pll_post_out_div_clk
+		 * rate are 243149748 per test. The GGGrand-parent dsi0_pll_out_div_clk
+		 * is 851024121 */
+		freq = qcom_find_freq(ftbl_disp_cc_mdss_pclk0_clk_src, rate);
+		clk_rcg_set_rate_mnd(priv->base, 0x80a8,
+				     freq->pre_div, freq->m, freq->n, freq->src, 8);
+
+
+	case DISP_CC_MDSS_ESC0_CLK:
+		/* Assume the divider is 1 in parent disp_cc_mdss_esc0_clk_src:
+		 * .cmd_rcgr = 0x8140, .mnd_width = 0, .hid_width = 5,
+		 * rate is 19200000, same with its parent bi-tcxo-div2-clk per test.
+		 * so ignore this handling. Or to use the table to force the parent.
+		 */
+		freq = qcom_find_freq(ftbl_disp_cc_mdss_vsync_clk_src, rate);
+		clk_rcg_set_rate(priv->base, 0x8140, freq->pre_div, freq->src);
+		return freq->freq;
 	default:
 		return 0;
 	}
@@ -837,8 +859,10 @@ static const struct gate_clk sm8650_disp_clks[] = {
 	GATE_CLK(DISP_CC_MDSS_MDP_LUT_CLK,	0x8018, BIT(0)),
 
 	GATE_CLK(DISP_CC_MDSS_VSYNC_CLK,	0x8024, BIT(0)),
-
+	GATE_CLK(DISP_CC_MDSS_PCLK0_CLK,	0x8004, BIT(0)),
+	GATE_CLK(DISP_CC_MDSS_ESC0_CLK,		0x8038, BIT(0)),
 };
+
 
 static const struct qcom_reset_map disp_cc_sm8550_resets[] = {
 	[DISP_CC_MDSS_CORE_BCR] = { 0x8000 },
