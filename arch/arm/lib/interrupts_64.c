@@ -169,19 +169,31 @@ static bool smh_emulate_trap(struct pt_regs *regs)
 	return true;
 }
 
-/*
- * do_bad_sync handles the impossible case in the Synchronous Abort vector.
+/**
+ * except_msg() - print exception message
+ *
+ * Print exception message, register contents, backtrace, loaded EFI images.
+ *
+ * @msg:	message describing exception type
+ * @pt_regs:	registers
  */
-void do_bad_sync(struct pt_regs *pt_regs)
+static void except_msg(const char *msg, struct pt_regs *pt_regs)
 {
 	efi_restore_gd();
-	printf("Bad mode in \"Synchronous Abort\" handler, esr 0x%08lx\n",
-	       pt_regs->esr);
+	printf("%s handler, esr 0x%016lx\n", msg, pt_regs->esr);
 	show_regs(pt_regs);
 	if (CONFIG_IS_ENABLED(FRAMEPOINTER))
 		show_backtrace(pt_regs);
 	show_efi_loaded_images(pt_regs);
 	panic("Resetting CPU ...\n");
+}
+
+/*
+ * do_bad_sync handles the impossible case in the Synchronous Abort vector.
+ */
+void do_bad_sync(struct pt_regs *pt_regs)
+{
+	except_msg("Bad mode in \"Synchronous Abort\"", pt_regs);
 }
 
 /*
@@ -189,13 +201,7 @@ void do_bad_sync(struct pt_regs *pt_regs)
  */
 void do_bad_irq(struct pt_regs *pt_regs)
 {
-	efi_restore_gd();
-	printf("Bad mode in \"Irq\" handler, esr 0x%08lx\n", pt_regs->esr);
-	show_regs(pt_regs);
-	if (CONFIG_IS_ENABLED(FRAMEPOINTER))
-		show_backtrace(pt_regs);
-	show_efi_loaded_images(pt_regs);
-	panic("Resetting CPU ...\n");
+	except_msg("Bad mode in \"Irq\"", pt_regs);
 }
 
 /*
@@ -203,13 +209,7 @@ void do_bad_irq(struct pt_regs *pt_regs)
  */
 void do_bad_fiq(struct pt_regs *pt_regs)
 {
-	efi_restore_gd();
-	printf("Bad mode in \"Fiq\" handler, esr 0x%08lx\n", pt_regs->esr);
-	show_regs(pt_regs);
-	if (CONFIG_IS_ENABLED(FRAMEPOINTER))
-		show_backtrace(pt_regs);
-	show_efi_loaded_images(pt_regs);
-	panic("Resetting CPU ...\n");
+	except_msg("Bad mode in \"Fiq\"", pt_regs);
 }
 
 /*
@@ -217,13 +217,7 @@ void do_bad_fiq(struct pt_regs *pt_regs)
  */
 void do_bad_error(struct pt_regs *pt_regs)
 {
-	efi_restore_gd();
-	printf("Bad mode in \"Error\" handler, esr 0x%08lx\n", pt_regs->esr);
-	show_regs(pt_regs);
-	if (CONFIG_IS_ENABLED(FRAMEPOINTER))
-		show_backtrace(pt_regs);
-	show_efi_loaded_images(pt_regs);
-	panic("Resetting CPU ...\n");
+	except_msg("Bad mode in \"Error\"", pt_regs);
 }
 
 /*
@@ -235,7 +229,7 @@ void do_sync(struct pt_regs *pt_regs)
 	    smh_emulate_trap(pt_regs))
 		return;
 	efi_restore_gd();
-	printf("\"Synchronous Abort\" handler, esr 0x%08lx", pt_regs->esr);
+	printf("\"Synchronous Abort\" handler, esr 0x%016lx", pt_regs->esr);
 	dump_far(pt_regs->esr);
 	printf("\n");
 	show_regs(pt_regs);
@@ -250,13 +244,7 @@ void do_sync(struct pt_regs *pt_regs)
  */
 void do_irq(struct pt_regs *pt_regs)
 {
-	efi_restore_gd();
-	printf("\"Irq\" handler, esr 0x%08lx\n", pt_regs->esr);
-	show_regs(pt_regs);
-	if (CONFIG_IS_ENABLED(FRAMEPOINTER))
-		show_backtrace(pt_regs);
-	show_efi_loaded_images(pt_regs);
-	panic("Resetting CPU ...\n");
+	except_msg("\"Irq\"", pt_regs);
 }
 
 /*
@@ -264,13 +252,7 @@ void do_irq(struct pt_regs *pt_regs)
  */
 void do_fiq(struct pt_regs *pt_regs)
 {
-	efi_restore_gd();
-	printf("\"Fiq\" handler, esr 0x%08lx\n", pt_regs->esr);
-	show_regs(pt_regs);
-	if (CONFIG_IS_ENABLED(FRAMEPOINTER))
-		show_backtrace(pt_regs);
-	show_efi_loaded_images(pt_regs);
-	panic("Resetting CPU ...\n");
+	except_msg("\"Fiq\"", pt_regs);
 }
 
 /*
@@ -281,11 +263,5 @@ void do_fiq(struct pt_regs *pt_regs)
  */
 void __weak do_error(struct pt_regs *pt_regs)
 {
-	efi_restore_gd();
-	printf("\"Error\" handler, esr 0x%08lx\n", pt_regs->esr);
-	show_regs(pt_regs);
-	if (CONFIG_IS_ENABLED(FRAMEPOINTER))
-		show_backtrace(pt_regs);
-	show_efi_loaded_images(pt_regs);
-	panic("Resetting CPU ...\n");
+	except_msg("\"Error\"", pt_regs);
 }
