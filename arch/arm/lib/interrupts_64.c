@@ -98,6 +98,35 @@ void show_regs(struct pt_regs *regs)
 	dump_instr(regs);
 }
 
+/**
+ * show_backtrace() - show backtrace using frame pointers
+ *
+ * @regs - registers
+ */
+static void show_backtrace(struct pt_regs *regs)
+{
+	void **fp = (void **)regs->regs[29];
+	unsigned int count = 0;
+	void *lr;
+
+	printf("\nbacktrace:\n");
+
+	while (fp) {
+		lr = fp[1];
+		printf("%3d: fp: %p lr: %p",
+		       count, fp, lr);
+
+		if (gd && gd->flags & GD_FLG_RELOC)
+			printf(" - %p (reloc)\n", lr - gd->reloc_off);
+		else
+			printf("\n");
+
+		fp = fp[0];
+		++count;
+	}
+	printf("\n");
+}
+
 /*
  * Try to "emulate" a semihosting call in the event that we don't have a
  * debugger attached.
@@ -149,6 +178,8 @@ void do_bad_sync(struct pt_regs *pt_regs)
 	printf("Bad mode in \"Synchronous Abort\" handler, esr 0x%08lx\n",
 	       pt_regs->esr);
 	show_regs(pt_regs);
+	if (CONFIG_IS_ENABLED(FRAMEPOINTER))
+		show_backtrace(pt_regs);
 	show_efi_loaded_images(pt_regs);
 	panic("Resetting CPU ...\n");
 }
@@ -161,6 +192,8 @@ void do_bad_irq(struct pt_regs *pt_regs)
 	efi_restore_gd();
 	printf("Bad mode in \"Irq\" handler, esr 0x%08lx\n", pt_regs->esr);
 	show_regs(pt_regs);
+	if (CONFIG_IS_ENABLED(FRAMEPOINTER))
+		show_backtrace(pt_regs);
 	show_efi_loaded_images(pt_regs);
 	panic("Resetting CPU ...\n");
 }
@@ -173,6 +206,8 @@ void do_bad_fiq(struct pt_regs *pt_regs)
 	efi_restore_gd();
 	printf("Bad mode in \"Fiq\" handler, esr 0x%08lx\n", pt_regs->esr);
 	show_regs(pt_regs);
+	if (CONFIG_IS_ENABLED(FRAMEPOINTER))
+		show_backtrace(pt_regs);
 	show_efi_loaded_images(pt_regs);
 	panic("Resetting CPU ...\n");
 }
@@ -185,6 +220,8 @@ void do_bad_error(struct pt_regs *pt_regs)
 	efi_restore_gd();
 	printf("Bad mode in \"Error\" handler, esr 0x%08lx\n", pt_regs->esr);
 	show_regs(pt_regs);
+	if (CONFIG_IS_ENABLED(FRAMEPOINTER))
+		show_backtrace(pt_regs);
 	show_efi_loaded_images(pt_regs);
 	panic("Resetting CPU ...\n");
 }
@@ -202,6 +239,8 @@ void do_sync(struct pt_regs *pt_regs)
 	dump_far(pt_regs->esr);
 	printf("\n");
 	show_regs(pt_regs);
+	if (CONFIG_IS_ENABLED(FRAMEPOINTER))
+		show_backtrace(pt_regs);
 	show_efi_loaded_images(pt_regs);
 	panic("Resetting CPU ...\n");
 }
@@ -214,6 +253,8 @@ void do_irq(struct pt_regs *pt_regs)
 	efi_restore_gd();
 	printf("\"Irq\" handler, esr 0x%08lx\n", pt_regs->esr);
 	show_regs(pt_regs);
+	if (CONFIG_IS_ENABLED(FRAMEPOINTER))
+		show_backtrace(pt_regs);
 	show_efi_loaded_images(pt_regs);
 	panic("Resetting CPU ...\n");
 }
@@ -226,6 +267,8 @@ void do_fiq(struct pt_regs *pt_regs)
 	efi_restore_gd();
 	printf("\"Fiq\" handler, esr 0x%08lx\n", pt_regs->esr);
 	show_regs(pt_regs);
+	if (CONFIG_IS_ENABLED(FRAMEPOINTER))
+		show_backtrace(pt_regs);
 	show_efi_loaded_images(pt_regs);
 	panic("Resetting CPU ...\n");
 }
@@ -241,6 +284,8 @@ void __weak do_error(struct pt_regs *pt_regs)
 	efi_restore_gd();
 	printf("\"Error\" handler, esr 0x%08lx\n", pt_regs->esr);
 	show_regs(pt_regs);
+	if (CONFIG_IS_ENABLED(FRAMEPOINTER))
+		show_backtrace(pt_regs);
 	show_efi_loaded_images(pt_regs);
 	panic("Resetting CPU ...\n");
 }
