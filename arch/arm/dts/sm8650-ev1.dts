@@ -100,6 +100,33 @@
 	memory@a0000000 {
 		bootph-all;
 	};
+
+#if 0
+	framebuffer {
+	    compatible = "simple-framebuffer";
+
+	    /* KEY: Point to the reserved memory region defined above. */
+	    memory-region = <&framebuffer_mem>;
+
+	    /* Other required display properties */
+	    width = <4320>;
+	    height = <2160>;
+	    stride = <(4320 * 4)>; /* Example for 32 bits-per-pixel */
+	    format = "a8r8g8b8";    /* Example format */
+	};
+
+	reserved_memory {
+	    #address-cells = <2>;
+	    #size-cells = <2>;
+	    ranges;
+
+	    framebuffer_mem: framebuffer@7F000000 {
+		compatible = "shared-dma-pool";
+		no-map;
+		reg = <0x0 0x9bb00000 0x0 0x03000000>; /* reuse video address, size (50MB) */
+	    };
+	};
+#endif
 };
 
 &smem {
@@ -143,7 +170,6 @@
 			regulator-name = "vreg_l1b_1p8";
 			regulator-min-microvolt = <1800000>;
 			regulator-max-microvolt = <1800000>;
-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
 
 			regulator-always-on; // XXX sensors
 		};
@@ -934,9 +960,9 @@
 
 #if 0
 &mdss_dsi0 {
-	vdda-supply = <&vreg_l3i_1p2>;
 	status = "okay";
 
+	vdda-supply = <&vreg_l3i_1p2>;
 	qcom,dual-dsi-mode;
 	qcom,master-dsi;
 
@@ -963,12 +989,14 @@
 				};
 			};
 
+#if 0
 			port@1 {
 				reg = <1>;
 				panel1_in: endpoint {
 					remote-endpoint = <&mdss_dsi1_out>;
 				};
 			};
+#endif
 		};
 	};
 };
@@ -980,9 +1008,7 @@
 
 &mdss_dsi0_phy {
 	vdds-supply = <&vreg_l1i_0p88>;
-/*
-	phy-type = <PHY_TYPE_CPHY>;
-*/
+//	phy-type = <PHY_TYPE_CPHY>;
 	status = "okay";
 };
 
