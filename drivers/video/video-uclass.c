@@ -3,6 +3,7 @@
  * Copyright (c) 2015 Google, Inc
  */
 
+#define DEBUG
 #define LOG_CATEGORY UCLASS_VIDEO
 
 #include <bloblist.h>
@@ -28,6 +29,7 @@
 #endif
 #include "vidconsole_internal.h"
 
+#define DEBUG
 /*
  * Theory of operation:
  *
@@ -137,7 +139,7 @@ int video_reserve(ulong *addrp)
 	     dev;
 	     uclass_find_next_device(&dev)) {
 		size = alloc_fb(dev, addrp);
-		debug("%s: Reserving %lx bytes at %lx for video device '%s'\n",
+		printf("%s: Reserving %lx bytes at %lx for video device '%s'\n",
 		      __func__, size, *addrp, dev->name);
 	}
 
@@ -579,6 +581,74 @@ int video_get_ysize(struct udevice *dev)
 	return priv->ysize;
 }
 
+<<<<<<< HEAD
+=======
+#ifdef CONFIG_VIDEO_COPY
+int video_sync_copy(struct udevice *dev, void *from, void *to)
+{
+	struct video_priv *priv = dev_get_uclass_priv(dev);
+
+printf("----------------------------%s enter\n", __func__);
+	if (priv->copy_fb) {
+		long offset, size;
+
+		/* Find the offset of the first byte to copy */
+		if ((ulong)to > (ulong)from) {
+			size = to - from;
+			offset = from - priv->fb;
+		} else {
+			size = from - to;
+			offset = to - priv->fb;
+		}
+
+		/*
+		 * Allow a bit of leeway for valid requests somewhere near the
+		 * frame buffer
+		 */
+		if (offset < -priv->fb_size || offset > 2 * priv->fb_size) {
+#ifdef DEBUG
+			char str[120];
+
+			snprintf(str, sizeof(str),
+				 "[** FAULT sync_copy fb=%p, from=%p, to=%p, offset=%lx]",
+				 priv->fb, from, to, offset);
+			console_puts_select_stderr(true, str);
+#endif
+			return -EFAULT;
+		}
+
+		/*
+		 * Silently crop the memcpy. This allows callers to avoid doing
+		 * this themselves. It is common for the end pointer to go a
+		 * few lines after the end of the frame buffer, since most of
+		 * the update algorithms terminate a line after their last write
+		 */
+		if (offset + size > priv->fb_size) {
+			size = priv->fb_size - offset;
+		} else if (offset < 0) {
+			size += offset;
+			offset = 0;
+		}
+
+		memcpy(priv->copy_fb + offset, priv->fb + offset, size);
+	}
+
+printf("----------------------------%s exit ok\n", __func__);
+	return 0;
+}
+
+int video_sync_copy_all(struct udevice *dev)
+{
+	struct video_priv *priv = dev_get_uclass_priv(dev);
+
+	video_sync_copy(dev, priv->fb, priv->fb + priv->fb_size);
+
+	return 0;
+}
+
+#endif
+
+>>>>>>> fbde0e3ba28 (debug: add video log)
 #define SPLASH_DECL(_name) \
 	extern u8 __splash_ ## _name ## _begin[]; \
 	extern u8 __splash_ ## _name ## _end[]
@@ -754,7 +824,7 @@ static int video_post_bind(struct udevice *dev)
 	ulong addr;
 	ulong size;
 
-printf("================%s enter\n", __func__);
+printf("================%s enter, gd->video_top 0x%x\n", __func__, gd->video_top);
 	/* Before relocation there is nothing to do here */
 	if (!(gd->flags & GD_FLG_RELOC))
 		return 0;
@@ -766,7 +836,9 @@ printf("================%s enter\n", __func__);
 
 	/* Allocate framebuffer space for this device */
 	addr = uc_priv->video_ptr;
+printf("================%s uc_priv->video_ptr 0x%x\n", __func__, addr);
 	size = alloc_fb(dev, &addr);
+printf("================%s after alloc_fb 0x%x vs gd->video_bottom 0x%x\n", __func__, addr, gd->video_bottom);
 	if (addr < gd->video_bottom) {
 		/*
 		 * Device tree node may need the 'bootph-all' or

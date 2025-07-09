@@ -10,6 +10,7 @@
  */
 
 #include <config.h>
+#define DEBUG
 #include <bloblist.h>
 #include <bootstage.h>
 #include <clock_legacy.h>
@@ -51,6 +52,7 @@
 #include <dm/root.h>
 #include <linux/errno.h>
 #include <linux/log2.h>
+#define DEBUG
 
 DECLARE_GLOBAL_DATA_PTR;
 
