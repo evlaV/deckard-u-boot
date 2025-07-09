@@ -93,6 +93,9 @@ printf("=========%s enter\n", __func__);
 	struct clk_bulk bulk;
 	int ret;
 
+	if (!(gd->flags & GD_FLG_RELOC))
+		return 0;
+
 	ret = reset_get_by_index(dev, 0, &reset);
 	if (ret) {
 		dev_err(dev, "reset get error %d\n", ret);
@@ -112,6 +115,7 @@ printf("=========%s enter\n", __func__);
 
 static int qcom_mdss_bind(struct udevice *dev)
 {
+printf("================== %s called\n", __func__);
 	return 0;
 }
 
@@ -128,4 +132,5 @@ U_BOOT_DRIVER(rockchip_mdss) = {
 	.probe	= qcom_mdss_probe,
 //        .remove = rk_vop_remove,
 	.priv_auto	= sizeof(struct qcom_mdss_priv),
+	.flags  = DM_FLAG_PRE_RELOC | DM_FLAG_LEAVE_PD_ON,
 };

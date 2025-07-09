@@ -2,6 +2,7 @@
 
 /* this file handles configuration of VBIF/CTL/SSPP/INTF/LM/PP/DSC in DPU */
 
+#define DEBUG 7
 #include <asm/io.h>
 #include <clk.h>
 #include <dm/device.h>
@@ -971,6 +972,7 @@ static int qcom_dpu_bind(struct udevice *dev)
 {
 	struct video_uc_plat *uc_plat = dev_get_uclass_plat(dev);
 
+printf("=========%s called\n", __func__);
 	uc_plat->size = (LCD_MAX_WIDTH * LCD_MAX_HEIGHT *
 			((1 << VIDEO_BPP32) / 8));
 	uc_plat->align = SZ_2M;
@@ -993,9 +995,10 @@ U_BOOT_DRIVER(qcom_dpu) = {
 	.name	= "qcom_dpu",
 	.id	= UCLASS_VIDEO,
 	.of_match = dpu_ids,
-	.ops	= &dpu_ops,
+//	.ops	= &dpu_ops,
 	.bind	= qcom_dpu_bind,
 	.probe	= qcom_dpu_probe,
 //        .remove = rk_vop_remove,
 	.priv_auto	= sizeof(struct qcom_dpu_priv),
+	.flags  = DM_FLAG_PRE_RELOC | DM_FLAG_LEAVE_PD_ON,
 };
