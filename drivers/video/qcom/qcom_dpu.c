@@ -2,11 +2,15 @@
 
 /* this file handles configuration of VBIF/CTL/SSPP/INTF/LM/PP/DSC in DPU */
 
+#include <asm/io.h>
 #include <clk.h>
 #include <dm/device.h>
 #include <dm/device_compat.h>
 #include <dm/read.h>
+#include <panel.h>
 #include <video.h>
+#include <video_bridge.h>
+#include <linux/sizes.h>
 
 #include "dpu_hw_mdss.h"
 //#include "mdssreg.h"
@@ -808,19 +812,30 @@ void mdp_dsi_video_on(struct dpu_mdss_cfg *cat, void *regs_base)
 	writel(0x421BC0, ctl_base + CTL_FLUSH);
 }
 
-/* copy from rk_vop.c
+/* copy from rk_vop.c and stm32_ltdc.c
 We can parse all sub-nodes here, to make parsing nodes and topology easier
 with referencing bootdev_get_sibling_blk() to get sub-nodes device */
 int qcom_dpu_probe(struct udevice *dev)
 {
-	struct video_uc_plat *plat = dev_get_uclass_plat(dev);
+	struct video_uc_plat *uc_plat = dev_get_uclass_plat(dev);
 	struct qcom_dpu_priv *priv = dev_get_priv(dev);
+	struct video_priv *uc_priv = dev_get_uclass_priv(dev);
 	struct clk_bulk bulk;
-	int ret;
+	struct udevice *bridge = NULL;
+	struct udevice *panel = NULL;
+	struct display_timing timings;
+	const struct device_node *np;
+	ulong rate;
+	int ret, len;
 
 printf("=========%s enter\n", __func__);
+	/* Before relocation we don't need to do anything */
+	if (!(gd->flags & GD_FLG_RELOC))
+		return 0;
+
 	priv->regs_base = dev_remap_addr_name(dev, "mdp");
 	priv->vbif_base = dev_remap_addr_name(dev, "vbif");
+	uc_plat->base = 0x9bb00000;
 
 	ret = clk_get_bulk(dev, &bulk);
 	if (ret) {
@@ -830,40 +845,89 @@ printf("=========%s enter\n", __func__);
 
 	return clk_enable_bulk(&bulk);
 
+	ret = uclass_first_device_err(UCLASS_PANEL, &panel);
+	if (ret) {
+		if (ret != -ENODEV)
+			dev_err(dev, "panel device error %d\n", ret);
+		return ret;
+	}
+
+	ret = panel_get_display_timing(panel, &timings);
+	if (ret) {
+		ret = ofnode_decode_display_timing(dev_ofnode(panel),
+						   0, &timings);
+		if (ret) {
+			dev_err(dev, "decode display timing error %d\n", ret);
+			return ret;
+		}
+	}
+
+/*
+	rate = clk_set_rate(&pclk, timings.pixelclock.typ);
+	if (IS_ERR_VALUE(rate))
+		dev_warn(dev, "fail to set pixel clock %d hz, ret=%ld\n",
+			 timings.pixelclock.typ, rate);
+*/
+
+	dev_dbg(dev, "Set pixel clock req %d hz get %ld hz\n",
+		timings.pixelclock.typ, rate);
+
+	if (IS_ENABLED(CONFIG_VIDEO_BRIDGE)) {
+		ret = uclass_get_device(UCLASS_VIDEO_BRIDGE, 0, &bridge);
+		if (ret)
+			dev_dbg(dev,
+				"No video bridge, or no backlight on bridge\n");
+
+		if (bridge) {
+			ret = video_bridge_attach(bridge);
+			if (ret) {
+				dev_err(bridge, "fail to attach bridge\n");
+				return ret;
+			}
+		}
+		np = ofnode_to_np(dev_ofnode(bridge));
+		if (of_find_property(np, "qcom,dual-dsi-mode", &len)) {
+			dev_dbg(bridge, "Dual DSI is found. To attach it\n");
+		}
+	} else {
+		dev_dbg(dev,
+			"ERROR: Please enable video bridge in defconfig\n");
+	}
+
+	dev_dbg(dev, "%dx%d %dbpp frame buffer at 0x%lx\n",
+		timings.hactive.typ, timings.vactive.typ,
+		VNBITS(VIDEO_BPP32), uc_plat->base);
+
+	/* Configure & start DPU */
+
+	uc_priv->bpix = VIDEO_BPP32;
+	uc_priv->xsize = timings.hactive.typ;
+	uc_priv->ysize = timings.vactive.typ;
+	uc_priv->rot = 0;
+
+
+	if (!bridge) {
+		ret = panel_enable_backlight(panel);
+		if (ret) {
+			dev_err(dev, "panel %s enable backlight error %d\n",
+				panel->name, ret);
+			return ret;
+		}
+	} else if (IS_ENABLED(CONFIG_VIDEO_BRIDGE)) {
+		ret = video_bridge_set_backlight(bridge, 80);
+		if (ret) {
+			dev_err(dev, "fail to set backlight\n");
+			return ret;
+		}
+	}
+
+	video_set_flush_dcache(dev, true);
+printf("=========%s exit ok\n", __func__);
+
 #if 0
 	struct rkvop_driverdata *ops =
 		(struct rkvop_driverdata *)dev_get_driver_data(dev);
-	int ret = 0;
 	ofnode port, node;
-	struct reset_ctl ahb_rst;
-
-	/* Before relocation we don't need to do anything */
-	if (!(gd->flags & GD_FLG_RELOC))
-		return 0;
-
-	ret = reset_get_by_name(dev, "ahb", &ahb_rst);
-	if (ret) {
-		dev_err(dev, "failed to get ahb reset (ret=%d)\n", ret);
-		return ret;
-	}
-
-	ret = reset_assert(&ahb_rst);
-	if (ret) {
-		dev_err(dev, "failed to assert ahb reset (ret=%d)\n", ret);
-		return ret;
-	}
-	udelay(20);
-
-	ret = reset_deassert(&ahb_rst);
-	if (ret) {
-		dev_err(dev, "failed to deassert ahb reset (ret=%d)\n", ret);
-		return ret;
-	}
-
-#if defined(CONFIG_EFI_LOADER)
-	debug("Adding to EFI map %d @ %lx\n", plat->size, plat->base);
-	efi_add_memory_map(plat->base, plat->size, EFI_RESERVED_MEMORY_TYPE);
-#endif
 
 	priv->regs = dev_read_addr_ptr(dev);
 	priv->win_offset = ops->win_offset;
@@ -901,8 +965,19 @@ printf("=========%s enter\n", __func__);
 	return 0;
 }
 
+#define LCD_MAX_WIDTH 4320
+#define LCD_MAX_HEIGHT 2160
 static int qcom_dpu_bind(struct udevice *dev)
 {
+	struct video_uc_plat *uc_plat = dev_get_uclass_plat(dev);
+
+	uc_plat->size = (LCD_MAX_WIDTH * LCD_MAX_HEIGHT *
+			((1 << VIDEO_BPP32) / 8));
+	uc_plat->align = SZ_2M;
+	dev_dbg(dev, "frame buffer max size %d bytes align %x\n",
+		uc_plat->size, uc_plat->align);
+printf("frame buffer max size %d bytes align %x\n", uc_plat->size, uc_plat->align);
+
 	return 0;
 }
 

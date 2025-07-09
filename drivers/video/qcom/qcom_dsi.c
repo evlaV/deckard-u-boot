@@ -534,28 +534,27 @@ static int qcom_dsi_attach(struct udevice *dev)
 {
 	struct qcom_dsi_priv *priv = dev_get_priv(dev);
 	struct mipi_dsi_device *device = &priv->device;
-//	struct mipi_dsi_device *device2 = &priv->device2;
 	struct mipi_dsi_panel_plat *mplat;
 	struct display_timing timings;
 	int ret;
 
+printf("------------%s enter\n", __func__);
 	ret = uclass_first_device_err(UCLASS_PANEL, &priv->panel);
 	if (ret) {
 		dev_err(dev, "panel device error %d\n", ret);
 		return ret;
 	}
 
+printf("------------%s line %d\n", __func__, __LINE__);
 	mplat = dev_get_plat(priv->panel);
-	mplat->device = &priv->device;
 	device->lanes = mplat->lanes;
 	device->format = mplat->format;
 	device->mode_flags = mplat->mode_flags;
-/*
-	mplat->device2 = &priv->device2;
-	device2->lanes = mplat->lanes;
-	device2->format = mplat->format;
-	device2->mode_flags = mplat->mode_flags;
-*/
+
+	if (device->index)
+		mplat->device2 = &priv->device;
+	else
+		mplat->device = &priv->device;
 
 	ret = panel_get_display_timing(priv->panel, &timings);
 	if (ret) {
@@ -567,12 +566,14 @@ static int qcom_dsi_attach(struct udevice *dev)
 		}
 	}
 
+printf("------------%s line %d\n", __func__, __LINE__);
 	ret = uclass_get_device(UCLASS_DSI_HOST, 0, &priv->dsi_host);
 	if (ret) {
 		dev_err(dev, "No video dsi host detected %d\n", ret);
 		return ret;
 	}
 
+printf("------------%s line %d\n", __func__, __LINE__);
 	ret = dsi_host_init(priv->dsi_host, device, &timings, 3,
 			    &mdss_dsi_phy_ops);
 	if (ret) {
@@ -580,6 +581,7 @@ static int qcom_dsi_attach(struct udevice *dev)
 		return ret;
 	}
 
+printf("------------%s exit ok\n", __func__);
 	return 0;
 }
 
