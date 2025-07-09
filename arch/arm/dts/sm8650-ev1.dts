@@ -958,14 +958,12 @@
 	status = "okay";
 };
 
-#if 0
 &mdss_dsi0 {
 	status = "okay";
 
-	vdda-supply = <&vreg_l3i_1p2>;
+//	vdda-supply = <&vreg_l3i_1p2>;
 	qcom,dual-dsi-mode;
 	qcom,master-dsi;
-
 
 	panel: panel@0 {
 		reg = <0>;
@@ -1006,6 +1004,7 @@
 	data-lanes = <0 1 2>;
 };
 
+#if 0
 &mdss_dsi0_phy {
 	vdds-supply = <&vreg_l1i_0p88>;
 //	phy-type = <PHY_TYPE_CPHY>;

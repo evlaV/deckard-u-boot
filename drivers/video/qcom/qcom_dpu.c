@@ -829,7 +829,7 @@ int qcom_dpu_probe(struct udevice *dev)
 	ulong rate;
 	int ret, len;
 
-printf("=========%s enter\n", __func__);
+printf("=========%s enter, FLG_RELOC? %d\n", __func__, gd->flags & GD_FLG_RELOC);
 	/* Before relocation we don't need to do anything */
 	if (!(gd->flags & GD_FLG_RELOC))
 		return 0;
@@ -838,29 +838,17 @@ printf("=========%s enter\n", __func__);
 	priv->vbif_base = dev_remap_addr_name(dev, "vbif");
 	uc_plat->base = 0x9bb00000;
 
+printf("=========%s line %d\n", __func__, __LINE__);
 	ret = clk_get_bulk(dev, &bulk);
 	if (ret) {
 		dev_err(dev, "clk bulk get error %d\n", ret);
 		return ret;
 	}
 
-	return clk_enable_bulk(&bulk);
-
-	ret = uclass_first_device_err(UCLASS_PANEL, &panel);
+	ret = clk_enable_bulk(&bulk);
 	if (ret) {
-		if (ret != -ENODEV)
-			dev_err(dev, "panel device error %d\n", ret);
+		dev_err(dev, "clk bulk enable error %d\n", ret);
 		return ret;
-	}
-
-	ret = panel_get_display_timing(panel, &timings);
-	if (ret) {
-		ret = ofnode_decode_display_timing(dev_ofnode(panel),
-						   0, &timings);
-		if (ret) {
-			dev_err(dev, "decode display timing error %d\n", ret);
-			return ret;
-		}
 	}
 
 /*
@@ -869,9 +857,6 @@ printf("=========%s enter\n", __func__);
 		dev_warn(dev, "fail to set pixel clock %d hz, ret=%ld\n",
 			 timings.pixelclock.typ, rate);
 */
-
-	dev_dbg(dev, "Set pixel clock req %d hz get %ld hz\n",
-		timings.pixelclock.typ, rate);
 
 	if (IS_ENABLED(CONFIG_VIDEO_BRIDGE)) {
 		ret = uclass_get_device(UCLASS_VIDEO_BRIDGE, 0, &bridge);
@@ -895,6 +880,31 @@ printf("=========%s enter\n", __func__);
 			"ERROR: Please enable video bridge in defconfig\n");
 	}
 
+printf("=========%s line %d\n", __func__, __LINE__);
+	ret = uclass_first_device_err(UCLASS_PANEL, &panel);
+	if (ret) {
+		if (ret != -ENODEV)
+			dev_err(dev, "panel device error %d\n", ret);
+		return ret;
+	}
+
+printf("=========%s line %d\n", __func__, __LINE__);
+	ret = panel_get_display_timing(panel, &timings);
+	if (ret) {
+		ret = ofnode_decode_display_timing(dev_ofnode(panel),
+						   0, &timings);
+		if (ret) {
+			dev_err(dev, "decode display timing error %d\n", ret);
+			return ret;
+		}
+	}
+
+printf("=========%s line %d\n", __func__, __LINE__);
+	dev_dbg(dev, "Set pixel clock req %d hz get %ld hz\n",
+		timings.pixelclock.typ, rate);
+
+
+printf("=========%s line %d\n", __func__, __LINE__);
 	dev_dbg(dev, "%dx%d %dbpp frame buffer at 0x%lx\n",
 		timings.hactive.typ, timings.vactive.typ,
 		VNBITS(VIDEO_BPP32), uc_plat->base);
@@ -905,6 +915,8 @@ printf("=========%s enter\n", __func__);
 	uc_priv->xsize = timings.hactive.typ;
 	uc_priv->ysize = timings.vactive.typ;
 	uc_priv->rot = 0;
+//printf("=========%s uc_priv->bpix %d\n", __func__, VIDEO_BPP32);
+printf("=========%s uc_priv->bpix %d, uc_priv 0x%x\n", __func__, uc_priv->bpix, uc_priv);
 
 
 	if (!bridge) {
