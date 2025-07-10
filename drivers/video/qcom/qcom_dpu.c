@@ -859,10 +859,14 @@ printf("=========%s line %d\n", __func__, __LINE__);
 */
 
 	if (IS_ENABLED(CONFIG_VIDEO_BRIDGE)) {
+		//ret = uclass_get_device(UCLASS_VIDEO_BRIDGE, 0, &bridge);
+		//ret = uclass_find_first_device(UCLASS_VIDEO_BRIDGE, &bridge);
 		ret = uclass_get_device(UCLASS_VIDEO_BRIDGE, 0, &bridge);
-		if (ret)
+		if (ret) {
 			dev_dbg(dev,
-				"No video bridge, or no backlight on bridge\n");
+				"No video bridge, err %d\n", ret);
+			return ret;
+		}
 
 		if (bridge) {
 			ret = video_bridge_attach(bridge);
@@ -881,15 +885,17 @@ printf("=========%s line %d\n", __func__, __LINE__);
 	}
 
 printf("=========%s line %d\n", __func__, __LINE__);
-	ret = uclass_first_device_err(UCLASS_PANEL, &panel);
+	//ret = uclass_first_device_err(UCLASS_PANEL, &panel);
+	//ret = uclass_find_first_device(UCLASS_PANEL, &panel);
+	ret = uclass_get_device(UCLASS_PANEL, 0, &panel);
 	if (ret) {
-		if (ret != -ENODEV)
-			dev_err(dev, "panel device error %d\n", ret);
+		dev_err(dev, "panel device error %d\n", ret);
 		return ret;
 	}
 
 printf("=========%s line %d\n", __func__, __LINE__);
 	ret = panel_get_display_timing(panel, &timings);
+printf("=========%s line %d get panel timing ret %d\n", __func__, __LINE__, ret);
 	if (ret) {
 		ret = ofnode_decode_display_timing(dev_ofnode(panel),
 						   0, &timings);

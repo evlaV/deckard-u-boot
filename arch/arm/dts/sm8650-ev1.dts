@@ -964,10 +964,11 @@
 //	vdda-supply = <&vreg_l3i_1p2>;
 	qcom,dual-dsi-mode;
 	qcom,master-dsi;
+	dual-dsi-index = < 0 >;
 
 	panel: panel@0 {
 		reg = <0>;
-		compatible = "pocf,jdi-lpm026m648c";
+		compatible = "jdi,lpm026m648c";
 		dual-panel;
 
 		reset-gpios = <&pm8550_gpios 3 GPIO_ACTIVE_HIGH>,
@@ -1004,18 +1005,19 @@
 	data-lanes = <0 1 2>;
 };
 
-#if 0
 &mdss_dsi0_phy {
 	vdds-supply = <&vreg_l1i_0p88>;
 //	phy-type = <PHY_TYPE_CPHY>;
 	status = "okay";
 };
 
+#if 0
 &mdss_dsi1 {
 	vdda-supply = <&vreg_l3i_1p2>;
 	status = "okay";
 
 	qcom,dual-dsi-mode;
+	dual-dsi-index = < 1 >;
 
 	assigned-clocks = <&dispcc DISP_CC_MDSS_BYTE1_CLK_SRC>, <&dispcc DISP_CC_MDSS_PCLK1_CLK_SRC>;
 	assigned-clock-parents = <&mdss_dsi0_phy 0>, <&mdss_dsi0_phy 1>;

@@ -53,8 +53,8 @@
 
 struct qcom_dsi_priv {
 	struct mipi_dsi_device device;
-	struct mipi_dsi_device device2;
 	void __iomem *base;
+	void __iomem *phy_base;
 	struct udevice *panel;
 	u32 pllref_clk;
 	u32 hw_version;
@@ -62,8 +62,13 @@ struct qcom_dsi_priv {
 	int lane_max_kbps;
 	struct udevice *vdd_reg;
 	struct udevice *dsi_host;
+	struct udevice *dsi_host2;
 };
 
+static struct qcom_dsi_priv_global {
+	struct qcom_dsi_priv *priv0;
+	struct qcom_dsi_priv *priv1;
+} qcom_dsi_global;
 
 static inline void dsi_write(void *addr, u32 val)
 {
@@ -551,10 +556,13 @@ printf("------------%s line %d\n", __func__, __LINE__);
 	device->format = mplat->format;
 	device->mode_flags = mplat->mode_flags;
 
-	if (device->index)
+	if (device->index) {
 		mplat->device2 = &priv->device;
-	else
+		qcom_dsi_global.priv1 = priv;
+	} else {
 		mplat->device = &priv->device;
+		qcom_dsi_global.priv0 = priv;
+	}
 
 	ret = panel_get_display_timing(priv->panel, &timings);
 	if (ret) {
@@ -585,6 +593,11 @@ printf("------------%s exit ok\n", __func__);
 	return 0;
 }
 
+static int qcom_dsi_set_backlight(struct udevice *dev, int percent)
+{
+printf("------------%s called\n", __func__);
+	return 0;
+}
 /* TODO: backlight regulators are enabled by default. attach to panel later.
 static int qcom_dsi_set_backlight(struct udevice *dev, int percent)
 {
@@ -606,19 +619,23 @@ static int qcom_dsi_set_backlight(struct udevice *dev, int percent)
 
 	return 0;
 }
+*/
 
 static int qcom_dsi_bind(struct udevice *dev)
 {
 	int ret;
 
-	ret = device_bind_driver_to_node(dev, "dw_mipi_dsi", "dsihost",
+printf("=============%s enter\n", __func__);
+/*
+	ret = device_bind_driver_to_node(dev, "qcom-dsi", "mdss_dsi",
 					 dev_ofnode(dev), NULL);
+printf("=============%s result %d, will scan panel next\n", __func__, ret);
 	if (ret)
 		return ret;
+*/
 
 	return dm_scan_fdt_dev(dev);
 }
-*/
 
 static int qcom_dsi_probe(struct udevice *dev)
 {
@@ -631,13 +648,20 @@ static int qcom_dsi_probe(struct udevice *dev)
 
 	device->dev = dev;
 
-dev_err(dev, "=============%s enter\n", __func__);
+printf("=============%s enter\n", __func__);
 	priv->base = dev_read_addr_ptr(dev);
 	dsi_reg = priv->base;
 	if (!priv->base) {
 		dev_err(dev, "dsi dt register address error\n");
 		return -EINVAL;
 	}
+
+	ret = ofnode_read_u32_default(dev_ofnode(dev), "dual-dsi-index", -1);
+	if (ret == 0 || ret == 1)
+		device->index = ret;
+	else
+		return ret;
+printf("=============%s line %d\n", __func__, __LINE__);
 
 /*
 	ret =  device_get_supply_regulator(dev, "phy-dsi-supply",
@@ -678,7 +702,7 @@ dev_err(dev, "=============%s enter\n", __func__);
 #endif
 
 	/* check hardware version */
-	priv->hw_version = dsi_read(dsi_reg->hw_version);
+	priv->hw_version = dsi_read(dsi_reg);
 	if (priv->hw_version != 0x20080000) {
 		dev_err(dev, "DSI version 0x%x not supported\n", priv->hw_version);
 		dev_dbg(dev, "remove and unbind all DSI child\n");
@@ -687,21 +711,22 @@ dev_err(dev, "=============%s enter\n", __func__);
 		ret = -ENODEV;
 		goto err_clk;
 	}
+	dm_scan_fdt_dev(dev);
 
-dev_err(dev, "=============%s ret 0\n", __func__);
+printf("=============%s ret 0\n", __func__);
 	return 0;
 err_clk:
 	clk_disable_bulk(&bulk);
 err_reg:
 //	regulator_set_enable(priv->vdd_reg, false);
 
-dev_err(dev, "=============%s ret %d\n", __func__, ret);
+printf("=============%s ret %d\n", __func__, ret);
 	return ret;
 }
 
 struct video_bridge_ops qcom_dsi_ops = {
 	.attach = qcom_dsi_attach,
-//	.set_backlight = qcom_dsi_set_backlight,
+	.set_backlight = qcom_dsi_set_backlight,
 };
 
 static const struct udevice_id qcom_dsi_ids[] = {
@@ -710,10 +735,10 @@ static const struct udevice_id qcom_dsi_ids[] = {
 };
 
 U_BOOT_DRIVER(qcom_dsi) = {
-	.name				= "qcom,mdss-dsi-ctrl",
+	.name				= "qcom-dsi",
 	.id				= UCLASS_VIDEO_BRIDGE,
 	.of_match			= qcom_dsi_ids,
-//	.bind				= qcom_dsi_bind,
+	.bind				= qcom_dsi_bind,
 	.probe				= qcom_dsi_probe,
 	.ops				= &qcom_dsi_ops,
 	.priv_auto		= sizeof(struct qcom_dsi_priv),
