@@ -267,6 +267,25 @@ const char *deckard_get_fw_part(void)
 	}
 }
 
+const char *fs_firmware_get_partition(void)
+{
+	char *bootedslot;
+
+	bootedslot = env_get("booted_slot");
+	switch(bootedslot[0]){
+		case 'A':
+			return DECKARD_SLOT_A_PARTITION;
+			break;
+		case 'B':
+			return DECKARD_SLOT_B_PARTITION;
+			break;
+		default:
+			return DECKARD_SLOT_A_PARTITION;
+			break;
+	}
+}
+
+
 /* Check for vol- button - if pressed - stop autoboot */
 int misc_init_r(void)
 {
