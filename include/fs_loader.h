@@ -64,4 +64,14 @@ int request_firmware_into_buf(struct udevice *dev,
  * Return: 0 on success, negative value on error
  */
 int get_fs_loader(struct udevice **dev);
+
+/**
+ * fs_firmware_get_partition() - Get partition of firmware to be loaded
+ *
+ * It is a weak function allowing board to overidde the default device
+ * and partition used to fetch firmware.
+ *
+ * Return: string of device and partition
+ */
+const char *fs_firmware_get_partition(void);
 #endif

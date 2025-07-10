@@ -644,6 +644,14 @@ config FS_LOADER
 	  The consumer driver would then use this loader to program whatever,
 	  ie. the FPGA device.
 
+config FS_LOADER_FIRMWARE_PARTITION
+	string "Device and partition for where the firmware is stored"
+	depends on FS_LOADER
+	default ""
+	help
+	  Define this to a string to specify the partition of the device where
+	  firmware blobs could be found.
+
 config SPL_FS_LOADER
 	bool "Enable loader driver for file system in SPL"
 	depends on SPL
