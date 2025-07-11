@@ -5,7 +5,6 @@
 #include <asm/io.h>
 #include <blk.h>
 #include <clk.h>
-#include <common.h>
 #include <dm.h>
 #include <dm/device_compat.h>
 #include <errno.h>
