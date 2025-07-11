@@ -192,14 +192,15 @@ int button_state_handler(enum combined_button_state_t total_button_state, int po
 		case VOLUP_OFF__VOLDN_OFF__SELECT_ON:
 			break;
 		case VOLUP_OFF__VOLDN_ON__SELECT_OFF:
+			env_set("fastboot","1");
 			break;
 		case VOLUP_OFF__VOLDN_ON__SELECT_ON:
 			break;
 		case VOLUP_ON__VOLDN_OFF__SELECT_OFF:
-			//enable_usb_serial_console();
-			//env_set("bootdelay","20");
 			break;
 		case VOLUP_ON__VOLDN_OFF__SELECT_ON:
+			enable_usb_serial_console();
+			env_set("bootdelay","20");
 			break;
 		case VOLUP_ON__VOLDN_ON__SELECT_OFF:
 			break;
@@ -344,22 +345,6 @@ int misc_init_r(void)
 
 	deckard_setup();
 
-	//////////////////////////////////////////
-	//1. check vars that are set before calling any set_env()
-	//2. clear those variables by env_set(...,"")
-	//3. then env_save() if the value is set
-
-	fastboot_envvar = env_get("fastboot");
-	if( fastboot_envvar && ( fastboot_envvar[0] == '1' ) ) 
-	{
-		//clearing fastboot var to avoid getting trapped in fastboot mode
-		env_set("fastboot","");
-		env_save();
-		fastbootmode = 1;
-	}
-	//printf("done checking for auto-clear variables")
-	//////////////////////////////////////////
-
 	ret = button_get_by_label("Volume Down", &btn);
 	if (ret < 0) {
 		printf("Couldn't find Vol- button!\n");
@@ -410,6 +395,22 @@ int misc_init_r(void)
 
 	button_state_handler(total_button_state,power_button_state);
 
+	//////////////////////////////////////////
+	//1. check vars that are set before calling any set_env()
+	//2. clear those variables by env_set(...,"")
+	//3. then env_save() if the value is set
+
+	fastboot_envvar = env_get("fastboot");
+	if( fastboot_envvar && ( fastboot_envvar[0] == '1' ) ) 
+	{
+		//clearing fastboot var to avoid getting trapped in fastboot mode
+		env_set("fastboot","");
+		env_save();
+		fastbootmode = 1;
+	}
+	//printf("done checking for auto-clear variables")
+	//////////////////////////////////////////
+
 	ret = led_get_by_label("blue", &led);
 	if (ret < 0) {
 		printf("Couldn't find blue led!\n");
@@ -432,7 +433,7 @@ int misc_init_r(void)
 	if( fastbootmode ) 
 	{
 		printf("Starting fastboot mode...\n");
-		env_set("kernel_addr_r","90000000");
+		env_set("kernel_addr_r","90000000"); //is this right?
 		env_set("serial#","123456789"); //put dummy serial number here used by fastboot
 		run_command("fastboot -l 0x880000000 -s 0x10000000 usb 0", 0);
 	}
