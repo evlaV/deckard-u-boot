@@ -352,7 +352,7 @@ int misc_init_r(void)
 		state = button_get_state(btn);
 		if (state == BUTTON_ON) {
 			printf("Vol- button pressed\n");
-			total_button_state |= VOLUP_BUTTON_MASK;
+			total_button_state |= VOLDN_BUTTON_MASK;
 		}
 	}
 
@@ -363,7 +363,7 @@ int misc_init_r(void)
 		state = button_get_state(btn);
 		if (state == BUTTON_ON) {
 			printf("Vol+ button pressed\n");
-			total_button_state |= VOLDN_BUTTON_MASK;
+			total_button_state |= VOLUP_BUTTON_MASK;
 		}
 		else
 		{
