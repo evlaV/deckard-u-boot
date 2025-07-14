@@ -42,7 +42,7 @@
 		};
 
 		key-select {
-			label = "select";
+			label = "Select";
 			linux,code = <KEY_SELECT>;
 			gpios = <&pm8550b_gpios 5 GPIO_ACTIVE_LOW>;
 			debounce-interval = <15>;
