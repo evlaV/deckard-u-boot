@@ -53,7 +53,8 @@ struct lpm026m648c_priv {
 	struct udevice *vdd;
 	struct udevice *backlight;
 
-	struct gpio_desc reset_gpios[RESET_NUM];
+	struct gpio_desc reset1_gpio;
+	struct gpio_desc reset2_gpio;
 	struct gpio_desc enp_gpio;
 
 	struct mipi_dsi_device *device;
@@ -319,6 +320,7 @@ static int lpm026m648c_panel_of_to_plat(struct udevice *dev)
 	struct lpm026m648c_priv *priv = dev_get_priv(dev);
 	int ret;
 
+printf("============%s called\n", __func__);
 /*
 	ret = uclass_get_device_by_phandle(UCLASS_PANEL_BACKLIGHT, dev,
 					   "backlight", &priv->backlight);
@@ -326,7 +328,6 @@ static int lpm026m648c_panel_of_to_plat(struct udevice *dev)
 		log_err("cannot get backlight: ret = %d\n", ret);
 		return ret;
 	}
-*/
 
 	ret = uclass_get_device_by_phandle(UCLASS_REGULATOR, dev,
 					   "vdda-supply", &priv->vdd);
@@ -334,18 +335,26 @@ static int lpm026m648c_panel_of_to_plat(struct udevice *dev)
 		dev_err(dev, "cannot get vdd-supply: ret = %d\n", ret);
 		return ret;
 	}
-
-	ret = gpio_request_list_by_name(dev, "reset-gpios",
-				   priv->reset_gpios, RESET_NUM, GPIOD_IS_OUT);
-	if (ret) {
-		dev_err(dev, "could not decode reset-gpios (%d)\n", ret);
-		return ret;
-	}
+*/
 
 	ret = gpio_request_by_name(dev, "enp-gpios", 0,
 				   &priv->enp_gpio, GPIOD_IS_OUT);
 	if (ret) {
 		dev_err(dev, "could not decode enp-gpios (%d)\n", ret);
+		return ret;
+	}
+
+	ret = gpio_request_by_name(dev, "reset1-gpios", 0,
+				   &priv->reset1_gpio, GPIOD_IS_OUT);
+	if (ret) {
+		dev_err(dev, "could not decode reset1-gpios (%d)\n", ret);
+		return ret;
+	}
+
+	ret = gpio_request_by_name(dev, "reset2-gpios", 0,
+				   &priv->reset2_gpio, GPIOD_IS_OUT);
+	if (ret) {
+		dev_err(dev, "could not decode reset2-gpios (%d)\n", ret);
 		return ret;
 	}
 
@@ -358,6 +367,7 @@ static int lpm026m648c_panel_probe(struct udevice *dev)
 	struct lpm026m648c_priv *priv = dev_get_priv(dev);
 	int ret;
 
+printf("============%s called\n", __func__);
 	/* fill characteristics of DSI data link */
 	plat->lanes = 3;
 	plat->format = MIPI_DSI_FMT_RGB888;
@@ -365,19 +375,22 @@ static int lpm026m648c_panel_probe(struct udevice *dev)
 			MIPI_DSI_CLOCK_NON_CONTINUOUS;
 
 	priv->dev = dev;
+/*
 	ret = regulator_set_enable_if_allowed(priv->vdd, 1);
 	if (ret) {
 		dev_err(dev, "%s: enabling vdd-supply failed (%d)\n",
 			  __func__, ret);
 		return ret;
 	}
+*/
 
 	mdelay(2);
         dm_gpio_set_value(&priv->enp_gpio, 1);
 	mdelay(20);
-	dm_gpio_set_value(&priv->reset_gpios[0], 1);
-	dm_gpio_set_value(&priv->reset_gpios[1], 1);
+	dm_gpio_set_value(&priv->reset1_gpio, 1);
+	dm_gpio_set_value(&priv->reset2_gpio, 1);
 
+printf("============%s ret 0\n", __func__);
 	return 0;
 }
 

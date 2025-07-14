@@ -971,12 +971,14 @@
 		compatible = "jdi,lpm026m648c";
 		dual-panel;
 
-		reset-gpios = <&pm8550_gpios 3 GPIO_ACTIVE_HIGH>,
-			      <&pm8550_gpios 11 GPIO_ACTIVE_HIGH>;
+		reset1-gpios = <&pm8550_gpios 3 GPIO_ACTIVE_HIGH>;
+		reset2-gpios = <&pm8550_gpios 11 GPIO_ACTIVE_HIGH>;
 		enp-gpios = <&tlmm 32 GPIO_ACTIVE_HIGH>;
 
+/*
 		wled1-supply = <&backlight>;
 		vdda-supply = <&vreg_l12b_1p8>;
+*/
 
 		ports {
 			#address-cells = <1>;
