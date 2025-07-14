@@ -382,7 +382,7 @@ int misc_init_r(void)
 		}
 	}
 
-	ret = button_get_by_label("select", &btn);
+	ret = button_get_by_label("Select", &btn);
 	if (ret < 0) {
 		printf("Couldn't find select button!\n");
 	} else {
