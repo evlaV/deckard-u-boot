@@ -179,8 +179,7 @@ static ulong iterate_boot_count(void)
 }
 
 /*
-Removing show/list buttons for now as it reports invalid values for some buttons.
-
+ * for debuging, maybe remove it later
 static int show_button_state(struct udevice *dev)
 {
 	int ret;
@@ -194,10 +193,6 @@ static int show_button_state(struct udevice *dev)
 	return ret;
 }
 
-TODO Select button is on pm8550b which needs a pull-up enabled to be 
-     read correctly.  SPL does not currently support pinctrl so this is
-     not getting set.  To correctly list all suppported buttons we would
-     need to import pinctrl ( or some pin setup ).  
 static void list_buttons(void)
 {
 	struct udevice *dev;
@@ -224,37 +219,35 @@ static void list_buttons(void)
 }
 */
 
-static void check_for_recovery_button(void)
+static enum button_state_t deckard_spl_get_button_state(const char *label)
 {
+	enum button_state_t state;
 	struct udevice *dev;
 	int ret;
 
-	for (ret = uclass_first_device_check(UCLASS_BUTTON, &dev);
-	     dev;
-	     ret = uclass_next_device_check(&dev)) {
-		struct button_uc_plat *plat = dev_get_uclass_plat(dev);
+	ret = button_get_by_label(label, &dev);
+	if (ret < 0)
+		return ret;
 
-		if (ret) {
-			printf("BUTTON device %s probe error %i\n",
-			       dev->name, ret);
-			continue;
-		}
+	state = button_get_state(dev);
+	if (state < 0 || state >= BUTTON_COUNT)
+		return -EINVAL;
 
-		if (plat->label) {
-			ret = button_get_state(dev);
-			if (ret >= BUTTON_COUNT)
-				ret = -EINVAL;
-			if( (ret >= 0) && !strncmp(plat->label,RESCUE_BUTTON,sizeof(RESCUE_BUTTON)) )
-			{
-				printf("recovery_check: %-15s %s\n", plat->label, ret ? "on" : "off");
-				if(ret)
-				{
-					printf("Rescue mode chosen by button press: %s\n", RESCUE_BUTTON);
-					go_to_rescue = 1;
-				}
-			}
-		}
+	return state;
+}
+
+static void deckard_spl_check_for_recovery_button(void)
+{
+	enum button_state_t button_rescue_state;
+
+	button_rescue_state = deckard_spl_get_button_state(RESCUE_BUTTON);
+
+	if (button_rescue_state == BUTTON_ON) {
+		printf("Rescue mode chosen by button press: %s\n", RESCUE_BUTTON);
+		go_to_rescue = 1;
 	}
+
+	return;
 }
 
 
@@ -281,7 +274,7 @@ void qcom_spl_board_init(void)
 
 	deckard_spl_battery_charging_setup(&battery_voltage);
 
-	check_for_recovery_button();
+	deckard_spl_check_for_recovery_button();
 
 	ret = ufs_probe();
 	if (ret)
