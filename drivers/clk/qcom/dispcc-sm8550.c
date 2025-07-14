@@ -807,6 +807,7 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		 * dsi0_phy_pll_out_dsiclk and GGrand-parent dsi0_pll_post_out_div_clk
 		 * rate are 243149748 per test. The GGGrand-parent dsi0_pll_out_div_clk
 		 * is 851024121 */
+		/* TODO: this clk use clk_pixel_ops in Linux, not mnd */
 		freq = qcom_find_freq(ftbl_disp_cc_mdss_pclk0_clk_src, rate);
 		clk_rcg_set_rate_mnd(priv->base, 0x80a8,
 				     freq->pre_div, freq->m, freq->n, freq->src, 8);

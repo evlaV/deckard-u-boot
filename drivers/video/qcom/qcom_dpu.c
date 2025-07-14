@@ -859,8 +859,6 @@ printf("=========%s line %d\n", __func__, __LINE__);
 */
 
 	if (IS_ENABLED(CONFIG_VIDEO_BRIDGE)) {
-		//ret = uclass_get_device(UCLASS_VIDEO_BRIDGE, 0, &bridge);
-		//ret = uclass_find_first_device(UCLASS_VIDEO_BRIDGE, &bridge);
 		ret = uclass_get_device(UCLASS_VIDEO_BRIDGE, 0, &bridge);
 		if (ret) {
 			dev_dbg(dev,
@@ -878,6 +876,20 @@ printf("=========%s line %d\n", __func__, __LINE__);
 		np = ofnode_to_np(dev_ofnode(bridge));
 		if (of_find_property(np, "qcom,dual-dsi-mode", &len)) {
 			dev_dbg(bridge, "Dual DSI is found. To attach it\n");
+			ret = uclass_get_device(UCLASS_VIDEO_BRIDGE, 1, &bridge);
+			if (ret) {
+				dev_dbg(dev,
+					"No video bridge, err %d\n", ret);
+				return ret;
+			}
+
+			if (bridge) {
+				ret = video_bridge_attach(bridge);
+				if (ret) {
+					dev_err(bridge, "fail to attach bridge\n");
+					return ret;
+				}
+			}
 		}
 	} else {
 		dev_dbg(dev,
@@ -925,19 +937,12 @@ printf("=========%s line %d\n", __func__, __LINE__);
 printf("=========%s uc_priv->bpix %d, uc_priv 0x%x\n", __func__, uc_priv->bpix, uc_priv);
 
 
-	if (!bridge) {
-		ret = panel_enable_backlight(panel);
-		if (ret) {
-			dev_err(dev, "panel %s enable backlight error %d\n",
-				panel->name, ret);
-			return ret;
-		}
-	} else if (IS_ENABLED(CONFIG_VIDEO_BRIDGE)) {
-		ret = video_bridge_set_backlight(bridge, 80);
-		if (ret) {
-			dev_err(dev, "fail to set backlight\n");
-			return ret;
-		}
+	/* Call panel api directly instead of via bridge, as we have 2 bridges */
+	ret = panel_enable_backlight(panel);
+	if (ret) {
+		dev_err(dev, "panel %s enable backlight error %d\n",
+			panel->name, ret);
+		return ret;
 	}
 
 	video_set_flush_dcache(dev, true);

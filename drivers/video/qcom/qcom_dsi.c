@@ -51,6 +51,7 @@
 #define DSI_TPG_DMA_FIFO_MODE BIT(2)
 #define DSI_CMD_DMA_PATTERN_SEL (BIT(16) | BIT(17))
 
+/* for bridge */
 struct qcom_dsi_priv {
 	struct mipi_dsi_device device;
 	void __iomem *base;
@@ -62,13 +63,29 @@ struct qcom_dsi_priv {
 	int lane_max_kbps;
 	struct udevice *vdd_reg;
 	struct udevice *dsi_host;
-	struct udevice *dsi_host2;
+};
+
+/* for dsi host */
+struct qcom_mipi_dsi {
+	struct mipi_dsi_host dsi_host;
+	struct mipi_dsi_device *device;
+	void __iomem *base;
+	unsigned int lane_mbps; /* per lane */
+	u32 channel;
+	unsigned int max_data_lanes;
+	const struct mipi_dsi_phy_ops *phy_ops;
 };
 
 static struct qcom_dsi_priv_global {
-	struct qcom_dsi_priv *priv0;
-	struct qcom_dsi_priv *priv1;
+	struct qcom_mipi_dsi *priv0;
+	struct qcom_mipi_dsi *priv1;
+	bool dual_dsi;
 } qcom_dsi_global;
+
+static inline struct qcom_mipi_dsi *host_to_dsi(struct mipi_dsi_host *host)
+{
+	return container_of(host, struct qcom_mipi_dsi, dsi_host);
+}
 
 static inline void dsi_write(void *addr, u32 val)
 {
@@ -452,6 +469,142 @@ static int dsi_pll_get_params(struct qcom_dsi_priv *dsi,
 }
 #endif
 
+
+static int qcom_mipi_dsi_host_attach(struct mipi_dsi_host *host,
+				   struct mipi_dsi_device *device)
+{
+	struct qcom_mipi_dsi *dsi = host_to_dsi(host);
+
+	if (device->lanes > dsi->max_data_lanes) {
+		dev_err(device->dev,
+			"the number of data lanes(%u) is too many\n",
+			device->lanes);
+		return -EINVAL;
+	}
+
+	dsi->channel = device->channel;
+
+	return 0;
+}
+
+static ssize_t qcom_mipi_dsi_host_transfer(struct mipi_dsi_host *host,
+					 const struct mipi_dsi_msg *msg)
+{
+	struct qcom_mipi_dsi *dsi = host_to_dsi(host);
+	struct mipi_dsi_packet packet;
+	int ret, nb_bytes;
+
+#if 0
+	ret = mipi_dsi_create_packet(&packet, msg);
+	if (ret) {
+		dev_err(host->dev, "failed to create packet: %d\n", ret);
+		return ret;
+	}
+
+	qcom_mipi_message_config(dsi, msg);
+
+	ret = qcom_mipi_dsi_write(dsi, &packet);
+	if (ret)
+		return ret;
+
+	if (msg->rx_buf && msg->rx_len) {
+		ret = qcom_mipi_dsi_read(dsi, msg);
+		if (ret)
+			return ret;
+		nb_bytes = msg->rx_len;
+	} else {
+		nb_bytes = packet.size;
+	}
+
+#endif
+	return nb_bytes;
+}
+
+static const struct mipi_dsi_host_ops qcom_mipi_dsi_host_ops = {
+	.attach = qcom_mipi_dsi_host_attach,
+	.transfer = qcom_mipi_dsi_host_transfer,
+};
+
+
+static int qcom_mipi_dsi_init(struct udevice *dev,
+			    struct mipi_dsi_device *device,
+			    struct display_timing *timings,
+			    unsigned int max_data_lanes,
+			    const struct mipi_dsi_phy_ops *phy_ops)
+{
+	struct qcom_mipi_dsi *dsi = dev_get_priv(dev);
+	struct clk clk;
+	int ret;
+
+	dev_dbg(dev, "Initialize DSI host\n");
+	if (!phy_ops->init || !phy_ops->get_lane_mbps) {
+		dev_err(device->dev, "Phy not properly configured\n");
+		return -ENODEV;
+	}
+
+	dsi->phy_ops = phy_ops;
+	dsi->max_data_lanes = max_data_lanes;
+	dsi->device = device;
+	dsi->dsi_host.dev = (struct device *)dev;
+	dsi->dsi_host.ops = &qcom_mipi_dsi_host_ops;
+	device->host = &dsi->dsi_host;
+
+#if 0
+	dsi->base = dev_read_addr_ptr(device->dev);
+	if (!dsi->base) {
+		dev_err(device->dev, "dsi dt register address error\n");
+		return -EINVAL;
+	}
+
+	ret = clk_get_by_name(device->dev, "px_clk", &clk);
+	if (ret) {
+		dev_err(device->dev, "peripheral clock get error %d\n", ret);
+		return ret;
+	}
+
+	/*  get the pixel clock set by the clock framework */
+	timings->pixelclock.typ = clk_get_rate(&clk);
+
+	qcom_mipi_dsi_bridge_set(dsi, timings);
+#endif
+
+	return 0;
+}
+
+static int qcom_mipi_dsi_enable(struct udevice *dev)
+{
+	struct qcom_mipi_dsi *dsi = dev_get_priv(dev);
+
+	dev_dbg(dev, "Enable DSI host\n");
+	/* Switch to video mode for panel-bridge enable & panel enable */
+	//qcom_mipi_dsi_set_mode(dsi, MIPI_DSI_MODE_VIDEO);
+
+	return 0;
+}
+
+struct dsi_host_ops qcom_mipi_dsi_ops = {
+	.init = qcom_mipi_dsi_init,
+	.enable = qcom_mipi_dsi_enable,
+};
+
+static int qcom_mipi_dsi_probe(struct udevice *dev)
+{
+	dev_dbg(dev, "DSI host probe\n");
+	return 0;
+}
+
+U_BOOT_DRIVER(qcom_mipi_dsi) = {
+	.name			= "qcom_mipi_dsi",
+	.id			= UCLASS_DSI_HOST,
+	.probe			= qcom_mipi_dsi_probe,
+	.ops			= &qcom_mipi_dsi_ops,
+	.priv_auto		= sizeof(struct qcom_mipi_dsi),
+};
+
+
+
+
+
 static int dsi_phy_init(void *priv_data)
 {
 	struct mipi_dsi_device *device = priv_data;
@@ -550,16 +703,18 @@ printf("------------%s enter\n", __func__);
 		return ret;
 	}
 
-printf("------------%s line %d\n", __func__, __LINE__);
 	mplat = dev_get_plat(priv->panel);
 	device->lanes = mplat->lanes;
 	device->format = mplat->format;
 	device->mode_flags = mplat->mode_flags;
 
 	if (device->index) {
+printf("------------%s dsi device 2: %p\n", __func__, &priv->device);
 		mplat->device2 = &priv->device;
 		qcom_dsi_global.priv1 = priv;
+		qcom_dsi_global.dual_dsi = true;
 	} else {
+printf("------------%s dsi device 0: %p\n", __func__, &priv->device);
 		mplat->device = &priv->device;
 		qcom_dsi_global.priv0 = priv;
 	}
@@ -598,6 +753,7 @@ static int qcom_dsi_set_backlight(struct udevice *dev, int percent)
 printf("------------%s called\n", __func__);
 	return 0;
 }
+
 /* TODO: backlight regulators are enabled by default. attach to panel later.
 static int qcom_dsi_set_backlight(struct udevice *dev, int percent)
 {
@@ -626,13 +782,11 @@ static int qcom_dsi_bind(struct udevice *dev)
 	int ret;
 
 printf("=============%s enter\n", __func__);
-/*
-	ret = device_bind_driver_to_node(dev, "qcom-dsi", "mdss_dsi",
+	ret = device_bind_driver_to_node(dev, "qcom_mipi_dsi", "mdss_dsi",
 					 dev_ofnode(dev), NULL);
 printf("=============%s result %d, will scan panel next\n", __func__, ret);
 	if (ret)
 		return ret;
-*/
 
 	return dm_scan_fdt_dev(dev);
 }
@@ -661,7 +815,7 @@ printf("=============%s enter\n", __func__);
 		device->index = ret;
 	else
 		return ret;
-printf("=============%s line %d\n", __func__, __LINE__);
+printf("=============%s line %d device->index %d\n", __func__, __LINE__, device->index);
 
 /*
 	ret =  device_get_supply_regulator(dev, "phy-dsi-supply",
