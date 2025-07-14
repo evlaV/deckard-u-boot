@@ -341,6 +341,7 @@ printf("============%s called\n", __func__);
 		return ret;
 	}
 */
+	priv->is_dual_panel = ofnode_read_bool(dev_ofnode(dev), "dual-panel");
 
 	ret = gpio_request_by_name(dev, "enp-gpios", 0,
 				   &priv->enp_gpio, GPIOD_IS_OUT);
