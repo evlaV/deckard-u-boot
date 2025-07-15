@@ -456,20 +456,34 @@ int ft_board_setup(void *fdt, struct bd_info *bd)
 	int nodeoffset;
 	int ret;
 
-	boot_wrapper_version = env_get("boot_wrapper_version");
-
-	if (!boot_wrapper_version)
-		return 0;
-
 	/* find or create "/chosen" node. */
 	nodeoffset = fdt_find_or_add_subnode(fdt, 0, "chosen");
 	if (nodeoffset < 0)
 		return nodeoffset;
 
 	/* add bootwrapper version */
-	ret = fdt_setprop_string(fdt, nodeoffset, "bootwrapper,version", boot_wrapper_version);
+	boot_wrapper_version = env_get("boot_wrapper_version");
+	ret = fdt_setprop_string(fdt, nodeoffset, "bootwrapper,version", boot_wrapper_version ? boot_wrapper_version : "-1");
 	if (ret < 0) {
 		printf("WARNING: could not set bootwrapper,version %s.\n",
+			   fdt_strerror(ret));
+		return ret;
+	}
+
+	/* add charger capability */
+	//this will indicate that u-boot has the ability to do charging within u-boot
+	ret = fdt_setprop_string(fdt, nodeoffset, "u-boot,charger", "1");
+	if (ret < 0) {
+		printf("WARNING: could not set u-boot,charger %s.\n",
+			   fdt_strerror(ret));
+		return ret;
+	}
+
+	/* add display capability */
+	//this will indicate that u-boot has the ability to driver display within u-boot
+	ret = fdt_setprop_string(fdt, nodeoffset, "u-boot,display", "0"); //set this to 1 when display works
+	if (ret < 0) {
+		printf("WARNING: could not set u-boot,display %s.\n",
 			   fdt_strerror(ret));
 		return ret;
 	}
