@@ -14,4 +14,6 @@
 
 int pmk8550_get_battery_voltage(struct udevice *pmic, uint16_t *battery_mv);
 
+int pmk8550_get_pon_reason(struct udevice *pmic);
+
 #endif /* __PMK8550_H */
