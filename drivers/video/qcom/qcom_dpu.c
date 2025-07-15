@@ -897,8 +897,6 @@ printf("=========%s line %d\n", __func__, __LINE__);
 	}
 
 printf("=========%s line %d\n", __func__, __LINE__);
-	//ret = uclass_first_device_err(UCLASS_PANEL, &panel);
-	//ret = uclass_find_first_device(UCLASS_PANEL, &panel);
 	ret = uclass_get_device(UCLASS_PANEL, 0, &panel);
 	if (ret) {
 		dev_err(dev, "panel device error %d\n", ret);
@@ -937,7 +935,9 @@ printf("=========%s line %d\n", __func__, __LINE__);
 printf("=========%s uc_priv->bpix %d, uc_priv 0x%x\n", __func__, uc_priv->bpix, uc_priv);
 
 
-	/* Call panel api directly instead of via bridge, as we have 2 bridges */
+	/* Call panel api directly instead of via bridge, as we have 2 bridges.
+	 * But we cannot call dsi_host_enable in bridge backlight api this way.
+	 * Then we need to enable dsi in dsi_host_init */
 	ret = panel_enable_backlight(panel);
 	if (ret) {
 		dev_err(dev, "panel %s enable backlight error %d\n",

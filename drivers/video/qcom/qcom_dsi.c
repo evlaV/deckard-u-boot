@@ -4,6 +4,7 @@
  *
  */
 
+#define DEBUG
 #define LOG_CATEGORY UCLASS_VIDEO_BRIDGE
 
 #include <clk.h>
@@ -739,7 +740,7 @@ printf("------------%s line %d\n", __func__, __LINE__);
 		return ret;
 	}
 
-printf("------------%s line %d host init\n", __func__, __LINE__);
+printf("------------%s line %d call dsi_host_init, while qcom_mipi_dsi_init is %p\n", __func__, __LINE__, qcom_mipi_dsi_init);
 	ret = dsi_host_init(priv->dsi_host, device, &timings, 3,
 			    &mdss_dsi_phy_ops);
 	if (ret) {
@@ -753,15 +754,12 @@ printf("------------%s exit ok\n", __func__);
 
 static int qcom_dsi_set_backlight(struct udevice *dev, int percent)
 {
-printf("------------%s called\n", __func__);
-	return 0;
-}
-
-/* TODO: backlight regulators are enabled by default. attach to panel later.
-static int qcom_dsi_set_backlight(struct udevice *dev, int percent)
-{
 	struct qcom_dsi_priv *priv = dev_get_priv(dev);
+	struct mipi_dsi_host *dsi_host;
 	int ret;
+
+	dev_err(dev, "panel %s backlight enabling skipped to avoid panic for temp\n");
+//	return 0;
 
 	ret = panel_enable_backlight(priv->panel);
 	if (ret) {
@@ -770,7 +768,17 @@ static int qcom_dsi_set_backlight(struct udevice *dev, int percent)
 		return ret;
 	}
 
-	ret = dsi_host_enable(priv->dsi_host);
+	dsi_host = &qcom_dsi_global.priv0->dsi_host;
+	ret = dsi_host_enable(dsi_host);
+	if (ret) {
+		dev_err(dev, "failed to enable mipi dsi host\n");
+		return ret;
+	}
+
+	if(!qcom_dsi_global.priv1)
+		return 0;
+	dsi_host = &qcom_dsi_global.priv1->dsi_host;
+	ret = dsi_host_enable(dsi_host);
 	if (ret) {
 		dev_err(dev, "failed to enable mipi dsi host\n");
 		return ret;
@@ -778,7 +786,6 @@ static int qcom_dsi_set_backlight(struct udevice *dev, int percent)
 
 	return 0;
 }
-*/
 
 static int qcom_dsi_bind(struct udevice *dev)
 {
@@ -868,7 +875,6 @@ printf("=============%s line %d device->index %d\n", __func__, __LINE__, device-
 		ret = -ENODEV;
 		goto err_clk;
 	}
-	dm_scan_fdt_dev(dev);
 
 printf("=============%s ret 0\n", __func__);
 	return 0;

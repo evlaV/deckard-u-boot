@@ -198,7 +198,7 @@ struct mipi_dsi_device_info {
  * @format: pixel format for video mode
  * @lanes: number of active data lanes
  * @mode_flags: DSI operation mode related flags
- * @index: the DSI index on the panel for dual DSI case
+ * @index: the DSI index for dual DSI port case
  */
 struct mipi_dsi_device {
 	struct mipi_dsi_host *host;
