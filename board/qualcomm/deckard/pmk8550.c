@@ -18,6 +18,8 @@
 #define ADC_APP1_CH0_DATA1     (ADC_APP1_BASE + 0x5D)
 #define ADC_APP1_TRIGGER_SET   (ADC_APP1_BASE + 0xE5)
 
+#define PON_AOP_PON_REASON1		0x7269
+
 /// @brief Read the VBAT_SNS_Charger ADC for the 2S Voltage.
 /// @param pmic
 /// @param battery_mv
@@ -92,4 +94,11 @@ int pmk8550_get_battery_voltage(struct udevice *pmic, uint16_t *battery_mv)
 	// printf("Battery: %d mV\n", *battery_mv);
 
 	return (0);
+}
+
+int pmk8550_get_pon_reason(struct udevice *pmic)
+{
+	int ret = pmic_reg_read(pmic, PON_AOP_PON_REASON1);
+
+	return ret;
 }

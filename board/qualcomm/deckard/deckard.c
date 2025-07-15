@@ -29,6 +29,7 @@
 #include "deckard_battery.h"
 #include "pm8550vs.h"
 #include "smb1510.h"
+#include "pmk8550.h"
 #include <part.h>
 #include "deckard.h"
 
@@ -124,6 +125,8 @@ static void deckard_disable_watchdog(void)
 	write32(HWIO_APSS_WDT_TMR2_WDOG_CTL_ADDR, 0);
 }
 
+int pon_reason = 0;
+
 static void deckard_setup(void)
 {
 	int             ret;
@@ -164,6 +167,9 @@ static void deckard_setup(void)
 
 	/* Ensure Battery is OK to proceed */
 	deckard_battery_prep_for_boot(pmk8550, pm8550b);
+
+	/* Read PON reason from pmk8550 (which is from AOP SDAM3) */
+	pon_reason = pmk8550_get_pon_reason(pmk8550);
 
 	printf("smb1510: enable fixed frequency at 500khz mode\n");
 	smb1510_set_switching_frequency(pmk8550, 0x0F);
@@ -513,6 +519,95 @@ int scsi_do_load_helper(char * partition, char * addr, char * path)
 	return do_load(NULL, 0, argc, argv, FS_TYPE_EXT);
 }
 
+int power_button_pushed(struct udevice *btn)
+{
+	enum button_state_t state;
+	state = button_get_state(btn);
+	if (state == BUTTON_ON) {
+		printf("PWR button pressed\n");
+		return 1;
+	}
+
+	return 0;
+}
+
+int prepare_for_boot()
+{
+	struct udevice  *led_red, *led_green, *led_blue;	
+	struct udevice *btn;
+	int leds_avail = 0;
+	int power_button_avail = 0;
+	
+	//TODO: should load adsp and get type-c charging running
+	
+	//check pon_reason to see if we were booted by a button push or warm reset (reboot command)
+
+	printf("pon_reason: %d\n",pon_reason);
+	if(pon_reason & 0x80)
+	{
+		printf("pon_reason includes button press, continuing to boot\n");
+		return 0;
+	}
+	else if(pon_reason & 0x01)
+	{
+		printf("pon_reason includes warm reset, continuing to boot\n");
+		return 0;
+	}
+
+	printf("Waiting for power button press to continue booting...\n");
+
+	int ret_r = led_get_by_label("red", &led_red);
+	int ret_g = led_get_by_label("green", &led_green);
+	int ret_b = led_get_by_label("blue", &led_blue);
+	if ( ret_r < 0 || ret_g < 0 || ret_b < 0 ) {
+		printf("Couldn't find led!\n");
+	}
+	 else 
+	{
+		leds_avail = 1;
+	}
+	
+	int ret = button_get_by_label("Power Button", &btn);
+	if (ret < 0) 
+	{
+		printf("Couldn't find power button!\n");
+	} 
+	else
+	{
+		power_button_avail = 1;
+	}
+
+	//trap in uboot while we wait for power button to be pushed
+	//we should charge and do various things here like light up the LED's etc
+	while(power_button_avail)
+	{
+		if(power_button_pushed(btn)) 
+		{
+			break;
+		}
+
+		//polling loop -- maybe be interrupt driven somehow?
+		mdelay(100);
+	}
+
+	if(leds_avail)
+	{
+		led_set_state(led_red, LEDST_ON);
+		led_set_state(led_green, LEDST_ON);
+		led_set_state(led_blue, LEDST_ON);
+		mdelay(100);
+		led_set_state(led_red, LEDST_OFF);
+		led_set_state(led_green, LEDST_OFF);
+		led_set_state(led_blue, LEDST_OFF);
+		mdelay(100);
+		led_set_state(led_red, LEDST_ON);
+		led_set_state(led_green, LEDST_ON);
+		led_set_state(led_blue, LEDST_ON);
+	}
+
+	return 0;
+}
+
 // per arm64 linux boot documenation, default text_offset is 0x80000
 #define ADDR_KERNEL "0x88000000"
 // this gives us roughly 290 Megabytes for kernel, dtb, and initrd
@@ -622,6 +717,9 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	env_set("kernel_addr_r", ADDR_KERNEL);
 	env_set("ramdisk_addr_r", INITRD_ADDR);
 	env_set("fdtcontroladdr", DTB_ADDR);
+
+	prepare_for_boot();
+
 	run_command("booti ${kernel_addr_r} ${ramdisk_addr_r} ${fdtcontroladdr}", 0);
 
 	printf("!!Boot Failed, Reset!!");
