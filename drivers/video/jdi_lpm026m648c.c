@@ -301,7 +301,7 @@ printf("======= %s priv->is_dual_panel %d plat->device %p\n", __func__, priv->is
 	if (priv->is_dual_panel)
 		plat->device2->mode_flags |= MIPI_DSI_MODE_LPM;
 
-printf("======= %s line %d\n", __func__, __LINE__);
+printf("======= %s set device %p device2 %p\n", __func__, plat->device, plat->device2);
 	priv->device = plat->device;
 	priv->device2 = plat->device2;
 	mdelay(20);

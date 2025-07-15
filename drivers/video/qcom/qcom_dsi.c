@@ -494,6 +494,7 @@ static ssize_t qcom_mipi_dsi_host_transfer(struct mipi_dsi_host *host,
 	struct mipi_dsi_packet packet;
 	int ret, nb_bytes;
 
+printf("======%s tx %d rx %d with base %p\n", __func__, msg->tx_len, msg->rx_len, dsi->base);
 #if 0
 	ret = mipi_dsi_create_packet(&packet, msg);
 	if (ret) {
@@ -549,13 +550,13 @@ static int qcom_mipi_dsi_init(struct udevice *dev,
 	dsi->dsi_host.ops = &qcom_mipi_dsi_host_ops;
 	device->host = &dsi->dsi_host;
 
-#if 0
 	dsi->base = dev_read_addr_ptr(device->dev);
 	if (!dsi->base) {
 		dev_err(device->dev, "dsi dt register address error\n");
 		return -EINVAL;
 	}
 
+#if 0
 	ret = clk_get_by_name(device->dev, "px_clk", &clk);
 	if (ret) {
 		dev_err(device->dev, "peripheral clock get error %d\n", ret);
@@ -694,7 +695,7 @@ static int qcom_dsi_attach(struct udevice *dev)
 	struct mipi_dsi_device *device = &priv->device;
 	struct mipi_dsi_panel_plat *mplat;
 	struct display_timing timings;
-	int ret;
+	int ret, host_index;
 
 printf("------------%s enter\n", __func__);
 	ret = uclass_first_device_err(UCLASS_PANEL, &priv->panel);
@@ -713,10 +714,12 @@ printf("------------%s dsi device 2: %p\n", __func__, &priv->device);
 		mplat->device2 = &priv->device;
 		qcom_dsi_global.priv1 = priv;
 		qcom_dsi_global.dual_dsi = true;
+		host_index = 1;
 	} else {
 printf("------------%s dsi device 0: %p\n", __func__, &priv->device);
 		mplat->device = &priv->device;
 		qcom_dsi_global.priv0 = priv;
+		host_index = 0;
 	}
 
 	ret = panel_get_display_timing(priv->panel, &timings);
@@ -730,13 +733,13 @@ printf("------------%s dsi device 0: %p\n", __func__, &priv->device);
 	}
 
 printf("------------%s line %d\n", __func__, __LINE__);
-	ret = uclass_get_device(UCLASS_DSI_HOST, 0, &priv->dsi_host);
+	ret = uclass_get_device(UCLASS_DSI_HOST, host_index, &priv->dsi_host);
 	if (ret) {
 		dev_err(dev, "No video dsi host detected %d\n", ret);
 		return ret;
 	}
 
-printf("------------%s line %d\n", __func__, __LINE__);
+printf("------------%s line %d host init\n", __func__, __LINE__);
 	ret = dsi_host_init(priv->dsi_host, device, &timings, 3,
 			    &mdss_dsi_phy_ops);
 	if (ret) {

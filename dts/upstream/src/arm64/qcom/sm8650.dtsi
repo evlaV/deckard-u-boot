@@ -3873,10 +3873,12 @@
 					      "iface",
 					      "bus";
 
+/*
 				assigned-clocks = <&dispcc DISP_CC_MDSS_BYTE1_CLK_SRC>,
 						  <&dispcc DISP_CC_MDSS_PCLK1_CLK_SRC>;
 				assigned-clock-parents = <&mdss_dsi1_phy 0>,
 							 <&mdss_dsi1_phy 1>;
+*/
 
 				operating-points-v2 = <&mdss_dsi_opp_table>;
 
