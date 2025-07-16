@@ -278,7 +278,7 @@ const char *deckard_get_fw_part(void)
 const char *fs_firmware_get_partition(void)
 {
 	char *bootedslot;
-
+#if 0
 	bootedslot = env_get("booted_slot");
 	switch(bootedslot[0]){
 		case 'A':
@@ -291,6 +291,9 @@ const char *fs_firmware_get_partition(void)
 			return DECKARD_SLOT_A_PARTITION;
 			break;
 	}
+#else
+	return deckard_get_fw_part();
+#endif	
 }
 
 
