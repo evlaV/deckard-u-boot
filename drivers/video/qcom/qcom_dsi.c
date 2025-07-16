@@ -11,8 +11,10 @@
 #include <dm.h>
 #include <dsi_host.h>
 #include <log.h>
+#include <generic-phy.h>
 #include <mipi_dsi.h>
 #include <panel.h>
+#include <phy-mipi-dphy.h>
 #include <reset.h>
 #include <video.h>
 #include <video_bridge.h>
@@ -27,7 +29,7 @@
 
 #include "mdssreg.h"
 #include "qcom_mipi_dsi.h"
-#include "qcom_dsi_phy.h"
+//#include "qcom_dsi_phy.h"
 
 #define DSI_DMA_STREAM1 0x0
 #define DSI_EMBED_MODE1 0x1
@@ -58,6 +60,7 @@ struct qcom_dsi_priv {
 	void __iomem *base;
 	void __iomem *phy_base;
 	struct udevice *panel;
+	struct phy phy;
 	u32 pllref_clk;
 	u32 hw_version;
 	int lane_min_kbps;
@@ -535,6 +538,7 @@ static int qcom_mipi_dsi_init(struct udevice *dev,
 			    const struct mipi_dsi_phy_ops *phy_ops)
 {
 	struct qcom_mipi_dsi *dsi = dev_get_priv(dev);
+	//const struct mipi_dsi_phy_ops *phy_ops = dsi->phy_ops;
 	struct clk clk;
 	int ret;
 
@@ -569,6 +573,14 @@ static int qcom_mipi_dsi_init(struct udevice *dev,
 
 	qcom_mipi_dsi_bridge_set(dsi, timings);
 #endif
+
+/*
+	ret = phy_ops->get_lane_mbps(device, timings, device->lanes,
+				     device->format, &dsi->lane_mbps);
+	if (ret)
+		dev_warn(dsi->dsi_host.dev, "Phy get_lane_mbps() failed\n");
+*/
+	ret = phy_ops->init(device);
 
 	return 0;
 }
@@ -680,6 +692,38 @@ static int dsi_get_lane_mbps(void *priv_data, struct display_timing *timings,
 
 	dev_dbg(dev, "pll_in %ukHz pll_out %ukHz lane_mbps %uMHz\n",
 		pll_in_khz, pll_out_khz, *lane_mbps);
+
+#if 0
+	bpp = mipi_dsi_pixel_format_to_bpp(format);
+	if (bpp < 0) {
+		dev_err(dsi->dsi_host,
+			"failed to get bpp for pixel format %d\n",
+			format);
+		return bpp;
+	}
+
+	mpclk = DIV_ROUND_UP(timings->pixelclock.typ, 1000);
+	if (mpclk) {
+		/* take 1 / 0.8, since mbps must big than bandwidth of RGB */
+		tmp = (mpclk * (bpp / lanes) * 10 / 8) / 1000;
+		if (tmp < max_mbps)
+			target_mbps = tmp;
+		else
+			dev_err(dsi->dsi_host,
+				"DPHY clock frequency is out of range\n");
+	}
+
+	/* for external phy only the mipi_dphy_config is necessary */
+	if (generic_phy_valid(&dsi->phy)) {
+		phy_mipi_dphy_get_default_config(timings->pixelclock.typ  * 10 / 8,
+						 bpp, lanes,
+						 &dsi->phy_opts);
+		dsi->lane_mbps = target_mbps;
+		*lane_mbps = dsi->lane_mbps;
+
+		return 0;
+	}
+#endif
 
 	return 0;
 }
@@ -826,6 +870,16 @@ printf("=============%s enter\n", __func__);
 	else
 		return ret;
 printf("=============%s line %d device->index %d\n", __func__, __LINE__, device->index);
+
+	ret = generic_phy_get_by_name(dev, "dsi", &priv->phy);
+	if (ret && ret != -ENODATA) {
+		dev_err(dev, "failed to get mipi dphy: %d\n", ret);
+		return ret;
+	}
+
+	if (!generic_phy_valid(&priv->phy)) {
+		dev_dbg(dev, "fail to validate phy, phy %p phy->dev %p\n", &priv->phy, priv->phy.dev);
+	}
 
 /*
 	ret =  device_get_supply_regulator(dev, "phy-dsi-supply",

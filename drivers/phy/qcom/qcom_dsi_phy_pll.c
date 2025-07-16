@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 
-#include "mdssreg.h"
+//#include "mdssreg.h"
 //#include "dsi_phy_pll.h"
 
 #define VCO_DELAY_USEC 1

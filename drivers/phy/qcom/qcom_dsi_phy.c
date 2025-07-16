@@ -1,14 +1,25 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
+#include <dm.h>
+#include <dm/device_compat.h>
+#include <dm/devres.h>
+#include <div64.h>
+#include <generic-phy.h>
+#include <linux/kernel.h>
+#include <linux/iopoll.h>
+#include <linux/clk-provider.h>
 #include <linux/delay.h>
 //#include <lib.h>
+#include <linux/math64.h>
+#include <linux/time.h>
+#include <phy-mipi-dphy.h>
 #include <string.h>
 #include <timer.h>
 
-#include "mdssreg.h"
-#include "qcom_display_resources.h"
-#include "qcom_mipi_dsi.h"
-#include "qcom_dsi_phy.h"
+//#include "mdssreg.h"
+//#include "qcom_display_resources.h"
+//#include "qcom_mipi_dsi.h"
+//#include "qcom_dsi_phy.h"
 
 #define HAL_DSI_PHY_PLL_READY_TIMEOUT_MS               150           /* ~15 ms */
 #define HAL_DSI_PHY_REFGEN_TIMEOUT_MS                  150           /* ~15 ms */
@@ -31,6 +42,40 @@
 
 #define write32(addr, val) writel(val, addr)
 #define read32(addr) readl(addr)
+
+struct clk_hw {
+	struct clk_core *core;
+	struct clk *clk;
+	const struct clk_init_data *init;
+};
+
+struct qcom_video_phy_plat_data {
+	const struct qcom_mipi_dphy_timing *qcom_mipi_dphy_timing_table;
+	const unsigned int num_timings;
+	//enum phy_max_rate max_rate;
+};
+
+struct qcom_dsidphy {
+	struct udevice *dev;
+	struct clk *ref_clk;
+	struct clk *ahb_clk;
+	struct clk *pclk_host;
+	const struct qcom_video_phy_plat_data *pdata;
+	void __iomem *base;
+	void __iomem *pll_base;
+	void __iomem *reg_base;
+	void __iomem *lane_base;
+	struct phy_configure_opts_mipi_dphy dphy_cfg;
+
+	struct clk *pll_clk;
+	struct {
+		struct clk_hw hw;
+		u8 prediv;
+		u16 fbdiv;
+		unsigned long rate;
+	} pll;
+};
+
 
 #if 0
 struct dsi_phy_divider_lut_entry_type {
@@ -726,3 +771,199 @@ int mdss_dsi_phy_10nm_init(struct edid *edid, struct dsi_phy_regs *phy_reg,
 	return ret;
 }
 #endif
+
+static void qcom_dsidphy_mipi_mode_enable(struct qcom_dsidphy *qcom)
+{
+//	struct phy_configure_opts_mipi_dphy *cfg = &qcom->dphy_cfg;
+	const struct qcom_mipi_dphy_timing *timings;
+/*
+	u32 t_txbyteclkhs, t_txclkesc;
+	u32 txbyteclkhs, txclkesc, esc_clk_div;
+	u32 hs_exit, clk_post, clk_pre, wakeup, lpx, ta_go, ta_sure, ta_wait;
+	u32 hs_prepare, hs_trail, hs_zero, clk_lane_hs_zero, data_lane_hs_zero;
+	unsigned int i;
+*/
+
+return;
+	timings = qcom->pdata->qcom_mipi_dphy_timing_table;
+
+#if 0
+	//qcom_dsidphy_pll_calc_rate(qcom, cfg->hs_clk_rate);
+
+	txbyteclkhs = qcom->pll.rate / 8;
+	t_txbyteclkhs = div_u64(PSEC_PER_SEC, txbyteclkhs);
+
+	esc_clk_div = DIV_ROUND_UP(txbyteclkhs, 20000000);
+	txclkesc = txbyteclkhs / esc_clk_div;
+	t_txclkesc = div_u64(PSEC_PER_SEC, txclkesc);
+
+	/*
+	 * The value of counter for HS Ths-exit
+	 * Ths-exit = Tpin_txbyteclkhs * value
+	 */
+	hs_exit = DIV_ROUND_UP(cfg->hs_exit, t_txbyteclkhs);
+	/*
+	 * The value of counter for HS Tclk-post
+	 * Tclk-post = Tpin_txbyteclkhs * value
+	 */
+	clk_post = DIV_ROUND_UP(cfg->clk_post, t_txbyteclkhs);
+	/*
+	 * The value of counter for HS Tclk-pre
+	 * Tclk-pre = Tpin_txbyteclkhs * value
+	 */
+	clk_pre = DIV_ROUND_UP(cfg->clk_pre, BITS_PER_BYTE);
+
+	/*
+	 * The value of counter for HS Tta-go
+	 * Tta-go for turnaround
+	 * Tta-go = Ttxclkesc * value
+	 */
+	ta_go = DIV_ROUND_UP(cfg->ta_go, t_txclkesc);
+	/*
+	 * The value of counter for HS Tta-sure
+	 * Tta-sure for turnaround
+	 * Tta-sure = Ttxclkesc * value
+	 */
+	ta_sure = DIV_ROUND_UP(cfg->ta_sure, t_txclkesc);
+	/*
+	 * The value of counter for HS Tta-wait
+	 * Tta-wait for turnaround
+	 * Tta-wait = Ttxclkesc * value
+	 */
+	ta_wait = DIV_ROUND_UP(cfg->ta_get, t_txclkesc);
+
+	for (i = 0; i < qcom->pdata->num_timings; i++)
+		if (qcom->pll.rate <= timings[i].rate)
+			break;
+
+	if (i == qcom->pdata->num_timings)
+		--i;
+
+	/*
+	 * The value of counter for HS Tlpx Time
+	 * Tlpx = Tpin_txbyteclkhs * (2 + value)
+	 */
+	if (qcom->pdata->max_rate == MAX_1GHZ) {
+		lpx = DIV_ROUND_UP(cfg->lpx, t_txbyteclkhs);
+		if (lpx >= 2)
+			lpx -= 2;
+	} else {
+		lpx = timings[i].lpx;
+	}
+
+	hs_prepare = timings[i].hs_prepare;
+	hs_trail = timings[i].hs_trail;
+	clk_lane_hs_zero = timings[i].clk_lane_hs_zero;
+	data_lane_hs_zero = timings[i].data_lane_hs_zero;
+	wakeup = 0x3ff;
+
+	for (i = REGISTER_PART_CLOCK_LANE; i <= REGISTER_PART_DATA3_LANE; i++) {
+		if (i == REGISTER_PART_CLOCK_LANE)
+			hs_zero = clk_lane_hs_zero;
+		else
+			hs_zero = data_lane_hs_zero;
+		/* configure registers below */
+	}
+#endif
+}
+
+static int qcom_dsidphy_power_on(struct phy *phy)
+{
+	struct qcom_dsidphy *qcom = dev_get_priv(phy->dev);
+
+return 0;
+	clk_prepare_enable(qcom->ahb_clk);
+	//clk_prepare_enable(qcom->ref_clk);
+
+	qcom_dsidphy_mipi_mode_enable(qcom);
+
+	return 0;
+}
+
+static int qcom_dsidphy_power_off(struct phy *phy)
+{
+	struct qcom_dsidphy *qcom = dev_get_priv(phy->dev);
+
+return 0;
+	//clk_disable_unprepare(qcom->ref_clk);
+	clk_disable_unprepare(qcom->ahb_clk);
+
+	return 0;
+}
+
+static int qcom_dsidphy_configure(struct phy *phy, void *params)
+{
+	struct qcom_dsidphy *qcom = dev_get_priv(phy->dev);
+	struct phy_configure_opts_mipi_dphy *config = params;
+	int ret;
+
+return 0;
+	ret = phy_mipi_dphy_config_validate(config);
+	if (ret)
+		return ret;
+
+	memcpy(&qcom->dphy_cfg, config, sizeof(qcom->dphy_cfg));
+
+	return 0;
+}
+
+static const struct phy_ops qcom_dsidphy_ops = {
+	.configure = qcom_dsidphy_configure,
+	.power_on = qcom_dsidphy_power_on,
+	.power_off = qcom_dsidphy_power_off,
+};
+
+static int qcom_dsidphy_probe(struct udevice *dev)
+{
+	struct qcom_dsidphy *qcom = dev_get_priv(dev);
+	int ret;
+
+	qcom->dev = dev;
+	qcom->pdata = (const struct qcom_video_phy_plat_data *)dev_get_driver_data(dev);
+
+	qcom->base = dev_remap_addr_name(dev, "dsi_phy");
+	if (IS_ERR(qcom->base))
+		return PTR_ERR(qcom->base);
+
+	qcom->pll_base = dev_remap_addr_name(dev, "dsi_pll");
+	if (IS_ERR(qcom->pll_base))
+		return PTR_ERR(qcom->pll_base);
+
+	qcom->lane_base = dev_remap_addr_name(dev, "dsi_phy_lane");
+	if (IS_ERR(qcom->lane_base))
+		return PTR_ERR(qcom->lane_base);
+
+printf("========%s udev %p base %p pll_base %p lane_base %p\n", __func__, dev, qcom->base, qcom->pll_base, qcom->lane_base);
+
+/*
+	qcom->ref_clk = devm_clk_get(dev, "ref");
+	if (IS_ERR(qcom->ref_clk)) {
+		ret = PTR_ERR(qcom->ref_clk);
+		dev_err(dev, "failed to get ref clock: %d\n", ret);
+		return ret;
+	}
+*/
+
+	qcom->ahb_clk = devm_clk_get(dev, "iface");
+	if (IS_ERR(qcom->ahb_clk)) {
+		ret = PTR_ERR(qcom->ahb_clk);
+		dev_err(dev, "failed to get phy iface clk: %d\n", ret);
+		return ret;
+	}
+
+	return 0;
+}
+
+static const struct udevice_id qcom_dsidphy_of_match[] = {
+	{ .compatible = "qcom,sm8650-dsi-phy-4nm" },
+	{}
+};
+
+U_BOOT_DRIVER(qcom_mdss_dsidphy) = {
+	.name = "qcom-dsidphy",
+	.id = UCLASS_PHY,
+	.of_match = qcom_dsidphy_of_match,
+	.probe = qcom_dsidphy_probe,
+	.ops = &qcom_dsidphy_ops,
+	.priv_auto = sizeof(struct qcom_dsidphy),
+};
