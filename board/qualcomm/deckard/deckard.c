@@ -21,6 +21,7 @@
 #include <led.h>
 #include <button.h>
 #include <power/pmic.h>
+#include <remoteproc.h>
 #include <command.h>
 #include <fs.h>
 #include <image.h>
@@ -531,13 +532,35 @@ int power_button_pushed(struct udevice *btn)
 	return 0;
 }
 
-int prepare_for_boot()
+int deckard_adsp_start(int id)
+{
+	int ret;
+
+	if (!rproc_is_initialized()) {
+		ret = rproc_init();
+		if (ret < 0) {
+			printf("deckard: failled to initialized rproc\n");
+			return ret;
+		}
+	}
+
+	ret = rproc_start(id);
+	if (ret < 0) {
+		printf("deckard: failled to start rproc\n");
+		return ret;
+	}
+
+	return 0;
+}
+
 int deckard_prepare_for_boot(void)
 {
 	struct udevice  *led_red, *led_green, *led_blue;
 	int power_button_avail = 0;
 	struct udevice *btn;
+	int adsp_loaded = 0;
 	int leds_avail = 0;
+	int id = 0;
 
 	//check pon_reason to see if we were booted by a button push or warm reset (reboot command)
 	printf("pon_reason: %d\n",pon_reason);
@@ -565,6 +588,14 @@ int deckard_prepare_for_boot(void)
 	if (ret < 0) {
 		printf("Couldn't find power button!\n");
 	} else {
+		/*
+		* We should only really load aDSP if we are going
+		* to be trapped in u-boot
+		*/
+		ret = deckard_adsp_start(id);
+		if (!ret)
+			adsp_loaded = 1;
+
 		power_button_avail = 1;
 	}
 
@@ -577,6 +608,9 @@ int deckard_prepare_for_boot(void)
 		//polling loop -- maybe be interrupt driven somehow?
 		mdelay(100);
 	}
+
+	if (adsp_loaded)
+		rproc_stop(id);
 
 	if(leds_avail) {
 		led_set_state(led_red, LEDST_ON);
