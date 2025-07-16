@@ -21,6 +21,7 @@
 #include <led.h>
 #include <button.h>
 #include <power/pmic.h>
+#include <remoteproc.h>
 #include <command.h>
 #include <fs.h>
 #include <image.h>
@@ -531,15 +532,53 @@ int power_button_pushed(struct udevice *btn)
 	return 0;
 }
 
-int prepare_for_boot()
+int deckard_adsp_start(int id)
+{
+	int ret;
+
+	if (!rproc_is_initialized()) {
+		ret = rproc_init();
+		if (ret < 0) {
+			printf("deckard: failed to initialized rproc\n");
+			return ret;
+		}
+	}
+
+	ret = rproc_start(id);
+	if (ret < 0) {
+		printf("deckard: failed to start rproc\n");
+		return ret;
+	}
+
+	return 0;
+}
+
+int deckard_check_for_key_press()
+{
+	if (tstc()) {	/* we got a key press	*/
+		if(getchar() == 'j') return 1;
+	}
+
+	return 0;
+}
+
+int power_cable_attached()
+{
+	//TODO: implement this
+
+	return 1;
+}
+
+int deckard_prepare_for_boot()
 {
 	struct udevice  *led_red, *led_green, *led_blue;	
-	struct udevice *btn;
-	int leds_avail = 0;
 	int power_button_avail = 0;
-	
-	//TODO: should load adsp and get type-c charging running
-	
+	struct udevice *btn;
+	int adsp_loaded = 0;
+	int leds_avail = 0;
+	int id = 0;
+	int key_pressed = 0;
+
 	//check pon_reason to see if we were booted by a button push or warm reset (reboot command)
 
 	printf("pon_reason: %d\n",pon_reason);
@@ -577,19 +616,47 @@ int prepare_for_boot()
 		power_button_avail = 1;
 	}
 
+	if(power_button_avail && !power_button_pushed(btn))
+	{
+		//start up adsp
+		printf("adsp: starting...\n");
+		ret = deckard_adsp_start(id);
+		if (!ret)
+			adsp_loaded = 1;
+	}
+	
 	//trap in uboot while we wait for power button to be pushed
 	//we should charge and do various things here like light up the LED's etc
 	while(power_button_avail)
 	{
-		if(power_button_pushed(btn)) 
-		{
+		if(power_button_pushed(btn))
 			break;
+
+#if 0
+		//may want to check for keyboard press for some reason or another here
+		if(deckard_check_for_key_press())
+		{
+			key_pressed = 1;
+			break;
+		}
+#endif
+
+		if(!power_cable_attached())
+		{
+			printf("power cable was removed, powering off...\n");
+			do_poweroff(NULL, 0, 0, NULL);
 		}
 
 		//polling loop -- maybe be interrupt driven somehow?
 		mdelay(100);
 	}
 
+	if (adsp_loaded)
+	{
+		printf("adsp: stopping...\n");
+		rproc_stop(id);
+	}
+		
 	if(leds_avail)
 	{
 		led_set_state(led_red, LEDST_ON);
@@ -668,10 +735,13 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 		snprintf(DTB_TARGET, PATHMAXLEN, "/boot/maindtb.dtb");
 	}
 
+	deckard_prepare_for_boot();
+
 	// Load kernel
 	if ( scsi_do_load_helper(partition, ADDR_KERNEL, KERNEL_TARGET) ) {
 		goto fail;
 	}
+
 	// Get kernel size.  TODO for now we are assuming an uncompressed linux image
 	addr_kernel = hextoul(ADDR_KERNEL, NULL);
 	ret = booti_get_image_size(addr_kernel, &image_size);
@@ -717,8 +787,6 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	env_set("kernel_addr_r", ADDR_KERNEL);
 	env_set("ramdisk_addr_r", INITRD_ADDR);
 	env_set("fdtcontroladdr", DTB_ADDR);
-
-	prepare_for_boot();
 
 	run_command("booti ${kernel_addr_r} ${ramdisk_addr_r} ${fdtcontroladdr}", 0);
 
