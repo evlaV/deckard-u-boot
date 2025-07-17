@@ -9,6 +9,7 @@
 #include <dm/device_compat.h>
 #include <errno.h>
 #include <ext4fs.h>
+#include <erofs.h>
 #include <fs_loader.h>
 #include <linux/err.h>
 #include <linux/sizes.h>
@@ -129,6 +130,33 @@ static int qcom_dsp_load_ext4fs(struct qcom_dsp *dsp, char *buf)
 	return len_read;
 }
 
+
+static int qcom_dsp_load_erofs(struct qcom_dsp *dsp, char *buf)
+{
+	const char *dev_and_part = fs_firmware_get_partition();
+	const char *ifname = FIRMWARE_EXT4_INTERFACE;
+	struct blk_desc *dev_desc = NULL;
+	struct disk_partition info;
+	loff_t len_read = 0;
+	int part;
+	int ret;
+
+	printf("Loading firmware from partition: %s\n", dev_and_part);
+
+	scsi_scan(true);
+
+	part = blk_get_device_part_str(ifname, dev_and_part, &dev_desc, &info, 1);
+	if (part < 0)
+		return -ENODEV;
+
+	//TODO: figure out why erofs_probe returns an error condition -- seems non-fatal, but why??
+    ret = erofs_probe(dev_desc, &info);
+
+	ret = erofs_read(dsp->firmware_name, buf, 0, CONFIG_REMOTEPROC_MAX_FW_SIZE, &len_read);
+
+	return len_read;
+}
+
 static int qcom_dsp_load(struct udevice *dev, ulong addr, ulong size)
 {
 	struct qcom_dsp *dsp = dev_get_priv(dev);
@@ -164,11 +192,19 @@ static int qcom_dsp_init(struct udevice *dev)
 	int read;
 	int ret;
 
+#if 0
 	read = qcom_dsp_load_ext4fs(dsp, buf);
 	if (read < 0) {
 		printf("ext4fs: failed to load: %s\n", dsp->firmware_name);
 		return read;
 	}
+#else
+	read = qcom_dsp_load_erofs(dsp, buf);
+	if (read < 0) {
+		printf("erofs: failed to load: %s\n", dsp->firmware_name);
+		return read;
+	}
+#endif
 
 	dsp->state = QCOM_DSP_STATE_INITIALIZED;
 

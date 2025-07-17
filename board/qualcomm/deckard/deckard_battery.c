@@ -73,7 +73,7 @@ static int deckard_battery_load_recovery_program(void)
 	argv[4]=arg4;
 
 	printf("loading dead battery program with args: %s, %s, %s, %s, %s\n",argv[0],argv[1],argv[2],argv[3],argv[4]);
-	return do_load(NULL, 0, argc, argv, FS_TYPE_EXT);
+	return do_load(NULL, 0, argc, argv, FS_TYPE_EROFS);
 }
 
 static int deckard_battery_run_recovery_program(void)
