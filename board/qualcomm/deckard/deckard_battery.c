@@ -239,6 +239,11 @@ int deckard_spl_battery_enable_charging(struct udevice *pm8550b)
 	return ret;
 }
 
+bool deckard_battery_is_charging_enabled(struct udevice *pm8550b)
+{
+	return pm8550b_is_charging_enabled(pm8550b);
+}
+
 int deckard_spl_battery_charging_setup(uint16_t * battery_voltage)
 {
 	int             ret;
