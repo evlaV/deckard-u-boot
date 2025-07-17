@@ -114,6 +114,7 @@ struct dsi_pll_7nm {
 	struct dsi_pll_7nm *slave;
 };
 
+#if 0
 #define to_pll_7nm(x)	container_of(x, struct dsi_pll_7nm, clk_hw)
 
 /*
@@ -1204,10 +1205,11 @@ static void dsi_7nm_phy_disable(struct msm_dsi_phy *phy)
 static const struct regulator_bulk_data dsi_phy_7nm_98000uA_regulators[] = {
 	{ .supply = "vdds", .init_load_uA = 98000 },
 };
+#endif
 
 
 /* below are copied from other soc driver for ref */
-static void qcom_dsidphy_mipi_mode_enable(struct qcom_dsidphy *qcom)
+static void msm_dsi_phy_mipi_mode_enable(struct msm_dsi_phy *qcom)
 {
 //	struct phy_configure_opts_mipi_dphy *cfg = &qcom->dphy_cfg;
 	const struct qcom_mipi_dphy_timing *timings;
@@ -1220,10 +1222,10 @@ static void qcom_dsidphy_mipi_mode_enable(struct qcom_dsidphy *qcom)
 */
 
 return;
-	timings = qcom->pdata->qcom_mipi_dphy_timing_table;
+	//timings = qcom->pdata->qcom_mipi_dphy_timing_table;
 
 #if 0
-	//qcom_dsidphy_pll_calc_rate(qcom, cfg->hs_clk_rate);
+	//msm_dsi_phy_pll_calc_rate(qcom, cfg->hs_clk_rate);
 
 	txbyteclkhs = qcom->pll.rate / 8;
 	t_txbyteclkhs = div_u64(PSEC_PER_SEC, txbyteclkhs);
@@ -1302,24 +1304,25 @@ return;
 #endif
 }
 
-static int qcom_dsidphy_power_on(struct phy *phy)
+static int msm_dsi_phy_power_on(struct phy *phy)
 {
-	struct qcom_dsidphy *qcom = dev_get_priv(phy->dev);
+	struct msm_dsi_phy *qcom = dev_get_priv(phy->dev);
 
 printf("======%s enter with phy->id %d\n", __func__, phy->id);
 	clk_prepare_enable(qcom->ahb_clk);
 
-	return dsi_pll_7nm_init(struct msm_dsi_phy *phy);
+return 0;
+	//return dsi_pll_7nm_init(phy);
 	//clk_prepare_enable(qcom->ref_clk);
 
-	qcom_dsidphy_mipi_mode_enable(qcom);
+	msm_dsi_phy_mipi_mode_enable(qcom);
 
 	return 0;
 }
 
-static int qcom_dsidphy_power_off(struct phy *phy)
+static int msm_dsi_phy_power_off(struct phy *phy)
 {
-	struct qcom_dsidphy *qcom = dev_get_priv(phy->dev);
+	struct msm_dsi_phy *qcom = dev_get_priv(phy->dev);
 
 return 0;
 	//clk_disable_unprepare(qcom->ref_clk);
@@ -1328,9 +1331,9 @@ return 0;
 	return 0;
 }
 
-static int qcom_dsidphy_configure(struct phy *phy, void *params)
+static int msm_dsi_phy_configure(struct phy *phy, void *params)
 {
-	struct qcom_dsidphy *qcom = dev_get_priv(phy->dev);
+	struct msm_dsi_phy *qcom = dev_get_priv(phy->dev);
 	struct phy_configure_opts_mipi_dphy *config = params;
 	int ret;
 
@@ -1339,20 +1342,20 @@ return 0;
 	if (ret)
 		return ret;
 
-	memcpy(&qcom->dphy_cfg, config, sizeof(qcom->dphy_cfg));
+	//memcpy(&qcom->dphy_cfg, config, sizeof(qcom->dphy_cfg));
 
 	return 0;
 }
 
-static const struct phy_ops qcom_dsidphy_ops = {
-	.configure = qcom_dsidphy_configure,
-	.power_on = qcom_dsidphy_power_on,
-	.power_off = qcom_dsidphy_power_off,
+static const struct phy_ops msm_dsi_phy_ops = {
+	.configure = msm_dsi_phy_configure,
+	.power_on = msm_dsi_phy_power_on,
+	.power_off = msm_dsi_phy_power_off,
 };
 
-static int qcom_dsidphy_probe(struct udevice *dev)
+static int msm_dsi_phy_probe(struct udevice *dev)
 {
-	struct qcom_dsidphy *qcom = dev_get_priv(dev);
+	struct msm_dsi_phy *qcom = dev_get_priv(dev);
 	int ret;
 
 	qcom->dev = dev;
@@ -1405,7 +1408,7 @@ printf("========%s udev %p base %p pll_base %p lane_base %p\n", __func__, dev, q
 	return 0;
 }
 
-static const struct udevice_id qcom_dsidphy_of_match[] = {
+static const struct udevice_id msm_dsi_phy_of_match[] = {
 	{ .compatible = "qcom,sm8650-dsi-phy-4nm" },
 	{}
 };
@@ -1413,8 +1416,8 @@ static const struct udevice_id qcom_dsidphy_of_match[] = {
 U_BOOT_DRIVER(qcom_mdss_dsidphy) = {
 	.name = "qcom-dsidphy",
 	.id = UCLASS_PHY,
-	.of_match = qcom_dsidphy_of_match,
-	.probe = qcom_dsidphy_probe,
-	.ops = &qcom_dsidphy_ops,
-	.priv_auto = sizeof(struct qcom_dsidphy),
+	.of_match = msm_dsi_phy_of_match,
+	.probe = msm_dsi_phy_probe,
+	.ops = &msm_dsi_phy_ops,
+	.priv_auto = sizeof(struct msm_dsi_phy),
 };

@@ -38,12 +38,14 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 */
 
+/*
 #ifdef __KERNEL__
 #include <linux/bug.h>
 #define assert(x) BUG_ON(!(x))
 #else
 #include <assert.h>
 #endif
+*/
 
 #ifdef __cplusplus
 #define __struct_cast(X)

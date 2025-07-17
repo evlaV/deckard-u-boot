@@ -9,9 +9,32 @@
 #include <dt-bindings/clock/qcom,dsi-phy-28nm.h>
 #include <linux/clk-provider.h>
 #include <linux/delay.h>
-#include <linux/regulator/consumer.h>
+//#include <linux/regulator/consumer.h>
 
-#include "dsi.h"
+//#include "dsi.h"
+
+#define DSI_0   0
+#define DSI_1   1
+#define DSI_MAX 2
+
+enum msm_dsi_phy_usecase {
+        MSM_DSI_PHY_STANDALONE,
+        MSM_DSI_PHY_MASTER,
+        MSM_DSI_PHY_SLAVE,
+};
+
+struct msm_dsi_phy;
+struct msm_dsi_phy_shared_timings {
+	u32 clk_post;
+	u32 clk_pre;
+	bool clk_pre_inc_by_2;
+	bool byte_intf_clk_div_2;
+};
+
+struct msm_dsi_phy_clk_request {
+	unsigned long bitclk_rate;
+	unsigned long escclk_rate;
+};
 
 struct msm_dsi_phy_ops {
 	int (*pll_init)(struct msm_dsi_phy *phy);
@@ -39,31 +62,8 @@ struct msm_dsi_phy_cfg {
 	bool has_phy_lane;
 };
 
-extern const struct msm_dsi_phy_cfg dsi_phy_28nm_hpm_cfgs;
-extern const struct msm_dsi_phy_cfg dsi_phy_28nm_hpm_famb_cfgs;
-extern const struct msm_dsi_phy_cfg dsi_phy_28nm_lp_cfgs;
-extern const struct msm_dsi_phy_cfg dsi_phy_28nm_8226_cfgs;
-extern const struct msm_dsi_phy_cfg dsi_phy_28nm_8937_cfgs;
-extern const struct msm_dsi_phy_cfg dsi_phy_28nm_8960_cfgs;
-extern const struct msm_dsi_phy_cfg dsi_phy_20nm_cfgs;
-extern const struct msm_dsi_phy_cfg dsi_phy_14nm_cfgs;
-extern const struct msm_dsi_phy_cfg dsi_phy_14nm_6150_cfgs;
-extern const struct msm_dsi_phy_cfg dsi_phy_14nm_660_cfgs;
-extern const struct msm_dsi_phy_cfg dsi_phy_14nm_2290_cfgs;
-extern const struct msm_dsi_phy_cfg dsi_phy_14nm_8953_cfgs;
-extern const struct msm_dsi_phy_cfg dsi_phy_10nm_cfgs;
-extern const struct msm_dsi_phy_cfg dsi_phy_10nm_8998_cfgs;
 extern const struct msm_dsi_phy_cfg dsi_phy_7nm_cfgs;
-extern const struct msm_dsi_phy_cfg dsi_phy_7nm_6375_cfgs;
-extern const struct msm_dsi_phy_cfg dsi_phy_7nm_8150_cfgs;
-extern const struct msm_dsi_phy_cfg dsi_phy_7nm_7280_cfgs;
-extern const struct msm_dsi_phy_cfg dsi_phy_5nm_8350_cfgs;
-extern const struct msm_dsi_phy_cfg dsi_phy_5nm_8450_cfgs;
-extern const struct msm_dsi_phy_cfg dsi_phy_5nm_8775p_cfgs;
-extern const struct msm_dsi_phy_cfg dsi_phy_5nm_sar2130p_cfgs;
-extern const struct msm_dsi_phy_cfg dsi_phy_4nm_8550_cfgs;
 extern const struct msm_dsi_phy_cfg dsi_phy_4nm_8650_cfgs;
-extern const struct msm_dsi_phy_cfg dsi_phy_3nm_8750_cfgs;
 
 struct msm_dsi_dphy_timing {
 	u32 clk_zero;
@@ -92,8 +92,16 @@ struct msm_dsi_dphy_timing {
 
 #define DSI_LANE_MAX			5
 
+struct qcom_video_phy_plat_data {
+	const struct qcom_mipi_dphy_timing *qcom_mipi_dphy_timing_table;
+	const unsigned int num_timings;
+	//enum phy_max_rate max_rate;
+};
+
 struct msm_dsi_phy {
-	struct platform_device *pdev;
+	struct udevice *dev;
+	const struct qcom_video_phy_plat_data *pdata;
+	struct phy_configure_opts_mipi_dphy dphy_cfg;
 	void __iomem *base;
 	void __iomem *pll_base;
 	void __iomem *reg_base;
@@ -105,7 +113,7 @@ struct msm_dsi_phy {
 	int id;
 
 	struct clk *ahb_clk;
-	struct regulator_bulk_data *supplies;
+	//struct regulator_bulk_data *supplies;
 
 	struct msm_dsi_dphy_timing timing;
 	const struct msm_dsi_phy_cfg *cfg;
