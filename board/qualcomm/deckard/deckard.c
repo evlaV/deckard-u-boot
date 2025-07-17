@@ -65,6 +65,9 @@ enum combined_button_state_t {
 	VOLUP_ON__VOLDN_ON__SELECT_ON    = 7,
 };
 
+#define DECKARD_SHUTDOWN_TIMEOUT_S 10
+#define DECKARD_SHUTDOWN_TIMEOUT_US (DECKARD_SHUTDOWN_TIMEOUT_S * 1000 * 1000)
+ 
 // #define CHECK_PMICS
 #ifdef CHECK_PMICS
 void check_pmic(const char *const pmic_dts, const char *const pmic_name)
@@ -553,10 +556,31 @@ int deckard_adsp_start(int id)
 	return 0;
 }
 
-int deckard_prepare_for_boot(void)
+static bool deckard_shutdown_condition(struct udevice *pmic)
+{
+	static unsigned long timeout;
+
+	if (!pmic)
+		return false;
+
+	if (deckard_battery_is_charging_enabled(pmic)) {
+		timeout = 0;
+		return false;
+	}
+
+	if (!timeout)
+		timeout = timer_get_us() + DECKARD_SHUTDOWN_TIMEOUT_US;
+
+	if (time_after(timer_get_us(), timeout))
+		return true;
+
+	return false;
+}
+
+static int deckard_prepare_for_boot(void)
 {
 	struct udevice  *led_red, *led_green, *led_blue;
-	int power_button_avail = 0;
+	struct udevice *pm8550b = NULL;
 	struct udevice *btn;
 	int adsp_loaded = 0;
 	int leds_avail = 0;
@@ -587,31 +611,44 @@ int deckard_prepare_for_boot(void)
 	int ret = button_get_by_label("Power Button", &btn);
 	if (ret < 0) {
 		printf("Couldn't find power button!\n");
-	} else {
-		/*
-		* We should only really load aDSP if we are going
-		* to be trapped in u-boot
-		*/
+		goto no_power_button;
+	}
+
+	/*
+	* We should only really load aDSP if we are going
+	* to be trapped in u-boot
+	*/
+	if (!power_button_pushed(btn)) {
 		ret = deckard_adsp_start(id);
 		if (!ret)
 			adsp_loaded = 1;
-
-		power_button_avail = 1;
 	}
+
+	// Find the PM8550B
+	ret = pmic_get("pmic@7", &pm8550b);
+	if (ret != 0)
+		printf("Failed to Find PM8550B\n");
 
 	//trap in uboot while we wait for power button to be pushed
 	//we should charge and do various things here like light up the LED's etc
-	while(power_button_avail) {
-		if(power_button_pushed(btn))
-			break;
-
+	while (!power_button_pushed(btn)) {
 		//polling loop -- maybe be interrupt driven somehow?
-		mdelay(100);
+		mdelay(1000);
+
+		if (deckard_shutdown_condition(pm8550b)) {
+			printf("Device not charging for %d seconds, Shutdown\n",
+				DECKARD_SHUTDOWN_TIMEOUT_S);
+			ret = sysreset_walk(SYSRESET_POWER_OFF);
+			if (ret == -EINPROGRESS)
+				mdelay(1000);
+			break;
+		}
 	}
 
 	if (adsp_loaded)
 		rproc_stop(id);
 
+no_power_button:
 	if(leds_avail) {
 		led_set_state(led_red, LEDST_ON);
 		led_set_state(led_green, LEDST_ON);
