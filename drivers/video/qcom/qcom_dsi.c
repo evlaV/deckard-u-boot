@@ -629,6 +629,15 @@ static int dsi_phy_init(void *priv_data)
 
 	dev_dbg(dev, "Initialize DSI physical layer\n");
 
+	if (!generic_phy_valid(&dsi->phy)) {
+		dev_dbg(dev, "fail to validate phy, phy %p phy->dev %p\n", &dsi->phy, dsi->phy.dev);
+	}
+
+	ret = generic_phy_power_on(&dsi->phy);
+	if (ret) {
+		dev_dbg(dev, "fail to power on phy\n");
+	}
+
 #if 0
 	/* Enable the regulator */
 	dsi_set(dsi, DSI_WRPCR, WRPCR_REGEN | WRPCR_BGREN);
