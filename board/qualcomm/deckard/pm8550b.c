@@ -26,6 +26,10 @@
 #define PM8550B_CHGR_WD_CFG_BITE_WDOG_TIMER_EN_ON_PLUGIN        BIT(1)
 #define PM8550B_CHGR_WD_CFG_BITE_WDOG_TIMER_EN                  BIT(0)
 
+#define PM8550B_TYPEC_PORT_BASE                                 0x2B00
+#define PM8550B_TYPEC_MISC_STATUS                               (PM8550B_TYPEC_PORT_BASE + 0x0B)
+#define PM8550B_TYPEC_VBUS_DETECT                               BIT(5)
+
 #define PM8550B_BATIF_BASE               0x2800
 #define PM8550B_BATIF_JEITA_EN           (BATIF_BASE + 0x7F)
 #define PM8550B_BATIF_JEITA_FV_WARM      (BATIF_BASE + 0x80)
@@ -264,6 +268,18 @@ int pm8550b_enable_watchdog(struct udevice *pmic, bool enable)
 	}
 
 	return 0;
+}
+
+bool pm8550b_is_charging_enabled(struct udevice *pmic)
+{
+	int ret;
+
+	/* check vbus status */
+	ret = pmic_reg_read(pmic, PM8550B_TYPEC_MISC_STATUS);
+	if (ret < 0)
+		return false;
+
+	return !!(ret & PM8550B_TYPEC_VBUS_DETECT);
 }
 
 int pm8550b_enable_charging(struct udevice *pmic, bool enable)

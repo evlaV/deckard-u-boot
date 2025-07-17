@@ -21,6 +21,7 @@ int pm8550b_set_float_voltage(struct udevice *pmic, uint16_t voltage_mv);
 int pm8550b_set_max_float_voltage(struct udevice *pmic, uint16_t voltage_mv);
 int pm8550b_set_termination_current(struct udevice *pmic, uint16_t current_ma);
 int pm8550b_enable_watchdog(struct udevice *pmic, bool enable);
+bool pm8550b_is_charging_enabled(struct udevice *pmic);
 int pm8550b_enable_charging(struct udevice *pmic, bool enable);
 int pm8550b_test(struct udevice *pmic, bool enable);
 #endif /* __PM8550B_H */
