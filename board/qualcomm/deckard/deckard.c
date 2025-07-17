@@ -25,6 +25,7 @@
 #include <command.h>
 #include <fs.h>
 #include <image.h>
+#include <sysreset.h>
 
 #include "deckard_eeprom.h"
 #include "deckard_battery.h"
@@ -65,6 +66,9 @@ enum combined_button_state_t {
 	VOLUP_ON__VOLDN_ON__SELECT_ON    = 7,
 };
 
+#define DECKARD_SHUTDOWN_TIMEOUT_S 10
+#define DECKARD_SHUTDOWN_TIMEOUT_US (DECKARD_SHUTDOWN_TIMEOUT_S * 1000 * 1000)
+ 
 // #define CHECK_PMICS
 #ifdef CHECK_PMICS
 void check_pmic(const char *const pmic_dts, const char *const pmic_name)
@@ -565,16 +569,38 @@ int deckard_check_for_key_press()
 	return 0;
 }
 
-int power_cable_attached()
+static bool deckard_shutdown_condition(struct udevice *pmic)
 {
-	//TODO: implement this
+	static unsigned long timeout;
 
-	return 1;
+	if (!pmic)
+		return false;
+
+	if (deckard_battery_is_charging_enabled(pmic)) {
+		if(timeout > 0)
+			printf("charging enabled\n");
+
+		timeout = 0;
+		return false;
+	}
+
+	if (!timeout)
+	{
+		printf("charging disabled\n");
+		timeout = timer_get_us() + DECKARD_SHUTDOWN_TIMEOUT_US;
+	}
+
+	if (time_after(timer_get_us(), timeout))
+		return true;
+
+	return false;
 }
+
 
 int deckard_prepare_for_boot()
 {
-	struct udevice  *led_red, *led_green, *led_blue;	
+	struct udevice  *led_red, *led_green, *led_blue;
+	struct udevice *pm8550b = NULL;	
 	int power_button_avail = 0;
 	struct udevice *btn;
 	int adsp_loaded = 0;
@@ -628,6 +654,13 @@ int deckard_prepare_for_boot()
 			adsp_loaded = 1;
 	}
 	
+	// Find the PM8550B
+	ret = pmic_get("pmic@7", &pm8550b);
+	if (ret != 0)
+		printf("Failed to Find PM8550B\n");
+	
+	int deckard_shutdown_loop_counter = 1;
+
 	//trap in uboot while we wait for power button to be pushed
 	//we should charge and do various things here like light up the LED's etc
 	while(power_button_avail)
@@ -644,12 +677,20 @@ int deckard_prepare_for_boot()
 		}
 #endif
 
-		if(!power_cable_attached())
+		//check every 10 loops to avoid spamming the SPMI bus
+		if ( deckard_shutdown_loop_counter-- == 0 )
 		{
-			printf("power cable was removed, powering off...\n");
-			do_poweroff(NULL, 0, 0, NULL);
+			deckard_shutdown_loop_counter = 10;
+			if(deckard_shutdown_condition(pm8550b)) 
+			{
+				printf("Device not charging for %d seconds, Shutdown\n", DECKARD_SHUTDOWN_TIMEOUT_S);
+				ret = sysreset_walk(SYSRESET_POWER_OFF);
+				if (ret == -EINPROGRESS)
+					mdelay(1000);
+				break;
+			}
 		}
-
+		
 		//polling loop -- maybe be interrupt driven somehow?
 		mdelay(100);
 	}
