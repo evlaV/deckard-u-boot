@@ -23,8 +23,8 @@
 #include <scsi.h>
 #include <linux/delay.h>
 
-#define FIRMWARE_EXT4_INTERFACE "scsi"
-#define FIRMWARE_EXT4_PATH_PREFIX "/lib/firmware/"
+#define FIRMWARE_INTERFACE "scsi"
+#define FIRMWARE_PATH_PREFIX "/lib/firmware/"
 
 #define QDSP6SS_RST_EVB 0x10
 
@@ -100,7 +100,7 @@ static int qcom_dsp_stop(struct udevice *dev)
 static int qcom_dsp_load_ext4fs(struct qcom_dsp *dsp, char *buf)
 {
 	const char *dev_and_part = fs_firmware_get_partition();
-	const char *ifname = FIRMWARE_EXT4_INTERFACE;
+	const char *ifname = FIRMWARE_INTERFACE;
 	struct blk_desc *dev_desc = NULL;
 	struct disk_partition info;
 	loff_t len_read = 0;
@@ -134,25 +134,28 @@ static int qcom_dsp_load_ext4fs(struct qcom_dsp *dsp, char *buf)
 static int qcom_dsp_load_erofs(struct qcom_dsp *dsp, char *buf)
 {
 	const char *dev_and_part = fs_firmware_get_partition();
-	const char *ifname = FIRMWARE_EXT4_INTERFACE;
-	struct blk_desc *dev_desc = NULL;
-	struct disk_partition info;
+	const char *ifname = FIRMWARE_INTERFACE;
 	loff_t len_read = 0;
-	int part;
 	int ret;
 
 	printf("Loading firmware from partition: %s\n", dev_and_part);
 
 	scsi_scan(true);
 
-	part = blk_get_device_part_str(ifname, dev_and_part, &dev_desc, &info, 1);
-	if (part < 0)
-		return -ENODEV;
+	ret = fs_set_blk_dev(ifname, dev_and_part, FS_TYPE_EROFS);
+	if (ret < 0) {
+		printf("firmmware_erofs_load: Unable to set blkdev %s %s\n", ifname,
+			dev_and_part);
+		return ret;
+	}
 
-	//TODO: figure out why erofs_probe returns an error condition -- seems non-fatal, but why??
-    ret = erofs_probe(dev_desc, &info);
-
-	ret = erofs_read(dsp->firmware_name, buf, 0, CONFIG_REMOTEPROC_MAX_FW_SIZE, &len_read);
+	ret = fs_read(dsp->firmware_name, (ulong)buf, 0, CONFIG_REMOTEPROC_MAX_FW_SIZE,
+			&len_read);
+	if (ret < 0) {
+		printf("firmmware_erofs_load: fail to read %s %s\n", ifname,
+			dev_and_part);
+		return ret;
+	}
 
 	return len_read;
 }
@@ -264,7 +267,7 @@ static int qcom_dsp_probe(struct udevice *dev)
 	if (ret < 0)
 		return ret;
 
-	dsp->firmware_name = FIRMWARE_EXT4_PATH_PREFIX;
+	dsp->firmware_name = FIRMWARE_PATH_PREFIX;
 
 	strncat(dsp->firmware_name, firmware_name, EXT2_PATH_MAX);
 
