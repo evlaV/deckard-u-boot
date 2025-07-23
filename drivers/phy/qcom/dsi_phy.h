@@ -41,8 +41,6 @@ struct msm_dsi_phy_ops {
 	int (*enable)(struct msm_dsi_phy *phy,
 			struct msm_dsi_phy_clk_request *clk_req);
 	void (*disable)(struct msm_dsi_phy *phy);
-	void (*save_pll_state)(struct msm_dsi_phy *phy);
-	int (*restore_pll_state)(struct msm_dsi_phy *phy);
 	bool (*set_continuous_clock)(struct msm_dsi_phy *phy, bool enable);
 	int (*parse_dt_properties)(struct msm_dsi_phy *phy);
 };
@@ -98,6 +96,33 @@ struct qcom_video_phy_plat_data {
 	//enum phy_max_rate max_rate;
 };
 
+struct dsi_pll_config {
+	bool enable_ssc;
+	bool ssc_center;
+	u32 ssc_freq;
+	u32 ssc_offset;
+	u32 ssc_adj_per;
+
+	/* out */
+	u32 decimal_div_start;
+	u32 frac_div_start;
+	u32 pll_clock_inverters;
+	u32 ssc_stepsize;
+	u32 ssc_div_per;
+};
+
+struct dsi_pll_7nm {
+	struct udevice *dev;
+	void __iomem *base;
+	void __iomem *pll_base;
+	struct clk clk;
+	struct msm_dsi_phy *phy;
+	struct msm_dsi_phy_cfg *cfg;
+	u64 vco_current_rate;
+	struct dsi_pll_7nm *slave;
+	u32 id;
+};
+
 struct msm_dsi_phy {
 	struct udevice *dev;
 	const struct qcom_video_phy_plat_data *pdata;
@@ -114,6 +139,7 @@ struct msm_dsi_phy {
 
 	struct clk *ahb_clk;
 	//struct regulator_bulk_data *supplies;
+	struct udevice *vdds_reg;
 
 	struct msm_dsi_dphy_timing timing;
 	const struct msm_dsi_phy_cfg *cfg;

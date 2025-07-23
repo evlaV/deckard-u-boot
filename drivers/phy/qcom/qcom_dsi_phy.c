@@ -26,6 +26,11 @@
 #include "dsi.xml.h"
 #include "dsi_phy_7nm.xml.h"
 
+#define readl_poll_timeout_atomic readl_poll_timeout
+
+#define S_DIV_ROUND_UP(n, d)	\
+	(((n) >= 0) ? (((n) + (d) - 1) / (d)) : (((n) - (d) + 1) / (d)))
+
 /*
  * DSI PLL 7nm - clock diagram (eg: DSI0): TODO: updated CPHY diagram
  *
@@ -67,61 +72,72 @@
 /* Hardware is V7.0 */
 #define DSI_PHY_7NM_QUIRK_V7_0		BIT(5)
 
-struct dsi_pll_config {
-	bool enable_ssc;
-	bool ssc_center;
-	u32 ssc_freq;
-	u32 ssc_offset;
-	u32 ssc_adj_per;
-
-	/* out */
-	u32 decimal_div_start;
-	u32 frac_div_start;
-	u32 pll_clock_inverters;
-	u32 ssc_stepsize;
-	u32 ssc_div_per;
-};
-
-struct pll_7nm_cached_state {
-	unsigned long vco_rate;
-	u8 bit_clk_div;
-	u8 pix_clk_div;
-	u8 pll_out_div;
-	u8 pll_mux;
-};
-
-struct clk_hw {
-	struct clk_core *core;
-	struct clk *clk;
-	const struct clk_init_data *init;
-};
-
-struct dsi_pll_7nm {
-	struct clk_hw clk_hw;
-
-	struct msm_dsi_phy *phy;
-
-	u64 vco_current_rate;
-
-	/* protects REG_DSI_7nm_PHY_CMN_CLK_CFG0 register */
-	spinlock_t postdiv_lock;
-
-	/* protects REG_DSI_7nm_PHY_CMN_CLK_CFG1 register */
-	spinlock_t pclk_mux_lock;
-
-	struct pll_7nm_cached_state cached_state;
-
-	struct dsi_pll_7nm *slave;
-};
-
-#if 0
-#define to_pll_7nm(x)	container_of(x, struct dsi_pll_7nm, clk_hw)
+#define to_pll_7nm(x)	container_of(x, struct dsi_pll_7nm, clk)
 
 /*
  * Global list of private DSI PLL struct pointers. We need this for bonded DSI
  * mode, where the master PLL's clk_ops needs access the slave's private data
  */
 static struct dsi_pll_7nm *pll_7nm_list[DSI_MAX];
+
+#if 1
+static inline s32 linear_inter(s32 tmax, s32 tmin, s32 percent,
+				s32 min_result, bool even)
+{
+	s32 v;
+
+	v = (tmax - tmin) * percent;
+	v = S_DIV_ROUND_UP(v, 100) + tmin;
+	if (even && (v & 0x1))
+		return max_t(s32, min_result, v - 1);
+	else
+		return max_t(s32, min_result, v);
+}
+
+int msm_dsi_cphy_timing_calc_v4(struct msm_dsi_dphy_timing *timing,
+	struct msm_dsi_phy_clk_request *clk_req)
+{
+	const unsigned long bit_rate = clk_req->bitclk_rate;
+	const unsigned long esc_rate = clk_req->escclk_rate;
+	s32 ui, ui_x7;
+	s32 tmax, tmin;
+	s32 coeff = 1000; /* Precision, should avoid overflow */
+	s32 temp;
+
+	if (!bit_rate || !esc_rate)
+		return -EINVAL;
+
+	ui = mult_frac(NSEC_PER_MSEC, coeff, bit_rate / 1000);
+	ui_x7 = ui * 7;
+
+	temp = S_DIV_ROUND_UP(38 * coeff, ui_x7);
+	tmin = max_t(s32, temp, 0);
+	temp = (95 * coeff) / ui_x7;
+	tmax = max_t(s32, temp, 0);
+	timing->clk_prepare = linear_inter(tmax, tmin, 50, 0, false);
+
+	tmin = DIV_ROUND_UP(50 * coeff, ui_x7);
+	tmax = 255;
+	timing->hs_rqst = linear_inter(tmax, tmin, 1, 0, false);
+
+	tmin = DIV_ROUND_UP(100 * coeff, ui_x7) - 1;
+	tmax = 255;
+	timing->hs_exit = linear_inter(tmax, tmin, 10, 0, false);
+
+	tmin = 1;
+	tmax = 32;
+	timing->shared_timings.clk_post = linear_inter(tmax, tmin, 80, 0, false);
+
+	tmin = min_t(s32, 64, S_DIV_ROUND_UP(262 * coeff, ui_x7) - 1);
+	tmax = 64;
+	timing->shared_timings.clk_pre = linear_inter(tmax, tmin, 20, 0, false);
+
+	printf("%d, %d, %d, %d, %d",
+		timing->shared_timings.clk_pre, timing->shared_timings.clk_post,
+		timing->clk_prepare, timing->hs_exit, timing->hs_rqst);
+
+	return 0;
+}
 
 static void dsi_pll_setup_config(struct dsi_pll_config *config)
 {
@@ -219,7 +235,7 @@ static void dsi_pll_calc_ssc(struct dsi_pll_7nm *pll, struct dsi_pll_config *con
 	u64 frac;
 
 	if (!config->enable_ssc) {
-		DBG("SSC not enabled\n");
+		printf("SSC not enabled\n");
 		return;
 	}
 
@@ -354,14 +370,27 @@ static void dsi_pll_commit(struct dsi_pll_7nm *pll, struct dsi_pll_config *confi
 	       base + REG_DSI_7nm_PHY_PLL_CLOCK_INVERTERS_1);
 }
 
-static int dsi_pll_7nm_vco_set_rate(struct clk_hw *hw, unsigned long rate,
+static int dsi_pll_7nm_vco_set_rate(struct clk *hw, unsigned long rate,
 				     unsigned long parent_rate)
 {
 	struct dsi_pll_7nm *pll_7nm = to_pll_7nm(hw);
 	struct dsi_pll_config config;
 
-	DBG("DSI PLL%d rate=%lu, parent's=%lu", pll_7nm->phy->id, rate,
+	printf("DSI PLL%d rate=%lu, parent's=%lu", pll_7nm->phy->id, rate,
 	    parent_rate);
+	/*
+	80Hz:
+	[drm:dsi_pll_7nm_vco_set_rate] DSI PLL0 rate=851297622, parent's=38400000
+	[drm:dsi_pll_7nm_vco_recalc_rate] DSI PLL0 returning vco rate = 851297607, dec = 16, frac = ad45
+
+	90Hz: that we are using
+	[drm:dsi_pll_7nm_vco_set_rate] DSI PLL0 rate=851023712, parent's=38400000
+	[drm:dsi_pll_7nm_vco_recalc_rate] DSI PLL0 returning vco rate = 851023681, dec = 16, frac = a5f7
+
+	120Hz:
+	[drm:dsi_pll_7nm_vco_set_rate] DSI PLL0 rate=851187806, parent's=38400000
+	[drm:dsi_pll_7nm_vco_recalc_rate] DSI PLL0 returning vco rate = 851187744, dec = 16, frac = aa57
+	*/
 
 	pll_7nm->vco_current_rate = rate;
 
@@ -387,14 +416,13 @@ static int dsi_pll_7nm_lock_status(struct dsi_pll_7nm *pll)
 {
 	int rc;
 	u32 status = 0;
-	u32 const delay_us = 100;
+	//u32 const delay_us = 100;
 	u32 const timeout_us = 5000;
 
 	rc = readl_poll_timeout_atomic(pll->phy->pll_base +
 				       REG_DSI_7nm_PHY_PLL_COMMON_STATUS_ONE,
 				       status,
 				       ((status & BIT(0)) > 0),
-				       delay_us,
 				       timeout_us);
 	if (rc)
 		pr_err("DSI PLL(%d) lock failed, status=0x%08x\n",
@@ -423,26 +451,19 @@ static void dsi_pll_enable_pll_bias(struct dsi_pll_7nm *pll)
 
 static void dsi_pll_cmn_clk_cfg0_write(struct dsi_pll_7nm *pll, u32 val)
 {
-	unsigned long flags;
-
-	spin_lock_irqsave(&pll->postdiv_lock, flags);
 	writel(val, pll->phy->base + REG_DSI_7nm_PHY_CMN_CLK_CFG0);
-	spin_unlock_irqrestore(&pll->postdiv_lock, flags);
 }
 
 static void dsi_pll_cmn_clk_cfg1_update(struct dsi_pll_7nm *pll, u32 mask,
 					u32 val)
 {
-	unsigned long flags;
 	u32 data;
 
-	spin_lock_irqsave(&pll->pclk_mux_lock, flags);
 	data = readl(pll->phy->base + REG_DSI_7nm_PHY_CMN_CLK_CFG1);
 	data &= ~mask;
 	data |= val & mask;
 
 	writel(data, pll->phy->base + REG_DSI_7nm_PHY_CMN_CLK_CFG1);
-	spin_unlock_irqrestore(&pll->pclk_mux_lock, flags);
 }
 
 static void dsi_pll_disable_global_clk(struct dsi_pll_7nm *pll)
@@ -471,9 +492,9 @@ static void dsi_pll_phy_dig_reset(struct dsi_pll_7nm *pll)
 	wmb(); /* Ensure that the reset is deasserted */
 }
 
-static int dsi_pll_7nm_vco_prepare(struct clk_hw *hw)
+static int dsi_pll_7nm_vco_prepare(struct clk *clk)
 {
-	struct dsi_pll_7nm *pll_7nm = to_pll_7nm(hw);
+	struct dsi_pll_7nm *pll_7nm = to_pll_7nm(clk);
 	int rc;
 
 	dsi_pll_enable_pll_bias(pll_7nm);
@@ -521,9 +542,9 @@ static void dsi_pll_disable_sub(struct dsi_pll_7nm *pll)
 	dsi_pll_disable_pll_bias(pll);
 }
 
-static void dsi_pll_7nm_vco_unprepare(struct clk_hw *hw)
+static void dsi_pll_7nm_vco_unprepare(struct clk_hw *clk)
 {
-	struct dsi_pll_7nm *pll_7nm = to_pll_7nm(hw);
+	struct dsi_pll_7nm *pll_7nm = to_pll_7nm(clk);
 
 	/*
 	 * To avoid any stray glitches while abruptly powering down the PLL
@@ -542,10 +563,10 @@ static void dsi_pll_7nm_vco_unprepare(struct clk_hw *hw)
 	pll_7nm->phy->pll_on = false;
 }
 
-static unsigned long dsi_pll_7nm_vco_recalc_rate(struct clk_hw *hw,
+static unsigned long dsi_pll_7nm_vco_recalc_rate(struct clk *clk,
 						  unsigned long parent_rate)
 {
-	struct dsi_pll_7nm *pll_7nm = to_pll_7nm(hw);
+	struct dsi_pll_7nm *pll_7nm = to_pll_7nm(clk);
 	void __iomem *base = pll_7nm->phy->pll_base;
 	u64 ref_clk = VCO_REF_CLK_RATE;
 	u64 vco_rate = 0x0;
@@ -575,16 +596,26 @@ static unsigned long dsi_pll_7nm_vco_recalc_rate(struct clk_hw *hw,
 	vco_rate = pll_freq;
 	pll_7nm->vco_current_rate = vco_rate;
 
-	DBG("DSI PLL%d returning vco rate = %lu, dec = %x, frac = %x",
+	/*
+	80Hz:
+	[drm:dsi_pll_7nm_vco_recalc_rate] DSI PLL0 returning vco rate = 851297607, dec = 16, frac = ad45
+
+	90Hz: that we are using
+	[drm:dsi_pll_7nm_vco_recalc_rate] DSI PLL0 returning vco rate = 851023681, dec = 16, frac = a5f7
+
+	120Hz:
+	[drm:dsi_pll_7nm_vco_recalc_rate] DSI PLL0 returning vco rate = 851187744, dec = 16, frac = aa57
+	*/
+	printf("DSI PLL%d returning vco rate = %lu, dec = %x, frac = %x",
 	    pll_7nm->phy->id, (unsigned long)vco_rate, dec, frac);
 
 	return (unsigned long)vco_rate;
 }
 
-static long dsi_pll_7nm_clk_round_rate(struct clk_hw *hw,
-		unsigned long rate, unsigned long *parent_rate)
+static long dsi_pll_7nm_clk_round_rate(struct clk *clk,
+		unsigned long rate)
 {
-	struct dsi_pll_7nm *pll_7nm = to_pll_7nm(hw);
+	struct dsi_pll_7nm *pll_7nm = to_pll_7nm(clk);
 
 	if      (rate < pll_7nm->phy->cfg->min_pll_rate)
 		return  pll_7nm->phy->cfg->min_pll_rate;
@@ -593,6 +624,8 @@ static long dsi_pll_7nm_clk_round_rate(struct clk_hw *hw,
 	else
 		return rate;
 }
+
+#endif
 
 static const struct clk_ops clk_ops_dsi_pll_7nm_vco = {
 	.round_rate = dsi_pll_7nm_clk_round_rate,
@@ -605,69 +638,13 @@ static const struct clk_ops clk_ops_dsi_pll_7nm_vco = {
 /*
  * PLL Callbacks
  */
-
-static void dsi_7nm_pll_save_state(struct msm_dsi_phy *phy)
-{
-	struct dsi_pll_7nm *pll_7nm = to_pll_7nm(phy->vco_hw);
-	struct pll_7nm_cached_state *cached = &pll_7nm->cached_state;
-	void __iomem *phy_base = pll_7nm->phy->base;
-	u32 cmn_clk_cfg0, cmn_clk_cfg1;
-
-	cached->pll_out_div = readl(pll_7nm->phy->pll_base +
-			REG_DSI_7nm_PHY_PLL_PLL_OUTDIV_RATE);
-	cached->pll_out_div &= 0x3;
-
-	cmn_clk_cfg0 = readl(phy_base + REG_DSI_7nm_PHY_CMN_CLK_CFG0);
-	cached->bit_clk_div = FIELD_GET(DSI_7nm_PHY_CMN_CLK_CFG0_DIV_CTRL_3_0__MASK, cmn_clk_cfg0);
-	cached->pix_clk_div = FIELD_GET(DSI_7nm_PHY_CMN_CLK_CFG0_DIV_CTRL_7_4__MASK, cmn_clk_cfg0);
-
-	cmn_clk_cfg1 = readl(phy_base + REG_DSI_7nm_PHY_CMN_CLK_CFG1);
-	cached->pll_mux = FIELD_GET(DSI_7nm_PHY_CMN_CLK_CFG1_DSICLK_SEL__MASK, cmn_clk_cfg1);
-
-	DBG("DSI PLL%d outdiv %x bit_clk_div %x pix_clk_div %x pll_mux %x",
-	    pll_7nm->phy->id, cached->pll_out_div, cached->bit_clk_div,
-	    cached->pix_clk_div, cached->pll_mux);
-}
-
-static int dsi_7nm_pll_restore_state(struct msm_dsi_phy *phy)
-{
-	struct dsi_pll_7nm *pll_7nm = to_pll_7nm(phy->vco_hw);
-	struct pll_7nm_cached_state *cached = &pll_7nm->cached_state;
-	u32 val;
-	int ret;
-
-	val = readl(pll_7nm->phy->pll_base + REG_DSI_7nm_PHY_PLL_PLL_OUTDIV_RATE);
-	val &= ~0x3;
-	val |= cached->pll_out_div;
-	writel(val, pll_7nm->phy->pll_base + REG_DSI_7nm_PHY_PLL_PLL_OUTDIV_RATE);
-
-	dsi_pll_cmn_clk_cfg0_write(pll_7nm,
-				   DSI_7nm_PHY_CMN_CLK_CFG0_DIV_CTRL_3_0(cached->bit_clk_div) |
-				   DSI_7nm_PHY_CMN_CLK_CFG0_DIV_CTRL_7_4(cached->pix_clk_div));
-	dsi_pll_cmn_clk_cfg1_update(pll_7nm, DSI_7nm_PHY_CMN_CLK_CFG1_DSICLK_SEL__MASK,
-				    cached->pll_mux);
-
-	ret = dsi_pll_7nm_vco_set_rate(phy->vco_hw,
-			pll_7nm->vco_current_rate,
-			VCO_REF_CLK_RATE);
-	if (ret) {
-		DRM_DEV_ERROR(&pll_7nm->phy->pdev->dev,
-			"restore vco rate failed. ret=%d\n", ret);
-		return ret;
-	}
-
-	DBG("DSI PLL%d", pll_7nm->phy->id);
-
-	return 0;
-}
-
 static int dsi_7nm_set_usecase(struct msm_dsi_phy *phy)
 {
 	struct dsi_pll_7nm *pll_7nm = to_pll_7nm(phy->vco_hw);
 	void __iomem *base = phy->base;
 	u32 data = 0x0;	/* internal PLL */
 
-	DBG("DSI PLL%d", pll_7nm->phy->id);
+	printf("DSI PLL%d", pll_7nm->id);
 
 	switch (phy->usecase) {
 	case MSM_DSI_PHY_STANDALONE:
@@ -692,7 +669,7 @@ static int dsi_7nm_set_usecase(struct msm_dsi_phy *phy)
 	return 0;
 }
 
-
+#if 0
 /*
  * The post dividers and mux clocks are created using the standard divider and
  * mux API. Unlike the 14nm PHY, the slave PLL doesn't need its dividers/mux
@@ -711,17 +688,21 @@ static int pll_7nm_register(struct dsi_pll_7nm *pll_7nm, struct clk_hw **provide
 		.flags = CLK_IGNORE_UNUSED,
 		.ops = &clk_ops_dsi_pll_7nm_vco,
 	};
-	struct device *dev = &pll_7nm->phy->pdev->dev;
-	struct clk_hw *hw, *pll_out_div, *pll_bit, *pll_by_2_bit;
-	struct clk_hw *pll_post_out_div, *phy_pll_out_dsi_parent;
+	struct device *dev = &pll_7nm->phy->dev;
+	struct clk *clk, *pll_out_div, *pll_bit, *pll_by_2_bit;
+	struct clk *pll_post_out_div, *phy_pll_out_dsi_parent;
 	int ret;
 
-	DBG("DSI%d", pll_7nm->phy->id);
+	printf("DSI%d", pll_7nm->phy->id);
 
 	snprintf(clk_name, sizeof(clk_name), "dsi%dvco_clk", pll_7nm->phy->id);
-	pll_7nm->clk_hw.init = &vco_init;
+	pll_7nm->clk.init = &vco_init;
 
-	ret = devm_clk_hw_register(dev, &pll_7nm->clk_hw);
+	/* vco_clk is the parent of pll_out_div:
+	 * vco_clk=>pll_out_div=>pll_bit=>phy_pll_out_byteclk
+	 * vco_clk=>pll_out_div=>pll_post_out_div
+	 */
+	ret = clk_register(dev, &pll_7nm->clk_hw);
 	if (ret)
 		return ret;
 
@@ -776,9 +757,11 @@ static int pll_7nm_register(struct dsi_pll_7nm *pll_7nm, struct clk_hw **provide
 	if (pll_7nm->phy->cphy_mode)
 		pll_post_out_div = devm_clk_hw_register_fixed_factor_parent_hw(
 				dev, clk_name, pll_out_div, 0, 2, 7);
+/*
 	else
 		pll_post_out_div = devm_clk_hw_register_fixed_factor_parent_hw(
 				dev, clk_name, pll_out_div, 0, 1, 4);
+*/
 	if (IS_ERR(pll_post_out_div)) {
 		ret = PTR_ERR(pll_post_out_div);
 		goto fail;
@@ -792,6 +775,7 @@ static int pll_7nm_register(struct dsi_pll_7nm *pll_7nm, struct clk_hw **provide
 					    DSI_7nm_PHY_CMN_CLK_CFG1_DSICLK_SEL__MASK,
 					    DSI_7nm_PHY_CMN_CLK_CFG1_DSICLK_SEL(3));
 		phy_pll_out_dsi_parent = pll_post_out_div;
+/*
 	} else {
 		snprintf(clk_name, sizeof(clk_name), "dsi%d_pclk_mux", pll_7nm->phy->id);
 
@@ -808,6 +792,7 @@ static int pll_7nm_register(struct dsi_pll_7nm *pll_7nm, struct clk_hw **provide
 		}
 
 		phy_pll_out_dsi_parent = hw;
+*/
 	}
 
 	snprintf(clk_name, sizeof(clk_name), "dsi%d_phy_pll_out_dsiclk", pll_7nm->phy->id);
@@ -831,18 +816,17 @@ fail:
 	return ret;
 }
 
-
 static int dsi_pll_7nm_init(struct msm_dsi_phy *phy)
 {
-	struct platform_device *pdev = phy->pdev;
+	struct udevice *dev = phy->dev;
 	struct dsi_pll_7nm *pll_7nm;
 	int ret;
 
-	pll_7nm = devm_kzalloc(&pdev->dev, sizeof(*pll_7nm), GFP_KERNEL);
+	pll_7nm = devm_kzalloc(dev, sizeof(*pll_7nm), GFP_KERNEL);
 	if (!pll_7nm)
 		return -ENOMEM;
 
-	DBG("DSI PLL%d", phy->id);
+	printf("DSI PLL%d", phy->id);
 
 	pll_7nm_list[phy->id] = pll_7nm;
 
@@ -850,7 +834,7 @@ static int dsi_pll_7nm_init(struct msm_dsi_phy *phy)
 
 	ret = pll_7nm_register(pll_7nm, phy->provided_clocks->hws);
 	if (ret) {
-		DRM_DEV_ERROR(&pdev->dev, "failed to register PLL: %d\n", ret);
+		dev_err(dev, "failed to register PLL: %d\n", ret);
 		return ret;
 	}
 
@@ -861,6 +845,48 @@ static int dsi_pll_7nm_init(struct msm_dsi_phy *phy)
 
 	return 0;
 }
+#endif
+
+static int dsi_pll_7nm_probe(struct udevice *dev)
+{
+/*
+	struct dsi_pll_7nm *pll_7nm = dev_get_priv(dev);
+	int index, ret;
+	struct msm_dsi_phy *phy = dev_get_parent_priv(dev);
+*/
+
+printf("========%s enter\n", __func__);
+
+/*
+	pll_7nm->dev = dev;
+	pll_7nm->cfg = &dsi_phy_4nm_8650_cfgs;
+	pll_7nm->phy = phy;
+
+	pll_7nm_list[index] = pll_7nm;
+
+	pll_7nm->pll_base = dev_remap_addr_name(dev, "dsi_pll");
+printf("========%s pll_base %p phy %p\n", __func__, pll_7nm->pll_base, phy);
+	if (IS_ERR(pll_7nm->pll_base))
+		return PTR_ERR(pll_7nm->pll_base);
+
+	pll_7nm->base = dev_remap_addr_name(dev, "dsi_phy");
+	if (IS_ERR(pll_7nm->base))
+		return PTR_ERR(pll_7nm->base);
+*/
+
+	return 0;
+}
+
+#define DSI_PLL_DRV_NAME "qcom-dsi-pll"
+
+U_BOOT_DRIVER(qcom_dsi_pll) = {
+	.name = DSI_PLL_DRV_NAME,
+	.id = UCLASS_CLK,
+	.probe = dsi_pll_7nm_probe,
+	.ops = &clk_ops_dsi_pll_7nm_vco,
+	.priv_auto = sizeof(struct dsi_pll_7nm),
+};
+
 
 static int dsi_phy_hw_v4_0_is_pll_on(struct msm_dsi_phy *phy)
 {
@@ -926,7 +952,7 @@ static int dsi_7nm_phy_enable(struct msm_dsi_phy *phy,
 {
 	int ret;
 	u32 status;
-	u32 const delay_us = 5;
+	//u32 const delay_us = 5;
 	u32 const timeout_us = 1000;
 	struct msm_dsi_dphy_timing *timing = &phy->timing;
 	void __iomem *base = phy->base;
@@ -937,14 +963,16 @@ static int dsi_7nm_phy_enable(struct msm_dsi_phy *phy,
 	u32 glbl_rescode_top_ctrl, glbl_rescode_bot_ctrl;
 	u32 data;
 
-	DBG("");
+	printf("");
 
 	if (phy->cphy_mode)
 		ret = msm_dsi_cphy_timing_calc_v4(timing, clk_req);
+/*
 	else
 		ret = msm_dsi_dphy_timing_calc_v4(timing, clk_req);
+*/
 	if (ret) {
-		DRM_DEV_ERROR(&phy->pdev->dev,
+		dev_err(phy->dev,
 			      "%s: PHY timing calculation failed\n", __func__);
 		return -EINVAL;
 	}
@@ -963,7 +991,7 @@ static int dsi_7nm_phy_enable(struct msm_dsi_phy *phy,
 	/* wait for REFGEN READY */
 	ret = readl_poll_timeout_atomic(base + REG_DSI_7nm_PHY_CMN_PHY_STATUS,
 					status, (status & BIT(0)),
-					delay_us, timeout_us);
+					timeout_us);
 	if (ret) {
 		pr_err("Ref gen not ready. Aborting\n");
 		return -EINVAL;
@@ -1105,7 +1133,7 @@ static int dsi_7nm_phy_enable(struct msm_dsi_phy *phy,
 
 	ret = dsi_7nm_set_usecase(phy);
 	if (ret) {
-		DRM_DEV_ERROR(&phy->pdev->dev, "%s: set pll usecase failed, %d\n",
+		dev_err(phy->dev, "%s: set pll usecase failed, %d\n",
 			__func__, ret);
 		return ret;
 	}
@@ -1145,7 +1173,7 @@ static int dsi_7nm_phy_enable(struct msm_dsi_phy *phy,
 	/* DSI lane settings */
 	dsi_phy_hw_v4_0_lane_settings(phy);
 
-	DBG("DSI%d PHY enabled", phy->id);
+	printf("DSI%d PHY enabled", phy->id);
 
 	return 0;
 }
@@ -1170,7 +1198,7 @@ static void dsi_7nm_phy_disable(struct msm_dsi_phy *phy)
 	void __iomem *base = phy->base;
 	u32 data;
 
-	DBG("");
+	printf("");
 
 	if (dsi_phy_hw_v4_0_is_pll_on(phy))
 		pr_warn("Turning OFF PHY while PLL is on\n");
@@ -1199,13 +1227,8 @@ static void dsi_7nm_phy_disable(struct msm_dsi_phy *phy)
 	/* make sure phy is turned off */
 	wmb();
 
-	DBG("DSI%d PHY disabled", phy->id);
+	printf("DSI%d PHY disabled", phy->id);
 }
-
-static const struct regulator_bulk_data dsi_phy_7nm_98000uA_regulators[] = {
-	{ .supply = "vdds", .init_load_uA = 98000 },
-};
-#endif
 
 
 /* below are copied from other soc driver for ref */
@@ -1307,10 +1330,16 @@ return;
 static int msm_dsi_phy_power_on(struct phy *phy)
 {
 	struct msm_dsi_phy *qcom = dev_get_priv(phy->dev);
+	/* TODO: need to calculate it via panel/lane/dsc data */
+	struct msm_dsi_phy_clk_request clk_req = {
+		.bitclk_rate = 851187806,
+		.escclk_rate = 19200000,
+	 };
 
 printf("======%s enter with phy->id %d\n", __func__, phy->id);
 	clk_prepare_enable(qcom->ahb_clk);
 
+	return dsi_7nm_phy_enable(phy, &clk_req);
 return 0;
 	//return dsi_pll_7nm_init(phy);
 	//clk_prepare_enable(qcom->ref_clk);
@@ -1353,13 +1382,32 @@ static const struct phy_ops msm_dsi_phy_ops = {
 	.power_off = msm_dsi_phy_power_off,
 };
 
+const struct msm_dsi_phy_cfg dsi_phy_4nm_8650_cfgs = {
+	.has_phy_lane = true,
+	.ops = {
+		.set_continuous_clock = dsi_7nm_set_continuous_clock,
+	},
+	.min_pll_rate = 600000000UL,
+#ifdef CONFIG_64BIT
+	.max_pll_rate = 5000000000UL,
+#else
+	.max_pll_rate = ULONG_MAX,
+#endif
+	.io_start = { 0xae95000, 0xae97000 },
+	.num_dsi_phy = 2,
+	.quirks = DSI_PHY_7NM_QUIRK_V5_2,
+};
+
 static int msm_dsi_phy_probe(struct udevice *dev)
 {
 	struct msm_dsi_phy *qcom = dev_get_priv(dev);
-	int ret;
+	struct driver *drv;
+	//struct udevice *plldev = NULL;
+	int index, ret;
 
 	qcom->dev = dev;
 	qcom->pdata = (const struct qcom_video_phy_plat_data *)dev_get_driver_data(dev);
+	qcom->cfg = &dsi_phy_4nm_8650_cfgs;
 
 	qcom->base = dev_remap_addr_name(dev, "dsi_phy");
 	if (IS_ERR(qcom->base))
@@ -1391,7 +1439,6 @@ printf("========%s udev %p base %p pll_base %p lane_base %p\n", __func__, dev, q
 		return ret;
 	}
 
-/*
 	ret =  device_get_supply_regulator(dev, "vdds-supply",
 					   &qcom->vdds_reg);
 	if (ret) {
@@ -1404,7 +1451,21 @@ printf("========%s udev %p base %p pll_base %p lane_base %p\n", __func__, dev, q
 		dev_err(dev, "failed to enable phy regulator: %d\n", ret);
 		return ret;
 	}
-*/
+
+	/* Get a handle to the dsi pll clk driver handler */
+	drv = lists_driver_lookup_name(DSI_PLL_DRV_NAME);
+	if (!drv)
+		return -ENOENT;
+
+printf("========%s drv %p\n", __func__, drv);
+	ret = device_bind_with_driver_data(dev, drv, DSI_PLL_DRV_NAME, qcom,
+					   dev_ofnode(dev), NULL);
+	if (ret) {
+		dev_err(dev, "failed to bind pll driver: %d\n", ret);
+		return ret;
+	}
+
+printf("========%s ret ok\n", __func__);
 	return 0;
 }
 

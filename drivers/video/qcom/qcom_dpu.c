@@ -601,6 +601,7 @@ static void mdss_intf_fetch_start_config(void *regs_base, struct dpu_mdss_cfg *c
 	for (i = 2; i < 4; i++) {
 		base = regs_base + cat->intf[i].base;
 
+		/* config for 90Hz */
 		writel(0x3100014, base + INTF_HSYNC_CTL);
 		writel(0x293960, base + INTF_VSYNC_PERIOD_F0);
 		writel(0x310, base + INTF_VSYNC_PULSE_WIDTH_F0);

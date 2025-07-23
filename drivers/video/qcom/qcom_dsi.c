@@ -61,10 +61,12 @@ struct qcom_dsi_priv {
 	void __iomem *phy_base;
 	struct udevice *panel;
 	struct phy phy;
+	struct phy_configure_opts_mipi_dphy phy_opts;
 	u32 pllref_clk;
 	u32 hw_version;
 	int lane_min_kbps;
 	int lane_max_kbps;
+	unsigned int lane_mbps; /* per lane */
 	struct udevice *vdd_reg;
 	struct udevice *dsi_host;
 };
@@ -693,16 +695,16 @@ static int dsi_get_lane_mbps(void *priv_data, struct display_timing *timings,
 	struct mipi_dsi_device *device = priv_data;
 	struct udevice *dev = device->dev;
 	struct qcom_dsi_priv *dsi = dev_get_priv(dev);
+	unsigned long mpclk, tmp;
 	int idf, ndiv, odf, pll_in_khz, pll_out_khz;
 	int ret, bpp;
-	u32 val;
+	unsigned int max_mbps, target_mbps = 1000;
 
 	*lane_mbps = pll_out_khz / 1000;
 
 	dev_dbg(dev, "pll_in %ukHz pll_out %ukHz lane_mbps %uMHz\n",
 		pll_in_khz, pll_out_khz, *lane_mbps);
 
-#if 0
 	bpp = mipi_dsi_pixel_format_to_bpp(format);
 	if (bpp < 0) {
 		dev_err(dsi->dsi_host,
@@ -724,15 +726,18 @@ static int dsi_get_lane_mbps(void *priv_data, struct display_timing *timings,
 
 	/* for external phy only the mipi_dphy_config is necessary */
 	if (generic_phy_valid(&dsi->phy)) {
+		/* need to switch a cphy version ?? required clk rate is calculated
+		 * here, then the clk is enabled in generic phy power on */
+/*
 		phy_mipi_dphy_get_default_config(timings->pixelclock.typ  * 10 / 8,
 						 bpp, lanes,
 						 &dsi->phy_opts);
+*/
 		dsi->lane_mbps = target_mbps;
 		*lane_mbps = dsi->lane_mbps;
 
 		return 0;
 	}
-#endif
 
 	return 0;
 }
