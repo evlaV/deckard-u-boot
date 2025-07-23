@@ -6,6 +6,7 @@
  * Copyright (c) 2018, Theobroma Systems Design und Consulting GmbH
  */
 
+#define DEBUG 7
 #define LOG_CATEGORY UCLASS_CLK
 
 #include <clk.h>

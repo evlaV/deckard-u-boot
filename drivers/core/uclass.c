@@ -6,6 +6,7 @@
  * Pavel Herrmann <morpheus.ibis@gmail.com>
  */
 
+#define DEBUG 11
 #define LOG_CATEGORY LOGC_DM
 
 #include <dm.h>
@@ -502,8 +503,10 @@ int uclass_get_device(enum uclass_id id, int index, struct udevice **devp)
 	struct udevice *dev;
 	int ret;
 
+printf("-------- %s enter\n", __func__);
 	*devp = NULL;
 	ret = uclass_find_device(id, index, &dev);
+printf("-------- uclass %d get device ret %d\n", id, ret);
 	return uclass_get_device_tail(dev, ret, devp);
 }
 

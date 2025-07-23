@@ -478,11 +478,11 @@ static int device_get_dma_constraints(struct udevice *dev)
 	return 0;
 }
 
-int  dbg_f = 0;
 int device_probe(struct udevice *dev)
 {
 	const struct driver *drv;
 	int ret;
+int  dbg_f = 0;
 
 	if (!dev)
 		return -EINVAL;
@@ -525,18 +525,20 @@ if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE_
 			return 0;
 	}
 
-if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE__);
 	dev_or_flags(dev, DM_FLAG_ACTIVATED);
 
+if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE__);
 	if (CONFIG_IS_ENABLED(POWER_DOMAIN) && dev->parent &&
 	    (device_get_uclass_id(dev) != UCLASS_POWER_DOMAIN) &&
 	    !(drv->flags & DM_FLAG_DEFAULT_PD_CTRL_OFF)) {
 if(dbg_f) printf("--------%s for dev %s call dev_power_domain_on\n", __func__, dev->name);
 		ret = dev_power_domain_on(dev);
+if(dbg_f) printf("--------%s for dev %s call dev_power_domain_on ret %d\n", __func__, dev->name, ret);
 		if (ret)
 			goto fail;
 	}
 
+if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE__);
 	/*
 	 * Process pinctrl for everything except the root device, and
 	 * continue regardless of the result of pinctrl. Don't process pinctrl
@@ -554,6 +556,7 @@ if(dbg_f) printf("--------%s for dev %s call dev_power_domain_on\n", __func__, d
 	 */
 	if (dev->parent && device_get_uclass_id(dev) != UCLASS_PINCTRL) {
 		ret = pinctrl_select_state(dev, "default");
+//if(dbg_f) printf("--------%s for dev %s line %d call pinctrl_select_state ret %d\n", __func__, dev->name, __LINE__, ret);
 		if (ret && ret != -ENOSYS)
 			log_debug("Device '%s' failed to configure default pinctrl: %d (%s)\n",
 				  dev->name, ret, errno_str(ret));
