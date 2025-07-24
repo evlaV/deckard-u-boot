@@ -457,6 +457,18 @@ static void dsi_pll_cmn_clk_cfg0_write(struct dsi_pll_7nm *pll, u32 val)
 	writel(val, pll->phy->base + REG_DSI_7nm_PHY_CMN_CLK_CFG0);
 }
 
+static void dsi_phy_pll_cmn_clk_cfg1_update(struct msm_dsi_phy *phy, u32 mask,
+					u32 val)
+{
+	u32 data;
+
+	data = readl(phy->base + REG_DSI_7nm_PHY_CMN_CLK_CFG1);
+	data &= ~mask;
+	data |= val & mask;
+
+	writel(data, phy->base + REG_DSI_7nm_PHY_CMN_CLK_CFG1);
+}
+
 static void dsi_pll_cmn_clk_cfg1_update(struct dsi_pll_7nm *pll, u32 mask,
 					u32 val)
 {
@@ -643,17 +655,16 @@ static const struct clk_ops clk_ops_dsi_pll_7nm_vco = {
  */
 static int dsi_7nm_set_usecase(struct msm_dsi_phy *phy)
 {
-	struct dsi_pll_7nm *pll_7nm = to_pll_7nm(phy->vco_hw);
 	void __iomem *base = phy->base;
 	u32 data = 0x0;	/* internal PLL */
 
-	printf("DSI PLL%d", pll_7nm->id);
+	printf("DSI PLL%d", phy->id);
 
 	switch (phy->usecase) {
 	case MSM_DSI_PHY_STANDALONE:
 		break;
 	case MSM_DSI_PHY_MASTER:
-		pll_7nm->slave = pll_7nm_list[(pll_7nm->phy->id + 1) % DSI_MAX];
+		//pll_7nm->slave = pll_7nm_list[(pll_7nm->phy->id + 1) % DSI_MAX];
 		/* v7.0: Enable ATB_EN0 and alternate clock output to external phy */
 		if (phy->cfg->quirks & DSI_PHY_7NM_QUIRK_V7_0)
 			writel(0x07, base + REG_DSI_7nm_PHY_CMN_CTRL_5);
@@ -666,7 +677,7 @@ static int dsi_7nm_set_usecase(struct msm_dsi_phy *phy)
 	}
 
 	/* set PLL src */
-	dsi_pll_cmn_clk_cfg1_update(pll_7nm, DSI_7nm_PHY_CMN_CLK_CFG1_BITCLK_SEL__MASK,
+	dsi_phy_pll_cmn_clk_cfg1_update(phy, DSI_7nm_PHY_CMN_CLK_CFG1_BITCLK_SEL__MASK,
 				    DSI_7nm_PHY_CMN_CLK_CFG1_BITCLK_SEL(data));
 
 	return 0;
@@ -1154,6 +1165,12 @@ printf("----%s line %d\n", __func__, __LINE__);
 		writel(0x40, base + REG_DSI_7nm_PHY_CMN_CTRL_2);
 
 printf("----%s line %d\n", __func__, __LINE__);
+	/* pll is touched inside, so we need to init pll struct first,
+	 * i.e. init the pll driver.
+	 * The pll struct is init during dsi_phy_driver_probe in kernel.
+	 * But pll is another driver in uboot.
+	 * And phy should be enabled before PLL, per comments where
+	 * dsi_phy_hw_v4_0_is_pll_on() is called */
 	ret = dsi_7nm_set_usecase(phy);
 	if (ret) {
 		dev_err(phy->dev, "%s: set pll usecase failed, %d\n",
@@ -1438,6 +1455,19 @@ static int dsi_phy_get_id(struct msm_dsi_phy *phy)
 	return -EINVAL;
 }
 
+static int qcom_dsi_phy_bind(struct udevice *dev)
+{
+	int ret;
+
+printf("=============%s enter\n", __func__);
+	ret = device_bind_driver_to_node(dev, DSI_PLL_DRV_NAME, "dsi_phy_pll",
+					 dev_ofnode(dev), NULL);
+	if (ret)
+		dev_err(dev, "failed to bind pll driver: %d\n", ret);
+
+	return ret;
+}
+
 static int msm_dsi_phy_probe(struct udevice *dev)
 {
 	struct msm_dsi_phy *qcom = dev_get_priv(dev);
@@ -1498,13 +1528,6 @@ printf("========%s udev %p base %p pll_base %p lane_base %p\n", __func__, dev, q
 		return ret;
 	}
 
-	ret = device_bind_driver_to_node(dev, DSI_PLL_DRV_NAME, "qcom_phy_pll",
-					 dev_ofnode(dev), NULL);
-	if (ret) {
-		dev_err(dev, "failed to bind pll driver: %d\n", ret);
-		return ret;
-	}
-
 printf("========%s ret ok\n", __func__);
 	return 0;
 }
@@ -1518,6 +1541,7 @@ U_BOOT_DRIVER(qcom_mdss_dsidphy) = {
 	.name = "qcom-dsidphy",
 	.id = UCLASS_PHY,
 	.of_match = msm_dsi_phy_of_match,
+	.bind = qcom_dsi_phy_bind,
 	.probe = msm_dsi_phy_probe,
 	.ops = &msm_dsi_phy_ops,
 	.priv_auto = sizeof(struct msm_dsi_phy),
