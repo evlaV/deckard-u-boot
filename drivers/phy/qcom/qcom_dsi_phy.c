@@ -104,8 +104,11 @@ int msm_dsi_cphy_timing_calc_v4(struct msm_dsi_dphy_timing *timing,
 	s32 coeff = 1000; /* Precision, should avoid overflow */
 	s32 temp;
 
-	if (!bit_rate || !esc_rate)
+	if (!bit_rate || !esc_rate) {
+		printf("%s error: bit_rate %d esc_rate %d\n",
+			bit_rate, esc_rate);
 		return -EINVAL;
+	}
 
 	ui = mult_frac(NSEC_PER_MSEC, coeff, bit_rate / 1000);
 	ui_x7 = ui * 7;
@@ -877,9 +880,9 @@ printf("========%s pll_base %p phy %p\n", __func__, pll_7nm->pll_base, phy);
 	return 0;
 }
 
-#define DSI_PLL_DRV_NAME "qcom-dsi-pll"
+#define DSI_PLL_DRV_NAME "dsi_pll"
 
-U_BOOT_DRIVER(qcom_dsi_pll) = {
+U_BOOT_DRIVER(dsi_pll) = {
 	.name = DSI_PLL_DRV_NAME,
 	.id = UCLASS_CLK,
 	.probe = dsi_pll_7nm_probe,
@@ -950,7 +953,7 @@ static void dsi_phy_hw_v4_0_lane_settings(struct msm_dsi_phy *phy)
 static int dsi_7nm_phy_enable(struct msm_dsi_phy *phy,
 			      struct msm_dsi_phy_clk_request *clk_req)
 {
-	int ret;
+	int ret = 0;
 	u32 status;
 	//u32 const delay_us = 5;
 	u32 const timeout_us = 1000;
@@ -962,6 +965,8 @@ static int dsi_7nm_phy_enable(struct msm_dsi_phy *phy,
 	u32 glbl_str_swi_cal_sel_ctrl, glbl_hstx_str_ctrl_0;
 	u32 glbl_rescode_top_ctrl, glbl_rescode_bot_ctrl;
 	u32 data;
+	unsigned long timeout;
+	u32 val;
 
 	printf("");
 
@@ -974,7 +979,7 @@ static int dsi_7nm_phy_enable(struct msm_dsi_phy *phy,
 	if (ret) {
 		dev_err(phy->dev,
 			      "%s: PHY timing calculation failed\n", __func__);
-		return -EINVAL;
+//		return -EINVAL;
 	}
 
 	if (dsi_phy_hw_v4_0_is_pll_on(phy))
@@ -989,16 +994,29 @@ static int dsi_7nm_phy_enable(struct msm_dsi_phy *phy,
 	}
 
 	/* wait for REFGEN READY */
+/*
 	ret = readl_poll_timeout_atomic(base + REG_DSI_7nm_PHY_CMN_PHY_STATUS,
 					status, (status & BIT(0)),
 					timeout_us);
-	if (ret) {
+*/
+	timeout = timer_get_us() + timeout_us;
+	for (;;) {
+		val = readl(base + REG_DSI_7nm_PHY_CMN_PHY_STATUS);
+		if (val & BIT(0))
+			break;
+		if (timeout_us && time_after(timer_get_us(), timeout)) {
+			val = readl(base + REG_DSI_7nm_PHY_CMN_PHY_STATUS);
+			break;
+		}
+	}
+	if (!(val & BIT(0))) {
 		pr_err("Ref gen not ready. Aborting\n");
 		return -EINVAL;
 	}
 
 	/* TODO: CPHY enable path (this is for DPHY only) */
 
+printf("----%s line %d\n", __func__, __LINE__);
 	/* Alter PHY configurations if data rate less than 1.5GHZ*/
 	less_than_1500_mhz = (clk_req->bitclk_rate <= 1500000000);
 
@@ -1017,6 +1035,7 @@ static int dsi_7nm_phy_enable(struct msm_dsi_phy *phy,
 		lane_ctrl0 = 0x1f;
 	}
 
+printf("----%s line %d\n", __func__, __LINE__);
 	if ((phy->cfg->quirks & DSI_PHY_7NM_QUIRK_V7_0)) {
 		if (phy->cphy_mode) {
 			/* TODO: different for second phy */
@@ -1080,6 +1099,7 @@ static int dsi_7nm_phy_enable(struct msm_dsi_phy *phy,
 		glbl_rescode_bot_ctrl = 0x3c;
 	}
 
+printf("----%s line %d\n", __func__, __LINE__);
 	/* de-assert digital and pll power down */
 	data = BIT(6) | BIT(5);
 	writel(data, base + REG_DSI_7nm_PHY_CMN_CTRL_0);
@@ -1100,6 +1120,7 @@ static int dsi_7nm_phy_enable(struct msm_dsi_phy *phy,
 	writel(0x21, base + REG_DSI_7nm_PHY_CMN_LANE_CFG0);
 	writel(0x84, base + REG_DSI_7nm_PHY_CMN_LANE_CFG1);
 
+printf("----%s line %d\n", __func__, __LINE__);
 	if (phy->cphy_mode)
 		writel(BIT(6), base + REG_DSI_7nm_PHY_CMN_GLBL_CTRL);
 
@@ -1122,6 +1143,7 @@ static int dsi_7nm_phy_enable(struct msm_dsi_phy *phy,
 	       base + REG_DSI_7nm_PHY_CMN_GLBL_RESCODE_OFFSET_BOT_CTRL);
 	writel(0x55, base + REG_DSI_7nm_PHY_CMN_GLBL_LPTX_STR_CTRL);
 
+printf("----%s line %d\n", __func__, __LINE__);
 	/* Remove power down from all blocks */
 	writel(0x7f, base + REG_DSI_7nm_PHY_CMN_CTRL_0);
 
@@ -1131,12 +1153,14 @@ static int dsi_7nm_phy_enable(struct msm_dsi_phy *phy,
 	if (!phy->cphy_mode)
 		writel(0x40, base + REG_DSI_7nm_PHY_CMN_CTRL_2);
 
+printf("----%s line %d\n", __func__, __LINE__);
 	ret = dsi_7nm_set_usecase(phy);
 	if (ret) {
 		dev_err(phy->dev, "%s: set pll usecase failed, %d\n",
 			__func__, ret);
 		return ret;
 	}
+printf("----%s line %d\n", __func__, __LINE__);
 
 	/* DSI PHY timings */
 	if (phy->cphy_mode) {
@@ -1170,6 +1194,7 @@ static int dsi_7nm_phy_enable(struct msm_dsi_phy *phy,
 		       base + REG_DSI_7nm_PHY_CMN_TIMING_CTRL_13);
 	}
 
+printf("----%s line %d\n", __func__, __LINE__);
 	/* DSI lane settings */
 	dsi_phy_hw_v4_0_lane_settings(phy);
 
@@ -1338,8 +1363,10 @@ static int msm_dsi_phy_power_on(struct phy *phy)
 
 printf("======%s enter with phy->id %d\n", __func__, phy->id);
 	clk_prepare_enable(qcom->ahb_clk);
+	/* the rate is from linux test */
+	clk_set_rate(qcom->ahb_clk, 19200000);
 
-	return dsi_7nm_phy_enable(phy, &clk_req);
+	return dsi_7nm_phy_enable(qcom, &clk_req);
 return 0;
 	//return dsi_pll_7nm_init(phy);
 	//clk_prepare_enable(qcom->ref_clk);
@@ -1398,16 +1425,30 @@ const struct msm_dsi_phy_cfg dsi_phy_4nm_8650_cfgs = {
 	.quirks = DSI_PHY_7NM_QUIRK_V5_2,
 };
 
+static int dsi_phy_get_id(struct msm_dsi_phy *phy)
+{
+	const struct msm_dsi_phy_cfg *cfg = phy->cfg;
+	int i;
+
+	for (i = 0; i < cfg->num_dsi_phy; i++) {
+		if (cfg->io_start[i] == phy->base)
+			return i;
+	}
+
+	return -EINVAL;
+}
+
 static int msm_dsi_phy_probe(struct udevice *dev)
 {
 	struct msm_dsi_phy *qcom = dev_get_priv(dev);
-	struct driver *drv;
+	struct driver *drv = NULL;
 	//struct udevice *plldev = NULL;
-	int index, ret;
+	int ret;
 
 	qcom->dev = dev;
 	qcom->pdata = (const struct qcom_video_phy_plat_data *)dev_get_driver_data(dev);
 	qcom->cfg = &dsi_phy_4nm_8650_cfgs;
+	qcom->cphy_mode = true;
 
 	qcom->base = dev_remap_addr_name(dev, "dsi_phy");
 	if (IS_ERR(qcom->base))
@@ -1422,6 +1463,11 @@ static int msm_dsi_phy_probe(struct udevice *dev)
 		return PTR_ERR(qcom->lane_base);
 
 printf("========%s udev %p base %p pll_base %p lane_base %p\n", __func__, dev, qcom->base, qcom->pll_base, qcom->lane_base);
+	qcom->id = dsi_phy_get_id(qcom);
+	if (qcom->id)
+		qcom->usecase = MSM_DSI_PHY_SLAVE;
+	else
+		qcom->usecase = MSM_DSI_PHY_MASTER;
 
 /*
 	qcom->ref_clk = devm_clk_get(dev, "ref");
@@ -1452,14 +1498,8 @@ printf("========%s udev %p base %p pll_base %p lane_base %p\n", __func__, dev, q
 		return ret;
 	}
 
-	/* Get a handle to the dsi pll clk driver handler */
-	drv = lists_driver_lookup_name(DSI_PLL_DRV_NAME);
-	if (!drv)
-		return -ENOENT;
-
-printf("========%s drv %p\n", __func__, drv);
-	ret = device_bind_with_driver_data(dev, drv, DSI_PLL_DRV_NAME, qcom,
-					   dev_ofnode(dev), NULL);
+	ret = device_bind_driver_to_node(dev, DSI_PLL_DRV_NAME, "qcom_phy_pll",
+					 dev_ofnode(dev), NULL);
 	if (ret) {
 		dev_err(dev, "failed to bind pll driver: %d\n", ret);
 		return ret;
