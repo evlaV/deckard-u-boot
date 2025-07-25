@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <env_internal.h>
 #include <button.h>
+#include "pmk8550.h"
 #include "deckard_battery.h"
 
 #define BOOT_DEVICE_UFS_A	(BOOT_DEVICE_NONE + 1)
@@ -36,6 +37,8 @@
 DECLARE_GLOBAL_DATA_PTR;
 
 static ulong boot_wrapper_version __section(".data");
+
+static struct pon_on_off_reason pon_reason;
 
 int go_to_rescue = 0;
 
@@ -271,6 +274,20 @@ void qcom_spl_board_init(void)
 	uint16_t battery_voltage;
 
 	printf("Hello from deckard_spl, boot wrapper version %ld\n", boot_wrapper_version);
+
+	ret = pmk8550_get_on_off_reason(&pon_reason);
+	if (ret == 0) {
+		if (pon_reason.trigger == PON_RESET_TRIGGER_OTHER)
+			printf("PON %s Unknown Trigger (Irq %d PID %d SID %d)\n",
+			       pmk8550_get_pon_type_str(pon_reason.type),
+				pon_reason.trigger_data.irq,
+				pon_reason.trigger_data.pid,
+				pon_reason.trigger_data.sid);
+		else
+			printf("PON %s Trigger %s\n",
+			       pmk8550_get_pon_type_str(pon_reason.type),
+			       pmk8550_get_pon_trigger_str(pon_reason.trigger));
+	}
 
 	deckard_spl_battery_charging_setup(&battery_voltage);
 
