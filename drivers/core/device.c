@@ -186,6 +186,7 @@ static int device_bind_common(struct udevice *parent, const struct driver *drv,
 	if (devp)
 		*devp = dev;
 
+	printf("ddddddd bind class %d device: %s\n", drv->id, name);
 	dev_or_flags(dev, DM_FLAG_BOUND);
 
 	return 0;

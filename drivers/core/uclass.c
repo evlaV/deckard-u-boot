@@ -290,6 +290,7 @@ int uclass_find_device_by_namelen(enum uclass_id id, const char *name, int len,
 		return ret;
 
 	uclass_foreach_dev(dev, uc) {
+printf("	check device %s\n", dev->name);
 		if (!strncmp(dev->name, name, len) &&
 		    strlen(dev->name) == len) {
 			*devp = dev;
@@ -503,10 +504,8 @@ int uclass_get_device(enum uclass_id id, int index, struct udevice **devp)
 	struct udevice *dev;
 	int ret;
 
-printf("-------- %s enter\n", __func__);
 	*devp = NULL;
 	ret = uclass_find_device(id, index, &dev);
-printf("-------- uclass %d get device ret %d\n", id, ret);
 	return uclass_get_device_tail(dev, ret, devp);
 }
 
@@ -518,6 +517,7 @@ int uclass_get_device_by_name(enum uclass_id id, const char *name,
 
 	*devp = NULL;
 	ret = uclass_find_device_by_name(id, name, &dev);
+printf("-------- uclass %d find device %s ret %d\n", id, name, ret);
 	return uclass_get_device_tail(dev, ret, devp);
 }
 
