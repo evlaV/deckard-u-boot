@@ -106,7 +106,7 @@ int msm_dsi_cphy_timing_calc_v4(struct msm_dsi_dphy_timing *timing,
 
 	if (!bit_rate || !esc_rate) {
 		printf("%s error: bit_rate %d esc_rate %d\n",
-			bit_rate, esc_rate);
+			__func__, bit_rate, esc_rate);
 		return -EINVAL;
 	}
 
@@ -969,7 +969,9 @@ static int dsi_7nm_phy_enable(struct msm_dsi_phy *phy,
 	//u32 const delay_us = 5;
 	u32 const timeout_us = 1000;
 	struct msm_dsi_dphy_timing *timing = &phy->timing;
+	struct udevice *pll_dev;
 	void __iomem *base = phy->base;
+	u8 buf[16];
 	bool less_than_1500_mhz;
 	u32 vreg_ctrl_0, vreg_ctrl_1, lane_ctrl0;
 	u32 glbl_pemph_ctrl_0;
@@ -1165,12 +1167,20 @@ printf("----%s line %d\n", __func__, __LINE__);
 		writel(0x40, base + REG_DSI_7nm_PHY_CMN_CTRL_2);
 
 printf("----%s line %d\n", __func__, __LINE__);
-	/* pll is touched inside, so we need to init pll struct first,
-	 * i.e. init the pll driver.
+	/* pll is touched inside dsi_7nm_set_usecase, so we need to init
+	 * pll struct first, i.e. init the pll driver.
 	 * The pll struct is init during dsi_phy_driver_probe in kernel.
 	 * But pll is another driver in uboot.
 	 * And phy should be enabled before PLL, per comments where
 	 * dsi_phy_hw_v4_0_is_pll_on() is called */
+	snprintf(buf, sizeof(buf), "dsi_phy_pll%d", phy->id);
+	ret = uclass_get_device_by_name(UCLASS_CLK, buf, &pll_dev);
+	if (ret) {
+		dev_err(phy->dev, "%s: failed to get %s\n",
+			__func__, buf);
+		return ret;
+	}
+
 	ret = dsi_7nm_set_usecase(phy);
 	if (ret) {
 		dev_err(phy->dev, "%s: set pll usecase failed, %d\n",
@@ -1457,14 +1467,9 @@ static int dsi_phy_get_id(struct msm_dsi_phy *phy)
 
 static int qcom_dsi_phy_bind(struct udevice *dev)
 {
-	int ret;
+	int ret = 0;
 
-printf("=============%s enter\n", __func__);
-	ret = device_bind_driver_to_node(dev, DSI_PLL_DRV_NAME, "dsi_phy_pll",
-					 dev_ofnode(dev), NULL);
-	if (ret)
-		dev_err(dev, "failed to bind pll driver: %d\n", ret);
-
+printf("=============%s line %d\n", __func__, __LINE__);
 	return ret;
 }
 
@@ -1473,10 +1478,12 @@ static int msm_dsi_phy_probe(struct udevice *dev)
 	struct msm_dsi_phy *qcom = dev_get_priv(dev);
 	struct driver *drv = NULL;
 	//struct udevice *plldev = NULL;
+	u8 buf[16];
 	int ret;
 
 	qcom->dev = dev;
 	qcom->pdata = (const struct qcom_video_phy_plat_data *)dev_get_driver_data(dev);
+#if 1
 	qcom->cfg = &dsi_phy_4nm_8650_cfgs;
 	qcom->cphy_mode = true;
 
@@ -1498,6 +1505,7 @@ printf("========%s udev %p base %p pll_base %p lane_base %p\n", __func__, dev, q
 		qcom->usecase = MSM_DSI_PHY_SLAVE;
 	else
 		qcom->usecase = MSM_DSI_PHY_MASTER;
+#endif
 
 /*
 	qcom->ref_clk = devm_clk_get(dev, "ref");
@@ -1528,8 +1536,13 @@ printf("========%s udev %p base %p pll_base %p lane_base %p\n", __func__, dev, q
 		return ret;
 	}
 
+	snprintf(buf, sizeof(buf), "dsi_phy_pll%d", qcom->id);
+	ret = device_bind_driver_to_node(dev, DSI_PLL_DRV_NAME, buf,
+					 dev_ofnode(dev), NULL);
+	if (ret)
+		dev_err(dev, "failed to bind pll driver: %d\n", ret);
 printf("========%s ret ok\n", __func__);
-	return 0;
+	return ret;
 }
 
 static const struct udevice_id msm_dsi_phy_of_match[] = {
