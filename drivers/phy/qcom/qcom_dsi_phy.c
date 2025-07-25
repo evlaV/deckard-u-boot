@@ -831,49 +831,17 @@ fail:
 
 	return ret;
 }
-
-static int dsi_pll_7nm_init(struct msm_dsi_phy *phy)
-{
-	struct udevice *dev = phy->dev;
-	struct dsi_pll_7nm *pll_7nm;
-	int ret;
-
-	pll_7nm = devm_kzalloc(dev, sizeof(*pll_7nm), GFP_KERNEL);
-	if (!pll_7nm)
-		return -ENOMEM;
-
-	printf("DSI PLL%d", phy->id);
-
-	pll_7nm_list[phy->id] = pll_7nm;
-
-	pll_7nm->phy = phy;
-
-	ret = pll_7nm_register(pll_7nm, phy->provided_clocks->hws);
-	if (ret) {
-		dev_err(dev, "failed to register PLL: %d\n", ret);
-		return ret;
-	}
-
-	phy->vco_hw = &pll_7nm->clk_hw;
-
-	/* TODO: Remove this when we have proper display handover support */
-	//msm_dsi_phy_pll_save_state(phy);
-
-	return 0;
-}
 #endif
 
 static int dsi_pll_7nm_probe(struct udevice *dev)
 {
-/*
 	struct dsi_pll_7nm *pll_7nm = dev_get_priv(dev);
 	int index, ret;
+	struct clk *clk;
 	struct msm_dsi_phy *phy = dev_get_parent_priv(dev);
-*/
 
 printf("========%s enter\n", __func__);
 
-/*
 	pll_7nm->dev = dev;
 	pll_7nm->cfg = &dsi_phy_4nm_8650_cfgs;
 	pll_7nm->phy = phy;
@@ -888,6 +856,21 @@ printf("========%s pll_base %p phy %p\n", __func__, pll_7nm->pll_base, phy);
 	pll_7nm->base = dev_remap_addr_name(dev, "dsi_phy");
 	if (IS_ERR(pll_7nm->base))
 		return PTR_ERR(pll_7nm->base);
+
+	/* move clks registration from pll_7nm_register. But how
+	 * to model the clk tree, or configure them at once. Or
+	 * we hack with hard coding the data from kernel for temp.
+	 * vco_clk(851024121 Hz) is the parent of pll_out_div:
+	 * vco_clk(851024121) => pll_out_div(851024121) => pll_bit(851024121) => phy_pll_out_byteclk(121574874)
+	 * vco_clk(851024121) => pll_out_div(851024121) => pll_bit(851024121) => pll_by_2_bit(425512060) for DPHY, not current CPHY
+	 * vco_clk(851024121) => pll_out_div(851024121) => pll_post_out_div(243149748) => phy_pll_out_dsi(243149748)
+	 */
+/*
+	clk = clk_register_divider(struct device *dev, const char *name,
+		const char *parent_name, unsigned long flags,
+		void __iomem *reg, u8 shift, u8 width,
+		u8 clk_divider_flags)
+	clk_dm(clk_id, clk);
 */
 
 	return 0;
@@ -1421,6 +1404,7 @@ static int msm_dsi_phy_configure(struct phy *phy, void *params)
 	struct phy_configure_opts_mipi_dphy *config = params;
 	int ret;
 
+	/* We finish configuration in power_on so far */
 return 0;
 	ret = phy_mipi_dphy_config_validate(config);
 	if (ret)
