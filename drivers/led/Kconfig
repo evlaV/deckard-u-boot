@@ -39,6 +39,12 @@ config LED_QCOM_TRI
 	help
 	  This option enables support for QCOM PMIC TRI LEDs.
 
+config SPL_LED_QCOM_TRI
+	bool "LED support for QCOM PMIC TRI LED in SPL"
+        depends on SPL_LED && SPMI
+	help
+	  This option enables support for QCOM PMIC TRI LEDs in SPL.
+
 config LED_BCM6328
 	bool "LED Support for BCM6328"
 	depends on LED && ARCH_BMIPS
