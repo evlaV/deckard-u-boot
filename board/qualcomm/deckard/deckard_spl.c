@@ -9,6 +9,7 @@
 #include <spl.h>
 #include <stdlib.h>
 #include <env_internal.h>
+#include <led.h>
 #include <button.h>
 #include "pmk8550.h"
 #include "deckard_battery.h"
@@ -253,6 +254,18 @@ static void deckard_spl_check_for_recovery_button(void)
 	return;
 }
 
+static void deckard_spl_leds_set(void)
+{
+	struct udevice *led_blue;
+	int ret;
+
+	ret = led_get_by_label("blue", &led_blue);
+	if (ret < 0)
+		printf("failed to get blue led\n");
+
+	led_set_state(led_blue, LEDST_ON);
+}
+
 
 void qcom_spl_board_init(void)
 {
@@ -274,6 +287,8 @@ void qcom_spl_board_init(void)
 	uint16_t battery_voltage;
 
 	printf("Hello from deckard_spl, boot wrapper version %ld\n", boot_wrapper_version);
+
+	deckard_spl_leds_set();
 
 	ret = pmk8550_get_on_off_reason(&pon_reason);
 	if (ret == 0) {

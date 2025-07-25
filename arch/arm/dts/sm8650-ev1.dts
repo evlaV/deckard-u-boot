@@ -663,16 +663,19 @@
 	led0: blue {
 		bit-mask = <0x20>;
 		pwm-base-addr = <0xea00>;
+		bootph-all;
 	};
 
 	led1: green {
 		bit-mask = <0x40>;
 		pwm-base-addr = <0xe900>;
+		bootph-all;
 	};
 
 	led2: red {
 		bit-mask = <0x80>;
 		pwm-base-addr = <0xe800>;
+		bootph-all;
 	};
 };
 
