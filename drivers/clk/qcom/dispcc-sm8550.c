@@ -811,7 +811,8 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		freq = qcom_find_freq(ftbl_disp_cc_mdss_pclk0_clk_src, rate);
 		clk_rcg_set_rate_mnd(priv->base, 0x80a8,
 				     freq->pre_div, freq->m, freq->n, freq->src, 8);
-
+		printf("!!!!!!!!!!! fix clock DISP_CC_MDSS_PCLK0_CLK!!!!!!!!!!\n");
+		return 0;
 
 	case DISP_CC_MDSS_ESC0_CLK:
 		/* Assume the divider is 1 in parent disp_cc_mdss_esc0_clk_src:
