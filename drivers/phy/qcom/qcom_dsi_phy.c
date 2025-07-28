@@ -893,7 +893,7 @@ printf("========%s pll_base %p phy %p\n", __func__, pll_7nm->pll_base, phy);
 	return 0;
 }
 
-#define DSI_PLL_DRV_NAME "dsi_pll"
+#define DSI_PLL_DRV_NAME "qcom_dsi_phy_pll"
 
 U_BOOT_DRIVER(dsi_pll) = {
 	.name = DSI_PLL_DRV_NAME,
@@ -1469,8 +1469,10 @@ static int dsi_phy_get_id(struct msm_dsi_phy *phy)
 static int qcom_dsi_phy_bind(struct udevice *dev)
 {
 	static int dsi_phy_id = 0;
+	struct driver *drv;
 	int ret;
 	char *buf;
+	void *driver_data = NULL;
 
 	buf = malloc(64);
 	if (!buf)
@@ -1478,7 +1480,13 @@ static int qcom_dsi_phy_bind(struct udevice *dev)
 
 	snprintf(buf, 64, "dsi_phy%d-", dsi_phy_id++);
 	strlcat(buf, dev->name, 64);
-	ret = device_bind_driver_to_node(dev, DSI_PLL_DRV_NAME, buf,
+
+	drv = lists_driver_lookup_name(DSI_PLL_DRV_NAME);
+
+	/// FIXME: CASEY: populate driver_data with configs necessary for the PLL.
+	/// IMPORTANT: we can't access data from the phy device itself since it may not be
+	/// probed when clk ops are called!
+	ret = device_bind_with_driver_data(dev, drv, buf, (ulong)driver_data,
 					 dev_ofnode(dev), NULL);
 	if (ret)
 		dev_err(dev, "failed to bind pll driver: %d\n", ret);
