@@ -65,9 +65,6 @@ enum combined_button_state_t {
 	VOLUP_ON__VOLDN_ON__SELECT_OFF   = 6,
 	VOLUP_ON__VOLDN_ON__SELECT_ON    = 7,
 };
-
-#define DECKARD_SHUTDOWN_TIMEOUT_S 10
-#define DECKARD_SHUTDOWN_TIMEOUT_US (DECKARD_SHUTDOWN_TIMEOUT_S * 1000 * 1000)
  
 // #define CHECK_PMICS
 #ifdef CHECK_PMICS
@@ -569,7 +566,7 @@ int deckard_check_for_key_press()
 	return 0;
 }
 
-static bool deckard_shutdown_condition(struct udevice *pmic)
+bool deckard_shutdown_condition(struct udevice *pmic)
 {
 	static unsigned long timeout;
 

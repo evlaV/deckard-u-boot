@@ -9,6 +9,7 @@
 #include "smb1510.h"
 #include "deckard.h"
 #include "deckard_battery.h"
+#include <sysreset.h>
 
 #define BATTERY_MIN_BOOT_VOLTAGE 7200
 #define BATTERY_DEAD_VOLTAGE     6000
@@ -89,6 +90,7 @@ void deckard_battery_prep_for_boot(struct udevice *pmk8550, struct udevice *pm85
 	int             ret;
 	uint16_t        battery_mv;
 	struct udevice *led = NULL;
+	struct udevice *led_blue = NULL;
 
 	/* Get Battery Voltage to Check for UVLO */
 	ret = pmk8550_get_battery_voltage(pmk8550, &battery_mv);
@@ -113,6 +115,14 @@ void deckard_battery_prep_for_boot(struct udevice *pmk8550, struct udevice *pm85
 	ret = led_get_by_label("red", &led);
 	if (ret < 0) {
 		printf("Couldn't find red led!\n");
+	}
+	ret = led_get_by_label("blue", &led_blue);
+	if (ret < 0) {
+		printf("Couldn't find blue led!\n");
+	}
+
+	if (led_blue) {
+		led_set_state(led_blue, LEDST_OFF);
 	}
 
 	if (led) {
@@ -169,6 +179,14 @@ void deckard_battery_prep_for_boot(struct udevice *pmk8550, struct udevice *pm85
 		mdelay(1000);
 		printf("Battery: %d mV\n", battery_mv);
 
+		if(deckard_shutdown_condition(pm8550b))
+		{
+			printf("Device not charging for %d seconds, Shutdown\n", DECKARD_SHUTDOWN_TIMEOUT_S);
+			ret = sysreset_walk(SYSRESET_POWER_OFF);
+			if (ret == -EINPROGRESS)
+				mdelay(1000);
+			break;
+		}
 	} while (battery_mv < BATTERY_MIN_BOOT_VOLTAGE);
 
 complete:
