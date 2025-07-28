@@ -83,8 +83,8 @@ struct qcom_mipi_dsi {
 };
 
 static struct qcom_dsi_priv_global {
-	struct qcom_mipi_dsi *priv0;
-	struct qcom_mipi_dsi *priv1;
+	struct qcom_dsi_priv *priv0;
+	struct qcom_dsi_priv *priv1;
 	bool dual_dsi;
 } qcom_dsi_global;
 
@@ -816,7 +816,7 @@ static int qcom_dsi_set_backlight(struct udevice *dev, int percent)
 	struct mipi_dsi_host *dsi_host;
 	int ret;
 
-	dev_err(dev, "panel %s backlight enabling skipped to avoid panic for temp\n");
+	dev_err(dev, "panel %s backlight enabling skipped to avoid panic for temp\n", priv->panel->name);
 //	return 0;
 
 	ret = panel_enable_backlight(priv->panel);
@@ -826,21 +826,22 @@ static int qcom_dsi_set_backlight(struct udevice *dev, int percent)
 		return ret;
 	}
 
-	dsi_host = &qcom_dsi_global.priv0->dsi_host;
-	ret = dsi_host_enable(dsi_host);
-	if (ret) {
-		dev_err(dev, "failed to enable mipi dsi host\n");
-		return ret;
-	}
+	/// FIXME: CASEY: dsi_host_enable() expects struct udevice not mipi_dsi_host?
+	// dsi_host = &qcom_dsi_global.priv0->dsi_host;
+	// ret = dsi_host_enable(dsi_host->dev);
+	// if (ret) {
+	// 	dev_err(dev, "failed to enable mipi dsi host\n");
+	// 	return ret;
+	// }
 
-	if(!qcom_dsi_global.priv1)
-		return 0;
-	dsi_host = &qcom_dsi_global.priv1->dsi_host;
-	ret = dsi_host_enable(dsi_host);
-	if (ret) {
-		dev_err(dev, "failed to enable mipi dsi host\n");
-		return ret;
-	}
+	// if(!qcom_dsi_global.priv1)
+	// 	return 0;
+	// dsi_host = &qcom_dsi_global.priv1->dsi_host;
+	// ret = dsi_host_enable(dsi_host->dev);
+	// if (ret) {
+	// 	dev_err(dev, "failed to enable mipi dsi host\n");
+	// 	return ret;
+	// }
 
 	return 0;
 }

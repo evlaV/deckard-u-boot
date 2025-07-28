@@ -830,7 +830,7 @@ int qcom_dpu_probe(struct udevice *dev)
 	ulong rate;
 	int ret, len;
 
-printf("=========%s enter, FLG_RELOC? %d\n", __func__, gd->flags & GD_FLG_RELOC);
+printf("=========%s enter, FLG_RELOC? %lu\n", __func__, gd->flags & GD_FLG_RELOC);
 	/* Before relocation we don't need to do anything */
 	if (!(gd->flags & GD_FLG_RELOC))
 		return 0;
