@@ -7,6 +7,8 @@
  * u-boot.
  */
 
+#include <linux/delay.h>
+#include <command.h>
 #include <bootstage.h>
 #include <hang.h>
 #include <stdio.h>
