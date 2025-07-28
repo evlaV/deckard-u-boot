@@ -6,6 +6,8 @@
 #include <div64.h>
 #include <generic-phy.h>
 #include <linux/kernel.h>
+#include <dm/device-internal.h>
+#include <dm/lists.h>
 #include <linux/iopoll.h>
 #include <linux/clk-provider.h>
 #include <linux/delay.h>
@@ -105,7 +107,7 @@ int msm_dsi_cphy_timing_calc_v4(struct msm_dsi_dphy_timing *timing,
 	s32 temp;
 
 	if (!bit_rate || !esc_rate) {
-		printf("%s error: bit_rate %d esc_rate %d\n",
+		printf("%s error: bit_rate %lu esc_rate %lu\n",
 			__func__, bit_rate, esc_rate);
 		return -EINVAL;
 	}
@@ -373,14 +375,12 @@ static void dsi_pll_commit(struct dsi_pll_7nm *pll, struct dsi_pll_config *confi
 	       base + REG_DSI_7nm_PHY_PLL_CLOCK_INVERTERS_1);
 }
 
-static int dsi_pll_7nm_vco_set_rate(struct clk *hw, unsigned long rate,
-				     unsigned long parent_rate)
+static unsigned long dsi_pll_7nm_vco_set_rate(struct clk *hw, unsigned long rate)
 {
 	struct dsi_pll_7nm *pll_7nm = to_pll_7nm(hw);
 	struct dsi_pll_config config;
 
-	printf("DSI PLL%d rate=%lu, parent's=%lu", pll_7nm->phy->id, rate,
-	    parent_rate);
+	printf("DSI PLL%d rate=%lu", pll_7nm->phy->id, rate);
 	/*
 	80Hz:
 	[drm:dsi_pll_7nm_vco_set_rate] DSI PLL0 rate=851297622, parent's=38400000
@@ -412,7 +412,7 @@ static int dsi_pll_7nm_vco_set_rate(struct clk *hw, unsigned long rate,
 	/* flush, ensure all register writes are done*/
 	wmb();
 
-	return 0;
+	return rate;
 }
 
 static int dsi_pll_7nm_lock_status(struct dsi_pll_7nm *pll)
@@ -557,7 +557,7 @@ static void dsi_pll_disable_sub(struct dsi_pll_7nm *pll)
 	dsi_pll_disable_pll_bias(pll);
 }
 
-static void dsi_pll_7nm_vco_unprepare(struct clk_hw *clk)
+static int dsi_pll_7nm_vco_unprepare(struct clk *clk)
 {
 	struct dsi_pll_7nm *pll_7nm = to_pll_7nm(clk);
 
@@ -576,6 +576,8 @@ static void dsi_pll_7nm_vco_unprepare(struct clk_hw *clk)
 	/* flush, ensure all register writes are done */
 	wmb();
 	pll_7nm->phy->pll_on = false;
+
+	return 0;
 }
 
 static unsigned long dsi_pll_7nm_vco_recalc_rate(struct clk *clk,
@@ -627,7 +629,7 @@ static unsigned long dsi_pll_7nm_vco_recalc_rate(struct clk *clk,
 	return (unsigned long)vco_rate;
 }
 
-static long dsi_pll_7nm_clk_round_rate(struct clk *clk,
+static unsigned long dsi_pll_7nm_clk_round_rate(struct clk *clk,
 		unsigned long rate)
 {
 	struct dsi_pll_7nm *pll_7nm = to_pll_7nm(clk);
@@ -899,6 +901,7 @@ U_BOOT_DRIVER(dsi_pll) = {
 	.probe = dsi_pll_7nm_probe,
 	.ops = &clk_ops_dsi_pll_7nm_vco,
 	.priv_auto = sizeof(struct dsi_pll_7nm),
+	.flags = DM_FLAG_NAME_ALLOCED,
 };
 
 
@@ -980,8 +983,6 @@ static int dsi_7nm_phy_enable(struct msm_dsi_phy *phy,
 	u32 data;
 	unsigned long timeout;
 	u32 val;
-
-	printf("");
 
 	if (phy->cphy_mode)
 		ret = msm_dsi_cphy_timing_calc_v4(timing, clk_req);
@@ -1467,9 +1468,21 @@ static int dsi_phy_get_id(struct msm_dsi_phy *phy)
 
 static int qcom_dsi_phy_bind(struct udevice *dev)
 {
-	int ret = 0;
+	static int dsi_phy_id = 0;
+	int ret;
+	char *buf;
 
-printf("=============%s line %d\n", __func__, __LINE__);
+	buf = malloc(64);
+	if (!buf)
+		return -ENOMEM;
+
+	snprintf(buf, 64, "dsi_phy%d-", dsi_phy_id++);
+	strlcat(buf, dev->name, 64);
+	ret = device_bind_driver_to_node(dev, DSI_PLL_DRV_NAME, buf,
+					 dev_ofnode(dev), NULL);
+	if (ret)
+		dev_err(dev, "failed to bind pll driver: %d\n", ret);
+
 	return ret;
 }
 
@@ -1478,7 +1491,6 @@ static int msm_dsi_phy_probe(struct udevice *dev)
 	struct msm_dsi_phy *qcom = dev_get_priv(dev);
 	struct driver *drv = NULL;
 	//struct udevice *plldev = NULL;
-	u8 buf[16];
 	int ret;
 
 	qcom->dev = dev;
@@ -1536,11 +1548,6 @@ printf("========%s udev %p base %p pll_base %p lane_base %p\n", __func__, dev, q
 		return ret;
 	}
 
-	snprintf(buf, sizeof(buf), "dsi_phy_pll%d", qcom->id);
-	ret = device_bind_driver_to_node(dev, DSI_PLL_DRV_NAME, buf,
-					 dev_ofnode(dev), NULL);
-	if (ret)
-		dev_err(dev, "failed to bind pll driver: %d\n", ret);
 printf("========%s ret ok\n", __func__);
 	return ret;
 }
