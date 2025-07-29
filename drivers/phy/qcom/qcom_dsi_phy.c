@@ -839,7 +839,7 @@ static int dsi_pll_7nm_probe(struct udevice *dev)
 	int index, ret;
 	struct clk *clk;
 	/* how to get msm_dsi_phy? It is null here */
-	struct msm_dsi_phy *phy = dev_get_parent_priv(dev);
+	struct msm_dsi_phy *phy = dev_get_priv(dev_get_parent(dev));
 
 printf("========%s enter\n", __func__);
 
@@ -850,7 +850,7 @@ printf("========%s enter\n", __func__);
 	pll_7nm_list[index] = pll_7nm;
 
 	pll_7nm->pll_base = dev_remap_addr_name(dev, "dsi_pll");
-printf("========%s pll_base %p phy %p\n", __func__, pll_7nm->pll_base, phy);
+printf("========%s id %d, pll_base %p phy %p\n", __func__, phy->id, pll_7nm->pll_base, phy);
 	if (IS_ERR(pll_7nm->pll_base))
 		return PTR_ERR(pll_7nm->pll_base);
 
@@ -1463,6 +1463,7 @@ static int qcom_dsi_phy_bind(struct udevice *dev)
 	if (!buf)
 		return -ENOMEM;
 
+	/* FIXME: dsi_phy_id should be aligned with dsi_phy_get_id() */
 	snprintf(buf, 64, "dsi_phy%d-", dsi_phy_id++);
 	strlcat(buf, dev->name, 64);
 
