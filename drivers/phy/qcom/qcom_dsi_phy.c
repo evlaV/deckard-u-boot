@@ -1157,7 +1157,7 @@ printf("----%s line %d\n", __func__, __LINE__);
 	 * But pll is another driver in uboot.
 	 * And phy should be enabled before PLL, per comments where
 	 * dsi_phy_hw_v4_0_is_pll_on() is called */
-	snprintf(buf, sizeof(buf), "dsi_phy_pll%d", phy->id);
+	snprintf(buf, sizeof(buf), "dsi_phy%d-", phy->id++);
 	ret = uclass_get_device_by_name(UCLASS_CLK, buf, &pll_dev);
 	if (ret) {
 		dev_err(phy->dev, "%s: failed to get %s\n",
@@ -1470,6 +1470,7 @@ static int qcom_dsi_phy_bind(struct udevice *dev)
 	/// FIXME: CASEY: populate driver_data with configs necessary for the PLL.
 	/// IMPORTANT: we can't access data from the phy device itself since it may not be
 	/// probed when clk ops are called!
+printf("------- binding device %s\n", buf);
 	ret = device_bind_with_driver_data(dev, drv, buf, (ulong)driver_data,
 					 dev_ofnode(dev), NULL);
 	if (ret)
