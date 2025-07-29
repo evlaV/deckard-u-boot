@@ -724,17 +724,50 @@ int deckard_prepare_for_boot()
 // this gives us roughly 290 Megabytes for kernel, dtb, and initrd
 #define MAX_ADDR_INITRD 0x99000000
 
+// find dtb path based on env and eeprom settings, load dtb from flash to memory
+// returns 0 on success
+// returns -1 on failure
+int deckard_load_dtb(char * partition, char * addr)
+{
+	char * dtb_qcom;
+	char * eeprom_board;
+	char DTB_TARGET[PATHMAXLEN];
+
+	// Get DTB
+	dtb_qcom = env_get("DTB_QCOM");
+	eeprom_board = env_get("EEPROM_BOARD");
+
+	// try custom dtb from fw env
+	if (dtb_qcom) {
+		snprintf(DTB_TARGET, PATHMAXLEN, "/boot/dtbqcom/%s", dtb_qcom);
+		// load dtb
+		if ( scsi_do_load_helper(partition, addr, DTB_TARGET) == 0 ) {
+			return 0;
+		}
+	}
+
+	// try dtb set in eeprom
+	if (eeprom_board) {
+		snprintf(DTB_TARGET, PATHMAXLEN, "/boot/dtbqcom/sm8650-%s.dtb", eeprom_board);
+		// load dtb
+		if ( scsi_do_load_helper(partition, addr, DTB_TARGET) == 0 ) {
+			return 0;
+		}
+	}
+
+	// try defualt dtb
+	snprintf(DTB_TARGET, PATHMAXLEN, "/boot/maindtb.dtb");
+	return scsi_do_load_helper(partition, addr, DTB_TARGET);
+}
+
 // Deckard boot command.  Executes sequence that would normally be in the boot.scr
 int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
 	char * bootedslot;
-	char * dtb_qcom;
-	char * eeprom_board;
 	char * KERNEL_TARGET = "/boot/Image";
 	char * INITRD_TARGET = "/boot/initrd.uImage";
 	char partition[DEVPARTMAXLEN];
 	char label[DEVPARTMAXLEN];
-	char DTB_TARGET[PATHMAXLEN];
 	int ret;
 	ulong image_size, addr_kernel, addr_dtb, addr_initrd;
 	char DTB_ADDR[DEVPARTMAXLEN];
@@ -768,17 +801,6 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 			break;
 	}
 
-	// Get DTB
-	dtb_qcom = env_get("DTB_QCOM");
-	eeprom_board = env_get("EEPROM_BOARD");
-	if (dtb_qcom) {
-		snprintf(DTB_TARGET, PATHMAXLEN, "/boot/dtbqcom/%s", dtb_qcom);
-	} else if (eeprom_board) {
-		snprintf(DTB_TARGET, PATHMAXLEN, "/boot/dtbqcom/sm8650-%s.dtb", eeprom_board);
-	} else {
-		snprintf(DTB_TARGET, PATHMAXLEN, "/boot/maindtb.dtb");
-	}
-
 	deckard_prepare_for_boot();
 
 	// Load kernel
@@ -798,7 +820,7 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	sprintf(DTB_ADDR, "0x%lX", addr_dtb);
 	printf("DTB_ADDR %s\n", DTB_ADDR); // debug
 	// load dtb
-	if ( scsi_do_load_helper(partition, DTB_ADDR, DTB_TARGET) ) {
+	if ( deckard_load_dtb(partition, DTB_ADDR) ) {
 		goto fail;
 	}
 	// get address for initrd
