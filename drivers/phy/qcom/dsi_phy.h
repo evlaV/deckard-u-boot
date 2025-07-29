@@ -53,7 +53,7 @@ struct msm_dsi_phy_cfg {
 	unsigned long	min_pll_rate;
 	unsigned long	max_pll_rate;
 
-	const resource_size_t io_start[DSI_MAX];
+	const void __iomem *io_start[DSI_MAX];
 	const int num_dsi_phy;
 	const int quirks;
 	bool has_phy_regulator;
@@ -149,7 +149,6 @@ struct msm_dsi_phy {
 	bool regulator_ldo_mode;
 	bool cphy_mode;
 
-	struct clk_hw *vco_hw;
 	bool pll_on;
 
 	struct clk_hw_onecell_data *provided_clocks;
