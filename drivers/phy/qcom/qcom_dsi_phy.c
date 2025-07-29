@@ -1444,7 +1444,7 @@ static int dsi_phy_get_id(struct msm_dsi_phy *phy)
 	int i;
 
 	for (i = 0; i < cfg->num_dsi_phy; i++) {
-		if (cfg->io_start[i] == phy->base)
+		if (cfg->io_start[i] == (phys_addr_t)phy->base)
 			return i;
 	}
 

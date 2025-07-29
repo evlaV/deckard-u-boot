@@ -53,7 +53,7 @@ struct msm_dsi_phy_cfg {
 	unsigned long	min_pll_rate;
 	unsigned long	max_pll_rate;
 
-	const void __iomem *io_start[DSI_MAX];
+	const phys_addr_t io_start[DSI_MAX];
 	const int num_dsi_phy;
 	const int quirks;
 	bool has_phy_regulator;
