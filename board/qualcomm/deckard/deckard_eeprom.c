@@ -41,6 +41,9 @@ static bool _eeprom_verify(eeprom_bootloader_t *eeprom_data)
 
 	if((eeprom_data->hdr.magic_number == EEPROM_BOOTLOADER_MAGIC_NUMBER) && (calc_checksum.value == eeprom_data->checksum.value))
 	{
+		printf("EEPROM verify succeeded ( Magic Number %x ( expected %x ), CRC %x ( expected %x ) )\n", 
+		eeprom_data->hdr.magic_number, EEPROM_BOOTLOADER_MAGIC_NUMBER,
+		eeprom_data->checksum.value, calc_checksum.value );
 		return true;
 	}
 
@@ -55,10 +58,14 @@ void deckard_eeprom_init(void)
 {
 	int ret;
 	struct udevice *dev;
+	struct udevice *strap_dev;
 	int node;
 	ofnode eeprom;
+	ofnode eeprom_strap;
 	const char *path;
+	const char *path_strap;
 	eeprom_bootloader_t eeprom_data;
+	eeprom_bootloader_t eeprom_strap_data;
 
 	if (!gd->fdt_blob) {
 		printf("%s: don't have a valid gd->fdt_blob!\n", __func__);
@@ -94,14 +101,40 @@ void deckard_eeprom_init(void)
 		printf("%s: Could not read EEPROM\n", __func__);
 	}
 
-	if ( !_eeprom_verify(&eeprom_data) ) {
+	if ( _eeprom_verify(&eeprom_data) ) {
+		if ( eeprom_data.board_revision_valid == EEPROM_VALID ) {
+			printf("EEPROM Board Revision: %s\n", eeprom_data.board_revision );
+			env_set("EEPROM_BOARD",  eeprom_data.board_revision);
+		} else {
+			printf("EEPROM Board Revision not valid\n" );
+		}
+	}
+
+	// test code for eeprom strap
+	path_strap = fdt_getprop(gd->fdt_blob, node, "eeprom-strap", NULL);
+	if (!path) {
+		printf("%s: no alias for %s\n", __func__, "eeprom-strap");
 		return;
 	}
 
-	if ( eeprom_data.board_revision_valid == EEPROM_VALID ) {
-		printf("EEPROM Board Revision: %s\n", eeprom_data.board_revision );
-		env_set("EEPROM_BOARD",  eeprom_data.board_revision);
-	} else {
-		printf("EEPROM Board Revision not valid\n" );
+	eeprom_strap = ofnode_path(path_strap);
+	if (!ofnode_valid(eeprom)) {
+		printf("%s: invalid hardware path_strap to strap EEPROM\n", __func__);
+		return;
+	}
+
+	ret = uclass_get_device_by_ofnode(UCLASS_I2C_EEPROM, eeprom_strap, &strap_dev);
+	if (ret) {
+		printf("%s: cannot find strap EEPROM by node\n", __func__);
+		return;
+	}
+
+	ret = i2c_eeprom_read(strap_dev, EEPROM_BOOTLOADER_ADDRESS_START, (uint8_t*)&eeprom_strap_data, sizeof(eeprom_bootloader_t));
+	if (ret) {
+		printf("%s: Could not read EEPROM\n", __func__);
+	}
+
+	if ( !_eeprom_verify(&eeprom_strap_data) ) {
+		return;
 	}
 }

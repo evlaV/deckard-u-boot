@@ -19,6 +19,7 @@
 		serial0 = &uart15;
 		serial1 = &uart14;
 		eeprom-core = &eeprom_core;
+		eeprom-strap = &eeprom_strap;
 	};
 
 	chosen {
@@ -570,13 +571,21 @@
 	status = "okay";
 };
 
-// Custom Connector I2C
 &i2c_hub_7 {
 	status = "okay";
 };
 
+// Custom Connector I2C
 &i2c2 {
 	status = "okay";
+	// BOOT EEPROM
+	eeprom_strap: eeprom@50 {
+		compatible  = "atmel,24c32";
+		status      = "okay";
+		reg         = <0x50>;
+		//wp-gpios = <&tlmm 139 GPIO_ACTIVE_HIGH>;
+		vcc-supply  = <&vreg_l15b_1p8>;
+	};
 };
 
 &pcie0 {
