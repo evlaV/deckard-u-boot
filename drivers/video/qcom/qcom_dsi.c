@@ -913,7 +913,7 @@ printf("=============%s line %d device->index %d\n", __func__, __LINE__, device-
 		if (ret)
 			return ret;
 	}
-
+*/
 	ret = clk_get_bulk(device->dev, &bulk);
 	if (ret) {
 		dev_err(dev, "peripheral clock get error %d\n", ret);
@@ -925,7 +925,7 @@ printf("=============%s line %d device->index %d\n", __func__, __LINE__, device-
 		dev_err(dev, "peripheral clock enable error %d\n", ret);
 		goto err_reg;
 	}
-*/
+
 
 #if 0
 	ret = reset_get_by_index(device->dev, 0, &rst);
