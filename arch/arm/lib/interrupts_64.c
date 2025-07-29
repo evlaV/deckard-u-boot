@@ -229,7 +229,7 @@ static void except_msg(const char *msg, struct pt_regs *pt_regs)
 	if (CONFIG_IS_ENABLED(FRAMEPOINTER))
 		show_backtrace(pt_regs->elr, pt_regs->regs[30], pt_regs->regs[29]);
 	show_efi_loaded_images(pt_regs);
-	panic("Resetting CPU ...\n");
+	panic_str("Resetting CPU ...\n");
 }
 
 /*
@@ -280,7 +280,7 @@ void do_sync(struct pt_regs *pt_regs)
 	if (CONFIG_IS_ENABLED(FRAMEPOINTER))
 		show_backtrace(pt_regs->elr, pt_regs->regs[30], pt_regs->regs[29]);
 	show_efi_loaded_images(pt_regs);
-	panic("Resetting CPU ...\n");
+	panic_str("Resetting CPU ...\n");
 }
 
 /*
