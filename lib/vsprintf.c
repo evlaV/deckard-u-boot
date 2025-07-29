@@ -450,10 +450,11 @@ static char *ptr_symbol(phys_addr_t addr, char *buf, char *end,
 
 	symbol_lookup(addr, NULL, &offset, namebuf);
 
-	strlcat(namebuf, "+0x", KSYM_NAME_LEN + 1);
+	if (offset)
+		strlcat(namebuf, "+0x", KSYM_NAME_LEN + 1);
 
 	buf = string(buf, end, namebuf, field_width, precision, flags);
-	return number(buf, end, offset, 16, field_width, precision, flags);
+	return offset ? number(buf, end, offset, 16, field_width, precision, flags) : buf;
 }
 
 /*
