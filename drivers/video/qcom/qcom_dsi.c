@@ -827,6 +827,8 @@ static int qcom_dsi_set_backlight(struct udevice *dev, int percent)
 	}
 
 	/// FIXME: CASEY: dsi_host_enable() expects struct udevice not mipi_dsi_host?
+	/// Jun: by definition, it expects udevice. This should be sort out,
+	///      otherwise, qcom_mipi_dsi_enable will panic later.
 	// dsi_host = &qcom_dsi_global.priv0->dsi_host;
 	// ret = dsi_host_enable(dsi_host->dev);
 	// if (ret) {

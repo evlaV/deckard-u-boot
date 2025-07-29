@@ -838,6 +838,7 @@ static int dsi_pll_7nm_probe(struct udevice *dev)
 	struct dsi_pll_7nm *pll_7nm = dev_get_priv(dev);
 	int index, ret;
 	struct clk *clk;
+	/* how to get msm_dsi_phy? It is null here */
 	struct msm_dsi_phy *phy = dev_get_parent_priv(dev);
 
 printf("========%s enter\n", __func__);
