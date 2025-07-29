@@ -74,8 +74,6 @@
 /* Hardware is V7.0 */
 #define DSI_PHY_7NM_QUIRK_V7_0		BIT(5)
 
-#define to_pll_7nm(x)	container_of(x, struct dsi_pll_7nm, clk)
-
 /*
  * Global list of private DSI PLL struct pointers. We need this for bonded DSI
  * mode, where the master PLL's clk_ops needs access the slave's private data
@@ -163,6 +161,7 @@ static void dsi_pll_calc_dec_frac(struct dsi_pll_7nm *pll, struct dsi_pll_config
 	u64 dec, dec_multiple;
 	u32 frac;
 	u64 multiplier;
+	struct msm_dsi_phy_plat *plat = pll->plat;
 
 	pll_freq = pll->vco_current_rate;
 
@@ -172,9 +171,9 @@ static void dsi_pll_calc_dec_frac(struct dsi_pll_7nm *pll, struct dsi_pll_config
 	dec_multiple = div_u64(pll_freq * multiplier, divider);
 	dec = div_u64_rem(dec_multiple, multiplier, &frac);
 
-	if (pll->phy->cfg->quirks & DSI_PHY_7NM_QUIRK_PRE_V4_1) {
+	if (plat->cfg->quirks & DSI_PHY_7NM_QUIRK_PRE_V4_1) {
 		config->pll_clock_inverters = 0x28;
-	} else if ((pll->phy->cfg->quirks & DSI_PHY_7NM_QUIRK_V7_0)) {
+	} else if ((plat->cfg->quirks & DSI_PHY_7NM_QUIRK_V7_0)) {
 		if (pll_freq < 163000000ULL)
 			config->pll_clock_inverters = 0xa0;
 		else if (pll_freq < 175000000ULL)
@@ -195,7 +194,7 @@ static void dsi_pll_calc_dec_frac(struct dsi_pll_7nm *pll, struct dsi_pll_config
 			config->pll_clock_inverters = 0x00;
 		else
 			config->pll_clock_inverters = 0x40;
-	} else if ((pll->phy->cfg->quirks & DSI_PHY_7NM_QUIRK_V5_2)) {
+	} else if ((plat->cfg->quirks & DSI_PHY_7NM_QUIRK_V5_2)) {
 		if (pll_freq <= 1300000000ULL)
 			config->pll_clock_inverters = 0xa0;
 		else if (pll_freq <= 2500000000ULL)
@@ -204,7 +203,7 @@ static void dsi_pll_calc_dec_frac(struct dsi_pll_7nm *pll, struct dsi_pll_config
 			config->pll_clock_inverters = 0x00;
 		else
 			config->pll_clock_inverters = 0x40;
-	} else if (pll->phy->cfg->quirks & DSI_PHY_7NM_QUIRK_V4_1) {
+	} else if (plat->cfg->quirks & DSI_PHY_7NM_QUIRK_V4_1) {
 		if (pll_freq <= 1000000000ULL)
 			config->pll_clock_inverters = 0xa0;
 		else if (pll_freq <= 2500000000ULL)
@@ -268,7 +267,7 @@ static void dsi_pll_calc_ssc(struct dsi_pll_7nm *pll, struct dsi_pll_config *con
 
 static void dsi_pll_ssc_commit(struct dsi_pll_7nm *pll, struct dsi_pll_config *config)
 {
-	void __iomem *base = pll->phy->pll_base;
+	void __iomem *base = pll->plat->pll_base;
 
 	if (config->enable_ssc) {
 		pr_debug("SSC is enabled\n");
@@ -292,30 +291,31 @@ static void dsi_pll_ssc_commit(struct dsi_pll_7nm *pll, struct dsi_pll_config *c
 
 static void dsi_pll_config_hzindep_reg(struct dsi_pll_7nm *pll)
 {
-	void __iomem *base = pll->phy->pll_base;
+	struct msm_dsi_phy_plat *plat = pll->plat;
+	void __iomem *base = plat->pll_base;
 	u8 analog_controls_five_1 = 0x01, vco_config_1 = 0x00;
 
-	if (!(pll->phy->cfg->quirks & DSI_PHY_7NM_QUIRK_PRE_V4_1))
+	if (!(plat->cfg->quirks & DSI_PHY_7NM_QUIRK_PRE_V4_1))
 		if (pll->vco_current_rate >= 3100000000ULL)
 			analog_controls_five_1 = 0x03;
 
-	if (pll->phy->cfg->quirks & DSI_PHY_7NM_QUIRK_V4_1) {
+	if (plat->cfg->quirks & DSI_PHY_7NM_QUIRK_V4_1) {
 		if (pll->vco_current_rate < 1520000000ULL)
 			vco_config_1 = 0x08;
 		else if (pll->vco_current_rate < 2990000000ULL)
 			vco_config_1 = 0x01;
 	}
 
-	if ((pll->phy->cfg->quirks & DSI_PHY_7NM_QUIRK_V4_2) ||
-	    (pll->phy->cfg->quirks & DSI_PHY_7NM_QUIRK_V4_3)) {
+	if ((plat->cfg->quirks & DSI_PHY_7NM_QUIRK_V4_2) ||
+	    (plat->cfg->quirks & DSI_PHY_7NM_QUIRK_V4_3)) {
 		if (pll->vco_current_rate < 1520000000ULL)
 			vco_config_1 = 0x08;
 		else if (pll->vco_current_rate >= 2990000000ULL)
 			vco_config_1 = 0x01;
 	}
 
-	if ((pll->phy->cfg->quirks & DSI_PHY_7NM_QUIRK_V5_2) ||
-	    (pll->phy->cfg->quirks & DSI_PHY_7NM_QUIRK_V7_0)) {
+	if ((plat->cfg->quirks & DSI_PHY_7NM_QUIRK_V5_2) ||
+	    (plat->cfg->quirks & DSI_PHY_7NM_QUIRK_V7_0)) {
 		if (pll->vco_current_rate < 1557000000ULL)
 			vco_config_1 = 0x08;
 		else
@@ -344,19 +344,19 @@ static void dsi_pll_config_hzindep_reg(struct dsi_pll_7nm *pll)
 	writel(0x29, base + REG_DSI_7nm_PHY_PLL_PFILT);
 	writel(0x2f, base + REG_DSI_7nm_PHY_PLL_PFILT);
 	writel(0x2a, base + REG_DSI_7nm_PHY_PLL_IFILT);
-	writel(!(pll->phy->cfg->quirks & DSI_PHY_7NM_QUIRK_PRE_V4_1) ? 0x3f : 0x22,
+	writel(!(plat->cfg->quirks & DSI_PHY_7NM_QUIRK_PRE_V4_1) ? 0x3f : 0x22,
 	       base + REG_DSI_7nm_PHY_PLL_IFILT);
 
-	if (!(pll->phy->cfg->quirks & DSI_PHY_7NM_QUIRK_PRE_V4_1)) {
+	if (!(plat->cfg->quirks & DSI_PHY_7NM_QUIRK_PRE_V4_1)) {
 		writel(0x22, base + REG_DSI_7nm_PHY_PLL_PERF_OPTIMIZE);
 		if (pll->slave)
-			writel(0x22, pll->slave->phy->pll_base + REG_DSI_7nm_PHY_PLL_PERF_OPTIMIZE);
+			writel(0x22, pll->slave->plat->pll_base + REG_DSI_7nm_PHY_PLL_PERF_OPTIMIZE);
 	}
 }
 
 static void dsi_pll_commit(struct dsi_pll_7nm *pll, struct dsi_pll_config *config)
 {
-	void __iomem *base = pll->phy->pll_base;
+	void __iomem *base = pll->plat->pll_base;
 
 	writel(0x12, base + REG_DSI_7nm_PHY_PLL_CORE_INPUT_OVERRIDE);
 	writel(config->decimal_div_start,
@@ -369,18 +369,23 @@ static void dsi_pll_commit(struct dsi_pll_7nm *pll, struct dsi_pll_config *confi
 	       base + REG_DSI_7nm_PHY_PLL_FRAC_DIV_START_HIGH_1);
 	writel(0x40, base + REG_DSI_7nm_PHY_PLL_PLL_LOCKDET_RATE_1);
 	writel(0x06, base + REG_DSI_7nm_PHY_PLL_PLL_LOCK_DELAY);
-	writel(pll->phy->cphy_mode ? 0x00 : 0x10,
+	writel(pll->plat->cphy_mode ? 0x00 : 0x10,
 	       base + REG_DSI_7nm_PHY_PLL_CMODE_1);
 	writel(config->pll_clock_inverters,
 	       base + REG_DSI_7nm_PHY_PLL_CLOCK_INVERTERS_1);
 }
 
-static unsigned long dsi_pll_7nm_vco_set_rate(struct clk *hw, unsigned long rate)
+// Parent clock should be RPMh CXO output which is typically xo_board/2 but according
+// to the logs below it's actually the full TCXO rate (38.4MHz)??
+#define TCXO_RATE	38400000
+
+static unsigned long dsi_pll_7nm_vco_set_rate(struct clk *clk, unsigned long rate)
 {
-	struct dsi_pll_7nm *pll_7nm = to_pll_7nm(hw);
+	struct dsi_pll_7nm *pll_7nm = dev_get_priv(clk->dev);
 	struct dsi_pll_config config;
 
-	printf("DSI PLL%d rate=%lu", pll_7nm->phy->id, rate);
+	printf("DSI PLL%d rate=%lu\n", pll_7nm->plat->id, rate);
+
 	/*
 	80Hz:
 	[drm:dsi_pll_7nm_vco_set_rate] DSI PLL0 rate=851297622, parent's=38400000
@@ -421,40 +426,41 @@ static int dsi_pll_7nm_lock_status(struct dsi_pll_7nm *pll)
 	u32 status = 0;
 	//u32 const delay_us = 100;
 	u32 const timeout_us = 5000;
+	struct msm_dsi_phy_plat *plat = dev_get_plat(pll->dev);
 
-	rc = readl_poll_timeout_atomic(pll->phy->pll_base +
+	rc = readl_poll_timeout_atomic(pll->plat->pll_base +
 				       REG_DSI_7nm_PHY_PLL_COMMON_STATUS_ONE,
 				       status,
 				       ((status & BIT(0)) > 0),
 				       timeout_us);
 	if (rc)
 		pr_err("DSI PLL(%d) lock failed, status=0x%08x\n",
-		       pll->phy->id, status);
+		       pll->plat->id, status);
 
 	return rc;
 }
 
 static void dsi_pll_disable_pll_bias(struct dsi_pll_7nm *pll)
 {
-	u32 data = readl(pll->phy->base + REG_DSI_7nm_PHY_CMN_CTRL_0);
+	u32 data = readl(pll->plat->base + REG_DSI_7nm_PHY_CMN_CTRL_0);
 
-	writel(0, pll->phy->pll_base + REG_DSI_7nm_PHY_PLL_SYSTEM_MUXES);
-	writel(data & ~BIT(5), pll->phy->base + REG_DSI_7nm_PHY_CMN_CTRL_0);
+	writel(0, pll->plat->pll_base + REG_DSI_7nm_PHY_PLL_SYSTEM_MUXES);
+	writel(data & ~BIT(5), pll->plat->base + REG_DSI_7nm_PHY_CMN_CTRL_0);
 	ndelay(250);
 }
 
 static void dsi_pll_enable_pll_bias(struct dsi_pll_7nm *pll)
 {
-	u32 data = readl(pll->phy->base + REG_DSI_7nm_PHY_CMN_CTRL_0);
+	u32 data = readl(pll->plat->base + REG_DSI_7nm_PHY_CMN_CTRL_0);
 
-	writel(data | BIT(5), pll->phy->base + REG_DSI_7nm_PHY_CMN_CTRL_0);
-	writel(0xc0, pll->phy->pll_base + REG_DSI_7nm_PHY_PLL_SYSTEM_MUXES);
+	writel(data | BIT(5), pll->plat->base + REG_DSI_7nm_PHY_CMN_CTRL_0);
+	writel(0xc0, pll->plat->pll_base + REG_DSI_7nm_PHY_PLL_SYSTEM_MUXES);
 	ndelay(250);
 }
 
 static void dsi_pll_cmn_clk_cfg0_write(struct dsi_pll_7nm *pll, u32 val)
 {
-	writel(val, pll->phy->base + REG_DSI_7nm_PHY_CMN_CLK_CFG0);
+	writel(val, pll->plat->base + REG_DSI_7nm_PHY_CMN_CLK_CFG0);
 }
 
 static void dsi_phy_pll_cmn_clk_cfg1_update(struct msm_dsi_phy *phy, u32 mask,
@@ -462,11 +468,11 @@ static void dsi_phy_pll_cmn_clk_cfg1_update(struct msm_dsi_phy *phy, u32 mask,
 {
 	u32 data;
 
-	data = readl(phy->base + REG_DSI_7nm_PHY_CMN_CLK_CFG1);
+	data = readl(phy->plat->base + REG_DSI_7nm_PHY_CMN_CLK_CFG1);
 	data &= ~mask;
 	data |= val & mask;
 
-	writel(data, phy->base + REG_DSI_7nm_PHY_CMN_CLK_CFG1);
+	writel(data, phy->plat->base + REG_DSI_7nm_PHY_CMN_CLK_CFG1);
 }
 
 static void dsi_pll_cmn_clk_cfg1_update(struct dsi_pll_7nm *pll, u32 mask,
@@ -474,11 +480,11 @@ static void dsi_pll_cmn_clk_cfg1_update(struct dsi_pll_7nm *pll, u32 mask,
 {
 	u32 data;
 
-	data = readl(pll->phy->base + REG_DSI_7nm_PHY_CMN_CLK_CFG1);
+	data = readl(pll->plat->base + REG_DSI_7nm_PHY_CMN_CLK_CFG1);
 	data &= ~mask;
 	data |= val & mask;
 
-	writel(data, pll->phy->base + REG_DSI_7nm_PHY_CMN_CLK_CFG1);
+	writel(data, pll->plat->base + REG_DSI_7nm_PHY_CMN_CLK_CFG1);
 }
 
 static void dsi_pll_disable_global_clk(struct dsi_pll_7nm *pll)
@@ -490,7 +496,7 @@ static void dsi_pll_enable_global_clk(struct dsi_pll_7nm *pll)
 {
 	u32 cfg_1 = DSI_7nm_PHY_CMN_CLK_CFG1_CLK_EN | DSI_7nm_PHY_CMN_CLK_CFG1_CLK_EN_SEL;
 
-	writel(0x04, pll->phy->base + REG_DSI_7nm_PHY_CMN_CTRL_3);
+	writel(0x04, pll->plat->base + REG_DSI_7nm_PHY_CMN_CTRL_3);
 	dsi_pll_cmn_clk_cfg1_update(pll, cfg_1, cfg_1);
 }
 
@@ -501,90 +507,17 @@ static void dsi_pll_phy_dig_reset(struct dsi_pll_7nm *pll)
 	 * coming out of a CX or analog rail power collapse while
 	 * ensuring that the pads maintain LP00 or LP11 state
 	 */
-	writel(BIT(0), pll->phy->base + REG_DSI_7nm_PHY_CMN_GLBL_DIGTOP_SPARE4);
+	writel(BIT(0), pll->plat->base + REG_DSI_7nm_PHY_CMN_GLBL_DIGTOP_SPARE4);
 	wmb(); /* Ensure that the reset is deasserted */
-	writel(0, pll->phy->base + REG_DSI_7nm_PHY_CMN_GLBL_DIGTOP_SPARE4);
+	writel(0, pll->plat->base + REG_DSI_7nm_PHY_CMN_GLBL_DIGTOP_SPARE4);
 	wmb(); /* Ensure that the reset is deasserted */
 }
 
-static int dsi_pll_7nm_vco_prepare(struct clk *clk)
-{
-	struct dsi_pll_7nm *pll_7nm = to_pll_7nm(clk);
-	int rc;
 
-	dsi_pll_enable_pll_bias(pll_7nm);
-	if (pll_7nm->slave)
-		dsi_pll_enable_pll_bias(pll_7nm->slave);
-
-	/* Start PLL */
-	writel(BIT(0), pll_7nm->phy->base + REG_DSI_7nm_PHY_CMN_PLL_CNTRL);
-
-	/*
-	 * ensure all PLL configurations are written prior to checking
-	 * for PLL lock.
-	 */
-	wmb();
-
-	/* Check for PLL lock */
-	rc = dsi_pll_7nm_lock_status(pll_7nm);
-	if (rc) {
-		pr_err("PLL(%d) lock failed\n", pll_7nm->phy->id);
-		goto error;
-	}
-
-	pll_7nm->phy->pll_on = true;
-
-	/*
-	 * assert power on reset for PHY digital in case the PLL is
-	 * enabled after CX of analog domain power collapse. This needs
-	 * to be done before enabling the global clk.
-	 */
-	dsi_pll_phy_dig_reset(pll_7nm);
-	if (pll_7nm->slave)
-		dsi_pll_phy_dig_reset(pll_7nm->slave);
-
-	dsi_pll_enable_global_clk(pll_7nm);
-	if (pll_7nm->slave)
-		dsi_pll_enable_global_clk(pll_7nm->slave);
-
-error:
-	return rc;
-}
-
-static void dsi_pll_disable_sub(struct dsi_pll_7nm *pll)
-{
-	writel(0, pll->phy->base + REG_DSI_7nm_PHY_CMN_RBUF_CTRL);
-	dsi_pll_disable_pll_bias(pll);
-}
-
-static int dsi_pll_7nm_vco_unprepare(struct clk *clk)
-{
-	struct dsi_pll_7nm *pll_7nm = to_pll_7nm(clk);
-
-	/*
-	 * To avoid any stray glitches while abruptly powering down the PLL
-	 * make sure to gate the clock using the clock enable bit before
-	 * powering down the PLL
-	 */
-	dsi_pll_disable_global_clk(pll_7nm);
-	writel(0, pll_7nm->phy->base + REG_DSI_7nm_PHY_CMN_PLL_CNTRL);
-	dsi_pll_disable_sub(pll_7nm);
-	if (pll_7nm->slave) {
-		dsi_pll_disable_global_clk(pll_7nm->slave);
-		dsi_pll_disable_sub(pll_7nm->slave);
-	}
-	/* flush, ensure all register writes are done */
-	wmb();
-	pll_7nm->phy->pll_on = false;
-
-	return 0;
-}
-
-static unsigned long dsi_pll_7nm_vco_recalc_rate(struct clk *clk,
+static unsigned long dsi_pll_7nm_vco_recalc_rate(struct dsi_pll_7nm *pll_7nm,
 						  unsigned long parent_rate)
 {
-	struct dsi_pll_7nm *pll_7nm = to_pll_7nm(clk);
-	void __iomem *base = pll_7nm->phy->pll_base;
+	void __iomem *base = pll_7nm->plat->pll_base;
 	u64 ref_clk = VCO_REF_CLK_RATE;
 	u64 vco_rate = 0x0;
 	u64 multiplier;
@@ -623,21 +556,101 @@ static unsigned long dsi_pll_7nm_vco_recalc_rate(struct clk *clk,
 	120Hz:
 	[drm:dsi_pll_7nm_vco_recalc_rate] DSI PLL0 returning vco rate = 851187744, dec = 16, frac = aa57
 	*/
-	printf("DSI PLL%d returning vco rate = %lu, dec = %x, frac = %x",
-	    pll_7nm->phy->id, (unsigned long)vco_rate, dec, frac);
+	printf("DSI PLL%d returning vco rate = %lu, dec = %x, frac = %x for parent rate %lu\n",
+	    pll_7nm->plat->id, (unsigned long)vco_rate, dec, frac, parent_rate);
 
 	return (unsigned long)vco_rate;
+}
+
+static int dsi_pll_7nm_vco_prepare(struct clk *clk)
+{
+	struct dsi_pll_7nm *pll_7nm = dev_get_priv(clk->dev);
+	int rc;
+
+	/* U-Boot doesn't have recalc_rate support so just set things up now */
+	if (!pll_7nm->vco_desired_rate)
+		pll_7nm->vco_desired_rate = dsi_pll_7nm_vco_recalc_rate(pll_7nm, TCXO_RATE);
+	if (!pll_7nm->vco_desired_rate) {
+		pr_err("DSI PLL(%d) recalc_rate returned 0 :( overriding...\n", pll_7nm->plat->id);
+		pll_7nm->vco_desired_rate = 851023681;
+	}
+	if (pll_7nm->vco_current_rate != pll_7nm->vco_desired_rate)
+		dsi_pll_7nm_vco_set_rate(clk, pll_7nm->vco_desired_rate);
+
+	dsi_pll_enable_pll_bias(pll_7nm);
+	if (pll_7nm->slave)
+		dsi_pll_enable_pll_bias(pll_7nm->slave);
+
+	/* Start PLL */
+	writel(BIT(0), pll_7nm->plat->base + REG_DSI_7nm_PHY_CMN_PLL_CNTRL);
+
+	/*
+	 * ensure all PLL configurations are written prior to checking
+	 * for PLL lock.
+	 */
+	wmb();
+
+	/* Check for PLL lock */
+	rc = dsi_pll_7nm_lock_status(pll_7nm);
+	if (rc) {
+		pr_err("PLL(%d) lock failed\n", pll_7nm->plat->id);
+		goto error;
+	}
+
+	/*
+	 * assert power on reset for PHY digital in case the PLL is
+	 * enabled after CX of analog domain power collapse. This needs
+	 * to be done before enabling the global clk.
+	 */
+	dsi_pll_phy_dig_reset(pll_7nm);
+	if (pll_7nm->slave)
+		dsi_pll_phy_dig_reset(pll_7nm->slave);
+
+	dsi_pll_enable_global_clk(pll_7nm);
+	if (pll_7nm->slave)
+		dsi_pll_enable_global_clk(pll_7nm->slave);
+
+error:
+	return rc;
+}
+
+static void dsi_pll_disable_sub(struct dsi_pll_7nm *pll)
+{
+	writel(0, pll->plat->base + REG_DSI_7nm_PHY_CMN_RBUF_CTRL);
+	dsi_pll_disable_pll_bias(pll);
+}
+
+static int dsi_pll_7nm_vco_unprepare(struct clk *clk)
+{
+	struct dsi_pll_7nm *pll_7nm = dev_get_priv(clk->dev);
+
+	/*
+	 * To avoid any stray glitches while abruptly powering down the PLL
+	 * make sure to gate the clock using the clock enable bit before
+	 * powering down the PLL
+	 */
+	dsi_pll_disable_global_clk(pll_7nm);
+	writel(0, pll_7nm->plat->base + REG_DSI_7nm_PHY_CMN_PLL_CNTRL);
+	dsi_pll_disable_sub(pll_7nm);
+	if (pll_7nm->slave) {
+		dsi_pll_disable_global_clk(pll_7nm->slave);
+		dsi_pll_disable_sub(pll_7nm->slave);
+	}
+	/* flush, ensure all register writes are done */
+	wmb();
+
+	return 0;
 }
 
 static unsigned long dsi_pll_7nm_clk_round_rate(struct clk *clk,
 		unsigned long rate)
 {
-	struct dsi_pll_7nm *pll_7nm = to_pll_7nm(clk);
+	struct dsi_pll_7nm *pll_7nm = dev_get_priv(clk->dev);
 
-	if      (rate < pll_7nm->phy->cfg->min_pll_rate)
-		return  pll_7nm->phy->cfg->min_pll_rate;
-	else if (rate > pll_7nm->phy->cfg->max_pll_rate)
-		return  pll_7nm->phy->cfg->max_pll_rate;
+	if      (rate < pll_7nm->plat->cfg->min_pll_rate)
+		return  pll_7nm->plat->cfg->min_pll_rate;
+	else if (rate > pll_7nm->plat->cfg->max_pll_rate)
+		return  pll_7nm->plat->cfg->max_pll_rate;
 	else
 		return rate;
 }
@@ -657,18 +670,18 @@ static const struct clk_ops clk_ops_dsi_pll_7nm_vco = {
  */
 static int dsi_7nm_set_usecase(struct msm_dsi_phy *phy)
 {
-	void __iomem *base = phy->base;
+	void __iomem *base = phy->plat->base;
 	u32 data = 0x0;	/* internal PLL */
 
-	printf("DSI PLL%d", phy->id);
+	printf("DSI PLL%d", phy->plat->id);
 
-	switch (phy->usecase) {
+	switch (phy->plat->usecase) {
 	case MSM_DSI_PHY_STANDALONE:
 		break;
 	case MSM_DSI_PHY_MASTER:
 		//pll_7nm->slave = pll_7nm_list[(pll_7nm->phy->id + 1) % DSI_MAX];
 		/* v7.0: Enable ATB_EN0 and alternate clock output to external phy */
-		if (phy->cfg->quirks & DSI_PHY_7NM_QUIRK_V7_0)
+		if (phy->plat->cfg->quirks & DSI_PHY_7NM_QUIRK_V7_0)
 			writel(0x07, base + REG_DSI_7nm_PHY_CMN_CTRL_5);
 		break;
 	case MSM_DSI_PHY_SLAVE:
@@ -739,7 +752,7 @@ static int pll_7nm_register(struct dsi_pll_7nm *pll_7nm, struct clk_hw **provide
 	/* BIT CLK: DIV_CTRL_3_0 */
 	pll_bit = devm_clk_hw_register_divider_parent_hw(dev, clk_name,
 			pll_out_div, CLK_SET_RATE_PARENT,
-			pll_7nm->phy->base + REG_DSI_7nm_PHY_CMN_CLK_CFG0,
+			pll_7nm->phy->plat->base + REG_DSI_7nm_PHY_CMN_CLK_CFG0,
 			0, 4, CLK_DIVIDER_ONE_BASED, &pll_7nm->postdiv_lock);
 	if (IS_ERR(pll_bit)) {
 		ret = PTR_ERR(pll_bit);
@@ -799,7 +812,7 @@ static int pll_7nm_register(struct dsi_pll_7nm *pll_7nm, struct clk_hw **provide
 				((const struct clk_hw *[]){
 					pll_bit,
 					pll_by_2_bit,
-				}), 2, 0, pll_7nm->phy->base +
+				}), 2, 0, pll_7nm->phy->plat->base +
 					REG_DSI_7nm_PHY_CMN_CLK_CFG1,
 				0, 1, 0, &pll_7nm->pclk_mux_lock);
 		if (IS_ERR(hw)) {
@@ -816,7 +829,7 @@ static int pll_7nm_register(struct dsi_pll_7nm *pll_7nm, struct clk_hw **provide
 	/* PIX CLK DIV : DIV_CTRL_7_4*/
 	hw = devm_clk_hw_register_divider_parent_hw(dev, clk_name,
 			phy_pll_out_dsi_parent, 0,
-			pll_7nm->phy->base + REG_DSI_7nm_PHY_CMN_CLK_CFG0,
+			pll_7nm->phy->plat->base + REG_DSI_7nm_PHY_CMN_CLK_CFG0,
 			4, 4, CLK_DIVIDER_ONE_BASED, &pll_7nm->postdiv_lock);
 	if (IS_ERR(hw)) {
 		ret = PTR_ERR(hw);
@@ -833,30 +846,37 @@ fail:
 }
 #endif
 
+static int dsi_pll_7nm_of_to_plat(struct udevice *dev)
+{
+	// Can't use dev_get_parent_plat() because dev->parent_plat_ hasn't been set yet since we're in
+	// next device_probe() calls... yay
+	struct msm_dsi_phy_plat *plat = dev_get_plat(dev), *pplat = dev_get_plat(dev_get_parent(dev));
+
+	if (!pplat) {
+		printf("%s: %s Parent plat not allocated?!\n", dev->name, __func__);
+		return -ENODEV;
+	}
+
+	/* Copy plat data from parent */
+	memcpy(plat, pplat, sizeof(*plat));
+
+	printf("%s: %s exit\n", dev->name, __func__);
+
+	return 0;
+}
+
 static int dsi_pll_7nm_probe(struct udevice *dev)
 {
 	struct dsi_pll_7nm *pll_7nm = dev_get_priv(dev);
-	int index, ret;
-	struct clk *clk;
-	/* how to get msm_dsi_phy? It is null here */
-	struct msm_dsi_phy *phy = dev_get_priv(dev_get_parent(dev));
+	int index = 0;
+	struct msm_dsi_phy_plat *plat = dev_get_plat(dev);
 
-printf("========%s enter\n", __func__);
+printf("========%s enter parent %s priv is %p\n", __func__, dev->parent->name, plat);
 
 	pll_7nm->dev = dev;
-	pll_7nm->cfg = &dsi_phy_4nm_8650_cfgs;
-	pll_7nm->phy = phy;
+	pll_7nm->plat = plat;
 
 	pll_7nm_list[index] = pll_7nm;
-
-	pll_7nm->pll_base = dev_remap_addr_name(dev, "dsi_pll");
-printf("========%s id %d, pll_base %p phy %p\n", __func__, phy->id, pll_7nm->pll_base, phy);
-	if (IS_ERR(pll_7nm->pll_base))
-		return PTR_ERR(pll_7nm->pll_base);
-
-	pll_7nm->base = dev_remap_addr_name(dev, "dsi_phy");
-	if (IS_ERR(pll_7nm->base))
-		return PTR_ERR(pll_7nm->base);
 
 	/* move clks registration from pll_7nm_register. But how
 	 * to model the clk tree, or configure them at once. Or
@@ -874,6 +894,7 @@ printf("========%s id %d, pll_base %p phy %p\n", __func__, phy->id, pll_7nm->pll
 	clk_dm(clk_id, clk);
 */
 
+	printf("%s: %s exit\n", dev->name, __func__);
 	return 0;
 }
 
@@ -882,16 +903,18 @@ printf("========%s id %d, pll_base %p phy %p\n", __func__, phy->id, pll_7nm->pll
 U_BOOT_DRIVER(dsi_pll) = {
 	.name = DSI_PLL_DRV_NAME,
 	.id = UCLASS_CLK,
+	.of_to_plat = dsi_pll_7nm_of_to_plat,
 	.probe = dsi_pll_7nm_probe,
 	.ops = &clk_ops_dsi_pll_7nm_vco,
 	.priv_auto = sizeof(struct dsi_pll_7nm),
+	.plat_auto = sizeof(struct msm_dsi_phy_plat),
 	.flags = DM_FLAG_NAME_ALLOCED,
 };
 
 
 static int dsi_phy_hw_v4_0_is_pll_on(struct msm_dsi_phy *phy)
 {
-	void __iomem *base = phy->base;
+	void __iomem *base = phy->plat->base;
 	u32 data = 0;
 
 	data = readl(base + REG_DSI_7nm_PHY_CMN_PLL_CNTRL);
@@ -902,7 +925,7 @@ static int dsi_phy_hw_v4_0_is_pll_on(struct msm_dsi_phy *phy)
 
 static void dsi_phy_hw_v4_0_config_lpcdrx(struct msm_dsi_phy *phy, bool enable)
 {
-	void __iomem *lane_base = phy->lane_base;
+	void __iomem *lane_base = phy->plat->lane_base;
 	int phy_lane_0 = 0;	/* TODO: Support all lane swap configs */
 
 	/*
@@ -921,9 +944,9 @@ static void dsi_phy_hw_v4_0_lane_settings(struct msm_dsi_phy *phy)
 	const u8 tx_dctrl_0[] = { 0x00, 0x00, 0x00, 0x04, 0x01 };
 	const u8 tx_dctrl_1[] = { 0x40, 0x40, 0x40, 0x46, 0x41 };
 	const u8 *tx_dctrl = tx_dctrl_0;
-	void __iomem *lane_base = phy->lane_base;
+	void __iomem *lane_base = phy->plat->lane_base;
 
-	if (!(phy->cfg->quirks & DSI_PHY_7NM_QUIRK_PRE_V4_1))
+	if (!(phy->plat->cfg->quirks & DSI_PHY_7NM_QUIRK_PRE_V4_1))
 		tx_dctrl = tx_dctrl_1;
 
 	/* Strength ctrl settings */
@@ -957,7 +980,7 @@ static int dsi_7nm_phy_enable(struct msm_dsi_phy *phy,
 	u32 const timeout_us = 1000;
 	struct msm_dsi_dphy_timing *timing = &phy->timing;
 	struct udevice *pll_dev;
-	void __iomem *base = phy->base;
+	void __iomem *base = phy->plat->base;
 	u8 buf[64];
 	bool less_than_1500_mhz;
 	u32 vreg_ctrl_0, vreg_ctrl_1, lane_ctrl0;
@@ -968,7 +991,7 @@ static int dsi_7nm_phy_enable(struct msm_dsi_phy *phy,
 	unsigned long timeout;
 	u32 val;
 
-	if (phy->cphy_mode)
+	if (phy->plat->cphy_mode)
 		ret = msm_dsi_cphy_timing_calc_v4(timing, clk_req);
 /*
 	else
@@ -984,10 +1007,10 @@ static int dsi_7nm_phy_enable(struct msm_dsi_phy *phy,
 		pr_warn("PLL turned on before configuring PHY\n");
 
 	/* Request for REFGEN READY */
-	if ((phy->cfg->quirks & DSI_PHY_7NM_QUIRK_V4_3) ||
-	    (phy->cfg->quirks & DSI_PHY_7NM_QUIRK_V5_2) ||
-	    (phy->cfg->quirks & DSI_PHY_7NM_QUIRK_V7_0)) {
-		writel(0x1, phy->base + REG_DSI_7nm_PHY_CMN_GLBL_DIGTOP_SPARE10);
+	if ((phy->plat->cfg->quirks & DSI_PHY_7NM_QUIRK_V4_3) ||
+	    (phy->plat->cfg->quirks & DSI_PHY_7NM_QUIRK_V5_2) ||
+	    (phy->plat->cfg->quirks & DSI_PHY_7NM_QUIRK_V7_0)) {
+		writel(0x1, phy->plat->base + REG_DSI_7nm_PHY_CMN_GLBL_DIGTOP_SPARE10);
 		udelay(500);
 	}
 
@@ -1019,7 +1042,7 @@ printf("----%s line %d\n", __func__, __LINE__);
 	less_than_1500_mhz = (clk_req->bitclk_rate <= 1500000000);
 
 	glbl_str_swi_cal_sel_ctrl = 0x00;
-	if (phy->cphy_mode) {
+	if (phy->plat->cphy_mode) {
 		vreg_ctrl_0 = 0x51;
 		vreg_ctrl_1 = 0x55;
 		glbl_hstx_str_ctrl_0 = 0x00;
@@ -1033,9 +1056,8 @@ printf("----%s line %d\n", __func__, __LINE__);
 		lane_ctrl0 = 0x1f;
 	}
 
-printf("----%s line %d\n", __func__, __LINE__);
-	if ((phy->cfg->quirks & DSI_PHY_7NM_QUIRK_V7_0)) {
-		if (phy->cphy_mode) {
+	if ((phy->plat->cfg->quirks & DSI_PHY_7NM_QUIRK_V7_0)) {
+		if (phy->plat->cphy_mode) {
 			/* TODO: different for second phy */
 			vreg_ctrl_0 = 0x57;
 			vreg_ctrl_1 = 0x41;
@@ -1047,8 +1069,8 @@ printf("----%s line %d\n", __func__, __LINE__);
 			glbl_rescode_top_ctrl = less_than_1500_mhz ? 0x3c :  0x03;
 			glbl_rescode_bot_ctrl = less_than_1500_mhz ? 0x38 :  0x3c;
 		}
-	} else if ((phy->cfg->quirks & DSI_PHY_7NM_QUIRK_V5_2)) {
-		if (phy->cphy_mode) {
+	} else if ((phy->plat->cfg->quirks & DSI_PHY_7NM_QUIRK_V5_2)) {
+		if (phy->plat->cphy_mode) {
 			vreg_ctrl_0 = 0x45;
 			vreg_ctrl_1 = 0x41;
 			glbl_rescode_top_ctrl = 0x00;
@@ -1059,24 +1081,24 @@ printf("----%s line %d\n", __func__, __LINE__);
 			glbl_rescode_top_ctrl = less_than_1500_mhz ? 0x3c :  0x03;
 			glbl_rescode_bot_ctrl = less_than_1500_mhz ? 0x38 :  0x3c;
 		}
-	} else if ((phy->cfg->quirks & DSI_PHY_7NM_QUIRK_V4_3)) {
-		if (phy->cphy_mode) {
+	} else if ((phy->plat->cfg->quirks & DSI_PHY_7NM_QUIRK_V4_3)) {
+		if (phy->plat->cphy_mode) {
 			glbl_rescode_top_ctrl = less_than_1500_mhz ? 0x3d :  0x01;
 			glbl_rescode_bot_ctrl = less_than_1500_mhz ? 0x38 :  0x3b;
 		} else {
 			glbl_rescode_top_ctrl = less_than_1500_mhz ? 0x3d :  0x01;
 			glbl_rescode_bot_ctrl = less_than_1500_mhz ? 0x38 :  0x39;
 		}
-	} else if (phy->cfg->quirks & DSI_PHY_7NM_QUIRK_V4_2) {
-		if (phy->cphy_mode) {
+	} else if (phy->plat->cfg->quirks & DSI_PHY_7NM_QUIRK_V4_2) {
+		if (phy->plat->cphy_mode) {
 			glbl_rescode_top_ctrl = less_than_1500_mhz ? 0x3d :  0x01;
 			glbl_rescode_bot_ctrl = less_than_1500_mhz ? 0x38 :  0x3b;
 		} else {
 			glbl_rescode_top_ctrl = less_than_1500_mhz ? 0x3c :  0x00;
 			glbl_rescode_bot_ctrl = less_than_1500_mhz ? 0x38 :  0x39;
 		}
-	} else if (phy->cfg->quirks & DSI_PHY_7NM_QUIRK_V4_1) {
-		if (phy->cphy_mode) {
+	} else if (phy->plat->cfg->quirks & DSI_PHY_7NM_QUIRK_V4_1) {
+		if (phy->plat->cphy_mode) {
 			glbl_hstx_str_ctrl_0 = 0x88;
 			glbl_rescode_top_ctrl = 0x00;
 			glbl_rescode_bot_ctrl = 0x3c;
@@ -1085,7 +1107,7 @@ printf("----%s line %d\n", __func__, __LINE__);
 			glbl_rescode_bot_ctrl = less_than_1500_mhz ? 0x39 :  0x3c;
 		}
 	} else {
-		if (phy->cphy_mode) {
+		if (phy->plat->cphy_mode) {
 			glbl_str_swi_cal_sel_ctrl = 0x03;
 			glbl_hstx_str_ctrl_0 = 0x66;
 		} else {
@@ -1109,8 +1131,8 @@ printf("----%s line %d\n", __func__, __LINE__);
 	writel(0x00, base + REG_DSI_7nm_PHY_CMN_RBUF_CTRL);
 
 	/* program CMN_CTRL_4 for minor_ver 2 chipsets*/
-	if ((phy->cfg->quirks & DSI_PHY_7NM_QUIRK_V5_2) ||
-	    (phy->cfg->quirks & DSI_PHY_7NM_QUIRK_V7_0) ||
+	if ((phy->plat->cfg->quirks & DSI_PHY_7NM_QUIRK_V5_2) ||
+	    (phy->plat->cfg->quirks & DSI_PHY_7NM_QUIRK_V7_0) ||
 	    (readl(base + REG_DSI_7nm_PHY_CMN_REVISION_ID0) & (0xf0)) == 0x20)
 		writel(0x04, base + REG_DSI_7nm_PHY_CMN_CTRL_4);
 
@@ -1118,8 +1140,7 @@ printf("----%s line %d\n", __func__, __LINE__);
 	writel(0x21, base + REG_DSI_7nm_PHY_CMN_LANE_CFG0);
 	writel(0x84, base + REG_DSI_7nm_PHY_CMN_LANE_CFG1);
 
-printf("----%s line %d\n", __func__, __LINE__);
-	if (phy->cphy_mode)
+	if (phy->plat->cphy_mode)
 		writel(BIT(6), base + REG_DSI_7nm_PHY_CMN_GLBL_CTRL);
 
 	/* Enable LDO */
@@ -1133,7 +1154,7 @@ printf("----%s line %d\n", __func__, __LINE__);
 	       base + REG_DSI_7nm_PHY_CMN_GLBL_HSTX_STR_CTRL_0);
 	writel(glbl_pemph_ctrl_0,
 	       base + REG_DSI_7nm_PHY_CMN_GLBL_PEMPH_CTRL_0);
-	if (phy->cphy_mode)
+	if (phy->plat->cphy_mode)
 		writel(0x01, base + REG_DSI_7nm_PHY_CMN_GLBL_PEMPH_CTRL_1);
 	writel(glbl_rescode_top_ctrl,
 	       base + REG_DSI_7nm_PHY_CMN_GLBL_RESCODE_OFFSET_TOP_CTRL);
@@ -1148,7 +1169,7 @@ printf("----%s line %d\n", __func__, __LINE__);
 	writel(lane_ctrl0, base + REG_DSI_7nm_PHY_CMN_LANE_CTRL0);
 
 	/* Select full-rate mode */
-	if (!phy->cphy_mode)
+	if (!phy->plat->cphy_mode)
 		writel(0x40, base + REG_DSI_7nm_PHY_CMN_CTRL_2);
 
 printf("----%s line %d\n", __func__, __LINE__);
@@ -1158,7 +1179,7 @@ printf("----%s line %d\n", __func__, __LINE__);
 	 * But pll is another driver in uboot.
 	 * And phy should be enabled before PLL, per comments where
 	 * dsi_phy_hw_v4_0_is_pll_on() is called */
-	snprintf(buf, sizeof(buf), "dsi_phy%d-pll", phy->id);
+	snprintf(buf, sizeof(buf), "dsi_phy%d-pll", phy->plat->id);
 	ret = uclass_get_device_by_name(UCLASS_CLK, buf, &pll_dev);
 	if (ret) {
 		dev_err(phy->dev, "%s: failed to get %s\n",
@@ -1175,7 +1196,7 @@ printf("----%s line %d\n", __func__, __LINE__);
 printf("----%s line %d\n", __func__, __LINE__);
 
 	/* DSI PHY timings */
-	if (phy->cphy_mode) {
+	if (phy->plat->cphy_mode) {
 		writel(0x00, base + REG_DSI_7nm_PHY_CMN_TIMING_CTRL_0);
 		writel(timing->hs_exit, base + REG_DSI_7nm_PHY_CMN_TIMING_CTRL_4);
 		writel(timing->shared_timings.clk_pre,
@@ -1210,14 +1231,14 @@ printf("----%s line %d\n", __func__, __LINE__);
 	/* DSI lane settings */
 	dsi_phy_hw_v4_0_lane_settings(phy);
 
-	printf("DSI%d PHY enabled", phy->id);
+	printf("DSI%d PHY enabled", phy->plat->id);
 
 	return 0;
 }
 
 static bool dsi_7nm_set_continuous_clock(struct msm_dsi_phy *phy, bool enable)
 {
-	void __iomem *base = phy->base;
+	void __iomem *base = phy->plat->base;
 	u32 data;
 
 	data = readl(base + REG_DSI_7nm_PHY_CMN_LANE_CTRL1);
@@ -1232,7 +1253,7 @@ static bool dsi_7nm_set_continuous_clock(struct msm_dsi_phy *phy, bool enable)
 
 static void dsi_7nm_phy_disable(struct msm_dsi_phy *phy)
 {
-	void __iomem *base = phy->base;
+	void __iomem *base = phy->plat->base;
 	u32 data;
 
 	printf("");
@@ -1243,9 +1264,9 @@ static void dsi_7nm_phy_disable(struct msm_dsi_phy *phy)
 	dsi_phy_hw_v4_0_config_lpcdrx(phy, false);
 
 	/* Turn off REFGEN Vote */
-	if ((phy->cfg->quirks & DSI_PHY_7NM_QUIRK_V4_3) ||
-	    (phy->cfg->quirks & DSI_PHY_7NM_QUIRK_V5_2) ||
-	    (phy->cfg->quirks & DSI_PHY_7NM_QUIRK_V7_0)) {
+	if ((phy->plat->cfg->quirks & DSI_PHY_7NM_QUIRK_V4_3) ||
+	    (phy->plat->cfg->quirks & DSI_PHY_7NM_QUIRK_V5_2) ||
+	    (phy->plat->cfg->quirks & DSI_PHY_7NM_QUIRK_V7_0)) {
 		writel(0x0, base + REG_DSI_7nm_PHY_CMN_GLBL_DIGTOP_SPARE10);
 		wmb();
 		/* Delay to ensure HW removes vote before PHY shut down */
@@ -1264,7 +1285,7 @@ static void dsi_7nm_phy_disable(struct msm_dsi_phy *phy)
 	/* make sure phy is turned off */
 	wmb();
 
-	printf("DSI%d PHY disabled", phy->id);
+	printf("DSI%d PHY disabled", phy->plat->id);
 }
 
 
@@ -1373,7 +1394,7 @@ static int msm_dsi_phy_power_on(struct phy *phy)
 		.escclk_rate = 19200000,
 	 };
 
-printf("======%s enter with phy->id %d\n", __func__, phy->id);
+printf("======%s enter with struct phy->id %lu (internal id %d)\n", __func__, phy->id, qcom->plat->id);
 	clk_prepare_enable(qcom->ahb_clk);
 	/* the rate is from linux test */
 	clk_set_rate(qcom->ahb_clk, 19200000);
@@ -1438,13 +1459,13 @@ const struct msm_dsi_phy_cfg dsi_phy_4nm_8650_cfgs = {
 	.quirks = DSI_PHY_7NM_QUIRK_V5_2,
 };
 
-static int dsi_phy_get_id(struct msm_dsi_phy *phy)
+static int dsi_phy_get_id(struct msm_dsi_phy_plat *plat)
 {
-	const struct msm_dsi_phy_cfg *cfg = phy->cfg;
+	const struct msm_dsi_phy_cfg *cfg = plat->cfg;
 	int i;
 
 	for (i = 0; i < cfg->num_dsi_phy; i++) {
-		if (cfg->io_start[i] == (phys_addr_t)phy->base)
+		if (cfg->io_start[i] == (phys_addr_t)plat->base)
 			return i;
 	}
 
@@ -1480,38 +1501,45 @@ printf("------- binding device %s\n", buf);
 	return ret;
 }
 
+static int qcom_dsi_phy_of_to_plat(struct udevice *dev)
+{
+	struct msm_dsi_phy_plat *plat = dev_get_plat(dev);
+
+	printf("%s: dev is %p\n", __func__, dev);
+
+	plat->cfg = &dsi_phy_4nm_8650_cfgs;
+	// FIXME: read from DTS
+	plat->cphy_mode = true;
+
+	plat->base = dev_remap_addr_name(dev, "dsi_phy");
+	if (IS_ERR(plat->base))
+		return PTR_ERR(plat->base);
+
+	plat->pll_base = dev_remap_addr_name(dev, "dsi_pll");
+	if (IS_ERR(plat->pll_base))
+		return PTR_ERR(plat->pll_base);
+
+	plat->lane_base = dev_remap_addr_name(dev, "dsi_phy_lane");
+	if (IS_ERR(plat->lane_base))
+		return PTR_ERR(plat->lane_base);
+
+printf("========%s udev %p base %p pll_base %p lane_base %p\n", __func__, dev, plat->base, plat->pll_base, plat->lane_base);
+	plat->id = dsi_phy_get_id(plat);
+	if (plat->id)
+		plat->usecase = MSM_DSI_PHY_SLAVE;
+	else
+		plat->usecase = MSM_DSI_PHY_MASTER;
+
+	return 0;
+}
+
 static int msm_dsi_phy_probe(struct udevice *dev)
 {
 	struct msm_dsi_phy *qcom = dev_get_priv(dev);
-	struct driver *drv = NULL;
-	//struct udevice *plldev = NULL;
 	int ret;
 
 	qcom->dev = dev;
-	qcom->pdata = (const struct qcom_video_phy_plat_data *)dev_get_driver_data(dev);
-#if 1
-	qcom->cfg = &dsi_phy_4nm_8650_cfgs;
-	qcom->cphy_mode = true;
-
-	qcom->base = dev_remap_addr_name(dev, "dsi_phy");
-	if (IS_ERR(qcom->base))
-		return PTR_ERR(qcom->base);
-
-	qcom->pll_base = dev_remap_addr_name(dev, "dsi_pll");
-	if (IS_ERR(qcom->pll_base))
-		return PTR_ERR(qcom->pll_base);
-
-	qcom->lane_base = dev_remap_addr_name(dev, "dsi_phy_lane");
-	if (IS_ERR(qcom->lane_base))
-		return PTR_ERR(qcom->lane_base);
-
-printf("========%s udev %p base %p pll_base %p lane_base %p\n", __func__, dev, qcom->base, qcom->pll_base, qcom->lane_base);
-	qcom->id = dsi_phy_get_id(qcom);
-	if (qcom->id)
-		qcom->usecase = MSM_DSI_PHY_SLAVE;
-	else
-		qcom->usecase = MSM_DSI_PHY_MASTER;
-#endif
+	qcom->plat = dev_get_plat(dev);
 
 /*
 	qcom->ref_clk = devm_clk_get(dev, "ref");
@@ -1556,7 +1584,9 @@ U_BOOT_DRIVER(qcom_mdss_dsidphy) = {
 	.id = UCLASS_PHY,
 	.of_match = msm_dsi_phy_of_match,
 	.bind = qcom_dsi_phy_bind,
+	.of_to_plat = qcom_dsi_phy_of_to_plat,
 	.probe = msm_dsi_phy_probe,
 	.ops = &msm_dsi_phy_ops,
 	.priv_auto = sizeof(struct msm_dsi_phy),
+	.plat_auto = sizeof(struct msm_dsi_phy_plat),
 };

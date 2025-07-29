@@ -6,6 +6,7 @@
 #ifndef __DSI_PHY_H__
 #define __DSI_PHY_H__
 
+#include <phy-mipi-dphy.h>
 #include <dt-bindings/clock/qcom,dsi-phy-28nm.h>
 #include <linux/clk-provider.h>
 #include <linux/delay.h>
@@ -90,12 +91,6 @@ struct msm_dsi_dphy_timing {
 
 #define DSI_LANE_MAX			5
 
-struct qcom_video_phy_plat_data {
-	const struct qcom_mipi_dphy_timing *qcom_mipi_dphy_timing_table;
-	const unsigned int num_timings;
-	//enum phy_max_rate max_rate;
-};
-
 struct dsi_pll_config {
 	bool enable_ssc;
 	bool ssc_center;
@@ -111,45 +106,43 @@ struct dsi_pll_config {
 	u32 ssc_div_per;
 };
 
-struct dsi_pll_7nm {
-	struct udevice *dev;
+struct msm_dsi_phy_plat {
+	int id;
 	void __iomem *base;
 	void __iomem *pll_base;
-	struct clk clk;
-	struct msm_dsi_phy *phy;
-	struct msm_dsi_phy_cfg *cfg;
+	void __iomem *reg_base;
+	void __iomem *lane_base;
+	const struct msm_dsi_phy_cfg *cfg;
+	enum msm_dsi_phy_usecase usecase;
+	bool cphy_mode;
+};
+
+struct dsi_pll_7nm {
+	struct udevice *dev;
+	struct msm_dsi_phy_plat *plat;
 	u64 vco_current_rate;
+	u64 vco_desired_rate;
 	struct dsi_pll_7nm *slave;
 	u32 id;
 };
 
 struct msm_dsi_phy {
 	struct udevice *dev;
-	const struct qcom_video_phy_plat_data *pdata;
+	struct msm_dsi_phy_plat *plat;
 	struct phy_configure_opts_mipi_dphy dphy_cfg;
-	void __iomem *base;
-	void __iomem *pll_base;
-	void __iomem *reg_base;
-	void __iomem *lane_base;
 	phys_addr_t base_size;
 	phys_addr_t pll_size;
 	phys_addr_t reg_size;
 	phys_addr_t lane_size;
-	int id;
 
 	struct clk *ahb_clk;
 	//struct regulator_bulk_data *supplies;
 	struct udevice *vdds_reg;
 
 	struct msm_dsi_dphy_timing timing;
-	const struct msm_dsi_phy_cfg *cfg;
 	void *tuning_cfg;
 
-	enum msm_dsi_phy_usecase usecase;
 	bool regulator_ldo_mode;
-	bool cphy_mode;
-
-	bool pll_on;
 
 	struct clk_hw_onecell_data *provided_clocks;
 
