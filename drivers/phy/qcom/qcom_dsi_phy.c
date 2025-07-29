@@ -958,7 +958,7 @@ static int dsi_7nm_phy_enable(struct msm_dsi_phy *phy,
 	struct msm_dsi_dphy_timing *timing = &phy->timing;
 	struct udevice *pll_dev;
 	void __iomem *base = phy->base;
-	u8 buf[16];
+	u8 buf[64];
 	bool less_than_1500_mhz;
 	u32 vreg_ctrl_0, vreg_ctrl_1, lane_ctrl0;
 	u32 glbl_pemph_ctrl_0;
@@ -1158,7 +1158,7 @@ printf("----%s line %d\n", __func__, __LINE__);
 	 * But pll is another driver in uboot.
 	 * And phy should be enabled before PLL, per comments where
 	 * dsi_phy_hw_v4_0_is_pll_on() is called */
-	snprintf(buf, sizeof(buf), "dsi_phy%d-", phy->id++);
+	snprintf(buf, sizeof(buf), "dsi_phy%d-pll", phy->id);
 	ret = uclass_get_device_by_name(UCLASS_CLK, buf, &pll_dev);
 	if (ret) {
 		dev_err(phy->dev, "%s: failed to get %s\n",
@@ -1464,8 +1464,7 @@ static int qcom_dsi_phy_bind(struct udevice *dev)
 		return -ENOMEM;
 
 	/* FIXME: dsi_phy_id should be aligned with dsi_phy_get_id() */
-	snprintf(buf, 64, "dsi_phy%d-", dsi_phy_id++);
-	strlcat(buf, dev->name, 64);
+	snprintf(buf, 64, "dsi_phy%d-pll", dsi_phy_id++);
 
 	drv = lists_driver_lookup_name(DSI_PLL_DRV_NAME);
 
