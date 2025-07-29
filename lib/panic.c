@@ -15,6 +15,7 @@
 #endif
 #include <linux/delay.h>
 #include <stdio.h>
+#include <symbols.h>
 
 static void panic_finish(void) __attribute__ ((noreturn));
 
@@ -38,6 +39,10 @@ void panic_str(const char *str)
 	panic_finish();
 }
 
+#if CONFIG_IS_ENABLED(ARM64)
+void unwind_stack(void);
+#endif
+
 void panic(const char *fmt, ...)
 {
 #if CONFIG_IS_ENABLED(PRINTF)
@@ -45,6 +50,12 @@ void panic(const char *fmt, ...)
 	va_start(args, fmt);
 	vprintf(fmt, args);
 	va_end(args);
+
+	if (CONFIG_IS_ENABLED(FRAMEPOINTER)) {
+		puts("\n");
+		unwind_stack();
+	}
+
 #endif
 	panic_finish();
 }
