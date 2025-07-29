@@ -24,6 +24,7 @@
 struct mpq3367_regulator_pdata {
 	struct udevice *i2c;
 	struct gpio_desc preboost;
+	struct gpio_desc preboost_good;
 	struct gpio_desc en;
 };
 
@@ -47,7 +48,7 @@ static int mpq3367_regulator_set_enable(struct udevice *dev, bool enable)
 	return 0;
 }
 
-#define RETRY_CNT 20
+#define RETRY_CNT 40
 static int mpq3367_regulator_probe(struct udevice *dev)
 {
 	struct mpq3367_regulator_pdata *pdata = dev_get_plat(dev);
@@ -63,14 +64,35 @@ static int mpq3367_regulator_probe(struct udevice *dev)
 	if (ret)
 		return ret;
 
-	for (cnt = RETRY_CNT; cnt; cnt--) {
-		dm_gpio_set_value(&pdata->preboost, 0);
-		udelay(300);
+	ret = gpio_request_by_name(dev, "preboost-good-gpios", 0, &pdata->preboost_good,
+				   GPIOD_IS_IN);
+	// Preboost-good missing, is EV1
+	if (ret) {
+		for (cnt = RETRY_CNT; cnt; cnt--) {
+			dm_gpio_set_value(&pdata->preboost, 0);
+			udelay(300);
+			dm_gpio_set_value(&pdata->preboost, 1);
+			udelay(1300);
+		}
 		dm_gpio_set_value(&pdata->preboost, 1);
-		udelay(1300);
-	}
 
-	udelay(250000);
+		udelay(450000);
+	} else {
+		int cnt = 1000;
+		dm_gpio_set_value(&pdata->preboost, 1);
+
+		/* Wait until GPIO goes to 1 */
+		do {
+			ret = dm_gpio_get_value(&pdata->preboost_good);
+			if (ret > 0)
+				break;
+
+			udelay(1000);
+		} while (cnt--);
+
+		if (!cnt)
+			dev_err(dev, "preboost-good failed.\n");
+	}
 
 skip_preboost:
 	ret = gpio_request_by_name(dev, "enable-gpios", 0, &pdata->en,
