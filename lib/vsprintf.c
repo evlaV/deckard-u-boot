@@ -25,6 +25,7 @@
 #include <linux/err.h>
 #include <linux/types.h>
 #include <linux/string.h>
+#include <symbols.h>
 
 /* we use this so that we can do without the ctype library */
 #define is_digit(c)	((c) >= '0' && (c) <= '9')
@@ -439,6 +440,23 @@ static char *uuid_string(char *buf, char *end, u8 *addr, int field_width,
 #endif
 
 /*
+ * Given an address, print the symbol name and offset to the address.
+ */
+static char *ptr_symbol(phys_addr_t addr, char *buf, char *end,
+			int field_width, int precision, int flags)
+{
+	unsigned long offset;
+	char namebuf[KSYM_NAME_LEN + 1] = { 0 };
+
+	symbol_lookup(addr, NULL, &offset, namebuf);
+
+	strlcat(namebuf, "+0x", KSYM_NAME_LEN + 1);
+
+	buf = string(buf, end, namebuf, field_width, precision, flags);
+	return number(buf, end, offset, 16, field_width, precision, flags);
+}
+
+/*
  * Show a '%p' thing.  A kernel extension is that the '%p' is followed
  * by an extra set of alphanumeric characters that are extended format
  * specifiers.
@@ -451,6 +469,7 @@ static char *uuid_string(char *buf, char *end, u8 *addr, int field_width,
  *       decimal for v4 and colon separated network-order 16 bit hex for v6)
  * - 'i' [46] for 'raw' IPv4/IPv6 addresses, IPv6 omits the colons, IPv4 is
  *       currently the same
+ * - 'S' for a symbol address, it prints the symbol name and offset
  */
 static char *pointer(const char *fmt, char *buf, char *end, void *ptr,
 		int field_width, int precision, int flags)
@@ -502,6 +521,12 @@ static char *pointer(const char *fmt, char *buf, char *end, void *ptr,
 			return ip4_addr_string(buf, end, ptr, field_width,
 					       precision, flags);
 		flags &= ~SPECIAL;
+		break;
+	case 'S':
+		if (IS_ENABLED(CONFIG_SYMBOL_LOOKUP))
+			return ptr_symbol((phys_addr_t)ptr, buf, end,
+					  field_width, precision, flags);
+		flags |= SPECIAL;
 		break;
 #ifdef CONFIG_LIB_UUID
 	case 'U':
