@@ -22,3 +22,10 @@ static inline const char *symbol_lookup(unsigned long addr, unsigned long *symad
 	return namebuf;
 }
 #endif
+
+#if CONFIG_IS_ENABLED(FRAMEPOINTER)
+/**
+ * unwind_stack - unwind the callstack and print a backtrace.
+ */
+void unwind_stack(void);
+#endif
