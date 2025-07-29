@@ -4,6 +4,8 @@
  * Copyright (c) 2023, Linaro Ltd.
  */
 
+#define LOG_DEBUG
+
 #include <clk-uclass.h>
 #include <dm.h>
 #include <dm/device_compat.h>
@@ -734,12 +736,33 @@ static const struct freq_tbl ftbl_disp_cc_mdss_mdp_clk_src[] = {
 	{ }
 };
 
+static const struct gate_clk sm8650_disp_clks[] = {
+	GATE_CLK(DISP_CC_MDSS_AHB_CLK,		0x80a4, BIT(0)),
+	GATE_CLK(DISP_CC_MDSS_BYTE0_CLK,	0x8028, BIT(0)),
+	GATE_CLK(DISP_CC_MDSS_BYTE0_INTF_CLK,	0x802c, BIT(0)),
+	GATE_CLK(DISP_CC_MDSS_BYTE1_CLK,	0x8030, BIT(0)),
+	GATE_CLK(DISP_CC_MDSS_BYTE1_INTF_CLK,	0x8034, BIT(0)),
+
+	GATE_CLK(DISP_CC_MDSS_MDP_CLK,		0x800c, BIT(0)),
+	GATE_CLK(DISP_CC_MDSS_MDP_LUT_CLK,	0x8018, BIT(0)),
+
+	GATE_CLK(DISP_CC_MDSS_VSYNC_CLK,	0x8024, BIT(0)),
+	GATE_CLK(DISP_CC_MDSS_PCLK0_CLK,	0x8004, BIT(0)),
+	GATE_CLK(DISP_CC_MDSS_ESC0_CLK,		0x8038, BIT(0)),
+};
+
 static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 {
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
 	const struct freq_tbl *freq;
+	const char *name;
 
-	dev_err(clk->dev, "set clk %d rate: %d\n", clk->id, rate);
+	if (clk->id < ARRAY_SIZE(sm8650_disp_clks))
+		name = sm8650_disp_clks[clk->id].name;
+	else
+		name = "unknown";
+
+	dev_err(clk->dev, "set clk %s (%lu) rate: %lu\n", name, clk->id, rate);
 
 	switch (clk->id) {
 	case DISP_CC_MDSS_AHB_CLK:
@@ -831,6 +854,12 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 static int sm8650_disp_cc_enable(struct clk *clk)
 {
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
+	const char *name;
+
+	if (clk->id < ARRAY_SIZE(sm8650_disp_clks))
+		name = sm8650_disp_clks[clk->id].name;
+	else
+		name = "unknown";
 
 /*
 	switch (clk->id) {
@@ -844,26 +873,11 @@ static int sm8650_disp_cc_enable(struct clk *clk)
 	}
 */
 
-	dev_err(clk->dev, "enable clk %d\n", clk->id);
+	dev_err(clk->dev, "enable clk %s (%lu)\n", name, clk->id);
 	qcom_gate_clk_en(priv, clk->id);
 
 	return 0;
 }
-
-static const struct gate_clk sm8650_disp_clks[] = {
-	GATE_CLK(DISP_CC_MDSS_AHB_CLK,		0x80a4, BIT(0)),
-	GATE_CLK(DISP_CC_MDSS_BYTE0_CLK,	0x8028, BIT(0)),
-	GATE_CLK(DISP_CC_MDSS_BYTE0_INTF_CLK,	0x802c, BIT(0)),
-	GATE_CLK(DISP_CC_MDSS_BYTE1_CLK,	0x8030, BIT(0)),
-	GATE_CLK(DISP_CC_MDSS_BYTE1_INTF_CLK,	0x8034, BIT(0)),
-
-	GATE_CLK(DISP_CC_MDSS_MDP_CLK,		0x800c, BIT(0)),
-	GATE_CLK(DISP_CC_MDSS_MDP_LUT_CLK,	0x8018, BIT(0)),
-
-	GATE_CLK(DISP_CC_MDSS_VSYNC_CLK,	0x8024, BIT(0)),
-	GATE_CLK(DISP_CC_MDSS_PCLK0_CLK,	0x8004, BIT(0)),
-	GATE_CLK(DISP_CC_MDSS_ESC0_CLK,		0x8038, BIT(0)),
-};
 
 
 static const struct qcom_reset_map disp_cc_sm8550_resets[] = {
