@@ -54,6 +54,8 @@
 #define DSI_TPG_DMA_FIFO_MODE BIT(2)
 #define DSI_CMD_DMA_PATTERN_SEL (BIT(16) | BIT(17))
 
+#define REG_DSI_VERSION						0x000001f0
+
 /* for bridge */
 struct qcom_dsi_priv {
 	struct mipi_dsi_device device;
@@ -938,6 +940,7 @@ printf("=============%s line %d device->index %d\n", __func__, __LINE__, device-
 
 	/* check hardware version */
 	priv->hw_version = dsi_read(dsi_reg);
+	printf("Got hw_version: 0x%x\n", priv->hw_version);
 	if (priv->hw_version != 0x20080000) {
 		dev_err(dev, "DSI version 0x%x not supported\n", priv->hw_version);
 		dev_dbg(dev, "remove and unbind all DSI child\n");
