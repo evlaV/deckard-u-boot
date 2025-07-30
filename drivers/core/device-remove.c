@@ -203,11 +203,6 @@ int device_remove(struct udevice *dev, uint flags)
 	if (!dev)
 		return -EINVAL;
 
-  printf("==================================Removing device %s\n", dev->name);
-if (!strncmp(dev->name, "dsi_phy_pll", strlen("dsi_phy_pll"))) {
-  panic("Removing device %s\n", dev->name);
-}
-
 	if (!(dev_get_flags(dev) & DM_FLAG_ACTIVATED))
 		return 0;
 
