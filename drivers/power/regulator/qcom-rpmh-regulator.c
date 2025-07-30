@@ -29,13 +29,6 @@ enum rpmh_regulator_type {
 	XOB,
 };
 
-enum rpmh_regulator_mode {
-	REGULATOR_MODE_RETENTION,
-	REGULATOR_MODE_LPM,
-	REGULATOR_MODE_AUTO,
-	REGULATOR_MODE_HPM,
-};
-
 #define RPMH_REGULATOR_REG_VRM_VOLTAGE		0x0
 #define RPMH_REGULATOR_REG_ENABLE		0x4
 #define RPMH_REGULATOR_REG_VRM_MODE		0x8
@@ -330,8 +323,10 @@ static int rpmh_regulator_vrm_set_mode(struct udevice *rdev,
 
 	debug("%s: set_mode %d (current %d)\n", rdev->name, mode, vreg->mode);
 
+/*
 	if (mode == vreg->mode)
 		return 0;
+*/
 
 	ret = rpmh_regulator_vrm_set_mode_bypass(vreg, mode, vreg->bypassed);
 	if (!ret)
