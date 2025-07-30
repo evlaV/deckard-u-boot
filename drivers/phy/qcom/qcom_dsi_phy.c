@@ -359,6 +359,7 @@ static void dsi_pll_commit(struct dsi_pll_7nm *pll, struct dsi_pll_config *confi
 	void __iomem *base = pll->plat->pll_base;
 
 	writel(0x12, base + REG_DSI_7nm_PHY_PLL_CORE_INPUT_OVERRIDE);
+printf("===== %s addr 0x%x readback 0x%x should be 0x12\n", __func__, base + REG_DSI_7nm_PHY_PLL_CORE_INPUT_OVERRIDE, readl(base + REG_DSI_7nm_PHY_PLL_CORE_INPUT_OVERRIDE));
 	writel(config->decimal_div_start,
 	       base + REG_DSI_7nm_PHY_PLL_DECIMAL_DIV_START_1);
 	writel(config->frac_div_start & 0xff,
@@ -568,14 +569,16 @@ static int dsi_pll_7nm_vco_prepare(struct clk *clk)
 	int rc;
 
 	/* U-Boot doesn't have recalc_rate support so just set things up now */
+	/* follow sequence of kernel */
 	if (!pll_7nm->vco_desired_rate)
 		pll_7nm->vco_desired_rate = dsi_pll_7nm_vco_recalc_rate(pll_7nm, TCXO_RATE);
 	if (!pll_7nm->vco_desired_rate) {
 		pr_err("DSI PLL(%d) recalc_rate returned 0 :( overriding...\n", pll_7nm->plat->id);
 		pll_7nm->vco_desired_rate = 851023681;
 	}
-	if (pll_7nm->vco_current_rate != pll_7nm->vco_desired_rate)
-		dsi_pll_7nm_vco_set_rate(clk, pll_7nm->vco_desired_rate);
+	dsi_pll_7nm_vco_set_rate(clk, pll_7nm->vco_desired_rate);
+	pll_7nm->vco_desired_rate = dsi_pll_7nm_vco_recalc_rate(pll_7nm, TCXO_RATE);
+	dsi_pll_7nm_vco_set_rate(clk, pll_7nm->vco_desired_rate);
 
 	dsi_pll_enable_pll_bias(pll_7nm);
 	if (pll_7nm->slave)
@@ -596,6 +599,7 @@ static int dsi_pll_7nm_vco_prepare(struct clk *clk)
 		pr_err("PLL(%d) lock failed\n", pll_7nm->plat->id);
 		goto error;
 	}
+printf("--------- PLL(%d) lock ok\n", pll_7nm->plat->id);
 
 	/*
 	 * assert power on reset for PHY digital in case the PLL is
