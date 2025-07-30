@@ -963,7 +963,7 @@
 &mdss_dsi0 {
 	status = "okay";
 
-//	vdda-supply = <&vreg_l3i_1p2>;
+	vdda-supply = <&vreg_l3i_1p2>;
 	qcom,dual-dsi-mode;
 	qcom,master-dsi;
 	dual-dsi-index = < 0 >;
