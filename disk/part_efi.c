@@ -637,13 +637,13 @@ int gpt_fill_header(struct blk_desc *desc, gpt_header *gpt_h, char *str_guid,
 	gpt_h->revision = cpu_to_le32(GPT_HEADER_REVISION_V1);
 	gpt_h->header_size = cpu_to_le32(sizeof(gpt_header));
 	gpt_h->my_lba = cpu_to_le64(1);
-	gpt_h->alternate_lba = cpu_to_le64(desc->lba - 1);
-	gpt_h->last_usable_lba = cpu_to_le64(desc->lba - 34);
+	gpt_h->alternate_lba = cpu_to_le64(desc->lba - 1); 
+	gpt_h->last_usable_lba = cpu_to_le64(desc->lba - 3); //need to account for blocksize being 4096 vs. 512 and GPT_ENTRY_NUMBERS and part entry size -- 34 was too big
 	gpt_h->partition_entry_lba =
 		cpu_to_le64(partition_entries_offset(desc));
 	gpt_h->first_usable_lba =
-		cpu_to_le64(le64_to_cpu(gpt_h->partition_entry_lba) + 32);
-	gpt_h->num_partition_entries = cpu_to_le32(GPT_ENTRY_NUMBERS);
+		cpu_to_le64(le64_to_cpu(gpt_h->partition_entry_lba) + 1); //need to account for blocksize being 4096 vs. 512 and GPT_ENTRY_NUMBERS and part entry size -- 32 was too big
+	gpt_h->num_partition_entries = cpu_to_le32(GPT_ENTRY_NUMBERS); //this number here uses a defconfig -- previously was set to 128, now is set to 32 which is correct for the xbl bootable disk
 	gpt_h->sizeof_partition_entry = cpu_to_le32(sizeof(gpt_entry));
 	gpt_h->header_crc32 = 0;
 	gpt_h->partition_entry_array_crc32 = 0;
