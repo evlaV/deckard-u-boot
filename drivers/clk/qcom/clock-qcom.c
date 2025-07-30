@@ -461,7 +461,7 @@ int qcom_cc_bind(struct udevice *parent)
 		return -ENOENT;
 
 	/* Register the clock controller */
-	ret = device_bind_with_driver_data(parent, drv, "qcom_clk", (ulong)data,
+	ret = device_bind_with_driver_data(parent, drv, parent->name, (ulong)data,
 					   dev_ofnode(parent), &clkdev);
 	if (ret)
 		return ret;
