@@ -900,20 +900,17 @@ printf("=============%s line %d device->index %d\n", __func__, __LINE__, device-
 		dev_dbg(dev, "fail to validate phy, phy %p phy->dev %p\n", &priv->phy, priv->phy.dev);
 	}
 
-/*
-	ret =  device_get_supply_regulator(dev, "phy-dsi-supply",
+	ret =  device_get_supply_regulator(dev, "vdda-supply",
 					   &priv->vdd_reg);
-	if (ret && ret != -ENOENT) {
-		dev_err(dev, "Warning: cannot get phy dsi supply\n");
+	if (ret) {
+		dev_err(dev, "Warning: cannot get dsi vdda supply\n");
 		return -ENODEV;
 	}
 
-	if (ret != -ENOENT) {
-		ret = regulator_set_enable(priv->vdd_reg, true);
-		if (ret)
-			return ret;
-	}
-*/
+	ret = regulator_set_enable(priv->vdd_reg, true);
+	if (ret)
+		return ret;
+
 	ret = clk_get_bulk(device->dev, &bulk);
 	if (ret) {
 		dev_err(dev, "peripheral clock get error %d\n", ret);
@@ -955,7 +952,7 @@ printf("=============%s ret 0\n", __func__);
 err_clk:
 	clk_disable_bulk(&bulk);
 err_reg:
-//	regulator_set_enable(priv->vdd_reg, false);
+	regulator_set_enable(priv->vdd_reg, false);
 
 printf("=============%s ret %d\n", __func__, ret);
 	return ret;
