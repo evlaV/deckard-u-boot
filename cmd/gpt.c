@@ -1210,6 +1210,144 @@ out:
 
 	return ret;
 }
+
+int ends_with_slot_name(const char *str, char slot) {
+    size_t len = strlen(str);
+    if (len < 2) return 0;  // Not enough characters
+
+    return (str[len - 2] == '_' && str[len - 1] == slot);
+}
+
+//test command with this at uboot:
+//gpt set-bootable-xbl-slot scsi 1 a
+
+/**
+ * gpt_set_xbl_partition_bootable_by_slot_partfstype() - Set part fstype uuid to a magic value 
+ * used by qcom xbl, and also marks disk as bootable
+ *
+ * When this is called all partitions on current disk that have the magic xbl parttype uuid 
+ * will be set to a default value to ensure the xbl will not try to boot those partitions
+ *
+ * @desc: block device descriptor
+ * @name: partition name
+ *
+ * @Return: '0' on success and -ve error on failure
+ */
+int gpt_set_xbl_partition_bootable_by_slot_partfstype(struct blk_desc *blk_dev_desc, char *const slotname)
+{
+	char *name;
+	char disk_guid[UUID_STR_LEN + 1];
+	struct list_head *pos;
+	struct disk_part *curr;
+	struct disk_partition *partitions = NULL;
+	int part_count = 0;
+	int ret = get_disk_guid(blk_dev_desc, disk_guid);
+	char slot = slotname[0];
+
+	if ( ! IS_ENABLED(CONFIG_PARTITION_TYPE_GUID) ) 
+	{
+		printf("Error: CONFIG_PARTITION_TYPE_GUID is required to use this function\n");
+		return ENOMEM;
+	}
+
+	if (ret < 0)
+		return ret;
+
+	ret = get_gpt_info(blk_dev_desc);
+	if (ret <= 0)
+		goto out;
+
+	part_count = ret;
+	partitions = malloc(sizeof(*partitions) * part_count);
+	if (!partitions) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	printf("making slot %c active\n",slot);
+
+
+	/* Copy partitions and clear bootable flag */
+	part_count = 0;
+	list_for_each(pos, &disk_partitions) {
+		curr = list_entry(pos, struct disk_part, list);
+		partitions[part_count] = curr->gpt_part_info;
+		//partitions[part_count].bootable &= ~PART_BOOTABLE;
+		part_count++;
+	}
+
+	//find pairs of partitions like uefi_a and uefi_b
+	//once we find these, then we can swap the parttype uuid with each other
+	//and mark as bootable
+	char targetstr[32];
+	for (int i = 0; i < part_count; i++) {
+		targetstr[0]='\0';
+		int part_a_idx = -1;
+		int part_b_idx = -1;
+		if(ends_with_slot_name((char *)partitions[i].name,'a'))
+		{
+			part_a_idx = i;
+			strcpy(targetstr,(char *)partitions[i].name);
+			int targetstrlen = strlen(targetstr);
+			if(targetstrlen > 2)
+			{
+				targetstr[targetstrlen - 1] = 'b'; //create string we are looking to match against
+				for (int j = 0; j < part_count; j++) {
+					if( !strcmp(targetstr,(char *)partitions[j].name) )
+					{
+						part_b_idx = j;
+						break;
+					}
+				}
+			}
+
+			char buf[64];
+			if((part_a_idx >= 0) && (part_b_idx >= 0) ) 
+			{
+				printf("[%d,%s] [%d,%s]\n", part_a_idx, (char *)partitions[part_a_idx].name,
+				  							part_b_idx, (char *)partitions[part_b_idx].name);
+
+				int part_idx_target = (slot == 'a') ? part_a_idx : part_b_idx;
+				if(strcmp(partitions[part_idx_target].type_guid, BOOTSLOTPARTTYPEXBLTARGET) == 0)
+				{
+					//we already are on the right slot -- skip work (abandon partition table we were building -- thats ok)
+					printf("slot_%c is already active\n",slot);
+					ret = 0;
+					goto out;
+				}
+
+				//swap _a and _b type_guid
+				strcpy(buf, partitions[part_a_idx].type_guid); //copy to tmp buffer
+				strcpy(partitions[part_a_idx].type_guid, partitions[part_b_idx].type_guid);	
+				strcpy(partitions[part_b_idx].type_guid, buf);	
+
+				partitions[part_a_idx].bootable &= ~PART_BOOTABLE;
+				partitions[part_b_idx].bootable &= ~PART_BOOTABLE;
+
+				if ( (strcmp((char *)partitions[part_idx_target].name, "xbl_a") == 0) || (strcmp((char *)partitions[part_idx_target].name, "xbl_b") == 0))
+				{
+					//mark the new slot xbl_a or _b as legacy_bootable flag / attribute
+					//PBL looks for: xbl partition by parttype uuid = DEA0BA2C-CBDD-4805-B4F9-F428251C3E98
+					//and then XBL_SC looks for part type uuid = 400FFDCD-22E0-47E7-9A23-F16ED9382388
+					//but this helps userspace figure out which one is active actually
+					partitions[part_idx_target].bootable |= PART_BOOTABLE;
+				}
+
+			}
+		}
+	}
+
+	ret = gpt_restore(blk_dev_desc, disk_guid, partitions, part_count);
+
+out:
+	del_gpt_info();
+
+	if (partitions)
+		free(partitions);
+
+	return ret;
+}
+
 #endif
 
 /**
@@ -1274,6 +1412,8 @@ static int do_gpt(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 		ret = gpt_set_bootable(blk_dev_desc, argv[4]);
 	} else if ((strcmp(argv[1], "set-bootable-xbl") == 0)) {
 		ret = gpt_set_xbl_partition_bootable_partfstype(blk_dev_desc, argv[4]);		
+	} else if ((strcmp(argv[1], "set-bootable-xbl-slot") == 0)) {
+		ret = gpt_set_xbl_partition_bootable_by_slot_partfstype(blk_dev_desc, argv[4]);				
 #endif
 	} else {
 		return CMD_RET_USAGE;
