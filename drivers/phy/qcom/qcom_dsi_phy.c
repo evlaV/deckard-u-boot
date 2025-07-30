@@ -16,6 +16,7 @@
 #include <linux/time.h>
 #include <phy-mipi-dphy.h>
 #include <power/regulator.h>
+#include <soc/qcom/rpmh.h>
 #include <string.h>
 #include <timer.h>
 
@@ -1571,6 +1572,12 @@ static int msm_dsi_phy_probe(struct udevice *dev)
 	ret = regulator_set_enable(qcom->vdds_reg, true);
 	if (ret) {
 		dev_err(dev, "failed to enable phy regulator: %d\n", ret);
+		return ret;
+	}
+
+	ret = regulator_set_mode(qcom->vdds_reg, REGULATOR_MODE_HPM);
+	if (ret) {
+		dev_err(dev, "failed to set regulator mode: %d\n", ret);
 		return ret;
 	}
 
