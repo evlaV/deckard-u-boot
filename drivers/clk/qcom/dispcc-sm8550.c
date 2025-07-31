@@ -891,6 +891,26 @@ static const struct qcom_power_map sm8650_disp_gdscs[] = {
 	[MDSS_INT2_GDSC] = { 0xb000 },
 };
 
+#define BASE 0xaf00000
+
+static const phys_addr_t dbg_rcg_addrs[] = {
+	BASE + 0x82e8,
+	BASE + 0x8108,
+	BASE + 0x8120,
+	BASE + 0x8124,
+	BASE + 0x813c,
+	BASE + 0x80a8,
+};
+
+static const char *dbg_rcg_names[] = {
+	"disp_cc_mdss_ahb_clk_src",
+	"disp_cc_mdss_byte0_clk_src",
+	"disp_cc_mdss_byte0_div_clk_src",
+	"disp_cc_mdss_byte1_clk_src",
+	"disp_cc_mdss_byte1_div_clk_src",
+	"disp_cc_mdss_pclk0_clk_src",
+};
+
 static struct msm_clk_data sm8650_disp_cc_data = {
 	.resets = disp_cc_sm8550_resets,
 	.num_resets = ARRAY_SIZE(disp_cc_sm8550_resets),
@@ -899,9 +919,22 @@ static struct msm_clk_data sm8650_disp_cc_data = {
 	.power_domains = sm8650_disp_gdscs,
 	.num_power_domains = ARRAY_SIZE(sm8650_disp_gdscs),
 
+	.dbg_rcg_addrs = dbg_rcg_addrs,
+	.dbg_rcg_names = dbg_rcg_names,
+	.num_rcgs = ARRAY_SIZE(dbg_rcg_addrs),
+
 	.enable = sm8650_disp_cc_enable,
 	.set_rate = sm8650_disp_cc_set_rate,
 };
+
+static int dispcc_sm8650_probe(struct udevice *dev)
+{
+	phys_addr_t base = dev_read_addr(dev);
+
+	/* Keep some clocks always on */
+	qcom_branch_set_clk_en(base, 0xe054); /* DISP_CC_XO_CLK */
+	return 0;
+}
 
 static const struct udevice_id disp_cc_sm8550_of_match[] = {
 	{	.compatible = "qcom,sm8650-dispcc",
@@ -915,5 +948,6 @@ U_BOOT_DRIVER(disp_cc_sm8550) = {
 	.id		= UCLASS_NOP,
 	.of_match	= disp_cc_sm8550_of_match,
 	.bind		= qcom_cc_bind,
+	.probe		= dispcc_sm8650_probe,
 	.flags		= DM_FLAG_PRE_RELOC,
 };
