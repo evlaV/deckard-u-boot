@@ -39,9 +39,12 @@
 struct measure_clk;
 
 struct debug_mux {
-	unsigned long base;
+	unsigned long phys;
 	const char *block_name;
 	size_t size;
+
+	struct debug_mux *parent;
+	unsigned long parent_mux_val;
 
 	unsigned int enable_reg;
 	unsigned int enable_mask;
@@ -63,17 +66,27 @@ struct debug_mux {
 	unsigned int ahb_mask;
 
 	void (*premeasure)(struct debug_mux *mux);
-	unsigned long (*measure)(const struct measure_clk *clk);
+	unsigned long (*measure)(const struct measure_clk *clk,
+				 const struct debug_mux *mux);
 	void (*postmeasure)(struct debug_mux *mux);
+};
+
+struct gcc_mux {
+	struct debug_mux mux;
+
+	unsigned int xo_rate;
+
+	unsigned int xo_div4_reg;
+	unsigned int xo_div4_val;
+
+	unsigned int debug_ctl_reg;
+	unsigned int debug_status_reg;
 };
 
 struct measure_clk {
 	char *name;
-	struct debug_mux *primary;
+	struct debug_mux *clk_mux;
 	int mux;
-
-	struct debug_mux *leaf;
-	int leaf_mux;
 
 	unsigned int fixed_div;
 };
@@ -90,12 +103,17 @@ int qcom_debugcc_run(int argc, char *const argv[]);
 int mmap_mux(int devmem, struct debug_mux *mux);
 void mux_enable(struct debug_mux *mux);
 void mux_disable(struct debug_mux *mux);
-unsigned long measure_mccc(const struct measure_clk *clk);
+unsigned long measure_gcc(const struct measure_clk *clk,
+			  const struct debug_mux *mux);
+unsigned long measure_leaf(const struct measure_clk *clk,
+			   const struct debug_mux *mux);
+unsigned long measure_mccc(const struct measure_clk *clk, const struct debug_mux *mux);
 
-extern struct debugcc_platform qcs404_debugcc;
-extern struct debugcc_platform sdm845_debugcc;
-extern struct debugcc_platform sm6115_debugcc;
-extern struct debugcc_platform sm8250_debugcc;
+// extern struct debugcc_platform qcs404_debugcc;
+// extern struct debugcc_platform sdm845_debugcc;
+// extern struct debugcc_platform sm6115_debugcc;
+// extern struct debugcc_platform sm8250_debugcc;
+extern struct debugcc_platform sm8650_debugcc;
 #else
 int qcom_debugcc_run(int argc, char *const argv[]) { return 0; }
 #endif
