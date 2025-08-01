@@ -412,8 +412,9 @@
 #define TS_CLK			19200000
 
 struct qcom_dpu_priv {
-	void *regs_base;
+	void *dpu_base;
 	void *vbif_base;
+	struct dpu_mdss_cfg *cat;
 /*
 	struct mdp_sspp_regs *mdp_sspp[2];
 	struct mdp_layer_mixer_regs *mdp_layer_mixer[4];
@@ -511,29 +512,6 @@ static void mdss_sspp_config(struct udevice *dev, void *base, bool rect0, int x_
 
 static void mdss_vbif_setup(void *regs_vbif)
 {
-#if 0
-	write32(vbif_rt->vbif_out_axi_amemtype_conf0, 0x33333333);
-	write32(vbif_rt->vbif_out_axi_amemtype_conf1, 0x00333333);
-
-	/*
-	 * VBIF remapper registers are used for translating internal display hardware
-	 * priority level (from 0 to 7) into system fabric priority level.
-	 * These remapper settings are defined for all the clients which corresponds
-	 * to the xin clients connected to SSPP on VBIF.
-	 */
-	write32(vbif_rt->qos_rp_remap[0].vbif_xinl_qos_rp_remap, 0x00000003);
-	write32(vbif_rt->qos_rp_remap[1].vbif_xinl_qos_rp_remap, 0x11111113);
-	write32(vbif_rt->qos_rp_remap[2].vbif_xinl_qos_rp_remap, 0x22222224);
-	write32(vbif_rt->qos_rp_remap[3].vbif_xinl_qos_rp_remap, 0x33333334);
-	write32(vbif_rt->qos_rp_remap[4].vbif_xinl_qos_rp_remap, 0x44444445);
-	write32(vbif_rt->qos_rp_remap[7].vbif_xinl_qos_rp_remap, 0x77777776);
-	write32(vbif_rt->qos_lvl_remap[0].vbif_xinl_qos_lvl_remap, 0x00000003);
-	write32(vbif_rt->qos_lvl_remap[1].vbif_xinl_qos_lvl_remap, 0x11111113);
-	write32(vbif_rt->qos_lvl_remap[2].vbif_xinl_qos_lvl_remap, 0x22222224);
-	write32(vbif_rt->qos_lvl_remap[3].vbif_xinl_qos_lvl_remap, 0x33333334);
-	write32(vbif_rt->qos_lvl_remap[4].vbif_xinl_qos_lvl_remap, 0x44444445);
-	write32(vbif_rt->qos_lvl_remap[5].vbif_xinl_qos_lvl_remap, 0x77777776);
-#endif
 	u32 reg_lvl = 0x40;
 
 	writel(0x400040, regs_vbif + VBIF_XINL_QOS_RP_REMAP_000);
@@ -554,7 +532,7 @@ static void mdss_vbif_setup(void *regs_vbif)
 	writel(0x77677767, regs_vbif + VBIF_XINL_QOS_RP_REMAP_000 + reg_lvl + 0x38);
 }
 
-static void mdss_intf_fetch_start_config(void *regs_base, struct dpu_mdss_cfg *cat)
+static void mdss_intf_fetch_start_config(void *dpu_base, struct dpu_mdss_cfg *cat)
 {
 #if 0
 	uint32_t v_total, h_total, fetch_start, vfp_start;
@@ -595,12 +573,12 @@ static void mdss_intf_fetch_start_config(void *regs_base, struct dpu_mdss_cfg *c
 
 	void *base;
 	/* assume the 1st ctl in active case of sm8650 */
-	void *ctl_base = regs_base + cat->ctl->base;
+	void *ctl_base = dpu_base + cat->ctl->base;
 	int i;
 
 	/* config 2 DSI intf that's on 2nd and 3rd intf */
 	for (i = 2; i < 4; i++) {
-		base = regs_base + cat->intf[i].base;
+		base = dpu_base + cat->intf[i].base;
 
 		/* config for 90Hz */
 		writel(0x3100014, base + INTF_HSYNC_CTL);
@@ -642,7 +620,7 @@ static void mdss_intf_fetch_start_config(void *regs_base, struct dpu_mdss_cfg *c
 }
 
 /* configure the mixer blending in ctl */
-void mdp_setup_stage(struct dpu_mdss_cfg *cat, void *regs_base)
+void mdp_setup_stage(struct dpu_mdss_cfg *cat, void *dpu_base)
 {
 /*
 	uint32_t ctl0_reg_val;
@@ -651,7 +629,7 @@ void mdp_setup_stage(struct dpu_mdss_cfg *cat, void *regs_base)
 	write32(mdp_ctl->ctl_intf_flush, INTF_FLUSH);
 	write32(mdp_ctl->ctl_flush, ctl0_reg_val);
 */
-	void *base = regs_base + cat->ctl[0].base;
+	void *base = dpu_base + cat->ctl[0].base;
 
 	for (int lm = 0; lm < PIPES_PER_PLANE; lm++) {
 		if (lm < PIPES_PER_STAGE) {
@@ -681,7 +659,7 @@ static inline int _stage_offset(struct dpu_lm_sub_blks *sblk, enum dpu_stage sta
 	return -EINVAL;
 }
 
-static void mdss_layer_mixer_setup(void *regs_base, struct dpu_mdss_cfg *cat)
+static void mdss_layer_mixer_setup(void *dpu_base, struct dpu_mdss_cfg *cat)
 {
 	uint32_t op_mode = 0x2;
 #if 0
@@ -705,12 +683,11 @@ static void mdss_layer_mixer_setup(void *regs_base, struct dpu_mdss_cfg *cat)
 	/* Base layer for layer mixer 0 */
 	write32(mdp_ctl->ctl_layer0, left_staging_level);
 #endif
-	//for (int i = 0; i < cat->mixer_count; i++) {
 	for (int i = 0; i < PIPES_PER_PLANE; i++) {
-		void *base = regs_base + cat->mixer[i].base;
-		//struct dpu_lm_sub_blks *sblk = lm->sblk;
-		//for (int stage = 0; i < sblk->maxblendstages; stage++) {
-		for (int stage = 0; i < 1; stage++) {
+		void *base = dpu_base + cat->mixer[i].base;
+		/* we only have one stage in uboot, no plane overlap */
+		//for (int stage = DPU_STAGE_0; i < sblk->maxblendstages; stage++) {
+		for (int stage = DPU_STAGE_0; stage < DPU_STAGE_0 + 1; stage++) {
 			u32 stage_off = _stage_offset(cat->mixer[i].sblk, stage);
 			if (WARN_ON(stage_off < 0))
 				return;
@@ -722,10 +699,11 @@ static void mdss_layer_mixer_setup(void *regs_base, struct dpu_mdss_cfg *cat)
 			op_mode |= BIT(31); /* split right half in stage */
 		writel(op_mode, base + LM_OP_MODE);
 	}
-	mdp_setup_stage(cat, regs_base);
+	mdp_setup_stage(cat, dpu_base);
 }
 
 #if 0
+/* sequence from coreboot */
 void mdp_dsi_video_config(struct edid *edid)
 {
 	mdss_intf_tg_setup(edid);
@@ -733,20 +711,20 @@ void mdp_dsi_video_config(struct edid *edid)
 	mdss_vbif_setup();
 	mdss_vbif_qos_remapper_setup();
 	mdss_sspp_config(edid);
-	mdss_layer_mixer_setup(regs_base, );
+	mdss_layer_mixer_setup();
 	mdss_ctrl_config();
 	write32(mdp_intf->intf_mux, 0x0F0000);
 }
 #endif
 
-void mdp_dsc_setup(struct dpu_mdss_cfg *cat, void *regs_base)
+void mdp_dsc_setup(struct dpu_mdss_cfg *cat, void *dpu_base)
 {
 	void *base;
 	const struct dpu_dsc_sub_blks *sblk;
 	int i;
 
 	for (i = 0; i < 4; i++) {
-		base = regs_base + cat->dsc[i].base;
+		base = dpu_base + cat->dsc[i].base;
 		sblk = cat->dsc[i].sblk;
 
 		dpu_write(base + DSC_CMN_MAIN_CNF, 0x103);
@@ -783,19 +761,19 @@ void mdp_dsc_setup(struct dpu_mdss_cfg *cat, void *regs_base)
 	}
 }
 
-void mdp_pingpong_setup(struct dpu_mdss_cfg *cat, void *regs_base)
+void mdp_pingpong_setup(struct dpu_mdss_cfg *cat, void *dpu_base)
 {
 	void *base;
 	int i;
 
 	/* 2 pp map to 4 pipe in quad-pipe case */
 	for (i = 0; i < 2; i++) {
-		base = regs_base + cat->pingpong[i].sblk->dither.base;
+		base = dpu_base + cat->pingpong[i].sblk->dither.base;
 		dpu_write(base + PP_DITHER_EN, 0);
 	}
 }
 
-void mdp_dsi_video_on(struct dpu_mdss_cfg *cat, void *regs_base)
+void mdp_video_on(struct dpu_mdss_cfg *cat, void *dpu_base)
 {
 /*
 	uint32_t ctl0_reg_val;
@@ -804,7 +782,7 @@ void mdp_dsi_video_on(struct dpu_mdss_cfg *cat, void *regs_base)
 	write32(mdp_ctl->ctl_intf_flush, INTF_FLUSH);
 	write32(mdp_ctl->ctl_flush, ctl0_reg_val);
 */
-	void *ctl_base = regs_base + cat->ctl[0].base;
+	void *ctl_base = dpu_base + cat->ctl[0].base;
 
 	writel(0x3, ctl_base + CTL_MERGE_3D_FLUSH);
 	writel(0x6, ctl_base + CTL_INTF_FLUSH);
@@ -836,10 +814,10 @@ printf("=========%s enter, FLG_RELOC? %lu\n", __func__, gd->flags & GD_FLG_RELOC
 	if (!(gd->flags & GD_FLG_RELOC))
 		return 0;
 
-	priv->regs_base = dev_remap_addr_name(dev, "mdp");
+	priv->dpu_base = dev_remap_addr_name(dev, "mdp");
 	priv->vbif_base = dev_remap_addr_name(dev, "vbif");
+	priv->cat = &dpu_sm8650_cfg;
 
-printf("=========%s line %d\n", __func__, __LINE__);
 	ret = clk_get_bulk(dev, &bulk);
 	if (ret) {
 		dev_err(dev, "clk bulk get error %d\n", ret);
@@ -946,7 +924,25 @@ printf("=========%s uc_priv->bpix %d, uc_priv 0x%x\n", __func__, uc_priv->bpix, 
 		return ret;
 	}
 
+	/* FIXME: do we have data cached ? */
 	video_set_flush_dcache(dev, true);
+
+	mdss_vbif_setup(priv->vbif_base);
+	mdss_intf_fetch_start_config(priv->dpu_base, priv->cat);
+	mdp_dsc_setup(priv->cat, priv->dpu_base);
+
+	/* hard coding 4 rect from 2 SSPP */
+	mdss_sspp_config(dev, priv->dpu_base + priv->cat->sspp[0].base, true, 0);
+	mdss_sspp_config(dev, priv->dpu_base + priv->cat->sspp[0].base, false, 1080);
+	mdss_sspp_config(dev, priv->dpu_base + priv->cat->sspp[1].base, true, 1080 * 2);
+	mdss_sspp_config(dev, priv->dpu_base + priv->cat->sspp[1].base, false, 1080 * 3);
+
+	mdss_layer_mixer_setup(priv->dpu_base, priv->cat);
+	mdp_pingpong_setup(priv->cat, priv->dpu_base);
+
+	/* flush all registers */
+	mdp_video_on(priv->cat, priv->dpu_base);
+
 printf("=========%s exit ok\n", __func__);
 
 #if 0
