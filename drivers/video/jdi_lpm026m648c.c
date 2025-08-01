@@ -68,14 +68,15 @@ struct lpm026m648c_priv {
 	bool is_dual_panel;
 };
 
+/* 90Hz */
 static const struct display_timing default_timing = {
-	.pixelclock.typ		= (2160 + 24 + 20 + 20) * (2160 + 1697 + 1 + 20) * 80,
+	.pixelclock.typ		= (2160 + 24 + 20 + 20) * (2160 + 1265 + 1 + 20) * 80,
 	.hactive.typ		= 2160,
 	.hfront_porch.typ	= 24,
 	.hback_porch.typ	= 20,
 	.hsync_len.typ		= 20,
 	.vactive.typ		= 2160,
-	.vfront_porch.typ	= 1697,
+	.vfront_porch.typ	= 1265,
 	.vback_porch.typ	= 20,
 	.vsync_len.typ		= 1,
 };
