@@ -16,7 +16,6 @@
 
 #define BOOT_DEVICE_UFS_A	(BOOT_DEVICE_NONE + 1)
 #define BOOT_DEVICE_UFS_B	(BOOT_DEVICE_NONE + 2)
-#define BOOT_DEVICE_UFS_R	(BOOT_DEVICE_NONE + 3)
 
 #define DECKARD_UFS_ENV_LUN		2
 #define DECKARD_UFS_ENV_PART		1
@@ -26,22 +25,15 @@
 #define DECKARD_UFS_BOOT_PART_A		3
 #define DECKARD_UFS_BOOT_PART_B		6
 
-#define DECKARD_UFS_RESCUE_LUN		3
-#define DECKARD_UFS_RESCUE_BOOT_PART	1
-
 #define BOOT_ATTEMPTS_MAX			8
 
 #define BUTTON_VOL_UP_NAME "Volume Up"
-
-#define RESCUE_BUTTON BUTTON_VOL_UP_NAME
 
 DECLARE_GLOBAL_DATA_PTR;
 
 static ulong boot_wrapper_version __section(".data");
 
 static struct pon_on_off_reason pon_reason;
-
-int go_to_rescue = 0;
 
 int g_boot_wrapper_version;
 /**
@@ -92,22 +84,14 @@ void board_boot_order(u32 *spl_boot_list)
 {
 	char *boot_order = env_get("BOOT_ORDER");
 
-	/* Try to go into rescue first if too much attempts */
-	if (env_get_ulong("FORCE_RESCUE", 10, 0)) {
-		printf("BOOT_ORDER set to Rescue as primary\n");
-		spl_boot_list[0] = BOOT_DEVICE_UFS_R;
-		spl_boot_list[1] = BOOT_DEVICE_UFS_A;
-		spl_boot_list[2] = BOOT_DEVICE_UFS_B;
-	} else if (!strcmp(boot_order, "A B")) {
+	if (!strcmp(boot_order, "A B")) {
 		printf("BOOT_ORDER set to A as primary\n");
 		spl_boot_list[0] = BOOT_DEVICE_UFS_A;
 		spl_boot_list[1] = BOOT_DEVICE_UFS_B;
-		spl_boot_list[2] = BOOT_DEVICE_UFS_R;
 	} else {
 		printf("BOOT_ORDER set to B as primary\n");
 		spl_boot_list[0] = BOOT_DEVICE_UFS_B;
 		spl_boot_list[1] = BOOT_DEVICE_UFS_A;
-		spl_boot_list[2] = BOOT_DEVICE_UFS_R;
 	}
 }
 
@@ -152,9 +136,6 @@ static ulong iterate_boot_count(void)
 		case BOOT_DEVICE_UFS_B:
 			boot_count_target = "BOOT_COUNT_B";
 			boot_count_max = BOOT_ATTEMPTS_MAX;
-			break;
-		case BOOT_DEVICE_UFS_R:
-			return BOOT_ATTEMPTS_MAX;
 			break;
 		default:
 			return BOOT_ATTEMPTS_MAX;
@@ -240,20 +221,6 @@ static enum button_state_t deckard_spl_get_button_state(const char *label)
 	return state;
 }
 
-static void deckard_spl_check_for_recovery_button(void)
-{
-	enum button_state_t button_rescue_state;
-
-	button_rescue_state = deckard_spl_get_button_state(RESCUE_BUTTON);
-
-	if (button_rescue_state == BUTTON_ON) {
-		printf("Rescue mode chosen by button press: %s\n", RESCUE_BUTTON);
-		go_to_rescue = 1;
-	}
-
-	return;
-}
-
 static void deckard_spl_leds_set(void)
 {
 	struct udevice *led_blue;
@@ -306,8 +273,6 @@ void qcom_spl_board_init(void)
 
 	deckard_spl_battery_charging_setup(&battery_voltage);
 
-	deckard_spl_check_for_recovery_button();
-
 	ret = ufs_probe();
 	if (ret)
 		panic("Failed to probe for UFS (%d)\n", ret);
@@ -328,8 +293,8 @@ void qcom_spl_board_init(void)
 
 	if (boot_wrapper_version == 9001)
 	{
-		go_to_rescue = 1;
-		goto skip_env_update;
+		//todo: handle this variable being set by bootwrapper if we want to use for something
+		//previously was used to force rescue from boot-wrapper button push
 	}
 
 	/* Read spl_env partition */
@@ -443,15 +408,6 @@ void qcom_spl_board_init(void)
 		//do nothing, normal state
 	}
 
-	//FORCE_RESCUE we want to delete from environment on disk once we detect it is set
-	//we do that by removing from environment in memory, then env_export() writes the env to disk (below this)
-	//then go_to_rescue == 1 will enable it (below) so that spl can know we want to go to rescue
-	if (env_get("FORCE_RESCUE")) {
-		printf("FORCE_RESCUE set in environment, going to rescue\n");
-		go_to_rescue = 1;
-		env_set("FORCE_RESCUE",NULL); //delete this variable now that we've consumed it
-	}
-
 	// Only iterate boot count if we believe this should be a successful boot based on battery level
 	if ( battery_voltage >= SPL_BATTERY_MIN_BOOT_VOLTAGE ) {
 		boot_count = iterate_boot_count();
@@ -479,10 +435,7 @@ void qcom_spl_board_init(void)
 	}
 	
 skip_env_update:
-	if (go_to_rescue) {
-		printf("Forcing rescue boot\n");
-		env_set_ulong("FORCE_RESCUE", 1);
-	}
+	//todo: check if we should do anything here?
 }
 
 static ulong deckard_ufs_fit_read(struct spl_load_info *load, ulong file_offset,
@@ -510,10 +463,11 @@ static int deckard_ufs_load_image(struct spl_image_info *spl_image,
 	unsigned int partid = DECKARD_UFS_BOOT_PART_A;
 	int ret;
 
+
+	blk_dev = NULL;
+
 	if (bootdev->boot_device == BOOT_DEVICE_UFS_B)
 		partid = DECKARD_UFS_BOOT_PART_B;
-	else if (bootdev->boot_device == BOOT_DEVICE_UFS_R)
-		partid = DECKARD_UFS_RESCUE_BOOT_PART;
 
 	if (bootdev->boot_device == BOOT_DEVICE_UFS_A ||
 	    bootdev->boot_device == BOOT_DEVICE_UFS_B) {
@@ -524,14 +478,6 @@ static int deckard_ufs_load_image(struct spl_image_info *spl_image,
 		}
 
 		blk_show_device(UCLASS_SCSI, 1);
-	} else {
-		blk_dev = blk_get_devnum_by_uclass_id(UCLASS_SCSI, DECKARD_UFS_RESCUE_LUN);
-		if (!blk_dev) {
-			printf("blk desc for %d %d not found\n", UCLASS_SCSI, DECKARD_UFS_RESCUE_LUN);
-			return -ENODEV;
-		}
-
-		blk_show_device(UCLASS_SCSI, 2);
 	}
 
 	ret = part_get_info(blk_dev, partid, &info);
@@ -552,4 +498,3 @@ static int deckard_ufs_load_image(struct spl_image_info *spl_image,
 
 SPL_LOAD_IMAGE_METHOD("UFS_A", 0, BOOT_DEVICE_UFS_A, deckard_ufs_load_image);
 SPL_LOAD_IMAGE_METHOD("UFS_B", 0, BOOT_DEVICE_UFS_B, deckard_ufs_load_image);
-SPL_LOAD_IMAGE_METHOD("RESCUE", 0, BOOT_DEVICE_UFS_R, deckard_ufs_load_image);
