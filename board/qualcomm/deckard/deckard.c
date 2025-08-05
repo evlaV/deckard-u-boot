@@ -39,17 +39,13 @@ DECLARE_GLOBAL_DATA_PTR;
 
 #define DECKARD_SYSTEM_LUNIDX "0"
 #define DECKARD_UBOOT_LUNIDX "2"
-#define DECKARD_RESCUE_LUNIDX "3"
-//M slot is the master slot / default
+
 #define DECKARD_UBOOT_ENV_SLOT_A "2:4"
 #define DECKARD_UBOOT_FW_SLOT_A "2:5"
 #define DECKARD_UBOOT_ENV_SLOT_B "2:7"
 #define DECKARD_UBOOT_FW_SLOT_B "2:8"
-#define DECKARD_UBOOT_ENV_SLOT_R "3:2"
-#define DECKARD_UBOOT_FW_SLOT_R "3:3"
 #define DECKARD_SLOT_A_PARTITION "0:4"
 #define DECKARD_SLOT_B_PARTITION "0:5"
-#define DECKARD_SLOT_R_PARTITION "3:4"
 
 //these are set as a bit-mask typically when we detect a button is enabled
 #define VOLUP_BUTTON_MASK 0b100
@@ -229,8 +225,8 @@ const char *env_scsi_get_dev_part(void)
 	if (ofnode_valid(node)) {
 		bootdev = ofnode_read_string(node, "u-boot,spl-boot-device");
 		if (!bootdev) {
-			printf("No u-boot,spl-boot-device, considering rescue slot\n");
-			return DECKARD_UBOOT_ENV_SLOT_R;
+			printf("No u-boot,spl-boot-device, considering slot\n");
+			return DECKARD_UBOOT_ENV_SLOT_A;
 		} else {
 			printf("Booted on slot '%s'\n", bootdev);
 
@@ -241,18 +237,15 @@ const char *env_scsi_get_dev_part(void)
 			case 'B':
 				return DECKARD_UBOOT_ENV_SLOT_B;
 				break;
-			case 'R':
-				return DECKARD_UBOOT_ENV_SLOT_R;
-				break;
 			default:
-				printf("%s: Invalid booted_slot, defaulting to Rescue env\n", __func__);
-				return DECKARD_UBOOT_ENV_SLOT_R;
+				printf("%s: Invalid booted_slot, defaulting to A env\n", __func__);
+				return DECKARD_UBOOT_ENV_SLOT_A;
 				break;
 			}
 		}
 	} else {
-		printf("No chosen node default to rescue!\n");
-		return DECKARD_UBOOT_ENV_SLOT_R;
+		printf("No chosen node default to A!\n");
+		return DECKARD_UBOOT_ENV_SLOT_A;
 	}
 }
 
@@ -269,9 +262,8 @@ const char *deckard_get_fw_part(void)
 		case 'B':
 			return DECKARD_UBOOT_FW_SLOT_B;
 			break;
-		case 'R':
 		default:
-			return DECKARD_UBOOT_FW_SLOT_R;
+			return DECKARD_UBOOT_FW_SLOT_A;
 			break;
 	}
 }
@@ -279,22 +271,7 @@ const char *deckard_get_fw_part(void)
 const char *fs_firmware_get_partition(void)
 {
 	char *bootedslot;
-#if 0
-	bootedslot = env_get("booted_slot");
-	switch(bootedslot[0]){
-		case 'A':
-			return DECKARD_SLOT_A_PARTITION;
-			break;
-		case 'B':
-			return DECKARD_SLOT_B_PARTITION;
-			break;
-		default:
-			return DECKARD_SLOT_A_PARTITION;
-			break;
-	}
-#else
 	return deckard_get_fw_part();
-#endif	
 }
 
 
@@ -318,8 +295,8 @@ int misc_init_r(void)
 
 		bootdev = ofnode_read_string(node, "u-boot,spl-boot-device");
 		if (!bootdev) {
-			printf("No u-boot,spl-boot-device, considering rescue slot\n");
-			env_set("booted_slot","R");
+			printf("No u-boot,spl-boot-device, considering A slot\n");
+			env_set("booted_slot","A");
 		} else {
 			printf("Booted on slot '%s'\n", bootdev);
 
@@ -329,9 +306,6 @@ int misc_init_r(void)
 				break;
 			case 'B':
 				env_set("booted_slot","B");
-				break;
-			case 'R':
-				env_set("booted_slot","R");
 				break;
 			default:
 				env_set("booted_slot","A");
@@ -434,7 +408,6 @@ int misc_init_r(void)
 
 	env_set("UBOOTLUNIDX", DECKARD_UBOOT_LUNIDX);
 	env_set("SYSTEMLUNIDX", DECKARD_SYSTEM_LUNIDX);
-	env_set("RESCUELUNIDX", DECKARD_RESCUE_LUNIDX);
 
 	// do we still need this?
 	bootedslot = env_get("booted_slot");
@@ -791,10 +764,9 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 			strncpy(partition, DECKARD_SLOT_B_PARTITION, DEVPARTMAXLEN);
 			strncpy(label, "rootfs-B", DEVPARTMAXLEN);
 			break;
-		case 'R':
 		default:
-			strncpy(partition, DECKARD_SLOT_R_PARTITION, DEVPARTMAXLEN);
-			strncpy(label, "system_r", DEVPARTMAXLEN);
+			strncpy(partition, DECKARD_SLOT_A_PARTITION, DEVPARTMAXLEN);
+			strncpy(label, "rootfs-A", DEVPARTMAXLEN);
 			break;
 	}
 
