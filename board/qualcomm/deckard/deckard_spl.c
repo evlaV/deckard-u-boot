@@ -456,6 +456,10 @@ void qcom_spl_board_init(void)
 	long count;
 	int ret;
 	int boot_count;
+	enum button_state_t vol_dn_state;
+	enum button_state_t vol_up_state;
+	enum button_state_t power_button_state;
+	enum button_state_t select_button_state;
 
 	uint16_t battery_voltage;
 
@@ -532,6 +536,26 @@ void qcom_spl_board_init(void)
 		ret = env_import(buf2, 1, 0);
 		if (ret)
 			printf("Failed to import environment\n");
+	}
+
+	vol_dn_state = deckard_spl_get_button_state("Volume Down");
+	if (vol_dn_state == BUTTON_ON) {
+		printf("Vol- button pressed\n");
+	}
+
+	vol_up_state = deckard_spl_get_button_state("Volume Up");
+	if (vol_up_state == BUTTON_ON) {
+		printf("Vol+ button pressed\n");
+	}
+	
+	power_button_state = deckard_spl_get_button_state("Power Button");
+	if (power_button_state == BUTTON_ON) {
+		printf("Power button pressed\n");
+	}
+
+	select_button_state = deckard_spl_get_button_state("Select");
+	if (select_button_state == BUTTON_ON) {
+		printf("Select button pressed\n");
 	}
 
 	/* Sanitize BOOT_ORDER && BOOT_COUNT */
