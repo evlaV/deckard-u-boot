@@ -66,8 +66,11 @@ void spl_perform_fixups(struct spl_image_info *spl_image)
 		ret = fdt_setprop_string(blob, chosen,
 				"u-boot,spl-boot-device", "B");
 	else
+	{
 		ret = fdt_setprop_string(blob, chosen,
-				"u-boot,spl-boot-device", "R");
+				"u-boot,spl-boot-device", "X");
+		printf("%s: u-boot,spl-boot-device was set to an unknown value!!\n", __func__);				
+	}
 	if (ret) {
 		printf("%s: could not add u-boot,spl-boot-device property\n", __func__);
 		return;
@@ -82,16 +85,34 @@ void spl_perform_fixups(struct spl_image_info *spl_image)
 
 void board_boot_order(u32 *spl_boot_list)
 {
-	char *boot_order = env_get("BOOT_ORDER");
+	//This function is called by the SPL loader to check what to boot!
 
-	if (!strcmp(boot_order, "A B")) {
-		printf("BOOT_ORDER set to A as primary\n");
+	char *boot_order = env_get("BOOT_TARGET");
+
+	if (!strcmp(boot_order, "A B")) 
+	{
 		spl_boot_list[0] = BOOT_DEVICE_UFS_A;
 		spl_boot_list[1] = BOOT_DEVICE_UFS_B;
-	} else {
-		printf("BOOT_ORDER set to B as primary\n");
+	} 
+	else if(!strcmp(boot_order, "B A")) 
+	{
 		spl_boot_list[0] = BOOT_DEVICE_UFS_B;
 		spl_boot_list[1] = BOOT_DEVICE_UFS_A;
+	}
+	else if(!strcmp(boot_order, "A")) 
+	{
+		spl_boot_list[0] = BOOT_DEVICE_UFS_A;
+		spl_boot_list[1] = BOOT_DEVICE_NONE;
+	}
+	else if(!strcmp(boot_order, "B")) 
+	{
+		spl_boot_list[0] = BOOT_DEVICE_UFS_B;
+		spl_boot_list[1] = BOOT_DEVICE_NONE;
+	}
+	else
+	{
+		spl_boot_list[0] = BOOT_DEVICE_UFS_A;
+		spl_boot_list[1] = BOOT_DEVICE_UFS_B;
 	}
 }
 
@@ -109,37 +130,28 @@ static char *check_boot_order(void)
 	return boot_order;
 }
 
-static uint get_boot_order_first_entry(void)
-{
-	char *boot_order;
-	u32 spl_boot_list[5];
-	boot_order = check_boot_order();
-	board_boot_order(spl_boot_list);
-	return spl_boot_list[0];
-}
-
 static ulong iterate_boot_count(void)
 {
 	char *boot_count;
 	ulong count = 0;
 	ulong boot_count_max = BOOT_ATTEMPTS_MAX;
-	uint boot_target;
+	char *boot_target = env_get("BOOT_TARGET");
 	char * boot_count_target = NULL;
-	boot_target = get_boot_order_first_entry();
 
-	switch(boot_target)
+	//check first character of BOOT_TARGET
+	if ( strncmp(boot_target, "A",1) == 0 )
 	{
-		case BOOT_DEVICE_UFS_A:
-			boot_count_target = "BOOT_COUNT_A";
-			boot_count_max = BOOT_ATTEMPTS_MAX;
-			break;
-		case BOOT_DEVICE_UFS_B:
-			boot_count_target = "BOOT_COUNT_B";
-			boot_count_max = BOOT_ATTEMPTS_MAX;
-			break;
-		default:
-			return BOOT_ATTEMPTS_MAX;
-			break;
+		boot_count_target = "BOOT_COUNT_A";
+		boot_count_max = BOOT_ATTEMPTS_MAX;
+	}
+	else if( strncmp(boot_target, "B",1) == 0 )
+	{
+		boot_count_target = "BOOT_COUNT_B";
+		boot_count_max = BOOT_ATTEMPTS_MAX;
+	}
+	else
+	{
+		return BOOT_ATTEMPTS_MAX;
 	}
 
 	boot_count = env_get(boot_count_target);
@@ -233,6 +245,204 @@ static void deckard_spl_leds_set(void)
 	led_set_state(led_blue, LEDST_ON);
 }
 
+static int update_boot_state_and_boot_valid(char boot_slot)
+{
+	int boot_state = -1;
+
+	switch(boot_slot)
+	{
+		case 'A':
+			if(env_get("BOOT_STATE_A"))
+			{
+				boot_state = env_get_ulong("BOOT_STATE_A", 10, 0);
+				if(boot_state == 1)
+				{
+					//set boot count to max to allow it to be used
+					env_set_ulong("BOOT_COUNT_A", BOOT_ATTEMPTS_MAX);
+					env_set_ulong("BOOT_VALID_A", 1);
+				}
+				else
+				{
+					//set boot count to 0 so it won't try to be used
+					env_set_ulong("BOOT_COUNT_A", 0);
+					env_set_ulong("BOOT_VALID_A", 0); //this BOOT_VALID var will persist
+				}
+				env_set("BOOT_STATE_A",NULL); //always delete this variable after we process it
+			}
+			break;
+
+		case 'B':
+			if(env_get("BOOT_STATE_B"))
+			{
+				boot_state = env_get_ulong("BOOT_STATE_B", 10, 0);
+				if(boot_state == 1)
+				{
+					//set boot count to max to allow it to be used
+					env_set_ulong("BOOT_COUNT_B", BOOT_ATTEMPTS_MAX);
+					env_set_ulong("BOOT_VALID_B", 1);
+				}
+				else
+				{
+					//set boot count to 0 so it won't try to be used
+					env_set_ulong("BOOT_COUNT_B", 0);
+					env_set_ulong("BOOT_VALID_B", 0); //this BOOT_VALID var will persist
+				}
+				env_set("BOOT_STATE_B",NULL); //always delete this variable after we process it
+			}
+			break;
+		
+		default:
+			printf("get_boot_counts: error\n");
+			break;
+	}
+
+	return boot_state;
+}
+
+static int get_boot_counts(char boot_slot)
+{
+	int boot_count = -1;
+	switch(boot_slot)
+	{
+		case 'A':
+			if(env_get("BOOT_COUNT_A"))
+			{
+				boot_count = env_get_ulong("BOOT_COUNT_A", 10, 0);
+			}
+			else
+			{
+				env_set_ulong("BOOT_COUNT_A", BOOT_ATTEMPTS_MAX);
+				boot_count = BOOT_ATTEMPTS_MAX;
+			}
+			break;
+
+		case 'B':
+			if(env_get("BOOT_COUNT_B"))
+			{
+				boot_count = env_get_ulong("BOOT_COUNT_B", 10, 0);
+			}
+			else
+			{
+				env_set_ulong("BOOT_COUNT_B", BOOT_ATTEMPTS_MAX);
+				boot_count = BOOT_ATTEMPTS_MAX;
+			}
+			break;
+
+		default:
+			printf("get_boot_counts: error\n");
+			break;
+	}
+
+	return boot_count;
+}
+
+static int get_boot_valid(char boot_slot)
+{
+	int boot_valid = -1;
+	switch(boot_slot)
+	{
+		case 'A':
+			//check if unset, then set a valid value
+			if(! env_get("BOOT_VALID_A"))
+			{
+				env_set_ulong("BOOT_VALID_A", 1);
+			}
+			boot_valid = env_get_ulong("BOOT_VALID_A", 10, 0);
+			break;
+
+		case 'B':
+			//check if unset, then set a valid value
+			if(! env_get("BOOT_VALID_B"))
+			{
+				env_set_ulong("BOOT_VALID_B", 1);
+			}
+			boot_valid = env_get_ulong("BOOT_VALID_B", 10, 0);
+			break;
+
+		default:
+			printf("get_boot_valid: error\n");
+			break;			
+	}
+
+	return boot_valid;
+
+}
+
+static int determine_boot_target(void)
+{
+	ulong boot_count_a = 0;
+	ulong boot_count_b = 0;
+	int boot_state_a = 0;
+	int boot_state_b = 0;
+	int boot_valid_a = 0;
+	int boot_valid_b = 0;
+	char *boot_order;
+	int boot_count_ok_a = 0;
+	int boot_count_ok_b = 0;
+
+	boot_state_a = update_boot_state_and_boot_valid('A');
+	boot_state_b = update_boot_state_and_boot_valid('B');
+	
+	boot_count_a = get_boot_counts('A');
+	boot_count_b = get_boot_counts('B');
+
+	boot_valid_a = get_boot_valid('A');
+	boot_valid_b = get_boot_valid('B');
+
+	boot_order = check_boot_order(); //this will ensure the boot order is either "A B" or "B A"
+
+	boot_count_ok_a = boot_count_a > 0;
+	boot_count_ok_b = boot_count_b > 0;
+
+	int swap_boot_order = 0;
+
+	//check if the target slot either is invalid or has run out of boot attempts
+	//if so, swap boot order
+	//in either case, provide a backup slot to try (will be used by SPL if the kernel / initrd fails to be loadable / missing)
+	//if we end up in a situation where both slots are invalid, we will end up just trying to boot our existing slot
+	if (!strcmp(boot_order, "A B")) 
+	{
+		printf("BOOT_ORDER set to A as primary\n");
+
+		if((!boot_valid_a || !boot_count_ok_a) && boot_valid_b && boot_count_ok_b) swap_boot_order = 1;
+		
+		if(swap_boot_order)
+		{
+			if(boot_valid_a) env_set("BOOT_TARGET", "B A"); //provide A as a backup since it is valid
+			else env_set("BOOT_TARGET", "B");
+		}
+		else
+		{
+			if(boot_valid_b) env_set("BOOT_TARGET", "A B"); //provide B as a backup since it is valid
+			else env_set("BOOT_TARGET", "A");
+		}
+	} 
+	else if (!strcmp(boot_order, "B A")) 
+	{
+		printf("BOOT_ORDER set to B as primary\n");
+
+		if((!boot_valid_b || !boot_count_ok_b) && boot_valid_a && boot_count_ok_a) swap_boot_order = 1;
+		
+		if(swap_boot_order)
+		{
+			if(boot_valid_b) env_set("BOOT_TARGET", "A B"); //provide B as a backup since it is valid
+			else env_set("BOOT_TARGET", "A");
+		}
+		else
+		{
+			if(boot_valid_a) env_set("BOOT_TARGET", "B A"); //provide A as a backup since it is valid
+			else env_set("BOOT_TARGET", "B");
+		}
+	}
+
+	printf("-------------------------------------------\n");
+	printf("determine boot target:\n");
+	printf("BOOT_ORDER  = '%s'\n", env_get("BOOT_ORDER"));
+	printf("BOOT_TARGET = '%s'\n", env_get("BOOT_TARGET"));
+	printf("-------------------------------------------\n");
+
+	return 0;
+}
 
 void qcom_spl_board_init(void)
 {
@@ -245,12 +455,8 @@ void qcom_spl_board_init(void)
 	char *boot_order;
 	long count;
 	int ret;
+	int boot_count;
 
-	ulong boot_count = 0;
-	ulong boot_count_a = 0;
-	ulong boot_count_b = 0;
-	int boot_state_a = 0;
-	int boot_state_b = 0;
 	uint16_t battery_voltage;
 
 	printf("Hello from deckard_spl, boot wrapper version %ld\n", boot_wrapper_version);
@@ -337,82 +543,21 @@ void qcom_spl_board_init(void)
 	printf("- BOOT_COUNT_B = '%s'\n", env_get("BOOT_COUNT_B"));
 	printf("- BOOT_STATE_A = '%s'\n", env_get("BOOT_STATE_A"));
 	printf("- BOOT_STATE_B = '%s'\n", env_get("BOOT_STATE_B"));
+	printf("- BOOT_VALID_A = '%s'\n", env_get("BOOT_VALID_A"));
+	printf("- BOOT_VALID_B = '%s'\n", env_get("BOOT_VALID_B"));
 
-	if(env_get("BOOT_STATE_A"))
-	{
-		boot_state_a = env_get_ulong("BOOT_STATE_A", 10, 0);
-		if(boot_state_a == 1)
-		{
-			//set boot count to max to allow it to be used
-			env_set_ulong("BOOT_COUNT_A", BOOT_ATTEMPTS_MAX);
-		}
-		else
-		{
-			//set boot count to 0 so it won't try to be used
-			env_set_ulong("BOOT_COUNT_A", 0);
-		}
-		env_set("BOOT_STATE_A",NULL); //always delete this variable after we process it
-	}
-
-	if(env_get("BOOT_STATE_B"))
-	{
-		boot_state_b = env_get_ulong("BOOT_STATE_B", 10, 0);
-		if(boot_state_b == 1)
-		{
-			//set boot count to max to allow it to be used
-			env_set_ulong("BOOT_COUNT_B", BOOT_ATTEMPTS_MAX);
-		}
-		else
-		{	
-			//set boot count to 0 so it won't try to be used
-			env_set_ulong("BOOT_COUNT_B", 0);
-		}
-		env_set("BOOT_STATE_B",NULL); //always delete this variable after we process it
-	}
-
-	if(env_get("BOOT_COUNT_A"))
-	{
-		boot_count_a = env_get_ulong("BOOT_COUNT_A", 10, 0);
-	}
-	else
-	{
-		env_set_ulong("BOOT_COUNT_A", BOOT_ATTEMPTS_MAX);
-		boot_count_a = BOOT_ATTEMPTS_MAX;
-	}
-
-	if(env_get("BOOT_COUNT_B"))
-	{
-		boot_count_b = env_get_ulong("BOOT_COUNT_B", 10, 0);
-	}
-	else
-	{
-		env_set_ulong("BOOT_COUNT_B", BOOT_ATTEMPTS_MAX);
-		boot_count_b = BOOT_ATTEMPTS_MAX;
-	}
-
-	//change BOOT_ORDER if we have exhausted boot attempts
-	if (      boot_count_a == 0  &&  boot_count_b == 0 ) 
-	{
-		go_to_rescue = 1;
-	}
-	else if ( boot_count_a == 0  &&  boot_count_b  > 0 ) 
-	{
-		env_set("BOOT_ORDER", "B A");
-	}
-	else if ( boot_count_a >  0  &&  boot_count_b == 0 ) 
-	{
-		env_set("BOOT_ORDER", "A B");
-	}
-	else
-	{
-		//do nothing, normal state
-	}
+	determine_boot_target();
 
 	// Only iterate boot count if we believe this should be a successful boot based on battery level
-	if ( battery_voltage >= SPL_BATTERY_MIN_BOOT_VOLTAGE ) {
+	if ( battery_voltage >= SPL_BATTERY_MIN_BOOT_VOLTAGE ) 
+	{
 		boot_count = iterate_boot_count();
 	}
-	printf("Boot count on target slot is %lu\n",boot_count);
+	else
+	{
+		printf("boot count not iterated due to low battery voltage\n");
+	}
+	printf("Boot count on target slot is %d\n",boot_count);
 
 	/* Export and write env in both partitions */
     /* NOTE: blk_write() size is in blocks ( 4k )*/
@@ -434,8 +579,6 @@ void qcom_spl_board_init(void)
 		printf("Failed to export environment");
 	}
 	
-skip_env_update:
-	//todo: check if we should do anything here?
 }
 
 static ulong deckard_ufs_fit_read(struct spl_load_info *load, ulong file_offset,
