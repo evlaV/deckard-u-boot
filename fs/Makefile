@@ -10,6 +10,7 @@ obj-$(CONFIG_SPL_FS_FAT) += fat/
 obj-$(CONFIG_SPL_FS_EXT4) += ext4/
 obj-$(CONFIG_SPL_FS_CBFS) += cbfs/
 obj-$(CONFIG_SPL_FS_SQUASHFS) += squashfs/
+obj-$(CONFIG_SPL_FS_GPT) += gpt/
 else
 obj-y				+= fs.o
 
