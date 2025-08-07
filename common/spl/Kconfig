@@ -757,6 +757,11 @@ config SPL_FS_FAT
 	  filesystem from within SPL. Support for the underlying block
 	  device (e.g. MMC or USB) must be enabled separately.
 
+config SPL_FS_GPT
+	bool "Support GPT partition handling"
+	help
+	  Enable support for GPT partition handling in SPL
+
 config SPL_FS_FAT_DMA_ALIGN
 	bool "Use DMA-aligned buffers with FAT"
 	depends on SPL_FS_FAT

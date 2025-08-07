@@ -1,0 +1,5 @@
+config SPL_FS_GPT
+	bool "SPL FS GPT Support"
+	help
+	  GPT partition handling within SPL
+	  If you don't want to enable compression feature, say N.
