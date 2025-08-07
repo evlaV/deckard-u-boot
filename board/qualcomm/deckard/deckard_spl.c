@@ -11,6 +11,8 @@
 #include <env_internal.h>
 #include <led.h>
 #include <button.h>
+#include <gpt.h>
+#include <command.h>
 #include "pmk8550.h"
 #include "deckard_battery.h"
 
@@ -20,6 +22,8 @@
 #define DECKARD_UFS_ENV_LUN		2
 #define DECKARD_UFS_ENV_PART		1
 #define DECKARD_UFS_ENV_PART_ALT	2
+
+#define DECKARD_UFS_BOOTFW_LUN		1
 
 #define DECKARD_UFS_BOOT_LUN		2
 #define DECKARD_UFS_BOOT_PART_A		3
@@ -299,6 +303,43 @@ static int update_boot_state_and_boot_valid(char boot_slot)
 	return boot_state;
 }
 
+
+static int check_for_boot_firmware_slot_change(void)
+{
+	char *boot_fw_slot;
+	int slot_change_success;
+	int ret = 0;
+	struct blk_desc *blk_dev;
+
+	boot_fw_slot = env_get("BOOT_FW_SLOT");
+	if (!boot_fw_slot)
+	{
+		//we don't run if the variable is unset
+		return 0;
+	}
+
+	//todo use DECKARD_UFS_BOOTFW_LUN instead of hard code 1
+
+	if(strcmp(boot_fw_slot, "A") == 0)
+	{
+		blk_dev = blk_get_devnum_by_uclass_id(UCLASS_SCSI, DECKARD_UFS_BOOTFW_LUN);
+		ret = gpt_set_xbl_partition_bootable_by_slot_partfstype(blk_dev,"a");
+	}
+	else if(strcmp(boot_fw_slot, "B") == 0)
+	{
+		blk_dev = blk_get_devnum_by_uclass_id(UCLASS_SCSI, DECKARD_UFS_BOOTFW_LUN);
+		ret = gpt_set_xbl_partition_bootable_by_slot_partfstype(blk_dev,"b");
+	}
+
+	printf("check_for_boot_firmware_slot_change, ret = %d\n",ret);
+
+	env_set("BOOT_FW_SLOT",NULL); //always delete this variable after we process it
+
+	slot_change_success = (ret == 0);
+
+	return slot_change_success;
+}
+
 static int get_boot_counts(char boot_slot)
 {
 	int boot_count = -1;
@@ -379,7 +420,7 @@ static int determine_boot_target(void)
 	char *boot_order;
 	int boot_count_ok_a = 0;
 	int boot_count_ok_b = 0;
-
+	
 	boot_state_a = update_boot_state_and_boot_valid('A');
 	boot_state_b = update_boot_state_and_boot_valid('B');
 	
@@ -435,12 +476,6 @@ static int determine_boot_target(void)
 		}
 	}
 
-	printf("-------------------------------------------\n");
-	printf("determine boot target:\n");
-	printf("BOOT_ORDER  = '%s'\n", env_get("BOOT_ORDER"));
-	printf("BOOT_TARGET = '%s'\n", env_get("BOOT_TARGET"));
-	printf("-------------------------------------------\n");
-
 	return 0;
 }
 
@@ -460,6 +495,7 @@ void qcom_spl_board_init(void)
 	enum button_state_t vol_up_state;
 	enum button_state_t power_button_state;
 	enum button_state_t select_button_state;
+	int reset_needed = 0;
 
 	uint16_t battery_voltage;
 
@@ -558,6 +594,13 @@ void qcom_spl_board_init(void)
 		printf("Select button pressed\n");
 	}
 
+	if(check_for_boot_firmware_slot_change())
+	{
+		printf("Boot firmware changed, rebooting!\n");
+		reset_needed = 1;
+		goto env_write;
+	}
+
 	/* Sanitize BOOT_ORDER && BOOT_COUNT */
 	boot_order = check_boot_order();
 
@@ -583,6 +626,7 @@ void qcom_spl_board_init(void)
 	}
 	printf("Boot count on target slot is %d\n",boot_count);
 
+env_write:
 	/* Export and write env in both partitions */
     /* NOTE: blk_write() size is in blocks ( 4k )*/
 	ret = env_export(buf1);
@@ -603,6 +647,11 @@ void qcom_spl_board_init(void)
 		printf("Failed to export environment");
 	}
 	
+	if(reset_needed)
+	{
+		do_reset(NULL, 0, 0, NULL);
+	}
+
 }
 
 static ulong deckard_ufs_fit_read(struct spl_load_info *load, ulong file_offset,
