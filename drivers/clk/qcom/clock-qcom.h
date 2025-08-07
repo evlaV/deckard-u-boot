@@ -40,7 +40,7 @@ struct vote_clk {
 };
 
 struct freq_tbl {
-	uint freq;
+	uint64_t freq;
 	uint src;
 	u8 pre_div;
 	u16 m;
@@ -85,6 +85,7 @@ struct msm_clk_data {
 	const phys_addr_t		*dbg_rcg_addrs;
 	unsigned long			num_rcgs;
 	const char * const		*dbg_rcg_names;
+	const char * const		*dbg_gdsc_names;
 
 	int (*enable)(struct clk *clk);
 	unsigned long (*set_rate)(struct clk *clk, unsigned long rate);

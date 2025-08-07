@@ -17,6 +17,7 @@
 #include <dt-bindings/clock/qcom,sm8650-dispcc.h>
 
 #include "clock-qcom.h"
+#include "clk-alpha-pll.h"
 
 /* Need to match the order of clocks in DT binding */
 enum {
@@ -693,6 +694,54 @@ static const struct regmap_config disp_cc_sm8550_regmap_config = {
 };
 #endif
 
+static struct pll_vco lucid_ole_vco[] = {
+	{ 249600000, 2000000000, 0 },
+};
+
+static struct alpha_pll_config disp_cc_pll0_config = {
+	.l = 0xd,
+	.alpha = 0x6492,
+	.config_ctl_val = 0x20485699,
+	.config_ctl_hi_val = 0x00182261,
+	.config_ctl_hi1_val = 0x82aa299c,
+	.test_ctl_val = 0x00000000,
+	.test_ctl_hi_val = 0x00000003,
+	.test_ctl_hi1_val = 0x00009000,
+	.test_ctl_hi2_val = 0x00000034,
+	.user_ctl_val = 0x00000000,
+	.user_ctl_hi_val = 0x00000005,
+};
+
+static struct clk_alpha_pll disp_cc_pll0 = {
+	.name = "disp_cc_pll0",
+	.offset = 0x0,
+	.vco_table = lucid_ole_vco,
+	.num_vco = ARRAY_SIZE(lucid_ole_vco),
+	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_LUCID_OLE],
+};
+
+static struct alpha_pll_config disp_cc_pll1_config = {
+	.l = 0x1f,
+	.alpha = 0x4000,
+	.config_ctl_val = 0x20485699,
+	.config_ctl_hi_val = 0x00182261,
+	.config_ctl_hi1_val = 0x82aa299c,
+	.test_ctl_val = 0x00000000,
+	.test_ctl_hi_val = 0x00000003,
+	.test_ctl_hi1_val = 0x00009000,
+	.test_ctl_hi2_val = 0x00000034,
+	.user_ctl_val = 0x00000000,
+	.user_ctl_hi_val = 0x00000005,
+};
+
+static struct clk_alpha_pll disp_cc_pll1 = {
+	.name = "disp_cc_pll1",
+	.offset = 0x1000,
+	.vco_table = lucid_ole_vco,
+	.num_vco = ARRAY_SIZE(lucid_ole_vco),
+	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_LUCID_OLE],
+};
+
 /* We need to look up the cfg val from parent_map with the src index from
  * freq table in Linux to merge the 2 tables into CFG_xx in 1 table in u-boot */
 #define CFG_BI_TCXO			(0 << 8)
@@ -751,6 +800,22 @@ static const struct gate_clk sm8650_disp_clks[] = {
 	GATE_CLK(DISP_CC_MDSS_ESC0_CLK,		0x8038, BIT(0)),
 };
 
+static int dispcc_enable_src(const struct freq_tbl *freq)
+{
+	switch (freq->src) {
+		// RPMh CXO already enabled :3
+		case CFG_BI_TCXO:
+			return 0;
+		case CFG_DISP_CC_PLL0_OUT_MAIN:
+			return alpha_pll_lucid_evo_enable(&disp_cc_pll0);
+		case CFG_DISP_CC_PLL1_OUT_MAIN:
+			return alpha_pll_lucid_evo_enable(&disp_cc_pll1);
+		default:
+			printf("%s: Unsupported PLL source %d\n", __func__, freq->src);
+			return -EINVAL;
+	}
+}
+
 static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 {
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
@@ -767,6 +832,8 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 	switch (clk->id) {
 	case DISP_CC_MDSS_AHB_CLK:
 		freq = qcom_find_freq(ftbl_disp_cc_mdss_ahb_clk_src, rate);
+		dispcc_enable_src(freq);
+		printf("Picked rate %llu for DISP_CC_MDSS_AHB_CLK\n", freq->freq);
 		clk_rcg_set_rate(priv->base, 0x82e8, freq->pre_div, freq->src);
 		return freq->freq;
 
@@ -783,6 +850,7 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		 * force the re-parent with the table.
 		 */
 		freq = qcom_find_freq(ftbl_disp_cc_mdss_byte0_clk_src, rate);
+		dispcc_enable_src(freq);
 		clk_rcg_set_rate(priv->base, 0x8108, freq->pre_div, freq->src);
 		return freq->freq;
 
@@ -800,6 +868,7 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		 * Force with the table to re-parent to dsi phy.
 		 */
 		freq = qcom_find_freq(ftbl_disp_cc_mdss_byte0_clk_src, rate);
+		dispcc_enable_src(freq);
 		clk_rcg_set_rate(priv->base, 0x8124, freq->pre_div, freq->src);
 		return freq->freq;
 
@@ -810,6 +879,7 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		 */
 	case DISP_CC_MDSS_MDP_CLK:
 		freq = qcom_find_freq(ftbl_disp_cc_mdss_mdp_clk_src, rate);
+		dispcc_enable_src(freq);
 		/* Per test, it is 514000000 and grand parent disp_cc_pll0 rate should
 		 * be 1542000000 */
 		clk_rcg_set_rate(priv->base, 0x80d8, freq->pre_div, freq->src);
@@ -822,6 +892,7 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		 * so ignore this handling.
 		 */
 		freq = qcom_find_freq(ftbl_disp_cc_mdss_vsync_clk_src, rate);
+		dispcc_enable_src(freq);
 		clk_rcg_set_rate(priv->base, 0x80f0, freq->pre_div, freq->src);
 		return freq->freq;
 
@@ -832,6 +903,7 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		 * is 851024121 */
 		/* TODO: this clk use clk_pixel_ops in Linux, not mnd */
 		freq = qcom_find_freq(ftbl_disp_cc_mdss_pclk0_clk_src, rate);
+		dispcc_enable_src(freq);
 		clk_rcg_set_rate_mnd(priv->base, 0x80a8,
 				     freq->pre_div, freq->m, freq->n, freq->src, 8);
 		printf("!!!!!!!!!!! fix clock DISP_CC_MDSS_PCLK0_CLK!!!!!!!!!!\n");
@@ -844,6 +916,7 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		 * so ignore this handling. Or to use the table to force the parent.
 		 */
 		freq = qcom_find_freq(ftbl_disp_cc_mdss_vsync_clk_src, rate);
+		dispcc_enable_src(freq);
 		clk_rcg_set_rate(priv->base, 0x8140, freq->pre_div, freq->src);
 		return freq->freq;
 	default:
@@ -873,6 +946,17 @@ static int sm8650_disp_cc_enable(struct clk *clk)
 	}
 */
 
+	switch (clk->id) {
+	case DISP_CC_MDSS_AHB_CLK:
+		sm8650_disp_cc_set_rate(clk, 19200000);
+		break;
+	case DISP_CC_MDSS_MDP_CLK:
+		sm8650_disp_cc_set_rate(clk, 514000000);
+		break;
+	default:
+		break;
+	}
+
 	dev_err(clk->dev, "enable clk %s (%lu)\n", name, clk->id);
 	qcom_gate_clk_en(priv, clk->id);
 
@@ -891,24 +975,38 @@ static const struct qcom_power_map sm8650_disp_gdscs[] = {
 	[MDSS_INT2_GDSC] = { 0xb000 },
 };
 
+static const char *const dbg_gdsc_names[] = {
+	"MDSS_GDSC",
+	"MDSS_INT2_GDSC",
+};
+
 #define BASE 0xaf00000
+
+static const phys_addr_t sm8650_gpll_addrs[] = {
+	BASE + 0, // DISP_CC_PLL0_OUT_MAIN
+	BASE + 0x4000, // DISP_CC_PLL1_OUT_MAIN
+};
 
 static const phys_addr_t dbg_rcg_addrs[] = {
 	BASE + 0x82e8,
+	BASE + 0x80d8,
 	BASE + 0x8108,
 	BASE + 0x8120,
 	BASE + 0x8124,
 	BASE + 0x813c,
 	BASE + 0x80a8,
+	BASE + 0xe03c,
 };
 
 static const char *dbg_rcg_names[] = {
 	"disp_cc_mdss_ahb_clk_src",
+	"disp_cc_mdss_mdp_clk_src",
 	"disp_cc_mdss_byte0_clk_src",
 	"disp_cc_mdss_byte0_div_clk_src",
 	"disp_cc_mdss_byte1_clk_src",
 	"disp_cc_mdss_byte1_div_clk_src",
 	"disp_cc_mdss_pclk0_clk_src",
+	"disp_cc_xo_clk_src",
 };
 
 static struct msm_clk_data sm8650_disp_cc_data = {
@@ -922,6 +1020,9 @@ static struct msm_clk_data sm8650_disp_cc_data = {
 	.dbg_rcg_addrs = dbg_rcg_addrs,
 	.dbg_rcg_names = dbg_rcg_names,
 	.num_rcgs = ARRAY_SIZE(dbg_rcg_addrs),
+	.dbg_pll_addrs = sm8650_gpll_addrs,
+	.num_plls = ARRAY_SIZE(sm8650_gpll_addrs),
+	.dbg_gdsc_names = dbg_gdsc_names,
 
 	.enable = sm8650_disp_cc_enable,
 	.set_rate = sm8650_disp_cc_set_rate,
@@ -930,6 +1031,16 @@ static struct msm_clk_data sm8650_disp_cc_data = {
 static int dispcc_sm8650_probe(struct udevice *dev)
 {
 	phys_addr_t base = dev_read_addr(dev);
+
+	printf("%s: probing disp_cc_sm8550 at 0x%llx\n", __func__, base);
+
+	// FIXME: avoid passing base around by making it a property of the pll struct
+	disp_cc_pll0.base = base;
+	disp_cc_pll1.base = base;
+	clk_lucid_ole_pll_configure(&disp_cc_pll0, &disp_cc_pll0_config);
+	clk_lucid_ole_pll_configure(&disp_cc_pll0, &disp_cc_pll1_config);
+
+	clk_rcg_set_rate(base, 0xe03c, 1, DT_BI_TCXO); /* disp_cc_xo_clk_src */
 
 	/* Keep some clocks always on */
 	qcom_branch_set_clk_en(base, 0xe054); /* DISP_CC_XO_CLK */
