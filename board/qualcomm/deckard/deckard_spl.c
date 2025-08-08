@@ -31,7 +31,30 @@
 
 #define BOOT_ATTEMPTS_MAX			8
 
-#define BUTTON_VOL_UP_NAME "Volume Up"
+//these are set as a bit-mask typically when we detect a button is enabled
+#define POWER_BUTTON_MASK 0b1000
+#define VOLUP_BUTTON_MASK 0b0100
+#define VOLDN_BUTTON_MASK 0b0010
+#define SELECT_BUTTON_MASK 0b0001
+enum combined_button_state_t {
+	POWER_OFF__VOLUP_OFF__VOLDN_OFF__SELECT_OFF = 0,
+	POWER_OFF__VOLUP_OFF__VOLDN_OFF__SELECT_ON  = 1,
+	POWER_OFF__VOLUP_OFF__VOLDN_ON__SELECT_OFF  = 2,
+	POWER_OFF__VOLUP_OFF__VOLDN_ON__SELECT_ON   = 3,
+	POWER_OFF__VOLUP_ON__VOLDN_OFF__SELECT_OFF  = 4,
+	POWER_OFF__VOLUP_ON__VOLDN_OFF__SELECT_ON   = 5,
+	POWER_OFF__VOLUP_ON__VOLDN_ON__SELECT_OFF   = 6,
+	POWER_OFF__VOLUP_ON__VOLDN_ON__SELECT_ON    = 7,
+	POWER_ON__VOLUP_OFF__VOLDN_OFF__SELECT_OFF  = 8,
+	POWER_ON__VOLUP_OFF__VOLDN_OFF__SELECT_ON   = 9,
+	POWER_ON__VOLUP_OFF__VOLDN_ON__SELECT_OFF   = 10,
+	POWER_ON__VOLUP_OFF__VOLDN_ON__SELECT_ON    = 11,
+	POWER_ON__VOLUP_ON__VOLDN_OFF__SELECT_OFF   = 12,
+	POWER_ON__VOLUP_ON__VOLDN_OFF__SELECT_ON    = 13,
+	POWER_ON__VOLUP_ON__VOLDN_ON__SELECT_OFF    = 14,
+	POWER_ON__VOLUP_ON__VOLDN_ON__SELECT_ON     = 15,
+};
+ 
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -479,27 +502,161 @@ static int determine_boot_target(void)
 	return 0;
 }
 
+static int spl_env_load(struct blk_desc *blk_dev, struct disk_partition *mainenv_info, struct disk_partition *altenv_info, void *mainbuf, void *altbuf)
+{
+	int ret;
+	long count;
+
+	/* Read spl_env partition */
+	ret = part_get_info(blk_dev, DECKARD_UFS_ENV_PART, mainenv_info);
+	if (ret == -ENOENT)
+		panic("partition %d for env not found\n",
+		       DECKARD_UFS_ENV_PART);
+
+	count = blk_read(blk_dev->bdev, mainenv_info->start, mainenv_info->size, mainbuf);
+	if (count < 0)
+		panic("Failed to read env partition (%ld)\n", count);
+
+	/* Load spl_alt_env right after the spl_env */
+	altbuf = mainbuf + (mainenv_info->size * blk_dev->blksz);
+
+	/* Read spl_alt_env partition */
+	ret = part_get_info(blk_dev, DECKARD_UFS_ENV_PART_ALT, altenv_info);
+	if (ret == -ENOENT)
+		panic("partition %d for env_alt not found\n",
+		       DECKARD_UFS_ENV_PART_ALT);
+
+	count = blk_read(blk_dev->bdev, altenv_info->start, altenv_info->size, altbuf);
+	if (count < 0)
+		panic("Failed to read env_alt partition (%ld)\n", count);
+
+	/* Open coded env_import_redund */
+	ret = env_import(mainbuf, 1, 0);
+	if (ret) {
+		ret = env_import(altbuf, 1, 0);
+		if (ret)
+			printf("Failed to import environment\n");
+	}
+
+	return ret;
+}
+
+static int spl_env_save(struct blk_desc *blk_dev, struct disk_partition *mainenv_info, struct disk_partition *altenv_info, void *mainbuf, void *altbuf)
+{
+	int ret;
+
+	/* Export and write env in both partitions */
+    /* NOTE: blk_write() size is in blocks ( 4k )*/
+	ret = env_export(mainbuf);
+	if (!ret) 
+	{
+		//write env primary
+		ret = blk_write(blk_dev->bdev, mainenv_info->start, mainenv_info->size, mainbuf);
+		if (!ret) printf("SPL: Unable to write env\n");
+		else printf("SPL: env written OK\n");
+		
+		//write env alternate
+		ret = blk_write(blk_dev->bdev, altenv_info->start, altenv_info->size, mainbuf);
+		if (!ret) printf("SPL: Unable to write env_alt\n");
+		else printf("SPL: env_alt written OK\n");
+	} 
+	else
+	{
+		printf("Failed to export environment");
+	}
+
+	return 0;
+}
+
+enum combined_button_state_t button_state_handler(void) 
+{
+	enum combined_button_state_t total_button_state;
+	int ret = 0;
+	enum button_state_t state;
+
+	if ( deckard_spl_get_button_state("Select") == BUTTON_ON) {
+		printf("Select button pressed\n");
+		total_button_state |= SELECT_BUTTON_MASK;
+	}
+
+	if ( deckard_spl_get_button_state("Volume Down") == BUTTON_ON) {
+		printf("Vol- button pressed\n");
+		total_button_state |= VOLDN_BUTTON_MASK;
+	}
+
+	if ( deckard_spl_get_button_state("Volume Up") == BUTTON_ON) {
+		printf("Vol+ button pressed\n");
+		total_button_state |= VOLUP_BUTTON_MASK;
+	}
+
+	if ( deckard_spl_get_button_state("Power Button") == BUTTON_ON) {
+		printf("Power button pressed\n");
+		total_button_state |= POWER_BUTTON_MASK;
+	}
+
+	printf("total button state = %d\n", total_button_state);
+
+	switch(total_button_state)
+	{
+		//recommend not to use any key combinations that include POWER_ON to take any actions
+		//but we could at least detect those combos if we desire
+
+		case POWER_OFF__VOLUP_OFF__VOLDN_OFF__SELECT_OFF:
+			break;
+		case POWER_OFF__VOLUP_OFF__VOLDN_OFF__SELECT_ON:
+			break;
+		case POWER_OFF__VOLUP_OFF__VOLDN_ON__SELECT_OFF:
+			break;
+		case POWER_OFF__VOLUP_OFF__VOLDN_ON__SELECT_ON:
+			break;
+		case POWER_OFF__VOLUP_ON__VOLDN_OFF__SELECT_OFF:
+			break;
+		case POWER_OFF__VOLUP_ON__VOLDN_OFF__SELECT_ON:
+			break;
+		case POWER_OFF__VOLUP_ON__VOLDN_ON__SELECT_OFF:
+			break;
+		case POWER_OFF__VOLUP_ON__VOLDN_ON__SELECT_ON:
+			break;
+		case POWER_ON__VOLUP_OFF__VOLDN_OFF__SELECT_OFF:
+			break;
+		case POWER_ON__VOLUP_OFF__VOLDN_OFF__SELECT_ON:
+			break;
+		case POWER_ON__VOLUP_OFF__VOLDN_ON__SELECT_OFF:
+			break;
+		case POWER_ON__VOLUP_OFF__VOLDN_ON__SELECT_ON:
+			break;
+		case POWER_ON__VOLUP_ON__VOLDN_OFF__SELECT_OFF:
+			break;
+		case POWER_ON__VOLUP_ON__VOLDN_OFF__SELECT_ON:
+			break;
+		case POWER_ON__VOLUP_ON__VOLDN_ON__SELECT_OFF:
+			break;
+		case POWER_ON__VOLUP_ON__VOLDN_ON__SELECT_ON: 
+			printf("why are you hitting all of the buttons?\n");
+			break;
+		default:
+			break;
+	}
+	return 0;
+}
+
 void qcom_spl_board_init(void)
 {
 	struct udevice *dev;
-	struct disk_partition info1;
-	struct disk_partition info2;
+	struct disk_partition mainenv_info;
+	struct disk_partition altenv_info;
 	struct blk_desc *blk_dev;
-	void *buf1 = (void *)(CONFIG_SYS_LOAD_ADDR);
-	void *buf2 = NULL;
+	void *mainbuf = (void *)(CONFIG_SYS_LOAD_ADDR);
+	void *altbuf = NULL;
 	char *boot_order;
-	long count;
 	int ret;
 	int boot_count;
-	enum button_state_t vol_dn_state;
-	enum button_state_t vol_up_state;
-	enum button_state_t power_button_state;
-	enum button_state_t select_button_state;
-	int reset_needed = 0;
+	enum combined_button_state_t total_button_state = 0;
 
 	uint16_t battery_voltage;
 
-	printf("Hello from deckard_spl, boot wrapper version %ld\n", boot_wrapper_version);
+	printf("Hello from deckard_spl\n");
+	printf("spl: boot wrapper version %ld\n", boot_wrapper_version);
 
 	deckard_spl_leds_set();
 
@@ -543,62 +700,27 @@ void qcom_spl_board_init(void)
 		//previously was used to force rescue from boot-wrapper button push
 	}
 
-	/* Read spl_env partition */
-	ret = part_get_info(blk_dev, DECKARD_UFS_ENV_PART, &info1);
-	if (ret == -ENOENT)
-		panic("partition %d for env not found\n",
-		       DECKARD_UFS_ENV_PART);
+	spl_env_load(blk_dev, &mainenv_info, &altenv_info, mainbuf, altbuf);
 
-	count = blk_read(blk_dev->bdev, info1.start, info1.size, buf1);
-	if (count < 0)
-		panic("Failed to read env partition (%ld)\n", count);
-
-	/* Load spl_alt_env right after the spl_env */
-	buf2 = buf1 + (info1.size * blk_dev->blksz);
-
-	/* Read spl_alt_env partition */
-	ret = part_get_info(blk_dev, DECKARD_UFS_ENV_PART_ALT, &info2);
-	if (ret == -ENOENT)
-		panic("partition %d for env_alt not found\n",
-		       DECKARD_UFS_ENV_PART_ALT);
-
-	count = blk_read(blk_dev->bdev, info2.start, info2.size, buf2);
-	if (count < 0)
-		panic("Failed to read env_alt partition (%ld)\n", count);
-
-	/* Open coded env_import_redund */
-	ret = env_import(buf1, 1, 0);
-	if (ret) {
-		ret = env_import(buf2, 1, 0);
-		if (ret)
-			printf("Failed to import environment\n");
-	}
-
-	vol_dn_state = deckard_spl_get_button_state("Volume Down");
-	if (vol_dn_state == BUTTON_ON) {
-		printf("Vol- button pressed\n");
-	}
-
-	vol_up_state = deckard_spl_get_button_state("Volume Up");
-	if (vol_up_state == BUTTON_ON) {
-		printf("Vol+ button pressed\n");
-	}
-	
-	power_button_state = deckard_spl_get_button_state("Power Button");
-	if (power_button_state == BUTTON_ON) {
-		printf("Power button pressed\n");
-	}
-
-	select_button_state = deckard_spl_get_button_state("Select");
-	if (select_button_state == BUTTON_ON) {
-		printf("Select button pressed\n");
-	}
+	total_button_state = button_state_handler();
 
 	if(check_for_boot_firmware_slot_change())
 	{
-		printf("Boot firmware changed, rebooting!\n");
-		reset_needed = 1;
-		goto env_write;
+		printf("Boot firmware changed\n");
+		
+		ret = spl_env_save(blk_dev, &mainenv_info, &altenv_info, mainbuf, altbuf);
+		if( ret == 0 ) ret = spl_env_load(blk_dev, &mainenv_info, &altenv_info, mainbuf, altbuf);
+
+		if(ret == 0)
+		{
+			char *boot_fw_slot = env_get("BOOT_FW_SLOT");
+			if (!boot_fw_slot) 
+			{
+				//confirmed that the variable was removed, safe to reboot now
+				printf("rebooting!\n");
+				do_reset(NULL, 0, 0, NULL);
+			}
+		}
 	}
 
 	/* Sanitize BOOT_ORDER && BOOT_COUNT */
@@ -626,32 +748,8 @@ void qcom_spl_board_init(void)
 	}
 	printf("Boot count on target slot is %d\n",boot_count);
 
-env_write:
-	/* Export and write env in both partitions */
-    /* NOTE: blk_write() size is in blocks ( 4k )*/
-	ret = env_export(buf1);
-	if (!ret) 
-	{
-		//write env primary
-		ret = blk_write(blk_dev->bdev, info1.start, info1.size, buf1);
-		if (!ret) printf("SPL: Unable to write env\n");
-		else printf("SPL: env written OK\n");
-		
-		//write env alternate
-		ret = blk_write(blk_dev->bdev, info2.start, info2.size, buf1);
-		if (!ret) printf("SPL: Unable to write env_alt\n");
-		else printf("SPL: env_alt written OK\n");
-	} 
-	else
-	{
-		printf("Failed to export environment");
-	}
+	spl_env_save(blk_dev, &mainenv_info, &altenv_info, mainbuf, altbuf);
 	
-	if(reset_needed)
-	{
-		do_reset(NULL, 0, 0, NULL);
-	}
-
 }
 
 static ulong deckard_ufs_fit_read(struct spl_load_info *load, ulong file_offset,
