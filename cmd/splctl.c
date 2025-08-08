@@ -275,6 +275,48 @@ static int env_scsi_save(void)
 	return 0;
 }
 
+static int do_set_bootfw_slot(struct cmd_tbl *cmdtp, int flag, int argc,
+			      char *const argv[])
+{
+	int ret = 0;
+	char * target = NULL;
+
+	if (argc < 2) /* no subcommand */
+		return cmd_usage(cmdtp);
+
+	target = argv[1]; // A or B
+	
+	ret = env_spl_scsi_load();
+
+	if(ret)	goto fail;
+
+	if(!strcmp(target,"A"))
+	{
+		ret = env_spl_set("BOOT_FW_SLOT","A");
+		if(ret)	goto fail;
+		ret = env_scsi_save();
+		if(ret)	goto fail;
+	}
+	else if(!strcmp(target,"B"))
+	{
+		ret = env_spl_set("BOOT_FW_SLOT","B");
+		if(ret)	goto fail;
+		ret = env_scsi_save();
+		if(ret)	goto fail;
+	}
+	else
+	{
+		printf("invalid target\n");
+		return 0;
+	} 
+
+	//no error, don't print anything
+	return ret;
+
+fail:
+	printf("err %d\n",ret);
+	return ret;
+}
 
 static int do_set_primary(struct cmd_tbl *cmdtp, int flag, int argc,
 			      char *const argv[])
@@ -337,6 +379,7 @@ static int do_print_spl_env(struct cmd_tbl *cmdtp, int flag, int argc,
 
 static struct cmd_tbl cmd_splctl_sub[] = {
 	U_BOOT_CMD_MKENT(set-primary, 2, 1, do_set_primary, "", ""),
+	U_BOOT_CMD_MKENT(set-bootfw-slot, 2, 1, do_set_bootfw_slot, "", ""),
 	U_BOOT_CMD_MKENT(env, 1, 1, do_print_spl_env, "", ""),
 };
 
@@ -361,7 +404,6 @@ static int do_splctl(struct cmd_tbl *cmdtp, int flag, int argc,
 
 U_BOOT_LONGHELP(splctl,
 	"set-primary [A/B] - SPL set primary partition\n"
-	"       force-rescue - SPL force booting to rescue\n"
 	"       env - SPL print env\n"
 	);
 
