@@ -65,10 +65,8 @@ struct debug_mux {
 	unsigned int ahb_reg;
 	unsigned int ahb_mask;
 
-	void (*premeasure)(struct debug_mux *mux);
 	unsigned long (*measure)(const struct measure_clk *clk,
 				 const struct debug_mux *mux);
-	void (*postmeasure)(struct debug_mux *mux);
 };
 
 struct gcc_mux {

@@ -88,6 +88,9 @@ static void mux_prepare_enable(struct debug_mux *mux, int selector)
 	}
 
 	mux_enable(mux);
+
+	if (mux->parent)
+		mux_prepare_enable(mux->parent, mux->parent_mux_val);
 }
 
 void mux_enable(struct debug_mux *mux)
@@ -99,17 +102,11 @@ void mux_enable(struct debug_mux *mux)
 		val |= mux->enable_mask;
 		writel(val, mux->phys + mux->enable_reg);
 	}
-
-	if (mux->premeasure)
-		mux->premeasure(mux);
 }
 
 void mux_disable(struct debug_mux *mux)
 {
 	uint32_t val;
-
-	if (mux->postmeasure)
-		mux->postmeasure(mux);
 
 	if (mux->enable_mask) {
 		val = readl(mux->phys + mux->enable_reg);
