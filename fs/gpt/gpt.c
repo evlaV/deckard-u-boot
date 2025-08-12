@@ -1345,3 +1345,83 @@ out:
 
 	return ret;
 }
+
+
+/**
+ * gpt_get_xbl_active_partition_slot() - check if A or B is active
+ *
+ * @desc: block device descriptor
+ * @name: partition name
+ *
+ * @Return: '0' on success and -ve error on failure
+ */
+char gpt_get_xbl_active_partition_slot(struct blk_desc *blk_dev_desc, char *foundslotname)
+{
+	char *name;
+	char disk_guid[UUID_STR_LEN + 1];
+	struct list_head *pos;
+	struct disk_part *curr;
+	struct disk_partition *partitions = NULL;
+	int part_count = 0;
+	int ret = get_disk_guid(blk_dev_desc, disk_guid);
+
+	if ( ! IS_ENABLED(CONFIG_PARTITION_TYPE_GUID) ) 
+	{
+		printf("Error: CONFIG_PARTITION_TYPE_GUID is required to use this function\n");
+		return ENOMEM;
+	}
+
+	if (ret < 0)
+		return ret;
+
+	ret = get_gpt_info(blk_dev_desc);
+	if (ret <= 0)
+		goto out;
+
+	part_count = ret;
+	partitions = malloc(sizeof(*partitions) * part_count);
+	if (!partitions) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	/* Copy partitions and clear bootable flag */
+	part_count = 0;
+	list_for_each(pos, &disk_partitions) {
+		curr = list_entry(pos, struct disk_part, list);
+		partitions[part_count] = curr->gpt_part_info;
+		//partitions[part_count].bootable &= ~PART_BOOTABLE;
+		part_count++;
+	}
+
+	strcpy(foundslotname,"X");
+
+	for (int i = 0; i < part_count; i++) {
+		if(partitions[i].bootable & PART_BOOTABLE)
+		{
+			printf("%s is bootable\n",partitions[i].name);
+			if( strcmp(partitions[i].name,"xbl_a") == 0 )
+			{
+				strcpy(foundslotname,"A");
+				break;
+			}
+			
+			if( strcmp(partitions[i].name,"xbl_b") == 0 )
+			{
+				strcpy(foundslotname,"B");
+				break;
+			}
+		}
+	}
+
+	printf("bootable slot is %s\n",foundslotname);
+
+
+out:
+	del_gpt_info();
+
+	if (partitions)
+		free(partitions);
+
+	return ret;
+}
