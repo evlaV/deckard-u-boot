@@ -640,6 +640,19 @@ enum combined_button_state_t button_state_handler(void)
 	return 0;
 }
 
+static int set_booted_fw_slot(void)
+{
+	char active_partition_slot[2];
+	int ret = 0;
+	struct blk_desc *blk_dev;
+
+	blk_dev = blk_get_devnum_by_uclass_id(UCLASS_SCSI, DECKARD_UFS_BOOTFW_LUN);
+	ret = gpt_get_xbl_active_partition_slot(blk_dev,active_partition_slot);
+	env_set("BOOTED_FW_SLOT",active_partition_slot); //always check xbl_a / xbl_b to see which slot we are on
+
+	return ret;
+}
+
 void qcom_spl_board_init(void)
 {
 	struct udevice *dev;
@@ -723,6 +736,8 @@ void qcom_spl_board_init(void)
 		}
 	}
 
+	set_booted_fw_slot();
+
 	/* Sanitize BOOT_ORDER && BOOT_COUNT */
 	boot_order = check_boot_order();
 
@@ -734,6 +749,7 @@ void qcom_spl_board_init(void)
 	printf("- BOOT_STATE_B = '%s'\n", env_get("BOOT_STATE_B"));
 	printf("- BOOT_VALID_A = '%s'\n", env_get("BOOT_VALID_A"));
 	printf("- BOOT_VALID_B = '%s'\n", env_get("BOOT_VALID_B"));
+	printf("- BOOTED_FW_SLOT = '%s'\n", env_get("BOOTED_FW_SLOT"));
 
 	determine_boot_target();
 

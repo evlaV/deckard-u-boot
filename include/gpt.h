@@ -23,3 +23,4 @@ int do_rename_gpt_parts(struct blk_desc *dev_desc, char *subcomm, char *name1, c
 int gpt_set_bootable(struct blk_desc *blk_dev_desc, char *const part_list);
 int gpt_set_xbl_partition_bootable_partfstype(struct blk_desc *blk_dev_desc, char *const partname);
 int gpt_set_xbl_partition_bootable_by_slot_partfstype(struct blk_desc *blk_dev_desc, char *const slotname);
+char gpt_get_xbl_active_partition_slot(struct blk_desc *blk_dev_desc, char *foundslotname);
