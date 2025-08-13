@@ -20,6 +20,8 @@ struct cmd_tbl;
 #define FS_TYPE_SEMIHOSTING 8
 #define FS_TYPE_EXFAT   9
 
+#define FS_DO_LOAD_IGNORE_BLKDEV_ERROR 0x80
+
 struct blk_desc;
 
 /**
