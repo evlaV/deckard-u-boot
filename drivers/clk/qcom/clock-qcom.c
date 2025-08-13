@@ -260,22 +260,12 @@ static int msm_clk_probe(struct udevice *dev)
 {
 	struct msm_clk_data *data = (struct msm_clk_data *)dev_get_driver_data(dev);
 	struct msm_clk_priv *priv = dev_get_priv(dev);
-	struct clk_bulk clks;
-	int ret;
 
 	priv->base = dev_read_addr(dev);
 	if (priv->base == FDT_ADDR_T_NONE)
 		return -EINVAL;
 
 	priv->data = data;
-
-	ret = clk_get_bulk(dev, &clks);
-	if (ret)
-		printf("%s: Failed to get provider clocks: %d\n", dev->name, ret);
-	printf("Got %d provider clocks\n", clks.count);
-	ret = clk_enable_bulk(&clks);
-	if (ret)
-		printf("%s: Failed to enable provider clocks: %d\n", dev->name, ret);
 
 	return 0;
 }
