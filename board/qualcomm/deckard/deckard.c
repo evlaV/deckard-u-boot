@@ -487,14 +487,22 @@ int scsi_do_load_helper(char * partition, char * addr, char * path)
 	char *argv[5];
 	char arg0[] = "do_the_dew"; // ?
 	char arg1[] = "scsi";
+	int ret;
 
 	argv[0]=arg0;
 	argv[1]=arg1;
 	argv[2]=partition; //e.g. "1:d"
 	argv[3]=addr; //e.g. "0xa7000000"
 	argv[4]=path; // e.g. "/boot/maindtb.dtb"
+	
+	//try with BTRFS first while ignoring the blkdev error, then if that fails, then try with EXT4
+	ret = do_load(NULL, FS_DO_LOAD_IGNORE_BLKDEV_ERROR, argc, argv, FS_TYPE_BTRFS);
+	if (ret) 
+	{
+		ret = do_load(NULL, 0, argc, argv, FS_TYPE_EXT);
+	}
 
-	return do_load(NULL, 0, argc, argv, FS_TYPE_EXT);
+	return ret;
 }
 
 int power_button_pushed(struct udevice *btn)

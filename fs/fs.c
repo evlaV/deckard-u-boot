@@ -810,6 +810,11 @@ int do_load(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[],
 		return CMD_RET_USAGE;
 
 	if (fs_set_blk_dev(argv[1], cmd_arg2(argc, argv), fstype)) {
+		if(flag == FS_DO_LOAD_IGNORE_BLKDEV_ERROR)
+		{
+			return 1;
+		}
+
 		log_err("Can't set block device\n");
 		return 1;
 	}
