@@ -329,7 +329,7 @@ static void dump_gplls(struct udevice *dev, phys_addr_t base)
 		xo_rate = clk_get_rate(clk);
 
 		/* On SDM845 this needs to be divided by 2 for some reason */
-		if (xo_rate && of_machine_is_compatible("qcom,sdm845"))
+		// if (xo_rate && of_machine_is_compatible("qcom,sdm845"))
 			xo_rate /= 2;
 	} else {
 		printf("Can't find XO clock, XO_BOARD rate may be wrong\n");
@@ -340,8 +340,12 @@ static void dump_gplls(struct udevice *dev, phys_addr_t base)
 	printf("+--------+--------+-----------+------------+----------------+\n");
 	for (i = 0; i < data->num_plls; i++) {
 		locked = !!(readl(gplls[i]) & BIT(31));
-		l = readl(gplls[i] + 4) & (BIT(16) - 1);
-		a = readq(gplls[i] + 40) & (BIT(16) - 1);
+		// SDM845
+		// l = readl(gplls[i] + 4) & (BIT(16) - 1);
+		// a = readq(gplls[i] + 40) & (BIT(16) - 1);
+		// SM8650 dispcc
+		l = readl(gplls[i] + 0x10) & (BIT(16) - 1);
+		a = readl(gplls[i] + 0x14) & (BIT(16) - 1);
 		printf("| GPLL%-2d | %-6s | %9llu * (%#-9llx + %#-13llx  * 2 ** -40 ) / 1000000\n",
 		       i, locked ? "X" : "", xo_rate, l, a);
 	}
