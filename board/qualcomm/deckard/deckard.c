@@ -662,6 +662,7 @@ int deckard_prepare_for_boot()
 			if(deckard_shutdown_condition(pm8550b)) 
 			{
 				printf("Device not charging for %d seconds, Shutdown\n", DECKARD_SHUTDOWN_TIMEOUT_S);
+				run_command("splctl set-uboot-poweroff-reason battery", 0); //inform the spl that we are shutting down due to low battery
 				ret = sysreset_walk(SYSRESET_POWER_OFF);
 				if (ret == -EINPROGRESS)
 					mdelay(1000);
