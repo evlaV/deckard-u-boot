@@ -246,6 +246,14 @@ void qcom_set_serialno(void)
 	const char *cmdline;
 	char serial[32];
 
+	/*
+	 * serial# is a special var, like ethaddr, they are defined as
+	 * write-once as a protection, we want to maintain that protection
+	 * writing it only once here, if not before, and avoid error after.
+	 */
+	if (env_get("serial#"))
+		return;
+
 	if (!qcom_socinfo_init())
 		return;
 
