@@ -275,6 +275,34 @@ static int env_scsi_save(void)
 	return 0;
 }
 
+static int do_set_uboot_poweroff_reason(struct cmd_tbl *cmdtp, int flag, int argc,
+			      char *const argv[])
+{
+	int ret = 0;
+	char * reason = NULL;
+
+	if (argc < 2) /* no subcommand */
+		return cmd_usage(cmdtp);
+
+	reason = argv[1]; //battery or ?
+
+	ret = env_spl_scsi_load();
+
+	if(ret)	goto fail;
+
+	ret = env_spl_set("UBOOT_POWEROFF_REASON",reason);
+	if(ret)	goto fail;
+	ret = env_scsi_save();
+	if(ret)	goto fail;
+
+	//no error, don't print anything
+	return ret;
+
+fail:
+	printf("err %d\n",ret);
+	return ret;
+}
+
 static int do_set_bootfw_slot(struct cmd_tbl *cmdtp, int flag, int argc,
 			      char *const argv[])
 {
@@ -381,6 +409,7 @@ static struct cmd_tbl cmd_splctl_sub[] = {
 	U_BOOT_CMD_MKENT(set-primary, 2, 1, do_set_primary, "", ""),
 	U_BOOT_CMD_MKENT(set-bootfw-slot, 2, 1, do_set_bootfw_slot, "", ""),
 	U_BOOT_CMD_MKENT(env, 1, 1, do_print_spl_env, "", ""),
+	U_BOOT_CMD_MKENT(set-uboot-poweroff-reason, 2, 1, do_set_uboot_poweroff_reason, "", ""),
 };
 
 static int do_splctl(struct cmd_tbl *cmdtp, int flag, int argc,
