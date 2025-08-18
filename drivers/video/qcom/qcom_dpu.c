@@ -427,8 +427,9 @@ struct qcom_dpu_priv {
 #define MDSS_MDP_MAX_PREFILL_FETCH 24
 
 /* call 4 times to configure rect0/rect1 of DMA0/1 on 8650 */
-static void mdss_sspp_config(void *base, bool rect0, int x_off)
+static void mdss_sspp_config(struct udevice *dev, void *base, bool rect0, int x_off)
 {
+	struct video_uc_plat *plat = dev_get_uclass_plat(dev);
 #if 0
 	uint32_t img_size, out_size, stride;
 	uint32_t fb_off = 0;
@@ -468,7 +469,7 @@ static void mdss_sspp_config(void *base, bool rect0, int x_off)
 
 	if (rect0) {
 		/* gd->fb_base is from reserve_video() */
-		writel(gd->video_bottom, base + SSPP_SRC0_ADDR);
+		writel(plat->base, base + SSPP_SRC0_ADDR);
 		writel(x_off, base + SSPP_SRC_XY); /* 0x438 * N */
 		writel(0x8700438, base + SSPP_OUT_SIZE);
 		writel(0, base + SSPP_OUT_XY);
@@ -477,7 +478,7 @@ static void mdss_sspp_config(void *base, bool rect0, int x_off)
 		writel(0x80000000, base + SSPP_SRC_OP_MODE);
 		writel(0x9, base + SSPP_CDP_CNTL);
 	} else {
-		writel(gd->video_bottom, base + SSPP_SRC1_ADDR);
+		writel(plat->base, base + SSPP_SRC1_ADDR);
 		writel(x_off, base + SSPP_SRC_XY_REC1); /* 0x438 * N */
 		writel(0x8700438, base + SSPP_OUT_SIZE_REC1);
 		writel(0x438, base + SSPP_OUT_XY_REC1);
@@ -741,7 +742,7 @@ void mdp_dsi_video_config(struct edid *edid)
 void mdp_dsc_setup(struct dpu_mdss_cfg *cat, void *regs_base)
 {
 	void *base;
-	struct dpu_dsc_sub_blks *sblk;
+	const struct dpu_dsc_sub_blks *sblk;
 	int i;
 
 	for (i = 0; i < 4; i++) {
@@ -837,7 +838,6 @@ printf("=========%s enter, FLG_RELOC? %lu\n", __func__, gd->flags & GD_FLG_RELOC
 
 	priv->regs_base = dev_remap_addr_name(dev, "mdp");
 	priv->vbif_base = dev_remap_addr_name(dev, "vbif");
-	uc_plat->base = 0x9bb00000;
 
 printf("=========%s line %d\n", __func__, __LINE__);
 	ret = clk_get_bulk(dev, &bulk);
@@ -1002,7 +1002,8 @@ printf("=========%s called\n", __func__);
 	uc_plat->align = SZ_2M;
 	dev_dbg(dev, "frame buffer max size %d bytes align %x\n",
 		uc_plat->size, uc_plat->align);
-printf("frame buffer max size %d bytes align %x\n", uc_plat->size, uc_plat->align);
+	uc_plat->base = 0x9bb00000;
+printf("frame buffer @ %#lx max size %d bytes align %x\n", uc_plat->base, uc_plat->size, uc_plat->align);
 
 	return 0;
 }
