@@ -694,6 +694,8 @@ static const struct regmap_config disp_cc_sm8550_regmap_config = {
 };
 #endif
 
+#define XO_BOARD 76800000
+
 static struct pll_vco lucid_ole_vco[] = {
 	{ 249600000, 2000000000, 0 },
 };
@@ -807,9 +809,18 @@ static int dispcc_enable_src(const struct freq_tbl *freq)
 		case CFG_BI_TCXO:
 			return 0;
 		case CFG_DISP_CC_PLL0_OUT_MAIN:
-			return alpha_pll_lucid_evo_enable(&disp_cc_pll0);
+			// bi_tcxo_div2 clock is routed to PLL0
+			// 1542000000 from measurements?
+			if (alpha_trion_pll_set_rate(&disp_cc_pll0, 1542000000, XO_BOARD / 2))
+				printf("Failed to set PLL0 rate!\n");
+			if (alpha_pll_lucid_evo_enable(&disp_cc_pll0))
+				printf("Failed to enable PLL0\n");
+			return 0;
 		case CFG_DISP_CC_PLL1_OUT_MAIN:
-			return alpha_pll_lucid_evo_enable(&disp_cc_pll1);
+			if (alpha_trion_pll_set_rate(&disp_cc_pll1, 1542000000, XO_BOARD / 2))
+				printf("Failed to set PLL0 rate!\n");
+			if (alpha_pll_lucid_evo_enable(&disp_cc_pll1))
+				printf("Failed to enable PLL0\n");
 		default:
 			printf("%s: Unsupported PLL source %d\n", __func__, freq->src);
 			return -EINVAL;
@@ -1028,6 +1039,8 @@ static struct msm_clk_data sm8650_disp_cc_data = {
 	.set_rate = sm8650_disp_cc_set_rate,
 };
 
+#define DISP_CC_MISC_CMD	0xF000
+
 static int dispcc_sm8650_probe(struct udevice *dev)
 {
 	phys_addr_t base = dev_read_addr(dev);
@@ -1040,7 +1053,9 @@ static int dispcc_sm8650_probe(struct udevice *dev)
 	clk_lucid_ole_pll_configure(&disp_cc_pll0, &disp_cc_pll0_config);
 	clk_lucid_ole_pll_configure(&disp_cc_pll0, &disp_cc_pll1_config);
 
-	clk_rcg_set_rate(base, 0xe03c, 1, DT_BI_TCXO); /* disp_cc_xo_clk_src */
+	// FIXME: from Linux, what does this really do?
+	/* Enable clock gating for MDP clocks */
+	setbits_32(base + DISP_CC_MISC_CMD, 0x10);
 
 	/* Keep some clocks always on */
 	qcom_branch_set_clk_en(base, 0xe054); /* DISP_CC_XO_CLK */

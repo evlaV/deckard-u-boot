@@ -12,6 +12,7 @@
 #include <linux/errno.h>
 #include <linux/types.h>
 #include <linux/delay.h>
+#include <div64.h>
 
 #include "clk-alpha-pll.h"
 
@@ -369,8 +370,32 @@ const u8 clk_alpha_pll_regs[][PLL_OFF_MAX_REGS] = {
 #define ZONDA_STAY_IN_CFA	BIT(16)
 #define ZONDA_PLL_FREQ_LOCK_DET	BIT(29)
 
+#define wait_for_pll_update(pll) \
+	wait_for_pll(pll, PLL_UPDATE, 1, "update")
+
+#define wait_for_pll_update_ack_set(pll) \
+	wait_for_pll(pll, ALPHA_PLL_ACK_LATCH, 0, "update_ack_set")
+
+#define wait_for_pll_update_ack_clear(pll) \
+	wait_for_pll(pll, ALPHA_PLL_ACK_LATCH, 1, "update_ack_clear")
+
 #define wait_for_pll_enable_lock(pll) \
 	wait_for_pll(pll, PLL_LOCK_DET, 0, "enable")
+
+#define pll_alpha_width(p)					\
+		((PLL_ALPHA_VAL_U(p) - PLL_ALPHA_VAL(p) == 4) ?	\
+				 ALPHA_REG_BITWIDTH : ALPHA_REG_16BIT_WIDTH)
+
+static void update_bits_32(phys_addr_t addr, uint32_t mask, uint32_t val)
+{
+	uint32_t reg;
+
+	reg = readl(addr);
+
+	reg &= ~mask;
+
+	writel(reg | (val & mask), addr);
+}
 
 static void clk_alpha_pll_write_config(phys_addr_t base, unsigned int reg,
 					unsigned int val)
@@ -459,6 +484,111 @@ int alpha_pll_lucid_evo_enable(struct clk_alpha_pll *pll)
 	/* Ensure that the write above goes through before returning. */
 	mb();
 	return ret;
+}
+
+static unsigned long
+alpha_pll_calc_rate(u64 prate, u32 l, u32 a, u32 alpha_width)
+{
+	return (prate * l) + ((prate * a) >> ALPHA_SHIFT(alpha_width));
+}
+
+static unsigned long
+alpha_pll_round_rate(unsigned long rate, unsigned long prate, u32 *l, u64 *a,
+		     u32 alpha_width)
+{
+	u64 remainder;
+	u64 quotient;
+
+	quotient = rate;
+	remainder = do_div(quotient, prate);
+	*l = quotient;
+
+	if (!remainder) {
+		*a = 0;
+		return rate;
+	}
+
+	/* Upper ALPHA_BITWIDTH bits of Alpha */
+	quotient = remainder << ALPHA_SHIFT(alpha_width);
+
+	remainder = do_div(quotient, prate);
+
+	if (remainder)
+		quotient++;
+
+	*a = quotient;
+	return alpha_pll_calc_rate(prate, *l, *a, alpha_width);
+}
+
+/*
+ * Due to limited number of bits for fractional rate programming, the
+ * rounded up rate could be marginally higher than the requested rate.
+ */
+static int alpha_pll_check_rate_margin(struct clk_alpha_pll *pll,
+			unsigned long rrate, unsigned long rate)
+{
+	unsigned long rate_margin = rate + PLL_RATE_MARGIN;
+
+	if (rrate > rate_margin || rrate < rate) {
+		pr_err("%s: Rounded rate %lu not within range [%lu, %lu)\n",
+		       pll->name, rrate, rate, rate_margin);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int __alpha_pll_trion_set_rate(struct clk_alpha_pll *pll, unsigned long rate,
+				      unsigned long prate, u32 latch_bit, u32 latch_ack)
+{
+	unsigned long rrate;
+	u32 val, l, alpha_width = pll_alpha_width(pll);
+	u64 a;
+	int ret;
+
+	rrate = alpha_pll_round_rate(rate, prate, &l, &a, alpha_width);
+	printf("Using rate %lu (%lu * (%u + %llu * 2 ** -40))\n", rate, prate, l, a);
+
+	ret = alpha_pll_check_rate_margin(pll, rrate, rate);
+	if (ret < 0)
+		return ret;
+
+	update_bits_32(pll->base + PLL_L_VAL(pll), LUCID_EVO_PLL_L_VAL_MASK,  l);
+	writel(a, pll->base + PLL_ALPHA_VAL(pll));
+
+	/* Latch the PLL input */
+	update_bits_32(pll->base + PLL_MODE(pll), latch_bit, latch_bit);
+
+	/* Wait for 2 reference cycles before checking the ACK bit. */
+	udelay(1);
+	val = readl(pll->base + PLL_MODE(pll));
+	if (!(val & latch_ack)) {
+		pr_err("Lucid PLL latch failed. Output may be unstable!\n");
+		return -EINVAL;
+	}
+
+	/* Return the latch input to 0 */
+	update_bits_32(pll->base + PLL_MODE(pll), latch_bit, 0);
+
+	if (trion_pll_is_enabled(pll)) {
+		ret = wait_for_pll_enable_lock(pll);
+		if (ret)
+			return ret;
+	}
+
+	/* Wait for PLL output to stabilize */
+	udelay(100);
+	printf("%s: %s success!\n", pll->name, __func__);
+	return 0;
+}
+
+// alpha_pll_lucid_5lpe_set_rate() in Linux
+int alpha_trion_pll_set_rate(struct clk_alpha_pll *pll, unsigned long rate,
+				    unsigned long prate)
+{
+	return __alpha_pll_trion_set_rate(pll, rate, prate,
+					  LUCID_5LPE_PLL_LATCH_INPUT,
+					  LUCID_5LPE_ALPHA_PLL_ACK_LATCH);
 }
 
 void clk_lucid_ole_pll_configure(struct clk_alpha_pll *pll,

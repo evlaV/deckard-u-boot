@@ -144,3 +144,6 @@ int alpha_pll_lucid_evo_enable(struct clk_alpha_pll *pll);
 void clk_lucid_ole_pll_configure(struct clk_alpha_pll *pll,
 				 const struct alpha_pll_config *config);
 
+// prate (parent rate) is typically BI_TCXO, something like 38400000
+int alpha_trion_pll_set_rate(struct clk_alpha_pll *pll, unsigned long rate,
+				    unsigned long prate);
