@@ -535,7 +535,7 @@ int gpt_fill_pte(struct blk_desc *desc, gpt_header *gpt_h, gpt_entry *gpt_e,
  * Return:		error on str_guid conversion error
  */
 int gpt_fill_header(struct blk_desc *desc, gpt_header *gpt_h, char *str_guid,
-		    int parts_count);
+		    int parts_count, int num_partition_entries);
 
 /**
  * gpt_restore() - Restore GPT partition table
