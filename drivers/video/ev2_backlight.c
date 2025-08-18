@@ -36,6 +36,16 @@ static char *reg_array[REGULATOR_N] = {
 static int ev2_backlight_enable(struct udevice *dev)
 {
 	struct ev2_backlight_priv *priv = dev_get_priv(dev);
+	int i, ret = 0;
+
+	for (i = 0; i < REGULATOR_N; i++) {
+		ret = regulator_set_enable_if_allowed(priv->reg[i], true);
+		if (ret) {
+			log_debug("fail to enable power supply %s: ret=%d\n",
+				  priv->reg[i]->name, ret);
+			return ret;
+		}
+	}
 
 	priv->enabled = true;
 	return 0;

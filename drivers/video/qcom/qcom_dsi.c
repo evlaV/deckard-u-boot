@@ -812,6 +812,13 @@ printf("------------%s exit ok\n", __func__);
 	return 0;
 }
 
+static int qcom_dsi_get_display_timing(struct udevice *dev, struct display_timing *timing)
+{
+	struct qcom_dsi_priv *priv = dev_get_priv(dev);
+
+	return panel_get_display_timing(priv->panel, timing);
+}
+
 static int qcom_dsi_set_backlight(struct udevice *dev, int percent)
 {
 	struct qcom_dsi_priv *priv = dev_get_priv(dev);
@@ -821,7 +828,7 @@ static int qcom_dsi_set_backlight(struct udevice *dev, int percent)
 	dev_err(dev, "panel %s backlight enabling skipped to avoid panic for temp\n", priv->panel->name);
 //	return 0;
 
-	ret = panel_enable_backlight(priv->panel);
+	ret = panel_set_backlight(priv->panel, percent);
 	if (ret) {
 		dev_err(dev, "panel %s enable backlight error %d\n",
 			priv->panel->name, ret);
@@ -960,6 +967,7 @@ printf("=============%s ret %d\n", __func__, ret);
 
 struct video_bridge_ops qcom_dsi_ops = {
 	.attach = qcom_dsi_attach,
+	.get_display_timing = qcom_dsi_get_display_timing,
 	.set_backlight = qcom_dsi_set_backlight,
 };
 
