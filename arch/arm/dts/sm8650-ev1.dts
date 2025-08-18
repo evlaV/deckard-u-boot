@@ -26,7 +26,7 @@
 		stdout-path = "serial0:115200n8";
 	};
 
-	backlight:backlight {
+	backlight: backlight {
 		compatible = "ev2-backlight";
 		bias0-supply = <&nex100011ub0>;
 		bias1-supply = <&nex100011ub1>;
@@ -976,6 +976,7 @@
 		reset1-gpios = <&pm8550_gpios 3 GPIO_ACTIVE_HIGH>;
 		reset2-gpios = <&pm8550_gpios 11 GPIO_ACTIVE_HIGH>;
 		enp-gpios = <&tlmm 32 GPIO_ACTIVE_HIGH>;
+		backlight = <&backlight>;
 
 /*
 		wled1-supply = <&backlight>;
