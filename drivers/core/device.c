@@ -590,7 +590,10 @@ if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE_
 
 if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE__);
 	/* Only handle devices that have a valid ofnode */
-	if (dev_has_ofnode(dev)) {
+	/* Hack: skip clk probing for dsi controller, so that dsi-pll can be
+	 * enabled after clks enablement in dsi probe
+	 */
+	if (dev_has_ofnode(dev) && strncmp(dev->name, "dsi@", 4)) {
 		/*
 		 * Process 'assigned-{clocks/clock-parents/clock-rates}'
 		 * properties
