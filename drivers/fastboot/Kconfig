@@ -259,6 +259,12 @@ config FASTBOOT_CMD_OEM_REBOOT_EDL
 	  Add support for the "oem reboot-edl" command to make the board reset
 	  in Emergency Download Mode (EDL)
 
+config FASTBOOT_CMD_OEM_REBOOT_USB
+	bool "Enable the 'oem reboot-usb' command"
+	help
+	  Add support for the "oem reboot-usb" command to make the possible
+	  to use USB as boot device
+
 config FASTBOOT_OEM_BOARD
 	bool "Enable the 'oem board' command"
 	help

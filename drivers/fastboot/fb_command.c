@@ -123,6 +123,10 @@ static const struct {
 		.command = "oem reboot-edl",
 		.dispatch = CONFIG_IS_ENABLED(FASTBOOT_CMD_OEM_REBOOT_EDL, (oem_reboot_edl), (NULL))
 	},
+	[FASTBOOT_COMMAND_OEM_REBOOT_USB] = {
+		.command = "oem reboot-usb",
+		.dispatch = CONFIG_IS_ENABLED(FASTBOOT_CMD_OEM_REBOOT_USB, (oem_reboot_usb), (NULL))
+	},
 	[FASTBOOT_COMMAND_UCMD] = {
 		.command = "UCmd",
 		.dispatch = CONFIG_IS_ENABLED(FASTBOOT_UUU_SUPPORT, (run_ucmd), (NULL))
@@ -567,6 +571,20 @@ static void __maybe_unused oem_reboot_edl(char *cmd_parameter, char *response)
 		fastboot_fail("Cannot set recovery flag", response);
 	else
 		fastboot_okay(NULL, response);
+}
+
+/**
+ * oem_reboot_usb() - Execute the OEM reboot_usb command
+ *
+ * @cmd_parameter: Pointer to command parameter
+ * @response: Pointer to fastboot response buffer
+ */
+static void __maybe_unused oem_reboot_usb(char *cmd_parameter, char *response)
+{
+	fastboot_okay(NULL, response);
+
+	if (fastboot_set_reboot_flag(FASTBOOT_REBOOT_REASON_OEM_USB))
+		printf("Cannot set recovery flag\n");
 }
 
 /**

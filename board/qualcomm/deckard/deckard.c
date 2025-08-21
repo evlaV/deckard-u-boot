@@ -26,6 +26,7 @@
 #include <power/pmic.h>
 #include <remoteproc.h>
 #include <command.h>
+#include <dm/device-internal.h>
 #include <fs.h>
 #include <image.h>
 #include <sysreset.h>
@@ -105,6 +106,8 @@ void check_pmics_comms(void)
 	check_pmic("pmic@d", "PM8010_n");
 }
 #endif
+
+extern int dwc3_glue_bind(struct udevice *parent);
 
 static inline void write32(unsigned long addr, u32 value)
 {
@@ -290,6 +293,108 @@ static void deckard_reboot_mode_clean(void)
 	mdelay(1000);
 }
 
+
+static int deckard_unbind_usb(void)
+{
+	struct device_node *snps_np = NULL;
+	struct udevice *dev = NULL;
+	ofnode node;
+	int ret;
+
+	snps_np = of_find_compatible_node(snps_np, NULL, "snps,dwc3");
+	if (!snps_np) {
+		log_err("Failed to find snps node\n");
+		return -ENOENT;
+	}
+
+	/* overwrite dr_mode property in child */
+	ret = of_write_prop(snps_np, "dr_mode", strlen("host") + 1, "host");
+	if (ret) {
+		log_err("Failed to overwrite 'dr_mode' property: %d\n", ret);
+		return ret;
+	}
+
+	/* child node */
+	node = ofnode_by_compatible(ofnode_null(), "snps,dwc3");
+	if (!ofnode_valid(node)) {
+		log_err("Failed to find glue node\n");
+		return -ENOENT;
+	}
+
+	ret = device_find_global_by_ofnode(node, &dev);
+	if (ret < 0) {
+		log_err("failed to get device from node\n");
+		return -ENOENT;
+	}
+
+	ret = device_remove(dev, DM_REMOVE_NORMAL);
+	if (ret) {
+		printf("Unable to remove. err:%d\n", ret);
+		return ret;
+	}
+
+	ret = device_unbind(dev);
+	if (ret) {
+		printf("Unable to unbind. err:%d\n", ret);
+		return ret;
+	}
+
+	return 0;
+}
+
+static int deckard_reboot_mode_usb(void)
+{
+	struct device_node *dwc3_np = NULL;
+	struct udevice *parent = NULL;
+	ofnode node;
+	int ret;
+
+	/* Find the DWC3 node itself */
+	dwc3_np = of_find_compatible_node(dwc3_np, NULL, "qcom,dwc3");
+	if (!dwc3_np) {
+		log_err("Failed to find dwc3 node\n");
+		return -ENOENT;
+	}
+
+	/* overwrite dr_mode property in parent */
+	ret = of_write_prop(dwc3_np, "dr_mode", strlen("host") + 1, "host");
+	if (ret) {
+		log_err("Failed to overwrite 'dr_mode' property: %d\n", ret);
+		return ret;
+	}
+
+	node = ofnode_by_compatible(ofnode_null(), "qcom,dwc3");
+	if (!ofnode_valid(node)) {
+		log_err("Failed to find glue node\n");
+		return -ENOENT;
+	}
+
+	/*
+	 * Unbind the already bind usb dwc3-generic-host or dwc3_generic_peripheral
+	 * driver to device, and bind our own to make sure everything is setup
+	 * correctly.
+	 */
+	ret = deckard_unbind_usb();
+	if (ret < 0) {
+		log_err("failed to unbind child node\n");
+		return -ENOENT;
+	}
+
+	ret = device_find_global_by_ofnode(node, &parent);
+	if (ret < 0) {
+		log_err("failed to get parent device from node\n");
+		return -ENOENT;
+	}
+
+	ret = dwc3_glue_bind(parent);
+	if (ret < 0) {
+		log_warning("failed to bind\n");
+		return -ENOENT;
+	}
+
+	return 0;
+}
+
 static void deckard_reboot_mode_edl(void)
 {
 	/*
@@ -307,6 +412,7 @@ int fastboot_set_reboot_flag(enum fastboot_reboot_reason reason)
 {
 	if ((reason != FASTBOOT_REBOOT_REASON_FASTBOOTD) &&
 			(reason != FASTBOOT_REBOOT_REASON_OEM_EDL) &&
+			(reason != FASTBOOT_REBOOT_REASON_OEM_USB) &&			
 			(reason != FASTBOOT_REBOOT_REASON_BOOTLOADER))
 		return -ENOTSUPP;
 
@@ -321,7 +427,11 @@ int fastboot_set_reboot_flag(enum fastboot_reboot_reason reason)
 	} else if (reason == FASTBOOT_REBOOT_REASON_OEM_EDL) {
 		printf("Rebooting to EDL mode ...\n");
 		deckard_reboot_mode_edl();
-	}
+	} else if (reason == FASTBOOT_REBOOT_REASON_OEM_USB) {
+		printf("Setting reboot to USB mode ...\n");
+		env_set("reboot_mode", "u");
+		env_save();
+ 	}
 
 	return 0;
 }
@@ -338,6 +448,8 @@ int misc_init_r(void)
 	int fastbootmode = 0;
 	int bootloadermode = 0;
 	int edlmode = 0;
+	int usbmode = 0;
+
 	ofnode node;
 	enum combined_button_state_t total_button_state = 0;
 	int power_button_state = 0;
@@ -447,6 +559,8 @@ int misc_init_r(void)
 		bootloadermode = 1;
 	else if (reboot_mode && (reboot_mode[0] == 'e' ))
 		edlmode = 1;
+	else if (reboot_mode && (reboot_mode[0] == 'u' ))
+		usbmode = 1;
 
 	/* cleanup all reboot_mode setups if any */
 	deckard_reboot_mode_clean();
@@ -494,6 +608,14 @@ int misc_init_r(void)
 	if (edlmode) {
 		printf("Rebooting to EDL mode...\n");
 		deckard_reboot_mode_edl();
+	}
+
+	if (usbmode) {
+		printf("Starting usb mode...\n");
+		ret = deckard_reboot_mode_usb();
+		if (!ret) {
+			run_command("usb start", 0);
+		}
 	}
 
 	// if requested, use the default env boot variables
