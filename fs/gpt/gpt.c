@@ -1134,7 +1134,7 @@ int gpt_set_xbl_partition_bootable_partfstype(struct blk_desc *blk_dev_desc, cha
 	struct disk_part *curr;
 	struct disk_partition *partitions = NULL;
 	int part_count = 0;
-	int ret = get_disk_guid(blk_dev_desc, disk_guid);
+	int ret;
 
 	if ( ! IS_ENABLED(CONFIG_PARTITION_TYPE_GUID) ) 
 	{
@@ -1142,6 +1142,14 @@ int gpt_set_xbl_partition_bootable_partfstype(struct blk_desc *blk_dev_desc, cha
 		return ENOMEM;
 	}
 
+	/* first check and try to recover if any (primary or backup) gpt is faulty */
+	ret = gpt_repair(blk_dev_desc);
+	if (ret < 0) {
+		printf("Error: gpt is corrupted in xbl partition\n");
+		return ret;
+	}
+
+	ret = get_disk_guid(blk_dev_desc, disk_guid);
 	if (ret < 0)
 		return ret;
 
@@ -1239,8 +1247,8 @@ int gpt_set_xbl_partition_bootable_by_slot_partfstype(struct blk_desc *blk_dev_d
 	struct disk_part *curr;
 	struct disk_partition *partitions = NULL;
 	int part_count = 0;
-	int ret = get_disk_guid(blk_dev_desc, disk_guid);
 	char slot = slotname[0];
+	int ret;
 
 	if ( ! IS_ENABLED(CONFIG_PARTITION_TYPE_GUID) ) 
 	{
@@ -1248,6 +1256,14 @@ int gpt_set_xbl_partition_bootable_by_slot_partfstype(struct blk_desc *blk_dev_d
 		return ENOMEM;
 	}
 
+	/* first check and try to recover if any (primary or backup) gpt is faulty */
+	ret = gpt_repair(blk_dev_desc);
+	if (ret < 0) {
+		printf("Error: gpt is corrupted in xbl partition\n");
+		return ret;
+	}
+
+	ret = get_disk_guid(blk_dev_desc, disk_guid);
 	if (ret < 0)
 		return ret;
 
@@ -1363,7 +1379,7 @@ char gpt_get_xbl_active_partition_slot(struct blk_desc *blk_dev_desc, char *foun
 	struct disk_part *curr;
 	struct disk_partition *partitions = NULL;
 	int part_count = 0;
-	int ret = get_disk_guid(blk_dev_desc, disk_guid);
+	int ret;
 
 	if ( ! IS_ENABLED(CONFIG_PARTITION_TYPE_GUID) ) 
 	{
@@ -1371,6 +1387,14 @@ char gpt_get_xbl_active_partition_slot(struct blk_desc *blk_dev_desc, char *foun
 		return ENOMEM;
 	}
 
+	/* first check and try to recover if any (primary or backup) gpt is faulty */
+	ret = gpt_repair(blk_dev_desc);
+	if (ret < 0) {
+		printf("Error: gpt is corrupted in xbl partition\n");
+		return ret;
+	}
+
+	ret = get_disk_guid(blk_dev_desc, disk_guid);
 	if (ret < 0)
 		return ret;
 
