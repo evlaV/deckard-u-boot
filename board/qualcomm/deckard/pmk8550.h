@@ -41,6 +41,7 @@ struct pon_on_off_reason {
 		uint32_t pid;                /* peripheral id */
 		uint32_t irq;                /* interrupt */
 	} trigger_data;
+	int pon_reason;
 };
 
 const char *pmk8550_get_pon_trigger_str(enum pon_reset_trigger trigger);

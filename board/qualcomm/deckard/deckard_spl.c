@@ -60,7 +60,7 @@ DECLARE_GLOBAL_DATA_PTR;
 
 static ulong boot_wrapper_version __section(".data");
 
-static struct pon_on_off_reason pon_reason;
+static struct pon_on_off_reason pon_poff_reason;
 
 int g_boot_wrapper_version;
 /**
@@ -673,18 +673,25 @@ void qcom_spl_board_init(void)
 
 	deckard_spl_leds_set();
 
-	ret = pmk8550_get_on_off_reason(&pon_reason);
+	ret = pmk8550_get_on_off_reason(&pon_poff_reason);
 	if (ret == 0) {
-		if (pon_reason.trigger == PON_RESET_TRIGGER_OTHER)
+		if (pon_poff_reason.trigger == PON_RESET_TRIGGER_OTHER)
+		{
 			printf("PON %s Unknown Trigger (Irq %d PID %d SID %d)\n",
-			       pmk8550_get_pon_type_str(pon_reason.type),
-				pon_reason.trigger_data.irq,
-				pon_reason.trigger_data.pid,
-				pon_reason.trigger_data.sid);
+			       pmk8550_get_pon_type_str(pon_poff_reason.type),
+				pon_poff_reason.trigger_data.irq,
+				pon_poff_reason.trigger_data.pid,
+				pon_poff_reason.trigger_data.sid);
+		}
 		else
+		{
 			printf("PON %s Trigger %s\n",
-			       pmk8550_get_pon_type_str(pon_reason.type),
-			       pmk8550_get_pon_trigger_str(pon_reason.trigger));
+			       pmk8550_get_pon_type_str(pon_poff_reason.type),
+			       pmk8550_get_pon_trigger_str(pon_poff_reason.trigger));
+		}
+
+		printf("PON Reason = 0x%0X\n",pon_poff_reason.pon_reason);
+			
 	}
 
 	deckard_spl_battery_charging_setup(&battery_voltage);

@@ -31,6 +31,8 @@
 #define PON_PBS_SYS_OK_RSN             0x71C2
 #define PON_PBS_RTC_ALARM_RSN          0x0621
 
+#define PON_AOP_PON_REASON1			   0x7269
+
 #define PON_PBS_RAW_XVDD_RB_MASK             0x8000
 #define PON_PBS_RAW_DVDD_RB_MASK             0x4000
 #define PON_PBS_IMMEDIATE_XVDD_SHUTDOWN_MASK 0x2000
@@ -235,10 +237,10 @@ int pmk8550_get_on_off_reason(struct pon_on_off_reason *reason)
 			break;
 	}
 
+	reason->pon_reason = pmk8550_get_pon_reason(pmic);
+
 	return 0;
 }
-
-#define PON_AOP_PON_REASON1		0x7269
 
 /// @brief Read the VBAT_SNS_Charger ADC for the 2S Voltage.
 /// @param pmic
