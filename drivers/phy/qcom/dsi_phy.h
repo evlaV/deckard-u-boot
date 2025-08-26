@@ -136,6 +136,7 @@ struct msm_dsi_phy {
 	phys_addr_t lane_size;
 
 	struct clk *ahb_clk;
+	struct clk *ref_clk;
 	//struct regulator_bulk_data *supplies;
 	struct udevice *vdds_reg;
 

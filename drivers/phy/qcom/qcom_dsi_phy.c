@@ -360,7 +360,6 @@ static void dsi_pll_commit(struct dsi_pll_7nm *pll, struct dsi_pll_config *confi
 	void __iomem *base = pll->plat->pll_base;
 
 	writel(0x12, base + REG_DSI_7nm_PHY_PLL_CORE_INPUT_OVERRIDE);
-printf("===== %s addr 0x%x readback 0x%x should be 0x12\n", __func__, base + REG_DSI_7nm_PHY_PLL_CORE_INPUT_OVERRIDE, readl(base + REG_DSI_7nm_PHY_PLL_CORE_INPUT_OVERRIDE));
 	writel(config->decimal_div_start,
 	       base + REG_DSI_7nm_PHY_PLL_DECIMAL_DIV_START_1);
 	writel(config->frac_div_start & 0xff,
@@ -1124,7 +1123,6 @@ printf("----%s line %d\n", __func__, __LINE__);
 		glbl_rescode_bot_ctrl = 0x3c;
 	}
 
-printf("----%s line %d\n", __func__, __LINE__);
 	/* de-assert digital and pll power down */
 	data = BIT(6) | BIT(5);
 	writel(data, base + REG_DSI_7nm_PHY_CMN_CTRL_0);
@@ -1390,17 +1388,16 @@ return;
 #endif
 }
 
-static int msm_dsi_phy_power_on(struct phy *phy)
+static int msm_dsi_phy_power_on_internal(struct msm_dsi_phy *qcom)
 {
-	struct msm_dsi_phy *qcom = dev_get_priv(phy->dev);
 	/* TODO: need to calculate it via panel/lane/dsc data */
 	struct msm_dsi_phy_clk_request clk_req = {
 		.bitclk_rate = 851187806,
 		.escclk_rate = 19200000,
 	 };
 
-printf("======%s enter with struct phy->id %lu (internal id %d)\n", __func__, phy->id, qcom->plat->id);
 	clk_prepare_enable(qcom->ahb_clk);
+	clk_prepare_enable(qcom->ref_clk);
 	/* the rate is from linux test */
 	clk_set_rate(qcom->ahb_clk, 19200000);
 
@@ -1412,6 +1409,15 @@ return 0;
 	msm_dsi_phy_mipi_mode_enable(qcom);
 
 	return 0;
+}
+
+static int msm_dsi_phy_power_on(struct phy *phy)
+{
+	struct msm_dsi_phy *qcom = dev_get_priv(phy->dev);
+
+printf("======%s enter with struct phy->id %lu (internal id %d), skipped so far\n", __func__, phy->id, qcom->plat->id);
+return 0;
+	return msm_dsi_phy_power_on_internal(qcom);
 }
 
 static int msm_dsi_phy_power_off(struct phy *phy)
@@ -1546,14 +1552,12 @@ static int msm_dsi_phy_probe(struct udevice *dev)
 	qcom->dev = dev;
 	qcom->plat = dev_get_plat(dev);
 
-/*
 	qcom->ref_clk = devm_clk_get(dev, "ref");
 	if (IS_ERR(qcom->ref_clk)) {
 		ret = PTR_ERR(qcom->ref_clk);
 		dev_err(dev, "failed to get ref clock: %d\n", ret);
 		return ret;
 	}
-*/
 
 	qcom->ahb_clk = devm_clk_get(dev, "iface");
 	if (IS_ERR(qcom->ahb_clk)) {
@@ -1581,6 +1585,8 @@ static int msm_dsi_phy_probe(struct udevice *dev)
 		return ret;
 	}
 
+	/* Enable phy by default, so that phy pll works when clk ops is called */
+	msm_dsi_phy_power_on_internal(qcom);
 printf("========%s ret ok\n", __func__);
 	return ret;
 }
