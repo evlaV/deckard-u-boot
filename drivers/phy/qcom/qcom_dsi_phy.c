@@ -614,6 +614,12 @@ printf("--------- PLL(%d) lock ok\n", pll_7nm->plat->id);
 	if (pll_7nm->slave)
 		dsi_pll_enable_global_clk(pll_7nm->slave);
 
+	/* Hard coding downstream clock mnd for headset usage case, to avoid
+	 * create parent clocks in pll_7nm_register() */
+	writel(0xff, REG_DSI_7nm_PHY_PLL_PLL_OUTDIV_RATE);
+	writel(0xf1, REG_DSI_7nm_PHY_CMN_CLK_CFG0);
+	writel(0x13, REG_DSI_7nm_PHY_CMN_CLK_CFG1);
+
 error:
 	return rc;
 }
@@ -1587,6 +1593,7 @@ static int msm_dsi_phy_probe(struct udevice *dev)
 
 	/* Enable phy by default, so that phy pll works when clk ops is called */
 	msm_dsi_phy_power_on_internal(qcom);
+
 printf("========%s ret ok\n", __func__);
 	return ret;
 }
