@@ -426,7 +426,8 @@ int fastboot_set_reboot_flag(enum fastboot_reboot_reason reason)
 		env_save();
 	} else if (reason == FASTBOOT_REBOOT_REASON_OEM_EDL) {
 		printf("Rebooting to EDL mode ...\n");
-		deckard_reboot_mode_edl();
+		env_set("reboot_mode", "e");
+		env_save();
 	} else if (reason == FASTBOOT_REBOOT_REASON_OEM_USB) {
 		printf("Setting reboot to USB mode ...\n");
 		env_set("reboot_mode", "u");
