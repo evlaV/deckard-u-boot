@@ -799,7 +799,9 @@ static const struct gate_clk sm8650_disp_clks[] = {
 
 	GATE_CLK(DISP_CC_MDSS_VSYNC_CLK,	0x8024, BIT(0)),
 	GATE_CLK(DISP_CC_MDSS_PCLK0_CLK,	0x8004, BIT(0)),
+	GATE_CLK(DISP_CC_MDSS_PCLK1_CLK,	0x8008, BIT(0)),
 	GATE_CLK(DISP_CC_MDSS_ESC0_CLK,		0x8038, BIT(0)),
+	GATE_CLK(DISP_CC_MDSS_ESC1_CLK,		0x803c, BIT(0)),
 };
 
 static int dispcc_enable_src(const struct freq_tbl *freq)
@@ -821,6 +823,7 @@ static int dispcc_enable_src(const struct freq_tbl *freq)
 				printf("Failed to set PLL0 rate!\n");
 			if (alpha_pll_lucid_evo_enable(&disp_cc_pll1))
 				printf("Failed to enable PLL0\n");
+			return 0;
 		default:
 			printf("%s: Unsupported PLL source %d\n", __func__, freq->src);
 			return -EINVAL;
@@ -911,13 +914,26 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		/* The rate of its parent disp_cc_mdss_pclk0_clk_src and grand parent
 		 * dsi0_phy_pll_out_dsiclk and GGrand-parent dsi0_pll_post_out_div_clk
 		 * rate are 243149748 per test. The GGGrand-parent dsi0_pll_out_div_clk
-		 * is 851024121 */
+		 * is 851024121 in 90Hz case, that's m/n = 7/2. Also 7/2 for 80/120Hz
+		 * The divider shall happen inside DSI PLL, ignore it here. */
 		/* TODO: this clk use clk_pixel_ops in Linux, not mnd */
 		freq = qcom_find_freq(ftbl_disp_cc_mdss_pclk0_clk_src, rate);
 		dispcc_enable_src(freq);
 		clk_rcg_set_rate_mnd(priv->base, 0x80a8,
 				     freq->pre_div, freq->m, freq->n, freq->src, 8);
-		printf("!!!!!!!!!!! fix clock DISP_CC_MDSS_PCLK0_CLK!!!!!!!!!!\n");
+		return 0;
+
+	case DISP_CC_MDSS_PCLK1_CLK:
+		/* The rate of its parent is disp_cc_mdss_pclk1_clk_src and grand parent
+		 * dsi0_phy_pll_out_dsiclk in dual-dsi case. GGrand-parent dsi0_pll_post_out_div_clk
+		 * rate are 243149748 per test. The GGGrand-parent dsi0_pll_out_div_clk
+		 * is 851024121 in 90Hz case, that's m/n = 7/2. Also 7/2 for 80/120Hz
+		 * The divider shall happen inside DSI PLL, ignore it here. */
+		/* TODO: this clk use clk_pixel_ops in Linux, not mnd */
+		freq = qcom_find_freq(ftbl_disp_cc_mdss_pclk0_clk_src, rate);
+		dispcc_enable_src(freq);
+		clk_rcg_set_rate_mnd(priv->base, 0x80c0,
+				     freq->pre_div, freq->m, freq->n, freq->src, 8);
 		return 0;
 
 	case DISP_CC_MDSS_ESC0_CLK:
@@ -928,8 +944,22 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		 */
 		freq = qcom_find_freq(ftbl_disp_cc_mdss_vsync_clk_src, rate);
 		dispcc_enable_src(freq);
-		clk_rcg_set_rate(priv->base, 0x8140, freq->pre_div, freq->src);
+		clk_rcg_set_rate_mnd(priv->base, 0x8140,
+				     freq->pre_div, freq->m, freq->n, freq->src, 0);
 		return freq->freq;
+
+	case DISP_CC_MDSS_ESC1_CLK:
+		/* Assume the divider is 1 in parent disp_cc_mdss_esc0_clk_src:
+		 * .cmd_rcgr = 0x8158, .mnd_width = 0, .hid_width = 5,
+		 * rate is 19200000, same with its parent bi-tcxo-div2-clk per test.
+		 * so ignore this handling. Or to use the table to force the parent.
+		 */
+		freq = qcom_find_freq(ftbl_disp_cc_mdss_vsync_clk_src, rate);
+		dispcc_enable_src(freq);
+		clk_rcg_set_rate_mnd(priv->base, 0x8158,
+				     freq->pre_div, freq->m, freq->n, freq->src, 0);
+		return freq->freq;
+
 	default:
 		return 0;
 	}
