@@ -380,9 +380,8 @@ static void dsi_pll_commit(struct dsi_pll_7nm *pll, struct dsi_pll_config *confi
 // to the logs below it's actually the full TCXO rate (38.4MHz)??
 #define TCXO_RATE	38400000
 
-static unsigned long dsi_pll_7nm_vco_set_rate(struct clk *clk, unsigned long rate)
+static unsigned long _dsi_pll_7nm_vco_set_rate(struct dsi_pll_7nm *pll_7nm, unsigned long rate)
 {
-	struct dsi_pll_7nm *pll_7nm = dev_get_priv(clk->dev);
 	struct dsi_pll_config config;
 
 	printf("DSI PLL%d rate=%lu\n", pll_7nm->plat->id, rate);
@@ -419,6 +418,13 @@ static unsigned long dsi_pll_7nm_vco_set_rate(struct clk *clk, unsigned long rat
 	wmb();
 
 	return rate;
+}
+
+static unsigned long dsi_pll_7nm_vco_set_rate(struct clk *clk, unsigned long rate)
+{
+	struct dsi_pll_7nm *pll_7nm = dev_get_priv(clk->dev);
+
+	return _dsi_pll_7nm_vco_set_rate(pll_7nm, rate);
 }
 
 static int dsi_pll_7nm_lock_status(struct dsi_pll_7nm *pll)
@@ -563,9 +569,8 @@ static unsigned long dsi_pll_7nm_vco_recalc_rate(struct dsi_pll_7nm *pll_7nm,
 	return (unsigned long)vco_rate;
 }
 
-static int dsi_pll_7nm_vco_prepare(struct clk *clk)
+static int _dsi_pll_7nm_vco_prepare(struct dsi_pll_7nm *pll_7nm)
 {
-	struct dsi_pll_7nm *pll_7nm = dev_get_priv(clk->dev);
 	int rc;
 
 	/* U-Boot doesn't have recalc_rate support so just set things up now */
@@ -576,9 +581,9 @@ static int dsi_pll_7nm_vco_prepare(struct clk *clk)
 		pr_err("DSI PLL(%d) recalc_rate returned 0 :( overriding...\n", pll_7nm->plat->id);
 		pll_7nm->vco_desired_rate = 851023681;
 	}
-	dsi_pll_7nm_vco_set_rate(clk, pll_7nm->vco_desired_rate);
+	_dsi_pll_7nm_vco_set_rate(pll_7nm, pll_7nm->vco_desired_rate);
 	pll_7nm->vco_desired_rate = dsi_pll_7nm_vco_recalc_rate(pll_7nm, TCXO_RATE);
-	dsi_pll_7nm_vco_set_rate(clk, pll_7nm->vco_desired_rate);
+	_dsi_pll_7nm_vco_set_rate(pll_7nm, pll_7nm->vco_desired_rate);
 
 	dsi_pll_enable_pll_bias(pll_7nm);
 	if (pll_7nm->slave)
@@ -616,12 +621,19 @@ printf("--------- PLL(%d) lock ok\n", pll_7nm->plat->id);
 
 	/* Hard coding downstream clock mnd for headset usage case, to avoid
 	 * create parent clocks in pll_7nm_register() */
-	writel(0xff, REG_DSI_7nm_PHY_PLL_PLL_OUTDIV_RATE);
-	writel(0xf1, REG_DSI_7nm_PHY_CMN_CLK_CFG0);
-	writel(0x13, REG_DSI_7nm_PHY_CMN_CLK_CFG1);
+	writel(0xff, pll_7nm->plat->base + REG_DSI_7nm_PHY_PLL_PLL_OUTDIV_RATE);
+	writel(0xf1, pll_7nm->plat->base + REG_DSI_7nm_PHY_CMN_CLK_CFG0);
+	writel(0x13, pll_7nm->plat->base + REG_DSI_7nm_PHY_CMN_CLK_CFG1);
 
 error:
 	return rc;
+}
+
+static int dsi_pll_7nm_vco_prepare(struct clk *clk)
+{
+	struct dsi_pll_7nm *pll_7nm = dev_get_priv(clk->dev);
+
+	return _dsi_pll_7nm_vco_prepare(pll_7nm);
 }
 
 static void dsi_pll_disable_sub(struct dsi_pll_7nm *pll)
@@ -904,6 +916,7 @@ printf("========%s enter parent %s priv is %p\n", __func__, dev->parent->name, p
 	clk_dm(clk_id, clk);
 */
 
+	_dsi_pll_7nm_vco_prepare(pll_7nm);
 	printf("%s: %s exit\n", dev->name, __func__);
 	return 0;
 }
