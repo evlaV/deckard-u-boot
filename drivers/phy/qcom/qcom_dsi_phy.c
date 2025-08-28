@@ -573,6 +573,9 @@ static int _dsi_pll_7nm_vco_prepare(struct dsi_pll_7nm *pll_7nm)
 {
 	int rc;
 
+	/* copy from linux 80Hz config */
+	pll_7nm->vco_desired_rate = 851023681;
+
 	/* U-Boot doesn't have recalc_rate support so just set things up now */
 	/* follow sequence of kernel */
 	if (!pll_7nm->vco_desired_rate)
