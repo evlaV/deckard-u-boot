@@ -316,26 +316,26 @@ static int set_brightness(struct lpm026m648c_priv *priv, u16 brightness,
 static int lpm026m648c_panel_enable_backlight(struct udevice *dev)
 {
 	struct lpm026m648c_priv *priv = dev_get_priv(dev);
-	// struct mipi_dsi_panel_plat *plat = dev_get_plat(dev);
+	struct mipi_dsi_panel_plat *plat = dev_get_plat(dev);
 
 	printf("%s: %s\n", dev->name, __func__);
-	return backlight_enable(priv->backlight);
+	backlight_enable(priv->backlight);
 
-// printf("======= %s priv->is_dual_panel %d plat->device %p\n", __func__, priv->is_dual_panel, plat->device);
-// 	plat->device->mode_flags |= MIPI_DSI_MODE_LPM;
-// 	if (priv->is_dual_panel)
-// 		plat->device2->mode_flags |= MIPI_DSI_MODE_LPM;
+printf("======= %s priv->is_dual_panel %d plat->device %p\n", __func__, priv->is_dual_panel, plat->device);
+	plat->device->mode_flags |= MIPI_DSI_MODE_LPM;
+	if (priv->is_dual_panel)
+		plat->device2->mode_flags |= MIPI_DSI_MODE_LPM;
 
-// printf("======= %s set device %p device2 %p\n", __func__, plat->device, plat->device2);
-// 	priv->device = plat->device;
-// 	priv->device2 = plat->device2;
-// 	mdelay(20);
-// 	dsi_write_panel_on(priv);
-// 	get_panel_info(priv);
+printf("======= %s set device %p device2 %p\n", __func__, plat->device, plat->device2);
+	priv->device = plat->device;
+	priv->device2 = plat->device2;
+	mdelay(20);
+	dsi_write_panel_on(priv);
+	get_panel_info(priv);
 
-// 	set_brightness(priv, 200, GPO1_TES1);
+	set_brightness(priv, 200, GPO1_TES1);
 
-//	return 0;
+	return 0;
 }
 
 static int lpm026m648c_panel_set_backlight(struct udevice *dev, int percent)
