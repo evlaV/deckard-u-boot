@@ -15,6 +15,8 @@
 #include <command.h>
 #include "pmk8550.h"
 #include "deckard_battery.h"
+#include <sysreset.h>
+#include <linux/delay.h>
 
 #define BOOT_DEVICE_UFS_A	(BOOT_DEVICE_NONE + 1)
 #define BOOT_DEVICE_UFS_B	(BOOT_DEVICE_NONE + 2)
@@ -571,8 +573,6 @@ static int spl_env_save(struct blk_desc *blk_dev, struct disk_partition *mainenv
 enum combined_button_state_t button_state_handler(void) 
 {
 	enum combined_button_state_t total_button_state;
-	int ret = 0;
-	enum button_state_t state;
 
 	if ( deckard_spl_get_button_state("Select") == BUTTON_ON) {
 		printf("Select button pressed\n");
@@ -665,13 +665,12 @@ void qcom_spl_board_init(void)
 	int ret;
 	int boot_count;
 	enum combined_button_state_t total_button_state = 0;
-
+	int power_button_released_since_boot = 0;
+	int power_button_release_rtc_time_since_pon  = 0;
 	uint16_t battery_voltage;
 
 	printf("Hello from deckard_spl\n");
 	printf("spl: boot wrapper version %ld\n", boot_wrapper_version);
-
-	deckard_spl_leds_set();
 
 	ret = pmk8550_get_on_off_reason(&pon_poff_reason);
 	if (ret == 0) {
@@ -691,8 +690,62 @@ void qcom_spl_board_init(void)
 		}
 
 		printf("PON Reason = 0x%0X\n",pon_poff_reason.pon_reason);
+
+
+		// We do this check for when power button was released to check for a situation that should be impossible
+		// Scenario of concern is that somehow the device appears to have been shutdown by powerbutton
+		// however, the device did not immediately power back up
+		// so we could potentially be confused as to if the user is:
+		// 1. holding the button down to boot device after a hard shutdown (by power button hold down)
+		// 2. or the user is currently shutting down the device via hard shutdown (by power button hold down)
+		//    and they are holding the key down still 
+		printf("PON RTC time = %d\n",pon_poff_reason.pon_rtc_time);
+		printf("Power button release RTC time = %d\n",pon_poff_reason.power_button_release_rtc_time);
+		power_button_release_rtc_time_since_pon = pon_poff_reason.power_button_release_rtc_time - pon_poff_reason.pon_rtc_time;
+
+		if(power_button_release_rtc_time_since_pon <= 0)
+		{
+			printf("Power button not released since boot\n");
+			power_button_released_since_boot = 0;
+		}
+		else
+		{
+			printf("Power button released %d ms after boot\n",power_button_release_rtc_time_since_pon);
+			power_button_released_since_boot = 1;
+		}
+
+		if( pon_poff_reason.type == PON_RESET_TYPE_SHUTDOWN 
+			&& pon_poff_reason.trigger == PON_RESET_TRIGGER_KPDPWR )
+		{
+			printf("Last Shutdown occurred by hard shutdown from power button hold down\n");
+
+			if(power_button_released_since_boot == 0)
+			{
+				//loop for 5s = (500 * 10ms)
+				for(int i=0; i < 100 * 5; i++)
+				{
+					if ( deckard_spl_get_button_state("Power Button") == BUTTON_OFF) {
+						printf("Power button released\n");
+						power_button_released_since_boot = 1;
+						break;
+					}
+					udelay(10000);
+				}
+			}
+
+			if(power_button_released_since_boot)
+			{
+				printf("SPL: shutting down...\n");
+				ret = sysreset_walk(SYSRESET_POWER_OFF);
+			}
+
+			//if we get here, then it appears the user is still holding the button, so just continue booting
+		}
 			
 	}
+
+	//this needs to be after we check if we are currently holding the button down for a power button hard shutdown
+	deckard_spl_leds_set();
 
 	deckard_spl_battery_charging_setup(&battery_voltage);
 

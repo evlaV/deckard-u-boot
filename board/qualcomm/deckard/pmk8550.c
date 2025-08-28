@@ -239,6 +239,10 @@ int pmk8550_get_on_off_reason(struct pon_on_off_reason *reason)
 
 	reason->pon_reason = pmk8550_get_pon_reason(pmic);
 
+	reason->pon_rtc_time = pmk8550_get_pon_rtc_time(pmic);
+
+	reason->power_button_release_rtc_time = pmk8550_get_power_button_release_rtc_time(pmic);
+
 	return 0;
 }
 
@@ -323,4 +327,26 @@ int pmk8550_get_pon_reason(struct udevice *pmic)
 	int ret = pmic_reg_read(pmic, PON_AOP_PON_REASON1);
 
 	return ret;
+}
+
+uint32_t pmk8550_get_pon_rtc_time(struct udevice *pmic)
+{
+	uint32_t pon_rtc_time = 
+		(pmic_reg_read(pmic, 0x715D) << 24) + 
+		(pmic_reg_read(pmic, 0x715C) << 16) +
+		(pmic_reg_read(pmic, 0x715B) << 8 ) +
+		(pmic_reg_read(pmic, 0x715A) << 0 );
+
+	return pon_rtc_time;
+}
+
+uint32_t pmk8550_get_power_button_release_rtc_time(struct udevice *pmic)
+{
+	uint32_t kpd_power_button_release_rtc_time = 
+				(pmic_reg_read(pmic, 0x7161) << 24) + 
+				(pmic_reg_read(pmic, 0x7160) << 16) +
+				(pmic_reg_read(pmic, 0x715F) << 8 ) +
+				(pmic_reg_read(pmic, 0x715E) << 0 );
+
+	return kpd_power_button_release_rtc_time;
 }
