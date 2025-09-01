@@ -42,6 +42,8 @@ struct pon_on_off_reason {
 		uint32_t irq;                /* interrupt */
 	} trigger_data;
 	int pon_reason;
+	int pon_boot1_poff_reason;
+	int pon_boot1_off_reason;
 	uint32_t pon_rtc_time;
 	uint32_t power_button_release_rtc_time;
 };
@@ -53,6 +55,8 @@ int pmk8550_get_on_off_reason(struct pon_on_off_reason *reason);
 int pmk8550_get_battery_voltage(struct udevice *pmic, uint16_t *battery_mv);
 
 int pmk8550_get_pon_reason(struct udevice *pmic);
+int pmk8550_get_boot1_poff_reason1(struct udevice *pmic);
+int pmk8550_get_boot1_off_reason(struct udevice *pmic);
 uint32_t pmk8550_get_pon_rtc_time(struct udevice *pmic);
 uint32_t pmk8550_get_power_button_release_rtc_time(struct udevice *pmic);
 

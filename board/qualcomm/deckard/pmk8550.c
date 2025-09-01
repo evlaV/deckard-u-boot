@@ -32,6 +32,8 @@
 #define PON_PBS_RTC_ALARM_RSN          0x0621
 
 #define PON_AOP_PON_REASON1			   0x7269
+#define PON_AOP_BOOT1_POFF_REASON1	   0x726C
+#define PON_AOP_BOOT1_OFF_REASON	   0x726D
 
 #define PON_PBS_RAW_XVDD_RB_MASK             0x8000
 #define PON_PBS_RAW_DVDD_RB_MASK             0x4000
@@ -239,6 +241,10 @@ int pmk8550_get_on_off_reason(struct pon_on_off_reason *reason)
 
 	reason->pon_reason = pmk8550_get_pon_reason(pmic);
 
+	reason->pon_boot1_poff_reason = pmk8550_get_boot1_poff_reason1(pmic);
+
+	reason->pon_boot1_off_reason = pmk8550_get_boot1_off_reason(pmic);
+
 	reason->pon_rtc_time = pmk8550_get_pon_rtc_time(pmic);
 
 	reason->power_button_release_rtc_time = pmk8550_get_power_button_release_rtc_time(pmic);
@@ -320,6 +326,20 @@ int pmk8550_get_battery_voltage(struct udevice *pmic, uint16_t *battery_mv)
 	// printf("Battery: %d mV\n", *battery_mv);
 
 	return (0);
+}
+
+int pmk8550_get_boot1_poff_reason1(struct udevice *pmic)
+{
+	int ret = pmic_reg_read(pmic, PON_AOP_BOOT1_POFF_REASON1);
+
+	return ret;
+}
+
+int pmk8550_get_boot1_off_reason(struct udevice *pmic)
+{
+	int ret = pmic_reg_read(pmic, PON_AOP_BOOT1_OFF_REASON);
+
+	return ret;
 }
 
 int pmk8550_get_pon_reason(struct udevice *pmic)

@@ -690,7 +690,8 @@ void qcom_spl_board_init(void)
 		}
 
 		printf("PON Reason = 0x%0X\n",pon_poff_reason.pon_reason);
-
+		printf("PON BOOT1 POFF Reason = 0x%0X\n",pon_poff_reason.pon_boot1_poff_reason);
+		printf("PON BOOT1 OFF Reason = 0x%0X\n",pon_poff_reason.pon_boot1_off_reason);
 
 		// We do this check for when power button was released to check for a situation that should be impossible
 		// Scenario of concern is that somehow the device appears to have been shutdown by powerbutton
