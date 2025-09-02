@@ -10,8 +10,9 @@
 #include <clk.h>
 #include <dm.h>
 #include <dsi_host.h>
-#include <log.h>
 #include <generic-phy.h>
+#include <lmb.h>
+#include <log.h>
 #include <mipi_dsi.h>
 #include <panel.h>
 #include <phy-mipi-dphy.h>
@@ -496,27 +497,129 @@ static int qcom_mipi_dsi_host_attach(struct mipi_dsi_host *host,
 	return 0;
 }
 
+#if 0
+static int dsi_cmd_dma_rx(struct msm_dsi_host *msm_host,
+			u8 *buf, int rx_byte, int pkt_size)
+{
+	u32 *temp, data;
+	int i, j = 0, cnt;
+	u32 read_cnt;
+	u8 reg[16];
+	int repeated_bytes = 0;
+	int buf_offset = buf - msm_host->rx_buf;
+
+	temp = (u32 *)reg;
+	cnt = (rx_byte + 3) >> 2;
+	if (cnt > 4)
+		cnt = 4; /* 4 x 32 bits registers only */
+
+	if (rx_byte == 4)
+		read_cnt = 4;
+	else
+		read_cnt = pkt_size + 6;
+
+	/*
+	 * In case of multiple reads from the panel, after the first read, there
+	 * is possibility that there are some bytes in the payload repeating in
+	 * the RDBK_DATA registers. Since we read all the parameters from the
+	 * panel right from the first byte for every pass. We need to skip the
+	 * repeating bytes and then append the new parameters to the rx buffer.
+	 */
+	if (read_cnt > 16) {
+		int bytes_shifted;
+		/* Any data more than 16 bytes will be shifted out.
+		 * The temp read buffer should already contain these bytes.
+		 * The remaining bytes in read buffer are the repeated bytes.
+		 */
+		bytes_shifted = read_cnt - 16;
+		repeated_bytes = buf_offset - bytes_shifted;
+	}
+
+	for (i = cnt - 1; i >= 0; i--) {
+		data = dsi_read(msm_host, REG_DSI_RDBK_DATA(i));
+		*temp++ = ntohl(data); /* to host byte order */
+		DBG("data = 0x%x and ntohl(data) = 0x%x", data, ntohl(data));
+	}
+
+	for (i = repeated_bytes; i < 16; i++)
+		buf[j++] = reg[i];
+
+	return j;
+}
+#endif
+
+#define REG_DSI_VBIF_CTRL	(0x01CC - 4)
 static ssize_t qcom_mipi_dsi_host_transfer(struct mipi_dsi_host *host,
 					 const struct mipi_dsi_msg *msg)
 {
 	struct qcom_mipi_dsi *dsi = host_to_dsi(host);
 	struct mipi_dsi_packet packet;
-	int ret, nb_bytes;
+	int ret, nb_bytes, len, count;
+	void __iomem *base = dsi->base;
+	u8 *data;
+	u32 val = 0;
 
 printf("======%s tx %d rx %d with base %p\n", __func__, msg->tx_len, msg->rx_len, dsi->base);
-#if 0
 	ret = mipi_dsi_create_packet(&packet, msg);
 	if (ret) {
 		dev_err(host->dev, "failed to create packet: %d\n", ret);
 		return ret;
 	}
 
-	qcom_mipi_message_config(dsi, msg);
+	len = (packet.size + 3) & (~0x3);
+	/* FIXME: Hack to use a lower address buffer. try to allocate it */
+	//data = malloc(len);
+	data = lmb_alloc_base(len, 0x1000, 0xf0000000, LMB_NONE);
+	//data = 0x1000;
+	if (!data) {
+		dev_err(host->dev, "failed to allocate packet\n");
+		return -EIO;
+	} else {
+		dev_err(host->dev, "allocate dsi packet %p\n", data);
+	}
 
-	ret = qcom_mipi_dsi_write(dsi, &packet);
-	if (ret)
-		return ret;
+	/* MSM specific command format in memory */
+	data[0] = packet.header[1];
+	data[1] = packet.header[2];
+	data[2] = packet.header[0];
+	data[3] = BIT(7); /* Last packet */
+	if (mipi_dsi_packet_format_is_long(msg->type))
+		data[3] |= BIT(6);
+	if (msg->rx_buf && msg->rx_len)
+		data[3] |= BIT(5);
 
+	/* Long packet */
+	if (packet.payload && packet.payload_length)
+		memcpy(data + 4, packet.payload, packet.payload_length);
+
+	/* Append 0xff to the end */
+	if (packet.size < len)
+		memset(data + packet.size, 0xff, len - packet.size);
+
+	dsi_write(base + REG_DSI_CTRL, 0x177);
+	dsi_write(base + REG_DSI_INTR_CTRL, 0xAA20AA02);
+	dsi_write(base + REG_DSI_DMA_BASE, 0x1000);
+	dsi_write(base + REG_DSI_DMA_LEN, 0x4);
+	dsi_write(base + REG_DSI_VBIF_CTRL, 0x7);
+	dsi_write(base + REG_DSI_TRIG_DMA, 0x1);
+	dsi_write(base + REG_DSI_INTR_CTRL, 0xAA20AA03);
+	//dsi_write(base + REG_DSI_INTR_CTRL, 0xAA20AA00);
+	printf("DSI reading irq off at 0x%x\n", base + REG_DSI_INTR_CTRL);
+	while (!val) {
+		val = dsi_read(base + REG_DSI_INTR_CTRL) & DSI_IRQ_CMD_DMA_DONE;
+		count++;
+		if (count > 100) {
+			printf("DSI CMD: count :%d dma failed\n", count);
+			printf("DSI CMD: irq value = %x\n", dsi_read(base + REG_DSI_INTR_CTRL));
+			printf("DSI CMD: err int value = %x\n", dsi_read(base + REG_DSI_ERR_INT_MASK0));
+			return -EIO;
+		}
+		udelay(10);
+	}
+
+	dsi_write(base + REG_DSI_CTRL, 0x173);
+
+/*
 	if (msg->rx_buf && msg->rx_len) {
 		ret = qcom_mipi_dsi_read(dsi, msg);
 		if (ret)
@@ -525,8 +628,11 @@ printf("======%s tx %d rx %d with base %p\n", __func__, msg->tx_len, msg->rx_len
 	} else {
 		nb_bytes = packet.size;
 	}
+*/
 
-#endif
+	/* only support tx so far */
+	nb_bytes = packet.size;
+	//free(data);
 	return nb_bytes;
 }
 
@@ -560,7 +666,8 @@ static void qcom_mipi_dsi_init_ctrl(void __iomem *base)
 	dsi_write(base + REG_DSI_CLKOUT_TIMING_CTRL, 0x1A27);
 	dsi_write(base + REG_DSI_EOT_PACKET_CTRL, 0x1);
 	dsi_write(base + REG_DSI_ERR_INT_MASK0, 0x13FF3FE0);
-	dsi_write(base + REG_DSI_INTR_CTRL, 0xAA20AA02);
+	//dsi_write(base + REG_DSI_INTR_CTRL, 0xAA20AA02);
+	dsi_write(base + REG_DSI_INTR_CTRL, 0);
 	dsi_write(base + REG_DSI_CLK_CTRL, 0x23F);
 	dsi_write(base + REG_DSI_LANE_SWAP_CTRL, 0x0);
 	dsi_write(base + REG_DSI_CTRL, 0x171);
@@ -596,6 +703,8 @@ static int qcom_mipi_dsi_init(struct udevice *dev,
 		dev_err(device->dev, "dsi dt register address error\n");
 		return -EINVAL;
 	}
+	/* offset in xml is wrong, we should shift it by 4 */
+	//dsi->base -= 4;
 
 #if 0
 	ret = clk_get_by_name(device->dev, "px_clk", &clk);
