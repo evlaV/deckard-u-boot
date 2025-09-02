@@ -84,6 +84,8 @@ struct qcom_mipi_dsi {
 	u32 channel;
 	unsigned int max_data_lanes;
 	const struct mipi_dsi_phy_ops *phy_ops;
+	phys_addr_t tx_buf;
+	u8 *rx_buf;
 };
 
 static struct qcom_dsi_priv_global {
@@ -497,8 +499,87 @@ static int qcom_mipi_dsi_host_attach(struct mipi_dsi_host *host,
 	return 0;
 }
 
-#if 0
-static int dsi_cmd_dma_rx(struct msm_dsi_host *msm_host,
+static void dsi_set_tx_power_mode(int mode, struct qcom_mipi_dsi *dsi)
+{
+	u32 data;
+
+	data = dsi_read(dsi->base + REG_DSI_CMD_DMA_CTRL);
+
+	if (mode == 0)
+		data &= ~DSI_CMD_DMA_CTRL_LOW_POWER;
+	else
+		data |= DSI_CMD_DMA_CTRL_LOW_POWER;
+
+	dsi_write(dsi->base + REG_DSI_CMD_DMA_CTRL, data);
+}
+
+#define REG_DSI_VBIF_CTRL	(0x01CC - 4)
+static int dsi_cmds2buf_tx(struct mipi_dsi_host *host,
+			   const struct mipi_dsi_msg *msg)
+{
+	struct qcom_mipi_dsi *dsi = host_to_dsi(host);
+	struct mipi_dsi_packet packet;
+	int ret, len, count;
+	void __iomem *base = dsi->base;
+	u8 *data;
+	u32 val = 0;
+
+printf("======%s tx %u rx %u with base %p\n", __func__, msg->tx_len, msg->rx_len, dsi->base);
+	ret = mipi_dsi_create_packet(&packet, msg);
+	if (ret) {
+		dev_err(host->dev, "failed to create packet: %d\n", ret);
+		return ret;
+	}
+
+	len = (packet.size + 3) & (~0x3);
+	data = dsi->tx_buf;
+
+	/* MSM specific command format in memory */
+	data[0] = packet.header[1];
+	data[1] = packet.header[2];
+	data[2] = packet.header[0];
+	data[3] = BIT(7); /* Last packet */
+	if (mipi_dsi_packet_format_is_long(msg->type))
+		data[3] |= BIT(6);
+	if (msg->rx_buf && msg->rx_len)
+		data[3] |= BIT(5);
+
+	/* Long packet */
+	if (packet.payload && packet.payload_length)
+		memcpy(data + 4, packet.payload, packet.payload_length);
+
+	/* Append 0xff to the end */
+	if (packet.size < len)
+		memset(data + packet.size, 0xff, len - packet.size);
+
+	dsi_write(base + REG_DSI_CTRL, 0x177);
+	dsi_write(base + REG_DSI_INTR_CTRL, 0xAA20AA02);
+	dsi_write(base + REG_DSI_DMA_BASE, 0x1000);
+	dsi_write(base + REG_DSI_DMA_LEN, 0x4);
+	dsi_write(base + REG_DSI_VBIF_CTRL, 0x7);
+	dsi_write(base + REG_DSI_TRIG_DMA, 0x1);
+	dsi_write(base + REG_DSI_INTR_CTRL, 0xAA20AA03);
+	//printf("DSI reading irq off at 0x%u\n", base + REG_DSI_INTR_CTRL);
+	while (!val) {
+		val = dsi_read(base + REG_DSI_INTR_CTRL) & DSI_IRQ_CMD_DMA_DONE;
+		count++;
+		if (count > 100) {
+			printf("DSI CMD: count :%d dma failed\n", count);
+			printf("DSI CMD: irq value = %x\n", dsi_read(base + REG_DSI_INTR_CTRL));
+			printf("DSI CMD: err int value = %x\n", dsi_read(base + REG_DSI_ERR_INT_MASK0));
+			return -EIO;
+		}
+		udelay(10);
+	}
+
+	dsi_write(base + REG_DSI_CTRL, 0x173);
+	dsi_write(base + REG_DSI_INTR_CTRL, 0xAA20AA00);
+
+	//free(data);
+	return packet.size;
+}
+
+static int dsi_cmd_dma_rx(struct qcom_mipi_dsi *dsi,
 			u8 *buf, int rx_byte, int pkt_size)
 {
 	u32 *temp, data;
@@ -506,7 +587,7 @@ static int dsi_cmd_dma_rx(struct msm_dsi_host *msm_host,
 	u32 read_cnt;
 	u8 reg[16];
 	int repeated_bytes = 0;
-	int buf_offset = buf - msm_host->rx_buf;
+	int buf_offset = buf - dsi->rx_buf;
 
 	temp = (u32 *)reg;
 	cnt = (rx_byte + 3) >> 2;
@@ -536,9 +617,9 @@ static int dsi_cmd_dma_rx(struct msm_dsi_host *msm_host,
 	}
 
 	for (i = cnt - 1; i >= 0; i--) {
-		data = dsi_read(msm_host, REG_DSI_RDBK_DATA(i));
+		data = dsi_read(dsi->base + REG_DSI_RDBK_DATA(i));
 		*temp++ = ntohl(data); /* to host byte order */
-		DBG("data = 0x%x and ntohl(data) = 0x%x", data, ntohl(data));
+		printf("data = 0x%x and ntohl(data) = 0x%x\n", data, ntohl(data));
 	}
 
 	for (i = repeated_bytes; i < 16; i++)
@@ -546,94 +627,217 @@ static int dsi_cmd_dma_rx(struct msm_dsi_host *msm_host,
 
 	return j;
 }
-#endif
 
-#define REG_DSI_VBIF_CTRL	(0x01CC - 4)
+/*
+ * dsi_short_read1_resp: 1 parameter
+ */
+static int dsi_short_read1_resp(u8 *buf, const struct mipi_dsi_msg *msg)
+{
+	u8 *data = msg->rx_buf;
+
+	if (data && (msg->rx_len >= 1)) {
+		*data = buf[1]; /* strip out dcs type */
+		return 1;
+	}
+
+	pr_err("%s: read data does not match with rx_buf len %zu\n",
+		__func__, msg->rx_len);
+	return -EINVAL;
+}
+
+/*
+ * dsi_short_read2_resp: 2 parameter
+ */
+static int dsi_short_read2_resp(u8 *buf, const struct mipi_dsi_msg *msg)
+{
+	u8 *data = msg->rx_buf;
+
+	if (data && (msg->rx_len >= 2)) {
+		data[0] = buf[1]; /* strip out dcs type */
+		data[1] = buf[2];
+		return 2;
+	}
+
+	pr_err("%s: read data does not match with rx_buf len %zu\n",
+		__func__, msg->rx_len);
+	return -EINVAL;
+}
+
+static int dsi_long_read_resp(u8 *buf, const struct mipi_dsi_msg *msg)
+{
+	/* strip out 4 byte dcs header */
+	if (msg->rx_buf && msg->rx_len)
+		memcpy(msg->rx_buf, buf + 4, msg->rx_len);
+
+	return msg->rx_len;
+}
+
+int msm_dsi_host_cmd_rx(struct mipi_dsi_host *host,
+				const struct mipi_dsi_msg *msg)
+{
+	struct qcom_mipi_dsi *dsi = host_to_dsi(host);
+	//const struct msm_dsi_cfg_handler *cfg_hnd = msm_host->cfg_hnd;
+	int data_byte, rx_byte, dlen, end;
+	int short_response, diff, pkt_size, ret = 0;
+	char cmd;
+	int rlen = msg->rx_len;
+	u8 *buf;
+
+	//printf("Dsi RX on Host %d", dsi->id);
+	printf("Dsi RX\n");
+	if (rlen <= 2) {
+		short_response = 1;
+		pkt_size = rlen;
+		rx_byte = 4;
+	} else {
+		short_response = 0;
+		data_byte = 10;	/* first read */
+		if (rlen < data_byte)
+			pkt_size = rlen;
+		else
+			pkt_size = data_byte;
+		rx_byte = data_byte + 6; /* 4 header + 2 crc */
+	}
+
+	buf = dsi->rx_buf;
+	end = 0;
+	while (!end) {
+		u8 tx[2] = {pkt_size & 0xff, pkt_size >> 8};
+		struct mipi_dsi_msg max_pkt_size_msg = {
+			.channel = msg->channel,
+			.type = MIPI_DSI_SET_MAXIMUM_RETURN_PACKET_SIZE,
+			.tx_len = 2,
+			.tx_buf = tx,
+		};
+
+		printf("rlen=%d pkt_size=%d rx_byte=%d\n",
+			rlen, pkt_size, rx_byte);
+
+		ret = dsi_cmds2buf_tx(host, &max_pkt_size_msg);
+		if (ret < 2) {
+			pr_err("%s: Set max pkt size failed, %d\n",
+				__func__, ret);
+			return -EINVAL;
+		}
+
+		/* 8650 is 6g_v2 MSM_DSI_VER_MAJOR_6G, MSM_DSI_6G_VER_MINOR_V2_8_0
+		if ((cfg_hnd->major == MSM_DSI_VER_MAJOR_6G) &&
+			(cfg_hnd->minor >= MSM_DSI_6G_VER_MINOR_V1_1)) {
+		}
+		*/
+		if (1) {
+			/* Clear the RDBK_DATA registers */
+			dsi_write(dsi->base + REG_DSI_RDBK_DATA_CTRL,
+					DSI_RDBK_DATA_CTRL_CLR);
+			wmb(); /* make sure the RDBK registers are cleared */
+			dsi_write(dsi->base + REG_DSI_RDBK_DATA_CTRL, 0);
+			wmb(); /* release cleared status before transfer */
+		}
+
+		ret = dsi_cmds2buf_tx(host, msg);
+		if (ret < 0) {
+			pr_err("%s: Read cmd Tx failed, %d\n", __func__, ret);
+			return ret;
+		} else if (ret < msg->tx_len) {
+			pr_err("%s: Read cmd Tx failed, too short: %d\n", __func__, ret);
+			return -EIO;
+		}
+
+		/*
+		 * once cmd_dma_done interrupt received,
+		 * return data from client is ready and stored
+		 * at RDBK_DATA register already
+		 * since rx fifo is 16 bytes, dcs header is kept at first loop,
+		 * after that dcs header lost during shift into registers
+		 */
+		dlen = dsi_cmd_dma_rx(dsi, buf, rx_byte, pkt_size);
+
+		if (dlen <= 0)
+			return 0;
+
+		if (short_response)
+			break;
+
+		if (rlen <= data_byte) {
+			diff = data_byte - rlen;
+			end = 1;
+		} else {
+			diff = 0;
+			rlen -= data_byte;
+		}
+
+		if (!end) {
+			dlen -= 2; /* 2 crc */
+			dlen -= diff;
+			buf += dlen;	/* next start position */
+			data_byte = 14;	/* NOT first read */
+			if (rlen < data_byte)
+				pkt_size += rlen;
+			else
+				pkt_size += data_byte;
+			printf("buf=%p dlen=%d diff=%d\n", buf, dlen, diff);
+		}
+	}
+
+	/*
+	 * For single Long read, if the requested rlen < 10,
+	 * we need to shift the start position of rx
+	 * data buffer to skip the bytes which are not
+	 * updated.
+	 */
+	if (pkt_size < 10 && !short_response)
+		buf = dsi->rx_buf + (10 - rlen);
+	else
+		buf = dsi->rx_buf;
+
+	cmd = buf[0];
+	switch (cmd) {
+	case MIPI_DSI_RX_ACKNOWLEDGE_AND_ERROR_REPORT:
+		pr_err("%s: rx ACK_ERR_PACLAGE\n", __func__);
+		ret = 0;
+		break;
+	case MIPI_DSI_RX_GENERIC_SHORT_READ_RESPONSE_1BYTE:
+	case MIPI_DSI_RX_DCS_SHORT_READ_RESPONSE_1BYTE:
+		ret = dsi_short_read1_resp(buf, msg);
+		break;
+	case MIPI_DSI_RX_GENERIC_SHORT_READ_RESPONSE_2BYTE:
+	case MIPI_DSI_RX_DCS_SHORT_READ_RESPONSE_2BYTE:
+		ret = dsi_short_read2_resp(buf, msg);
+		break;
+	case MIPI_DSI_RX_GENERIC_LONG_READ_RESPONSE:
+	case MIPI_DSI_RX_DCS_LONG_READ_RESPONSE:
+		ret = dsi_long_read_resp(buf, msg);
+		break;
+	default:
+		printf("%s:Invalid response cmd 0x%x\n", __func__, cmd);
+		ret = 0;
+	}
+
+	return ret;
+}
+
 static ssize_t qcom_mipi_dsi_host_transfer(struct mipi_dsi_host *host,
 					 const struct mipi_dsi_msg *msg)
 {
 	struct qcom_mipi_dsi *dsi = host_to_dsi(host);
-	struct mipi_dsi_packet packet;
-	int ret, nb_bytes, len, count;
-	void __iomem *base = dsi->base;
-	u8 *data;
-	u32 val = 0;
+	int ret;
 
-printf("======%s tx %d rx %d with base %p\n", __func__, msg->tx_len, msg->rx_len, dsi->base);
-	ret = mipi_dsi_create_packet(&packet, msg);
-	if (ret) {
-		dev_err(host->dev, "failed to create packet: %d\n", ret);
-		return ret;
-	}
+	/* from msm_dsi_host_xfer_prepare() */
+	if (!(msg->flags & MIPI_DSI_MSG_USE_LPM))
+		dsi_set_tx_power_mode(0, dsi);
 
-	len = (packet.size + 3) & (~0x3);
-	/* FIXME: Hack to use a lower address buffer. try to allocate it */
-	//data = malloc(len);
-	data = lmb_alloc_base(len, 0x1000, 0xf0000000, LMB_NONE);
-	//data = 0x1000;
-	if (!data) {
-		dev_err(host->dev, "failed to allocate packet\n");
-		return -EIO;
-	} else {
-		dev_err(host->dev, "allocate dsi packet %p\n", data);
-	}
-
-	/* MSM specific command format in memory */
-	data[0] = packet.header[1];
-	data[1] = packet.header[2];
-	data[2] = packet.header[0];
-	data[3] = BIT(7); /* Last packet */
-	if (mipi_dsi_packet_format_is_long(msg->type))
-		data[3] |= BIT(6);
-	if (msg->rx_buf && msg->rx_len)
-		data[3] |= BIT(5);
-
-	/* Long packet */
-	if (packet.payload && packet.payload_length)
-		memcpy(data + 4, packet.payload, packet.payload_length);
-
-	/* Append 0xff to the end */
-	if (packet.size < len)
-		memset(data + packet.size, 0xff, len - packet.size);
-
-	dsi_write(base + REG_DSI_CTRL, 0x177);
-	dsi_write(base + REG_DSI_INTR_CTRL, 0xAA20AA02);
-	dsi_write(base + REG_DSI_DMA_BASE, 0x1000);
-	dsi_write(base + REG_DSI_DMA_LEN, 0x4);
-	dsi_write(base + REG_DSI_VBIF_CTRL, 0x7);
-	dsi_write(base + REG_DSI_TRIG_DMA, 0x1);
-	dsi_write(base + REG_DSI_INTR_CTRL, 0xAA20AA03);
-	//dsi_write(base + REG_DSI_INTR_CTRL, 0xAA20AA00);
-	printf("DSI reading irq off at 0x%x\n", base + REG_DSI_INTR_CTRL);
-	while (!val) {
-		val = dsi_read(base + REG_DSI_INTR_CTRL) & DSI_IRQ_CMD_DMA_DONE;
-		count++;
-		if (count > 100) {
-			printf("DSI CMD: count :%d dma failed\n", count);
-			printf("DSI CMD: irq value = %x\n", dsi_read(base + REG_DSI_INTR_CTRL));
-			printf("DSI CMD: err int value = %x\n", dsi_read(base + REG_DSI_ERR_INT_MASK0));
-			return -EIO;
-		}
-		udelay(10);
-	}
-
-	dsi_write(base + REG_DSI_CTRL, 0x173);
-
-/*
 	if (msg->rx_buf && msg->rx_len) {
-		ret = qcom_mipi_dsi_read(dsi, msg);
+		ret = msm_dsi_host_cmd_rx(host, msg);
 		if (ret)
 			return ret;
-		nb_bytes = msg->rx_len;
+		ret = msg->rx_len;
 	} else {
-		nb_bytes = packet.size;
+		ret = dsi_cmds2buf_tx(host, msg);
 	}
-*/
 
-	/* only support tx so far */
-	nb_bytes = packet.size;
-	//free(data);
-	return nb_bytes;
+	/* from msm_dsi_host_xfer_restore() */
+	if (!(msg->flags & MIPI_DSI_MSG_USE_LPM))
+		dsi_set_tx_power_mode(1, dsi);
 }
 
 static const struct mipi_dsi_host_ops qcom_mipi_dsi_host_ops = {
@@ -727,6 +931,8 @@ static int qcom_mipi_dsi_init(struct udevice *dev,
 */
 
 	qcom_mipi_dsi_init_ctrl(dsi->base);
+	dsi->tx_buf =  lmb_alloc_base(0x1000, 0x1000, 0xf0000000, LMB_NONE);
+	dsi->rx_buf =  malloc(0x1000);
 	ret = phy_ops->init(device);
 
 	return 0;
@@ -734,7 +940,7 @@ static int qcom_mipi_dsi_init(struct udevice *dev,
 
 static int qcom_mipi_dsi_enable(struct udevice *dev)
 {
-	struct qcom_mipi_dsi *dsi = dev_get_priv(dev);
+	//struct qcom_mipi_dsi *dsi = dev_get_priv(dev);
 
 	dev_dbg(dev, "Enable DSI host\n");
 	/* Switch to video mode for panel-bridge enable & panel enable */
@@ -771,7 +977,7 @@ static int dsi_phy_init(void *priv_data)
 	struct mipi_dsi_device *device = priv_data;
 	struct udevice *dev = device->dev;
 	struct qcom_dsi_priv *dsi = dev_get_priv(dev);
-	u32 val;
+	//u32 val;
 	int ret;
 
 	dev_dbg(dev, "Initialize DSI physical layer\n");
