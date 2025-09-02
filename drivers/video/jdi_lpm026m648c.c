@@ -330,8 +330,8 @@ printf("======= %s set device %p device2 %p\n", __func__, plat->device, plat->de
 	priv->device = plat->device;
 	priv->device2 = plat->device2;
 	mdelay(20);
-	dsi_write_panel_on(priv);
 	get_panel_info(priv);
+	dsi_write_panel_on(priv);
 
 	set_brightness(priv, 200, GPO1_TES1);
 
