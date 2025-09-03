@@ -35,8 +35,6 @@ static struct nex100011ub_regulator_config nex100011ub_data = {
 	.vmax = 6500000,
 };
 
-static int gpio_done = 0;
-
 static int nex100011ub_regulator_set_value(struct udevice *dev, int uV)
 {
 	struct nex100011ub_regulator_pdata *pdata = dev_get_plat(dev);
@@ -87,10 +85,6 @@ static int nex100011ub_regulator_probe(struct udevice *dev)
 
 	pdata->config = (void *)dev_get_driver_data(dev);
 
-	if (gpio_done)
-		goto skip_gpio;
-
-	gpio_done = 1;
 	ret = gpio_request_by_name(dev, "biasp-gpios", 0, &pdata->biasp_gpio, GPIOD_IS_OUT);
 	if (ret) {
 		dev_err(dev, "biasp gpio get failed.\n");
@@ -107,7 +101,6 @@ static int nex100011ub_regulator_probe(struct udevice *dev)
 	dm_gpio_set_value(&pdata->biasn_gpio, 1);
 	udelay(1000);
 
-skip_gpio:
 	ret = i2c_get_chip(dev->parent, NEX10001UB_I2C_CHIP, 1, &pdata->i2c);
 	if (ret) {
 		dev_err(dev, "i2c dev get failed.\n");
