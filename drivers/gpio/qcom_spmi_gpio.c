@@ -946,12 +946,12 @@ static int qcom_spmi_pmic_pinctrl_pinmux_set_mux(struct udevice *dev, unsigned i
 	struct spmi_pmic_gpio_pad *pad;
 	unsigned int val;
 	int ret;
+	const char *name;
 
 	if (selector >= plat->pin_count)
 		return -EINVAL;
 
 	pad = &plat->pads[selector];
-
 	/*
 	 * Non-LV/MV subtypes only support 2 special functions,
 	 * offsetting the dtestx function values by 2
@@ -1015,6 +1015,21 @@ static int qcom_spmi_pmic_pinctrl_pinmux_set_mux(struct udevice *dev, unsigned i
 	return spmi_pmic_gpio_write(plat, pad, PMIC_GPIO_REG_EN_CTL, val);
 }
 
+static int qcom_spmi_pmic_pinctrl_bind(struct udevice *dev)
+{
+	const char *name;
+
+	/* Set a descriptive name since there are many PMICs! */
+	name = strchr(dev_read_string(dev, "compatible"), ',');
+	if (name) {
+		name += 1; /* skip the , */
+		name = strdup(name);
+		device_set_name(dev, name);
+	}
+
+	return 0;
+}
+
 struct pinctrl_ops qcom_spmi_pmic_pinctrl_ops = {
 	.get_pins_count = qcom_spmi_pmic_pinctrl_get_pins_count,
 	.get_pin_name = qcom_spmi_pmic_pinctrl_get_pin_name,
@@ -1031,5 +1046,6 @@ struct pinctrl_ops qcom_spmi_pmic_pinctrl_ops = {
 U_BOOT_DRIVER(qcom_spmi_pmic_pinctrl) = {
 	.name	= "qcom_spmi_pmic_pinctrl",
 	.id	= UCLASS_PINCTRL,
+	.bind	= qcom_spmi_pmic_pinctrl_bind,
 	.ops	= &qcom_spmi_pmic_pinctrl_ops,
 };
