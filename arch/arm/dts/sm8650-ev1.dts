@@ -593,8 +593,8 @@
 	nex100011ub0: nex100011ub0@3e {
 		compatible  = "nexperia,nex100011ub";
 		reg         = <0x3e>;
-		biasp-gpios = <&pm8550_gpios 4 GPIO_ACTIVE_HIGH>;
-		biasn-gpios = <&pm8550_gpios 9 GPIO_ACTIVE_HIGH>;
+		biasp-gpios = <&pm8550_gpios 8 GPIO_ACTIVE_HIGH>;
+		biasn-gpios = <&pm8550_gpios 10 GPIO_ACTIVE_HIGH>;
 		status      = "okay";
 	};
 
@@ -614,8 +614,8 @@
 	nex100011ub1: nex100011ub1@3e {
 		compatible  = "nexperia,nex100011ub";
 		reg         = <0x3e>;
-		biasp-gpios = <&pm8550_gpios 8 GPIO_ACTIVE_HIGH>;
-		biasn-gpios = <&pm8550_gpios 10 GPIO_ACTIVE_HIGH>;
+		biasp-gpios = <&pm8550_gpios 4 GPIO_ACTIVE_HIGH>;
+		biasn-gpios = <&pm8550_gpios 9 GPIO_ACTIVE_HIGH>;
 		status      = "okay";
 	};
 
