@@ -524,7 +524,7 @@ static int dsi_cmds2buf_tx(struct mipi_dsi_host *host,
 	u8 *data;
 	u32 val = 0;
 
-printf("======%s tx %u rx %u with base %p\n", __func__, msg->tx_len, msg->rx_len, dsi->base);
+printf("======%s tx %lu rx %lu with base %p\n", __func__, msg->tx_len, msg->rx_len, dsi->base);
 	ret = mipi_dsi_create_packet(&packet, msg);
 	if (ret) {
 		dev_err(host->dev, "failed to create packet: %d\n", ret);
@@ -532,7 +532,7 @@ printf("======%s tx %u rx %u with base %p\n", __func__, msg->tx_len, msg->rx_len
 	}
 
 	len = (packet.size + 3) & (~0x3);
-	data = dsi->tx_buf;
+	data = (u8 *)dsi->tx_buf;
 
 	/* MSM specific command format in memory */
 	data[0] = packet.header[1];
