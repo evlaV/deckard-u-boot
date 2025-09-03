@@ -256,7 +256,7 @@ static int msm_serial_setbrg(struct udevice *dev, int baud)
 	ret = geni_serial_set_clock_rate(dev, clk_rate);
 	if (ret < 0) {
 		pr_err("%s: Couldn't set clock rate: %d\n", __func__, ret);
-		return ret;
+		return 0;
 	}
 	geni_serial_baud(priv->base, clk_div, baud);
 
