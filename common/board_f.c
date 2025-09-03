@@ -9,6 +9,8 @@
  * Marius Groeger <mgroeger@sysgo.de>
  */
 
+// #define LOG_DEBUG
+
 #include <config.h>
 #define DEBUG
 #include <bloblist.h>
@@ -829,6 +831,8 @@ static int initf_bootstage(void)
 	return 0;
 }
 
+#define HACK_SKIP_EARLY_DM 1
+
 static int initf_dm(void)
 {
 	int ret;
@@ -837,6 +841,15 @@ static int initf_dm(void)
 		return 0;
 
 	bootstage_start(BOOTSTAGE_ID_ACCUM_DM_F, "dm_f");
+
+	// HACK: Skip parsing the entire DT and just create an empty device model.
+	// UART will still work since the serial framework will parse stdout-path!
+
+#if HACK_SKIP_EARLY_DM == 1
+	ret = dm_init(CONFIG_IS_ENABLED(OF_LIVE));
+	if (ret)
+		return ret;
+#else
 	ret = dm_init_and_scan(true);
 	if (ret)
 		return ret;
@@ -844,6 +857,7 @@ static int initf_dm(void)
 	ret = dm_autoprobe();
 	if (ret)
 		return ret;
+#endif
 	bootstage_accum(BOOTSTAGE_ID_ACCUM_DM_F);
 
 	if (IS_ENABLED(CONFIG_TIMER_EARLY)) {
