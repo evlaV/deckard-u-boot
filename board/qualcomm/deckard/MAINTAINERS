@@ -1,0 +1,5 @@
+Deckard
+M:	Gabe Rowe <gaber@valvesoftware.com>
+S:	Maintained
+F:	board/qualcomm/deckard/
+F:	configs/sm8650*
