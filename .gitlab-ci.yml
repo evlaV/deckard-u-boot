@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: GPL-2.0+
 
 variables:
-  DEFAULT_ALL_TAG: "all"
-  DEFAULT_ARM64_TAG: "arm64"
-  DEFAULT_FAST_ARM64_TAG: "fast arm64"
-  DEFAULT_AMD64_TAG: "amd64"
-  DEFAULT_FAST_AMD64_TAG: "fast amd64"
+  DEFAULT_ALL_TAG: "x86_64-linux-kvm-docker"
+  DEFAULT_ARM64_TAG: "aarch64-linux-docker"
+  DEFAULT_FAST_ARM64_TAG: "aarch64-linux-docker"
+  DEFAULT_AMD64_TAG: "x86_64-linux-kvm-docker"
+  DEFAULT_FAST_AMD64_TAG: "x86_64-linux-kvm-docker"
   MIRROR_DOCKER: docker.io
   SJG_LAB: ""
   PLATFORM: linux/amd64,linux/arm64
@@ -125,8 +125,8 @@ build all platforms in a single job:
   dependencies: []
   parallel:
     matrix:
-      - HOST: "fast arm64"
-      - HOST: "fast amd64"
+      - HOST: "aarch64-linux-docker"
+      - HOST: "x86_64-linux-kvm-docker"
   tags:
     - ${HOST}
   script:
@@ -253,8 +253,8 @@ Check packing of Python tools:
 sandbox test.py:
   parallel:
     matrix:
-      - HOST: "fast arm64"
-      - HOST: "fast amd64"
+      - HOST: "aarch64-linux-docker"
+      - HOST: "x86_64-linux-kvm-docker"
   tags:
     - ${HOST}
   variables:
@@ -265,8 +265,8 @@ sandbox test.py:
 sandbox with clang test.py:
   parallel:
     matrix:
-      - HOST: "fast arm64"
-      - HOST: "fast amd64"
+      - HOST: "aarch64-linux-docker"
+      - HOST: "x86_64-linux-kvm-docker"
   tags:
     - ${HOST}
   variables:
@@ -277,8 +277,8 @@ sandbox with clang test.py:
 sandbox64 test.py:
   parallel:
     matrix:
-      - HOST: "fast arm64"
-      - HOST: "fast amd64"
+      - HOST: "aarch64-linux-docker"
+      - HOST: "x86_64-linux-kvm-docker"
   tags:
     - ${HOST}
   variables:
@@ -288,8 +288,8 @@ sandbox64 test.py:
 sandbox64 with clang test.py:
   parallel:
     matrix:
-      - HOST: "fast arm64"
-      - HOST: "fast amd64"
+      - HOST: "aarch64-linux-docker"
+      - HOST: "x86_64-linux-kvm-docker"
   tags:
     - ${HOST}
   variables:
@@ -300,8 +300,8 @@ sandbox64 with clang test.py:
 sandbox64_lwip test.py:
   parallel:
     matrix:
-      - HOST: "fast arm64"
-      - HOST: "fast amd64"
+      - HOST: "aarch64-linux-docker"
+      - HOST: "x86_64-linux-kvm-docker"
   tags:
     - ${HOST}
   variables:
