@@ -117,6 +117,7 @@ static ulong sm8650_set_rate(struct clk *clk, ulong rate)
 
 static const struct gate_clk sm8650_clks[] = {
 	GATE_CLK(GCC_AGGRE_NOC_PCIE_AXI_CLK,		0x52000, BIT(12)),
+	GATE_CLK(GCC_DISP_HF_AXI_CLK,			0x2700c, BIT(0)),
 	GATE_CLK(GCC_AGGRE_UFS_PHY_AXI_CLK,		0x770e4, BIT(0)),
 	GATE_CLK(GCC_AGGRE_UFS_PHY_AXI_HW_CTL_CLK,	0x770e4, BIT(1)),
 	GATE_CLK(GCC_AGGRE_USB3_PRIM_AXI_CLK,		0x3908c, BIT(0)),
@@ -296,11 +297,23 @@ static const struct udevice_id gcc_sm8650_of_match[] = {
 	{ }
 };
 
+static int gcc_sm8650_probe(struct udevice *dev)
+{
+	phys_addr_t base = dev_read_addr(dev);
+
+	/* Force some clocks always on */
+	qcom_branch_set_clk_en(base, 0x27004); /* GCC_DISP_AHB_CLK */
+	qcom_branch_set_clk_en(base, 0x27018); /* GCC_DISP_XO_CLK */
+
+	return 0;
+}
+
 U_BOOT_DRIVER(gcc_sm8650) = {
 	.name		= "gcc_sm8650",
 	.id		= UCLASS_NOP,
 	.of_match	= gcc_sm8650_of_match,
 	.bind		= qcom_cc_bind,
+	.probe		= gcc_sm8650_probe,
 	.flags		= DM_FLAG_PRE_RELOC | DM_FLAG_DEFAULT_PD_CTRL_OFF,
 };
 
