@@ -240,6 +240,14 @@ config DM_REGULATOR_QCOM_RPMH
 	  implements get/set api for a limited set of regulators used
 	  by u-boot.
 
+config SPL_DM_REGULATOR_QCOM_RPMH
+	bool "SPL Enable driver model for Qualcomm RPMh regulator"
+	depends on SPL_DM_REGULATOR && SPL_QCOM_RPMH
+	---help---
+	  Enable support for the Qualcomm RPMh regulator. The driver
+	  implements get/set api for a limited set of regulators used
+	  by u-boot.	  
+
 config DM_REGULATOR_QCOM_USB_VBUS
 	bool "Enable driver model for Qualcomm USB vbus regulator"
 	depends on DM_REGULATOR
