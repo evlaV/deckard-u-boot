@@ -127,6 +127,23 @@ config CLK_QCOM_X1E80100
 	  on the Snapdragon X1E80100 SoC. This driver supports the clocks
 	  and resets exposed by the GCC hardware block.
 
+config CLK_QCOM_RPMH
+	bool "Qualcomm RPMh controllers clocks"
+	depends on QCOM_RPMH
+	help
+	  Say Y here to enable support for configuring clocks via the RPMh.
+
 endmenu
+
+config CLK_QCOM_DEBUG
+	bool "Enable Qualcomm clock debugging"
+	depends on ARCH_SNAPDRAGON
+	select CMD_CLK
+	help
+	  Enable support for debugging the Qualcomm Global Clock
+	  Controller on supported platforms. The hardware implements
+	  the ability to measure the output rates of most clocks, so
+	  that clock configurations can be validated. Use the "clk debug"
+	  command.
 
 endif

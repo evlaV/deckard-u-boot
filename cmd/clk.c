@@ -8,6 +8,7 @@
 #include <dm/device.h>
 #include <dm/root.h>
 #include <dm/device-internal.h>
+#include <dm/uclass-internal.h>
 #include <linux/clk-provider.h>
 
 static void show_clks(struct udevice *dev, int depth, int last_flag)
@@ -87,6 +88,36 @@ static int do_clk_dump(struct cmd_tbl *cmdtp, int flag, int argc,
 		printf("Clock dump error %d\n", ret);
 		ret = CMD_RET_FAILURE;
 	}
+
+	return ret;
+}
+
+static int do_clk_debug(struct cmd_tbl *cmdtp, int flag, int argc,
+		       char *const argv[])
+{
+	int ret;
+	struct udevice *dev;
+
+	for (ret = 0; ret < argc; ret++) {
+		printf("%s ", argv[ret]);
+	}
+	printf("\n\n");
+
+	if (argc < 2) {
+		printf("clk debug <device>\n");
+		return 0;
+	}
+
+	ret = uclass_find_device_by_name(UCLASS_CLK, argv[1], &dev);
+	if (ret < 0) {
+		ret = uclass_find_device_by_seq(UCLASS_CLK, dectoul(argv[1], NULL), &dev);
+		if (ret < 0) {
+			printf("Can't find device '%s'\n", argv[1]);
+			return ret;
+		}
+	}
+
+	clk_debug_clks(dev, argc-1, argv+1);
 
 	return ret;
 }

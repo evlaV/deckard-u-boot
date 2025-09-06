@@ -1,5 +1,12 @@
 if ARCH_SNAPDRAGON
 
+config OF_LIVE_SA8775P
+	bool "Enable OF LIVE SA8775P"
+	select OF_LIVE
+	help
+	  Say Y here to enable support for OF LIVE fixups
+	  on the Snapdragon SA8775 SoC.
+
 config SYS_SOC
 	default "snapdragon"
 

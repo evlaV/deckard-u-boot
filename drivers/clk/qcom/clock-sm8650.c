@@ -5,6 +5,8 @@
  * (C) Copyright 2024 Linaro Ltd.
  */
 
+#define LOG_DEBUG
+
 #include <clk-uclass.h>
 #include <dm.h>
 #include <linux/delay.h>
@@ -65,58 +67,10 @@ static const struct freq_tbl ftbl_gcc_pcie_0_phy_rchng_clk_src[] = {
 	{ }
 };
 
-static ulong sm8650_set_rate(struct clk *clk, ulong rate)
-{
-	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
-	const struct freq_tbl *freq;
-
-	switch (clk->id) {
-	case GCC_QUPV3_WRAP2_S7_CLK: /* UART15 */
-		freq = qcom_find_freq(ftbl_gcc_qupv3_wrap1_s3_clk_src, rate);
-		clk_rcg_set_rate_mnd(priv->base, 0x1e898,
-				     freq->pre_div, freq->m, freq->n, freq->src, 16);
-		return freq->freq;
-	case GCC_SDCC2_APPS_CLK:
-		freq = qcom_find_freq(ftbl_gcc_sdcc2_apps_clk_src, rate);
-		clk_rcg_set_rate_mnd(priv->base, 0x14018,
-				     freq->pre_div, freq->m, freq->n, freq->src, 8);
-		return freq->freq;
-	case GCC_USB30_PRIM_MASTER_CLK:
-		freq = qcom_find_freq(ftbl_gcc_usb30_prim_master_clk_src, rate);
-		clk_rcg_set_rate_mnd(priv->base, 0x3902c,
-				     freq->pre_div, freq->m, freq->n, freq->src, 8);
-		return freq->freq;
-	case GCC_USB30_PRIM_MOCK_UTMI_CLK:
-		clk_rcg_set_rate(priv->base, 0x39044, 0, 0);
-		return TCXO_DIV2_RATE;
-	case GCC_USB3_PRIM_PHY_AUX_CLK_SRC:
-		clk_rcg_set_rate(priv->base, 0x39070, 0, 0);
-		return TCXO_DIV2_RATE;
-	case GCC_PCIE_0_AUX_CLK:
-		freq = qcom_find_freq(ftbl_gcc_pcie_0_aux_clk_src, rate);
-		clk_rcg_set_rate_mnd(priv->base, 0x6b074,
-				     freq->pre_div, freq->m, freq->n, freq->src, 16);
-		return freq->freq;
-	case GCC_PCIE_1_AUX_CLK:
-		freq = qcom_find_freq(ftbl_gcc_pcie_0_aux_clk_src, rate);
-		clk_rcg_set_rate_mnd(priv->base, 0x8d07c,
-				     freq->pre_div, freq->m, freq->n, freq->src, 16);
-		return freq->freq;
-	case GCC_PCIE_0_PHY_RCHNG_CLK:
-		freq = qcom_find_freq(ftbl_gcc_pcie_0_phy_rchng_clk_src, rate);
-		clk_rcg_set_rate(priv->base, 0x6b058, freq->pre_div, freq->src);
-		return freq->freq;
-	case GCC_PCIE_1_PHY_RCHNG_CLK:
-		freq = qcom_find_freq(ftbl_gcc_pcie_0_phy_rchng_clk_src, rate);
-		clk_rcg_set_rate(priv->base, 0x8d060, freq->pre_div, freq->src);
-		return freq->freq;
-	default:
-		return 0;
-	}
-}
 
 static const struct gate_clk sm8650_clks[] = {
 	GATE_CLK(GCC_AGGRE_NOC_PCIE_AXI_CLK,		0x52000, BIT(12)),
+	GATE_CLK(GCC_DISP_HF_AXI_CLK,			0x2700c, BIT(0)),
 	GATE_CLK(GCC_AGGRE_UFS_PHY_AXI_CLK,		0x770e4, BIT(0)),
 	GATE_CLK(GCC_AGGRE_UFS_PHY_AXI_HW_CTL_CLK,	0x770e4, BIT(1)),
 	GATE_CLK(GCC_AGGRE_USB3_PRIM_AXI_CLK,		0x3908c, BIT(0)),
@@ -201,9 +155,75 @@ static const struct gate_clk sm8650_clks[] = {
 	GATE_CLK(GCC_TURING_Q6_AXI_CLK,			0x45004, BIT(0)),
 };
 
+static ulong sm8650_set_rate(struct clk *clk, ulong rate)
+{
+	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
+	const struct freq_tbl *freq;
+	const char *clk_name;
+
+	if (clk->id < ARRAY_SIZE(sm8650_clks) && sm8650_clks[clk->id].name)
+		clk_name = sm8650_clks[clk->id].name;
+	else
+		clk_name = "";
+
+	debug("%s: clk %s (%lu) rate %lu\n", __func__, clk_name, clk->id, rate);
+
+	switch (clk->id) {
+	case GCC_QUPV3_WRAP2_S7_CLK: /* UART15 */
+		freq = qcom_find_freq(ftbl_gcc_qupv3_wrap1_s3_clk_src, rate);
+		clk_rcg_set_rate_mnd(priv->base, 0x1e898,
+				     freq->pre_div, freq->m, freq->n, freq->src, 16);
+		return freq->freq;
+	case GCC_SDCC2_APPS_CLK:
+		freq = qcom_find_freq(ftbl_gcc_sdcc2_apps_clk_src, rate);
+		clk_rcg_set_rate_mnd(priv->base, 0x14018,
+				     freq->pre_div, freq->m, freq->n, freq->src, 8);
+		return freq->freq;
+	case GCC_USB30_PRIM_MASTER_CLK:
+		freq = qcom_find_freq(ftbl_gcc_usb30_prim_master_clk_src, rate);
+		clk_rcg_set_rate_mnd(priv->base, 0x3902c,
+				     freq->pre_div, freq->m, freq->n, freq->src, 8);
+		return freq->freq;
+	case GCC_USB30_PRIM_MOCK_UTMI_CLK:
+		clk_rcg_set_rate(priv->base, 0x39044, 0, 0);
+		return TCXO_DIV2_RATE;
+	case GCC_USB3_PRIM_PHY_AUX_CLK_SRC:
+		clk_rcg_set_rate(priv->base, 0x39070, 0, 0);
+		return TCXO_DIV2_RATE;
+	case GCC_PCIE_0_AUX_CLK:
+		freq = qcom_find_freq(ftbl_gcc_pcie_0_aux_clk_src, rate);
+		clk_rcg_set_rate_mnd(priv->base, 0x6b074,
+				     freq->pre_div, freq->m, freq->n, freq->src, 16);
+		return freq->freq;
+	case GCC_PCIE_1_AUX_CLK:
+		freq = qcom_find_freq(ftbl_gcc_pcie_0_aux_clk_src, rate);
+		clk_rcg_set_rate_mnd(priv->base, 0x8d07c,
+				     freq->pre_div, freq->m, freq->n, freq->src, 16);
+		return freq->freq;
+	case GCC_PCIE_0_PHY_RCHNG_CLK:
+		freq = qcom_find_freq(ftbl_gcc_pcie_0_phy_rchng_clk_src, rate);
+		clk_rcg_set_rate(priv->base, 0x6b058, freq->pre_div, freq->src);
+		return freq->freq;
+	case GCC_PCIE_1_PHY_RCHNG_CLK:
+		freq = qcom_find_freq(ftbl_gcc_pcie_0_phy_rchng_clk_src, rate);
+		clk_rcg_set_rate(priv->base, 0x8d060, freq->pre_div, freq->src);
+		return freq->freq;
+	default:
+		return 0;
+	}
+}
+
 static int sm8650_enable(struct clk *clk)
 {
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
+	const char *clk_name;
+
+	if (clk->id < ARRAY_SIZE(sm8650_clks) && sm8650_clks[clk->id].name)
+		clk_name = sm8650_clks[clk->id].name;
+	else
+		clk_name = "";
+
+	debug("%s: clk %s (%lu)\n", __func__, clk_name, clk->id);
 
 	switch (clk->id) {
 	case GCC_AGGRE_USB3_PRIM_AXI_CLK:
@@ -296,11 +316,23 @@ static const struct udevice_id gcc_sm8650_of_match[] = {
 	{ }
 };
 
+static int gcc_sm8650_probe(struct udevice *dev)
+{
+	phys_addr_t base = dev_read_addr(dev);
+
+	/* Force some clocks always on */
+	qcom_branch_set_clk_en(base, 0x27004); /* GCC_DISP_AHB_CLK */
+	qcom_branch_set_clk_en(base, 0x27018); /* GCC_DISP_XO_CLK */
+
+	return 0;
+}
+
 U_BOOT_DRIVER(gcc_sm8650) = {
 	.name		= "gcc_sm8650",
 	.id		= UCLASS_NOP,
 	.of_match	= gcc_sm8650_of_match,
 	.bind		= qcom_cc_bind,
+	.probe		= gcc_sm8650_probe,
 	.flags		= DM_FLAG_PRE_RELOC | DM_FLAG_DEFAULT_PD_CTRL_OFF,
 };
 

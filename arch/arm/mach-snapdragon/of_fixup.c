@@ -19,6 +19,7 @@
 #define pr_fmt(fmt) "of_fixup: " fmt
 
 #include <dt-bindings/input/linux-event-codes.h>
+#include <dt-bindings/power/qcom-rpmpd.h>
 #include <dm/of_access.h>
 #include <dm/of.h>
 #include <event.h>
@@ -155,6 +156,16 @@ static void fixup_power_domains(struct device_node *root)
 
 		val = prop->value;
 		if (val[0] == cpu_to_fdt32(pd->phandle))
+			/* Check if the rpmh power domain is SA8775P_CX and remove it */
+			if (IS_ENABLED(CONFIG_OF_LIVE_SA8775P) &&
+			    (val[1] != cpu_to_fdt32(SA8775P_CX)))
+					continue;
+
+		if (!strncmp(np->name, "display", 7) ||
+		    !strncmp(np->name, "dsi", 3) ||
+		    !strcmp(np->name, "clock-controller@af00000"))
+			continue;
+
 			of_remove_property(np, prop);
 	}
 }

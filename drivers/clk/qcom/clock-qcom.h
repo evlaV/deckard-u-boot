@@ -40,7 +40,7 @@ struct vote_clk {
 };
 
 struct freq_tbl {
-	uint freq;
+	uint64_t freq;
 	uint src;
 	u8 pre_div;
 	u16 m;
@@ -85,6 +85,7 @@ struct msm_clk_data {
 	const phys_addr_t		*dbg_rcg_addrs;
 	unsigned long			num_rcgs;
 	const char * const		*dbg_rcg_names;
+	const char * const		*dbg_gdsc_names;
 
 	int (*enable)(struct clk *clk);
 	unsigned long (*set_rate)(struct clk *clk, unsigned long rate);
@@ -106,6 +107,8 @@ void clk_rcg_set_rate_mnd(phys_addr_t base, uint32_t cmd_rcgr,
 void clk_rcg_set_rate(phys_addr_t base, uint32_t cmd_rcgr, int div,
 		      int source);
 void clk_phy_mux_enable(phys_addr_t base, uint32_t cmd_rcgr, bool enabled);
+void clk_rcg_set_rate_div(phys_addr_t base, uint32_t cmd_rcgr,
+			  int width, int shift);;
 
 static inline int qcom_gate_clk_en(const struct msm_clk_priv *priv, unsigned long id)
 {
@@ -120,6 +123,16 @@ static inline int qcom_gate_clk_en(const struct msm_clk_priv *priv, unsigned lon
 	writel(val | priv->data->clks[id].en_val, priv->base + priv->data->clks[id].reg);
 
 	return 0;
+}
+
+static inline void qcom_branch_set_clk_en(phys_addr_t base, unsigned long cbcr)
+{
+	u32 val;
+
+	val = readl(base + cbcr);
+	writel(val | BIT(0), base + cbcr);
+
+	printf("%s: base %p cbcr %lx val %x\n", __func__, (void *)base, cbcr, readl(base + cbcr));
 }
 
 #endif

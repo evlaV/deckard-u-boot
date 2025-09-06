@@ -15,6 +15,7 @@
 #include <clk-uclass.h>
 #include <linux/clk-provider.h>
 #include <dm.h>
+#include <dm/device_compat.h>
 #include <dm/device-internal.h>
 #include <dm/lists.h>
 #include <errno.h>
@@ -27,6 +28,8 @@
 #include <power-domain-uclass.h>
 
 #include "clock-qcom.h"
+
+#include "debugcc/debugcc.h"
 
 /* CBCR register fields */
 #define CBCR_BRANCH_ENABLE_BIT  BIT(0)
@@ -120,9 +123,11 @@ void clk_rcg_set_rate_mnd(phys_addr_t base, uint32_t cmd_rcgr,
 	debug("m %#x n %#x d %#x div %#x mask %#x\n", m_val, n_val, d_val, div, mask);
 
 	/* Program MND values */
-	writel(m_val & mask, base + cmd_rcgr + RCG_M_REG);
-	writel(n_val & mask, base + cmd_rcgr + RCG_N_REG);
-	writel(d_val & mask, base + cmd_rcgr + RCG_D_REG);
+	if (mnd_width) {
+		writel(m_val & mask, base + cmd_rcgr + RCG_M_REG);
+		writel(n_val & mask, base + cmd_rcgr + RCG_N_REG);
+		writel(d_val & mask, base + cmd_rcgr + RCG_D_REG);
+	}
 
 	/* setup src select and divider */
 	cfg  = readl(base + cmd_rcgr + RCG_CFG_REG);
@@ -142,8 +147,11 @@ void clk_rcg_set_rate_mnd(phys_addr_t base, uint32_t cmd_rcgr,
 	clk_bcr_update(base + cmd_rcgr);
 }
 
-/* root set rate for clocks with half integer and mnd_width=0 */
-void clk_rcg_set_rate(phys_addr_t base, uint32_t cmd_rcgr, int div,
+/* root set rate for clocks with half integer and mnd_width=0.
+ * pre_div is (d * 2) - 1, allowing for 1/2 fractions which have to be
+ * calculated at compile time!
+ */
+void clk_rcg_set_rate(phys_addr_t base, uint32_t cmd_rcgr, int pre_div,
 		      int source)
 {
 	u32 cfg;
@@ -157,8 +165,8 @@ void clk_rcg_set_rate(phys_addr_t base, uint32_t cmd_rcgr, int div,
 	 * Set the divider; HW permits fraction dividers (+0.5), but
 	 * for simplicity, we will support integers only
 	 */
-	if (div)
-		cfg |= (2 * div - 1) & CFG_SRC_DIV_MASK;
+	if (pre_div)
+		cfg |= pre_div & CFG_SRC_DIV_MASK;
 
 	writel(cfg, base + cmd_rcgr + RCG_CFG_REG); /* Write new clock configuration */
 
@@ -181,8 +189,60 @@ void clk_phy_mux_enable(phys_addr_t base, uint32_t cmd_rcgr, bool enabled)
 		cfg |= FIELD_PREP(PHY_MUX_MASK, PHY_MUX_PHY_SRC);
 	else
 		cfg |= FIELD_PREP(PHY_MUX_MASK, PHY_MUX_REF_SRC);
-
 	writel(cfg, base + cmd_rcgr);
+}
+
+/* only divider 1 is supported so far. Because get_rate is missing and cannot
+ * calculate div with parent rate. */
+void clk_rcg_set_rate_div(phys_addr_t base, uint32_t cmd_rcgr,
+			  int width, int shift)
+{
+	u32 cfg;
+
+	cfg  = readl(base + cmd_rcgr);
+	cfg &= ~(BIT(width) << shift);
+	cfg |= 1 << shift;
+	writel(cfg, base + cmd_rcgr);
+}
+
+static int qcom_clk_parent_enable(struct clk *clk)
+{
+	struct clk *parent = (struct clk *)clk->data;
+
+	if (!parent) {
+		dev_err(clk->dev, "No parent clock set for %lu\n", clk->id);
+		return -ENOENT;
+	}
+
+	if (!(parent->dev->flags_ & DM_FLAG_ACTIVATED)) {
+		dev_err(clk->dev, "Parent clock %s:%lu not activated\n",
+			parent->dev->name, parent->id);
+		return -ENODEV;
+	}
+
+	debug("Enabling parent clock %s:%lu for %s:%lu\n", parent->dev->name, parent->id, clk->dev->name, clk->id);
+
+	return clk_enable(parent);
+}
+
+static ulong qcom_clk_parent_set_rate(struct clk *clk, ulong rate)
+{
+	struct clk *parent = (struct clk *)clk->data;
+
+	if (!parent) {
+		dev_err(clk->dev, "No parent clock set for %lu\n", clk->id);
+		return -ENOENT;
+	}
+
+	if (!(parent->dev->flags_ & DM_FLAG_ACTIVATED)) {
+		dev_err(clk->dev, "Parent clock %s:%lu not activated\n",
+			parent->dev->name, parent->id);
+		return -ENODEV;
+	}
+
+	debug("Setting rate %lu for parent clock %s:%lu for %s:%lu\n", rate, parent->dev->name, parent->id, clk->dev->name, clk->id);
+
+	return clk_set_rate(parent, clk->rate);
 }
 
 const struct freq_tbl *qcom_find_freq(const struct freq_tbl *f, uint rate)
@@ -218,6 +278,17 @@ static int msm_clk_probe(struct udevice *dev)
 static ulong msm_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct msm_clk_data *data = (struct msm_clk_data *)dev_get_driver_data(clk->dev);
+	int ret = 0;
+
+	// FIXME: For now we're assuming that if we have a parent then rate changes should
+	// be propagated, this may not always be the case...
+	if (clk->data) {
+		ret = qcom_clk_parent_set_rate(clk, rate);
+		if (ret) {
+			dev_err(clk->dev, "Failed to set parent clock rate: %d\n", ret);
+			return 0;
+		}
+	}
 
 	if (data->set_rate)
 		return data->set_rate(clk, rate);
@@ -228,6 +299,10 @@ static ulong msm_clk_set_rate(struct clk *clk, ulong rate)
 static int msm_clk_enable(struct clk *clk)
 {
 	struct msm_clk_data *data = (struct msm_clk_data *)dev_get_driver_data(clk->dev);
+
+	/* If the clock has a parent, the pointer to it is in the data property */
+	if (clk->data)
+		qcom_clk_parent_enable(clk);
 
 	if (data->enable)
 		return data->enable(clk);
@@ -256,7 +331,7 @@ static void dump_gplls(struct udevice *dev, phys_addr_t base)
 		xo_rate = clk_get_rate(clk);
 
 		/* On SDM845 this needs to be divided by 2 for some reason */
-		if (xo_rate && of_machine_is_compatible("qcom,sdm845"))
+		// if (xo_rate && of_machine_is_compatible("qcom,sdm845"))
 			xo_rate /= 2;
 	} else {
 		printf("Can't find XO clock, XO_BOARD rate may be wrong\n");
@@ -267,8 +342,12 @@ static void dump_gplls(struct udevice *dev, phys_addr_t base)
 	printf("+--------+--------+-----------+------------+----------------+\n");
 	for (i = 0; i < data->num_plls; i++) {
 		locked = !!(readl(gplls[i]) & BIT(31));
-		l = readl(gplls[i] + 4) & (BIT(16) - 1);
-		a = readq(gplls[i] + 40) & (BIT(16) - 1);
+		// SDM845
+		// l = readl(gplls[i] + 4) & (BIT(16) - 1);
+		// a = readq(gplls[i] + 40) & (BIT(16) - 1);
+		// SM8650 dispcc
+		l = readl(gplls[i] + 0x10) & (BIT(16) - 1);
+		a = readl(gplls[i] + 0x14) & (BIT(16) - 1);
 		printf("| GPLL%-2d | %-6s | %9llu * (%#-9llx + %#-13llx  * 2 ** -40 ) / 1000000\n",
 		       i, locked ? "X" : "", xo_rate, l, a);
 	}
@@ -329,11 +408,27 @@ static void __maybe_unused msm_dump_clks(struct udevice *dev)
 	struct msm_clk_data *data = (struct msm_clk_data *)dev_get_driver_data(dev);
 	struct msm_clk_priv *priv = dev_get_priv(dev);
 	const struct gate_clk *sclk;
+	struct udevice *nulldev;
 	int val, i;
 
 	if (!data->clks) {
 		printf("No clocks\n");
 		return;
+	}
+
+	// If we have power domains, print them
+	if (!uclass_get_device_by_ofnode(UCLASS_POWER_DOMAIN,
+					dev_ofnode(dev), &nulldev)) {
+		printf("Power domains:\n");
+		for (i = 0; i < data->num_power_domains; i++) {
+			val = readl(priv->base + data->power_domains[i].reg);
+			if (data->dbg_gdsc_names)
+				printf("%-32s: %s\n", data->dbg_gdsc_names[i],
+				       (val & (GDSC_PWR_ON_MASK | GDSC_POWER_UP_COMPLETE)) ? "ON" : "OFF");
+			else
+			 	printf("GDSC-%-27d: %s\n", i,
+				       (val & (GDSC_PWR_ON_MASK | GDSC_POWER_UP_COMPLETE)) ? "ON" : "OFF");;
+		}
 	}
 
 	printf("Gate Clocks:\n");
@@ -350,12 +445,36 @@ static void __maybe_unused msm_dump_clks(struct udevice *dev)
 	dump_rcgs(dev);
 }
 
+static int msm_clk_set_parent(struct clk *clk, struct clk *parent)
+{
+	/* Stash a pointer to the parent clock in the data property */
+	clk->data = (unsigned long)parent;
+
+	// FIXME: probably we shouldn't be doing this?
+	if (clk->enable_count)
+		clk_enable(parent);
+
+	return 0;
+}
+
+static void msm_debug_clks(struct udevice *dev, int argc, char *const argv[])
+{
+	if (!IS_ENABLED(CONFIG_CLK_QCOM_DEBUG)) {
+		printf("Enable CONFIG_CLK_QCOM_DEBUG to debug GCC\n");
+		return;
+	}
+
+	qcom_debugcc_run(argc, argv);
+}
+
 static struct clk_ops msm_clk_ops = {
 	.set_rate = msm_clk_set_rate,
 	.enable = msm_clk_enable,
 #if IS_ENABLED(CONFIG_CMD_CLK)
 	.dump = msm_dump_clks,
+	.debug_clks = msm_debug_clks,
 #endif
+	.set_parent = msm_clk_set_parent,
 };
 
 U_BOOT_DRIVER(qcom_clk) = {
@@ -380,7 +499,7 @@ int qcom_cc_bind(struct udevice *parent)
 		return -ENOENT;
 
 	/* Register the clock controller */
-	ret = device_bind_with_driver_data(parent, drv, "qcom_clk", (ulong)data,
+	ret = device_bind_with_driver_data(parent, drv, parent->name, (ulong)data,
 					   dev_ofnode(parent), &clkdev);
 	if (ret)
 		return ret;
