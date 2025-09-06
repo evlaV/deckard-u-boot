@@ -32,6 +32,13 @@ config QCOM_RPMH
 	  Say y here to support the Qualcomm RPMh (resource peripheral manager)
 	  if you need to control regulators on Qualcomm platforms, say y here.
 
+config SPL_QCOM_RPMH
+	bool "SPL Qualcomm RPMh support"
+	depends on SPL_QCOM_COMMAND_DB
+	help
+	  Say y here to support the Qualcomm RPMh (resource peripheral manager)
+	  if you need to control regulators on Qualcomm platforms, say y here.
+
 config QCOM_SMEM
 	bool "Qualcomm SMEM support"
 	help
