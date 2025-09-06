@@ -302,8 +302,8 @@ static int gcc_sm8650_probe(struct udevice *dev)
 	phys_addr_t base = dev_read_addr(dev);
 
 	/* Force some clocks always on */
-	qcom_branch_set_clk_en(base, 0x27004); /* GCC_DISP_AHB_CLK */
-	qcom_branch_set_clk_en(base, 0x27018); /* GCC_DISP_XO_CLK */
+	//qcom_branch_set_clk_en(base, 0x27004); /* GCC_DISP_AHB_CLK */
+	//qcom_branch_set_clk_en(base, 0x27018); /* GCC_DISP_XO_CLK */
 
 	return 0;
 }
