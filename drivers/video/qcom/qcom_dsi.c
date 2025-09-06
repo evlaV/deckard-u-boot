@@ -524,7 +524,7 @@ static int dsi_cmds2buf_tx(struct mipi_dsi_host *host,
 	u8 *data;
 	u32 val = 0;
 
-printf("======%s tx %lu rx %lu with base %p\n", __func__, msg->tx_len, msg->rx_len, dsi->base);
+//printf("======%s tx %lu rx %lu with base %p\n", __func__, msg->tx_len, msg->rx_len, dsi->base);
 	ret = mipi_dsi_create_packet(&packet, msg);
 	if (ret) {
 		dev_err(host->dev, "failed to create packet: %d\n", ret);
@@ -1303,14 +1303,14 @@ static int qcom_dsi_probe(struct udevice *dev)
 		goto err_clk;
 	}
 
-printf("=============%s ret 0\n", __func__);
+//printf("=============%s ret 0\n", __func__);
 	return 0;
 err_clk:
 	clk_disable_bulk(&bulk);
 err_reg:
 	regulator_set_enable(priv->vdd_reg, false);
 
-printf("=============%s ret %d\n", __func__, ret);
+//printf("=============%s ret %d\n", __func__, ret);
 	return ret;
 }
 

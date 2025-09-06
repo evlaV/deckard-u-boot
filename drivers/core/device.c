@@ -186,7 +186,7 @@ static int device_bind_common(struct udevice *parent, const struct driver *drv,
 	if (devp)
 		*devp = dev;
 
-	printf("ddddddd bind class %d device: %s\n", drv->id, name);
+	//printf("ddddddd bind class %d device: %s\n", drv->id, name);
 	dev_or_flags(dev, DM_FLAG_BOUND);
 
 	return 0;
@@ -489,9 +489,11 @@ int  dbg_f = 0;
 		return -EINVAL;
 
 dbg_f = 0;
+#if 0
 if (!strncmp(dev->name, "dis", 3) || !strncmp(dev->name, "dsi", 3) || !strncmp(dev->name, "phy", 3) ||
     !strncmp(dev->name, "power", 5) || !strncmp(dev->name, "rpmh", 4) || !strncmp(dev->name, "rsc", 3))
 	dbg_f = 1;
+#endif
 
 if(dbg_f) printf("--------%s enter for dev %s\n", __func__, dev->name);
 	if (dev_get_flags(dev) & DM_FLAG_ACTIVATED)
