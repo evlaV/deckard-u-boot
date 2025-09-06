@@ -64,7 +64,7 @@ static int ev2_backlight_probe(struct udevice *dev)
 	struct ev2_backlight_priv *priv = dev_get_priv(dev);
 	int ret, i;
 
-printf("=========%s called\n", __func__);
+//printf("=========%s called\n", __func__);
 
 	for (i = 0; i < REGULATOR_N; i++) {
 		ret = device_get_supply_regulator(dev, vreg_names[i], &priv->reg[i]);

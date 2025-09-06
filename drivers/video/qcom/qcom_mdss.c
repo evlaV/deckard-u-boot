@@ -19,7 +19,7 @@ We can parse all sub-nodes here, to make parsing nodes and topology easier
 with referencing bootdev_get_sibling_blk() to get sub-nodes device */
 int qcom_mdss_probe(struct udevice *dev)
 {
-printf("=========%s enter\n", __func__);
+//printf("=========%s enter\n", __func__);
 #if 0
 	struct video_uc_plat *plat = dev_get_uclass_plat(dev);
 	struct rk_vop_priv *priv = dev_get_priv(dev);
@@ -115,7 +115,7 @@ printf("=========%s enter\n", __func__);
 
 static int qcom_mdss_bind(struct udevice *dev)
 {
-printf("================== %s called\n", __func__);
+//printf("================== %s called\n", __func__);
 	return 0;
 }
 

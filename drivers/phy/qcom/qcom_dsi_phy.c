@@ -607,7 +607,7 @@ static int _dsi_pll_7nm_vco_prepare(struct dsi_pll_7nm *pll_7nm)
 		pr_err("PLL(%d) lock failed\n", pll_7nm->plat->id);
 		goto error;
 	}
-printf("--------- PLL(%d) lock ok\n", pll_7nm->plat->id);
+//printf("--------- PLL(%d) lock ok\n", pll_7nm->plat->id);
 
 	/*
 	 * assert power on reset for PHY digital in case the PLL is
@@ -896,7 +896,7 @@ static int dsi_pll_7nm_probe(struct udevice *dev)
 	int index = 0;
 	struct msm_dsi_phy_plat *plat = dev_get_plat(dev);
 
-printf("========%s enter parent %s priv is %p\n", __func__, dev->parent->name, plat);
+//printf("========%s enter parent %s priv is %p\n", __func__, dev->parent->name, plat);
 
 	pll_7nm->dev = dev;
 	pll_7nm->plat = plat;
@@ -1437,7 +1437,7 @@ static int msm_dsi_phy_power_on(struct phy *phy)
 {
 	struct msm_dsi_phy *qcom = dev_get_priv(phy->dev);
 
-printf("======%s enter with struct phy->id %lu (internal id %d), skipped so far\n", __func__, phy->id, qcom->plat->id);
+//printf("======%s enter with struct phy->id %lu (internal id %d), skipped so far\n", __func__, phy->id, qcom->plat->id);
 return 0;
 	return msm_dsi_phy_power_on_internal(qcom);
 }
@@ -1525,7 +1525,7 @@ static int qcom_dsi_phy_bind(struct udevice *dev)
 	/// FIXME: CASEY: populate driver_data with configs necessary for the PLL.
 	/// IMPORTANT: we can't access data from the phy device itself since it may not be
 	/// probed when clk ops are called!
-printf("------- binding device %s\n", buf);
+//printf("------- binding device %s\n", buf);
 	ret = device_bind_with_driver_data(dev, drv, buf, (ulong)driver_data,
 					 dev_ofnode(dev), NULL);
 	if (ret)
@@ -1556,7 +1556,7 @@ static int qcom_dsi_phy_of_to_plat(struct udevice *dev)
 	if (IS_ERR(plat->lane_base))
 		return PTR_ERR(plat->lane_base);
 
-printf("========%s udev %p base %p pll_base %p lane_base %p\n", __func__, dev, plat->base, plat->pll_base, plat->lane_base);
+//printf("========%s udev %p base %p pll_base %p lane_base %p\n", __func__, dev, plat->base, plat->pll_base, plat->lane_base);
 	plat->id = dsi_phy_get_id(plat);
 	if (plat->id)
 		plat->usecase = MSM_DSI_PHY_SLAVE;
@@ -1610,7 +1610,7 @@ static int msm_dsi_phy_probe(struct udevice *dev)
 	/* Enable phy by default, so that phy pll works when clk ops is called */
 	msm_dsi_phy_power_on_internal(qcom);
 
-printf("========%s ret ok\n", __func__);
+//printf("========%s ret ok\n", __func__);
 	return ret;
 }
 

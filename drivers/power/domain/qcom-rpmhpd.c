@@ -165,7 +165,7 @@ static int rpmhpd_power_on(struct power_domain *pd)
 	if (!ret)
 		curr_rpmhpd->enabled = true;
 
-printf("---------dev %s id %d is power on ret %d\n", pd->dev->name, pd->id, ret);
+//printf("---------dev %s id %d is power on ret %d\n", pd->dev->name, pd->id, ret);
 	return ret;
 }
 
@@ -191,7 +191,7 @@ static int rpmhpd_power_off(struct power_domain *pd)
 	if (!ret)
 		curr_rpmhpd->enabled = false;
 
-printf("---------dev %s id %d is power off ret %d\n", pd->dev->name, pd->id, ret);
+//printf("---------dev %s id %d is power off ret %d\n", pd->dev->name, pd->id, ret);
 	return ret;
 }
 
@@ -242,12 +242,12 @@ static int rpmhpd_probe(struct udevice *dev)
 	struct rpmhpd *priv;
 	const struct rpmhpd_desc *desc;
 
-printf("---------%s line %d\n", __func__, __LINE__);
+//printf("---------%s line %d\n", __func__, __LINE__);
 	desc = (const struct rpmhpd_desc *)dev_get_driver_data(dev);
 	if (!desc)
 		return -EINVAL;
 
-printf("---------%s line %d\n", __func__, __LINE__);
+//printf("---------%s line %d\n", __func__, __LINE__);
 	rpmhpds = desc->rpmhpds;
 
 	for (i = 0; i < desc->num_pds; i++) {
@@ -274,7 +274,7 @@ printf("---------%s line %d\n", __func__, __LINE__);
 			return ret;
 	}
 
-printf("---------%s ret %d\n", __func__, ret);
+//printf("---------%s ret %d\n", __func__, ret);
 	return ret;
 }
 
@@ -296,7 +296,7 @@ int qcom_rpmhpd_bind(struct udevice *parent)
 	struct driver *drv;
 	int ret;
 
-printf("---------%s enter\n", __func__);
+//printf("---------%s enter\n", __func__);
 	/* Get a handle to the rpmhpd handler */
 	drv = lists_driver_lookup_name("qcom_rpmhpd_drv");
 	if (!drv)
@@ -305,7 +305,7 @@ printf("---------%s enter\n", __func__);
 	/* Register the rpmhpd dev */
 	ret = device_bind_with_driver_data(parent, drv, "qcom_rpmhpd_dev", (ulong)data,
 					   dev_ofnode(parent), NULL);
-printf("---------%s ret %d\n", __func__, ret);
+//printf("---------%s ret %d\n", __func__, ret);
 	if (ret)
 		return ret;
 

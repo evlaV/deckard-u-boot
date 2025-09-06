@@ -809,7 +809,7 @@ int qcom_dpu_probe(struct udevice *dev)
 	ulong rate;
 	int ret, len;
 
-printf("=========%s enter, FLG_RELOC? %lu\n", __func__, gd->flags & GD_FLG_RELOC);
+//printf("=========%s enter, FLG_RELOC? %lu\n", __func__, gd->flags & GD_FLG_RELOC);
 	/* Before relocation we don't need to do anything */
 	if (!(gd->flags & GD_FLG_RELOC))
 		return 0;
@@ -875,16 +875,16 @@ printf("=========%s enter, FLG_RELOC? %lu\n", __func__, gd->flags & GD_FLG_RELOC
 			"ERROR: Please enable video bridge in defconfig\n");
 	}
 
-printf("=========%s line %d\n", __func__, __LINE__);
+//printf("=========%s line %d\n", __func__, __LINE__);
 	ret = uclass_get_device(UCLASS_PANEL, 0, &panel);
 	if (ret) {
 		dev_err(dev, "panel device error %d\n", ret);
 		return ret;
 	}
 
-printf("=========%s line %d\n", __func__, __LINE__);
+//printf("=========%s line %d\n", __func__, __LINE__);
 	ret = panel_get_display_timing(panel, &timings);
-printf("=========%s line %d get panel timing ret %d\n", __func__, __LINE__, ret);
+//printf("=========%s line %d get panel timing ret %d\n", __func__, __LINE__, ret);
 	if (ret) {
 		ret = ofnode_decode_display_timing(dev_ofnode(panel),
 						   0, &timings);
@@ -894,12 +894,12 @@ printf("=========%s line %d get panel timing ret %d\n", __func__, __LINE__, ret)
 		}
 	}
 
-printf("=========%s line %d\n", __func__, __LINE__);
+//printf("=========%s line %d\n", __func__, __LINE__);
 	dev_dbg(dev, "Set pixel clock req %d hz get %ld hz\n",
 		timings.pixelclock.typ, rate);
 
 
-printf("=========%s line %d\n", __func__, __LINE__);
+//printf("=========%s line %d\n", __func__, __LINE__);
 	dev_dbg(dev, "%dx%d %dbpp frame buffer at 0x%lx\n",
 		timings.hactive.typ, timings.vactive.typ,
 		VNBITS(VIDEO_BPP32), uc_plat->base);
@@ -911,7 +911,7 @@ printf("=========%s line %d\n", __func__, __LINE__);
 	uc_priv->ysize = timings.vactive.typ;
 	uc_priv->rot = 0;
 //printf("=========%s uc_priv->bpix %d\n", __func__, VIDEO_BPP32);
-printf("=========%s uc_priv->bpix %d, uc_priv 0x%x\n", __func__, uc_priv->bpix, uc_priv);
+//printf("=========%s uc_priv->bpix %d, uc_priv 0x%x\n", __func__, uc_priv->bpix, uc_priv);
 
 
 	/* Call panel api directly instead of via bridge, as we have 2 bridges.
@@ -943,7 +943,7 @@ printf("=========%s uc_priv->bpix %d, uc_priv 0x%x\n", __func__, uc_priv->bpix, 
 	/* flush all registers */
 	mdp_video_on(priv->cat, priv->dpu_base);
 
-printf("=========%s exit ok\n", __func__);
+//printf("=========%s exit ok\n", __func__);
 
 #if 0
 	struct rkvop_driverdata *ops =
@@ -992,7 +992,7 @@ static int qcom_dpu_bind(struct udevice *dev)
 {
 	struct video_uc_plat *uc_plat = dev_get_uclass_plat(dev);
 
-printf("=========%s called\n", __func__);
+//printf("=========%s called\n", __func__);
 	uc_plat->size = (LCD_MAX_WIDTH * LCD_MAX_HEIGHT *
 			((1 << VIDEO_BPP32) / 8));
 	uc_plat->align = SZ_2M;

@@ -1107,7 +1107,7 @@ static int qcom_dsi_attach(struct udevice *dev)
 	struct display_timing timings;
 	int ret, host_index;
 
-printf("------------%s enter\n", __func__);
+//printf("------------%s enter\n", __func__);
 	ret = uclass_first_device_err(UCLASS_PANEL, &priv->panel);
 	if (ret) {
 		dev_err(dev, "panel device error %d\n", ret);
@@ -1120,13 +1120,13 @@ printf("------------%s enter\n", __func__);
 	device->mode_flags = mplat->mode_flags;
 
 	if (device->index) {
-printf("------------%s dsi device 2: %p\n", __func__, &priv->device);
+//printf("------------%s dsi device 2: %p\n", __func__, &priv->device);
 		mplat->device2 = &priv->device;
 		qcom_dsi_global.priv1 = priv;
 		qcom_dsi_global.dual_dsi = true;
 		host_index = 1;
 	} else {
-printf("------------%s dsi device 0: %p\n", __func__, &priv->device);
+//printf("------------%s dsi device 0: %p\n", __func__, &priv->device);
 		mplat->device = &priv->device;
 		qcom_dsi_global.priv0 = priv;
 		host_index = 0;
@@ -1142,14 +1142,14 @@ printf("------------%s dsi device 0: %p\n", __func__, &priv->device);
 		}
 	}
 
-printf("------------%s line %d\n", __func__, __LINE__);
+//printf("------------%s line %d\n", __func__, __LINE__);
 	ret = uclass_get_device(UCLASS_DSI_HOST, host_index, &priv->dsi_host);
 	if (ret) {
 		dev_err(dev, "No video dsi host detected %d\n", ret);
 		return ret;
 	}
 
-printf("------------%s line %d call dsi_host_init, while qcom_mipi_dsi_init is %p\n", __func__, __LINE__, qcom_mipi_dsi_init);
+//printf("------------%s line %d call dsi_host_init, while qcom_mipi_dsi_init is %p\n", __func__, __LINE__, qcom_mipi_dsi_init);
 	ret = dsi_host_init(priv->dsi_host, device, &timings, 3,
 			    &mdss_dsi_phy_ops);
 	if (ret) {
@@ -1157,7 +1157,7 @@ printf("------------%s line %d call dsi_host_init, while qcom_mipi_dsi_init is %
 		return ret;
 	}
 
-printf("------------%s exit ok\n", __func__);
+//printf("------------%s exit ok\n", __func__);
 	return 0;
 }
 
@@ -1210,10 +1210,10 @@ static int qcom_dsi_bind(struct udevice *dev)
 {
 	int ret;
 
-printf("=============%s enter\n", __func__);
+//printf("=============%s enter\n", __func__);
 	ret = device_bind_driver_to_node(dev, "qcom_mipi_dsi", "mdss_dsi",
 					 dev_ofnode(dev), NULL);
-printf("=============%s result %d, will scan panel next\n", __func__, ret);
+//printf("=============%s result %d, will scan panel next\n", __func__, ret);
 	if (ret)
 		return ret;
 
@@ -1231,7 +1231,7 @@ static int qcom_dsi_probe(struct udevice *dev)
 
 	device->dev = dev;
 
-printf("=============%s enter\n", __func__);
+//printf("=============%s enter\n", __func__);
 	priv->base = dev_read_addr_ptr(dev);
 	dsi_reg = priv->base;
 	if (!priv->base) {
@@ -1244,7 +1244,7 @@ printf("=============%s enter\n", __func__);
 		device->index = ret;
 	else
 		return ret;
-printf("=============%s line %d device->index %d\n", __func__, __LINE__, device->index);
+//printf("=============%s line %d device->index %d\n", __func__, __LINE__, device->index);
 
 	ret = generic_phy_get_by_name(dev, "dsi", &priv->phy);
 	if (ret && ret != -ENODATA) {

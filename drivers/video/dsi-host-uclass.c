@@ -21,7 +21,7 @@ int dsi_host_init(struct udevice *dev,
 	if (!ops->init)
 		return -ENOSYS;
 
-printf("------------%s line %d call dsi_host ops->init %p\n", __func__, __LINE__, ops->init);
+//printf("------------%s line %d call dsi_host ops->init %p\n", __func__, __LINE__, ops->init);
 	return ops->init(dev, device, timings, max_data_lanes, phy_ops);
 }
 

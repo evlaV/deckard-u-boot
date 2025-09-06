@@ -321,12 +321,12 @@ static int lpm026m648c_panel_enable_backlight(struct udevice *dev)
 	printf("%s: %s\n", dev->name, __func__);
 	backlight_enable(priv->backlight);
 
-printf("======= %s priv->is_dual_panel %d plat->device %p\n", __func__, priv->is_dual_panel, plat->device);
+//printf("======= %s priv->is_dual_panel %d plat->device %p\n", __func__, priv->is_dual_panel, plat->device);
 	plat->device->mode_flags |= MIPI_DSI_MODE_LPM;
 	if (priv->is_dual_panel)
 		plat->device2->mode_flags |= MIPI_DSI_MODE_LPM;
 
-printf("======= %s set device %p device2 %p\n", __func__, plat->device, plat->device2);
+//printf("======= %s set device %p device2 %p\n", __func__, plat->device, plat->device2);
 	priv->device = plat->device;
 	priv->device2 = plat->device2;
 	mdelay(20);
@@ -359,7 +359,7 @@ static int lpm026m648c_panel_of_to_plat(struct udevice *dev)
 	struct lpm026m648c_priv *priv = dev_get_priv(dev);
 	int ret;
 
-printf("============%s called\n", __func__);
+//printf("============%s called\n", __func__);
 
 	ret = uclass_get_device_by_phandle(UCLASS_PANEL_BACKLIGHT, dev,
 					   "backlight", &priv->backlight);
@@ -400,7 +400,7 @@ static int lpm026m648c_panel_probe(struct udevice *dev)
 	struct lpm026m648c_priv *priv = dev_get_priv(dev);
 	int ret;
 
-printf("============%s called\n", __func__);
+//printf("============%s called\n", __func__);
 	/* fill characteristics of DSI data link */
 	plat->lanes = 3;
 	plat->format = MIPI_DSI_FMT_RGB888;
@@ -423,7 +423,7 @@ printf("============%s called\n", __func__);
 	dm_gpio_set_value(&priv->reset1_gpio, 1);
 	dm_gpio_set_value(&priv->reset2_gpio, 1);
 
-printf("============%s ret 0\n", __func__);
+//printf("============%s ret 0\n", __func__);
 	return 0;
 }
 
