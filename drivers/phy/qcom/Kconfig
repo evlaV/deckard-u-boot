@@ -62,3 +62,10 @@ config PHY_QCOM_USB_SS
 	help
 	  Enable this to support the Super-Speed USB transceiver on various
 	  Qualcomm chipsets.
+
+config PHY_QCOM_MIPI_DSI
+	tristate "Qualcomm MIPI DSI PHY driver"
+	depends on PHY && ARCH_SNAPDRAGON
+	help
+	  Enable this to support the MIPI DSI PHY on various on Qualcomm
+	  chipsets.
