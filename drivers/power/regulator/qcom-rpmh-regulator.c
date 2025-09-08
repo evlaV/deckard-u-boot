@@ -323,8 +323,10 @@ static int rpmh_regulator_vrm_set_mode(struct udevice *rdev,
 
 	debug("%s: set_mode %d (current %d)\n", rdev->name, mode, vreg->mode);
 
+/*
 	if (mode == vreg->mode)
 		return 0;
+*/
 
 	ret = rpmh_regulator_vrm_set_mode_bypass(vreg, mode, vreg->bypassed);
 	if (!ret)
