@@ -121,9 +121,11 @@ void clk_rcg_set_rate_mnd(phys_addr_t base, uint32_t cmd_rcgr,
 	debug("m %#x n %#x d %#x div %#x mask %#x\n", m_val, n_val, d_val, div, mask);
 
 	/* Program MND values */
-	writel(m_val & mask, base + cmd_rcgr + RCG_M_REG);
-	writel(n_val & mask, base + cmd_rcgr + RCG_N_REG);
-	writel(d_val & mask, base + cmd_rcgr + RCG_D_REG);
+	if (mnd_width) {
+		writel(m_val & mask, base + cmd_rcgr + RCG_M_REG);
+		writel(n_val & mask, base + cmd_rcgr + RCG_N_REG);
+		writel(d_val & mask, base + cmd_rcgr + RCG_D_REG);
+	}
 
 	/* setup src select and divider */
 	cfg  = readl(base + cmd_rcgr + RCG_CFG_REG);
