@@ -564,3 +564,9 @@ config DM_REGULATOR_MT6359
 	  MediaTek MT6359 PMIC.
 	  This driver supports the control of different power rails of device
 	  through regulator interface.
+
+config DM_REGULATOR_MPQ3367
+	bool "Enable driver for MPQ3367 Power Regulator"
+	depends on DM_REGULATOR
+	help
+	The MPQ3367 provides a step-up converter with 6 channel current sources
