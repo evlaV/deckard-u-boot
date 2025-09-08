@@ -61,6 +61,12 @@
 			reg = <0 0x9bb00000 0 0x800000>;
 			no-map;
 		};
+
+		framebuffer_mem: framebuffer@9bb00000 {
+			no-map;
+			/* reuse video address, size (50MB) */
+			reg = <0x0 0x9bb00000 0x0 0x03000000>;
+		};
 	};
 
 	psci {
