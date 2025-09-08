@@ -519,6 +519,18 @@ config DM_REGULATOR_CPCAP
 	(SW) Regulators and Low-Dropout Linear (LDO) Regulators	found in CPCAP
 	PMIC and implements get/set api for voltage and state.
 
+config DM_REGULATOR_NEX10001UB
+	bool "Enable driver for NEX10001UB Power Regulator"
+	depends on DM_REGULATOR
+	help
+	The NEX10001UB provides 220 mA dual output LCD bias power supply.
+
+config SPL_DM_REGULATOR_NEX10001UB
+	bool "SPL Enable driver for NEX10001UB Power Regulator"
+	depends on DM_REGULATOR
+	help
+	The NEX10001UB provides 220 mA dual output LCD bias power supply.
+
 config DM_REGULATOR_MPQ3367
 	bool "Enable driver for MPQ3367 Power Regulator"
 	depends on DM_REGULATOR
