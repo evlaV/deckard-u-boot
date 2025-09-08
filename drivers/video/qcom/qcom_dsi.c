@@ -524,6 +524,7 @@ static int dsi_cmds2buf_tx(struct mipi_dsi_host *host,
 	u8 *data;
 	u32 val = 0;
 
+printf("======%s tx %lu rx %lu with base %p\n", __func__, msg->tx_len, msg->rx_len, dsi->base);
 	ret = mipi_dsi_create_packet(&packet, msg);
 	if (ret) {
 		dev_err(host->dev, "failed to create packet: %d\n", ret);
@@ -558,10 +559,14 @@ static int dsi_cmds2buf_tx(struct mipi_dsi_host *host,
 	dsi_write(base + REG_DSI_VBIF_CTRL, 0x7);
 	dsi_write(base + REG_DSI_TRIG_DMA, 0x1);
 	dsi_write(base + REG_DSI_INTR_CTRL, 0xAA20AA03);
+	//printf("DSI reading irq off at 0x%u\n", base + REG_DSI_INTR_CTRL);
 	while (!val) {
 		val = dsi_read(base + REG_DSI_INTR_CTRL) & DSI_IRQ_CMD_DMA_DONE;
 		count++;
 		if (count > 100) {
+			printf("DSI CMD: count :%d dma failed\n", count);
+			printf("DSI CMD: irq value = %x\n", dsi_read(base + REG_DSI_INTR_CTRL));
+			printf("DSI CMD: err int value = %x\n", dsi_read(base + REG_DSI_ERR_INT_MASK0));
 			return -EIO;
 		}
 		udelay(10);
@@ -614,6 +619,7 @@ static int dsi_cmd_dma_rx(struct qcom_mipi_dsi *dsi,
 	for (i = cnt - 1; i >= 0; i--) {
 		data = dsi_read(dsi->base + REG_DSI_RDBK_DATA(i));
 		*temp++ = ntohl(data); /* to host byte order */
+		printf("data = 0x%x and ntohl(data) = 0x%x\n", data, ntohl(data));
 	}
 
 	for (i = repeated_bytes; i < 16; i++)
@@ -677,6 +683,8 @@ int msm_dsi_host_cmd_rx(struct mipi_dsi_host *host,
 	int rlen = msg->rx_len;
 	u8 *buf;
 
+	//printf("Dsi RX on Host %d", dsi->id);
+	printf("Dsi RX\n");
 	if (rlen <= 2) {
 		short_response = 1;
 		pkt_size = rlen;
@@ -701,6 +709,9 @@ int msm_dsi_host_cmd_rx(struct mipi_dsi_host *host,
 			.tx_len = 2,
 			.tx_buf = tx,
 		};
+
+		printf("rlen=%d pkt_size=%d rx_byte=%d\n",
+			rlen, pkt_size, rx_byte);
 
 		ret = dsi_cmds2buf_tx(host, &max_pkt_size_msg);
 		if (ret < 2) {
@@ -764,6 +775,7 @@ int msm_dsi_host_cmd_rx(struct mipi_dsi_host *host,
 				pkt_size += rlen;
 			else
 				pkt_size += data_byte;
+			printf("buf=%p dlen=%d diff=%d\n", buf, dlen, diff);
 		}
 	}
 
@@ -835,6 +847,8 @@ static const struct mipi_dsi_host_ops qcom_mipi_dsi_host_ops = {
 
 static void qcom_mipi_dsi_init_ctrl(void __iomem *base)
 {
+	printf("Hard coding DSI host controller\n");
+
 	/* TODO: make sure this happens before dsi phy init */
 	dsi_write(base + REG_DSI_PHY_RESET, 0x1);
 	dsi_write(base + REG_DSI_PHY_RESET, 0x0);
@@ -1093,6 +1107,7 @@ static int qcom_dsi_attach(struct udevice *dev)
 	struct display_timing timings;
 	int ret, host_index;
 
+printf("------------%s enter\n", __func__);
 	ret = uclass_first_device_err(UCLASS_PANEL, &priv->panel);
 	if (ret) {
 		dev_err(dev, "panel device error %d\n", ret);
@@ -1105,11 +1120,13 @@ static int qcom_dsi_attach(struct udevice *dev)
 	device->mode_flags = mplat->mode_flags;
 
 	if (device->index) {
+printf("------------%s dsi device 2: %p\n", __func__, &priv->device);
 		mplat->device2 = &priv->device;
 		qcom_dsi_global.priv1 = priv;
 		qcom_dsi_global.dual_dsi = true;
 		host_index = 1;
 	} else {
+printf("------------%s dsi device 0: %p\n", __func__, &priv->device);
 		mplat->device = &priv->device;
 		qcom_dsi_global.priv0 = priv;
 		host_index = 0;
@@ -1125,12 +1142,14 @@ static int qcom_dsi_attach(struct udevice *dev)
 		}
 	}
 
+printf("------------%s line %d\n", __func__, __LINE__);
 	ret = uclass_get_device(UCLASS_DSI_HOST, host_index, &priv->dsi_host);
 	if (ret) {
 		dev_err(dev, "No video dsi host detected %d\n", ret);
 		return ret;
 	}
 
+printf("------------%s line %d call dsi_host_init, while qcom_mipi_dsi_init is %p\n", __func__, __LINE__, qcom_mipi_dsi_init);
 	ret = dsi_host_init(priv->dsi_host, device, &timings, 3,
 			    &mdss_dsi_phy_ops);
 	if (ret) {
@@ -1138,6 +1157,7 @@ static int qcom_dsi_attach(struct udevice *dev)
 		return ret;
 	}
 
+printf("------------%s exit ok\n", __func__);
 	return 0;
 }
 
@@ -1190,8 +1210,10 @@ static int qcom_dsi_bind(struct udevice *dev)
 {
 	int ret;
 
+printf("=============%s enter\n", __func__);
 	ret = device_bind_driver_to_node(dev, "qcom_mipi_dsi", "mdss_dsi",
 					 dev_ofnode(dev), NULL);
+printf("=============%s result %d, will scan panel next\n", __func__, ret);
 	if (ret)
 		return ret;
 
@@ -1209,6 +1231,7 @@ static int qcom_dsi_probe(struct udevice *dev)
 
 	device->dev = dev;
 
+printf("=============%s enter\n", __func__);
 	priv->base = dev_read_addr_ptr(dev);
 	dsi_reg = priv->base;
 	if (!priv->base) {
@@ -1221,6 +1244,7 @@ static int qcom_dsi_probe(struct udevice *dev)
 		device->index = ret;
 	else
 		return ret;
+printf("=============%s line %d device->index %d\n", __func__, __LINE__, device->index);
 
 	ret = generic_phy_get_by_name(dev, "dsi", &priv->phy);
 	if (ret && ret != -ENODATA) {
@@ -1269,6 +1293,7 @@ static int qcom_dsi_probe(struct udevice *dev)
 
 	/* check hardware version */
 	priv->hw_version = dsi_read(dsi_reg);
+	printf("Got hw_version: 0x%x\n", priv->hw_version);
 	if (priv->hw_version != 0x20080000) {
 		dev_err(dev, "DSI version 0x%x not supported\n", priv->hw_version);
 		dev_dbg(dev, "remove and unbind all DSI child\n");
@@ -1278,12 +1303,14 @@ static int qcom_dsi_probe(struct udevice *dev)
 		goto err_clk;
 	}
 
+printf("=============%s ret 0\n", __func__);
 	return 0;
 err_clk:
 	clk_disable_bulk(&bulk);
 err_reg:
 	regulator_set_enable(priv->vdd_reg, false);
 
+printf("=============%s ret %d\n", __func__, ret);
 	return ret;
 }
 
