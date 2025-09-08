@@ -89,6 +89,12 @@
 		regulator-always-on;
 	};
 
+	BACKLIGHT_PREBOOST: backlight_preboost {
+		compatible = "ti,tps61377";
+		en-gpio = <&tlmm 79 GPIO_ACTIVE_HIGH>;
+		pgood-gpio = <&tlmm 69 GPIO_ACTIVE_HIGH>;
+	};
+
 	memory@a0000000 {
 		bootph-all;
 	};
@@ -135,7 +141,6 @@
 			regulator-name = "vreg_l1b_1p8";
 			regulator-min-microvolt = <1800000>;
 			regulator-max-microvolt = <1800000>;
-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
 
 			regulator-always-on; // XXX sensors
 		};
@@ -185,8 +190,6 @@
 			regulator-min-microvolt = <1800000>;
 			regulator-max-microvolt = <1800000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
-
-			regulator-always-on; // XXX DMIC
 		};
 
 		vreg_l12b_1p8: ldo12 {
@@ -197,6 +200,7 @@
 			regulator-allow-set-load;
 			regulator-allowed-modes = <RPMH_REGULATOR_MODE_LPM
 						   RPMH_REGULATOR_MODE_HPM>;
+			regulator-always-on; // XXX DMIC
 		};
 
 		vreg_l15b_1p8: ldo15 {
@@ -237,8 +241,8 @@
 
 		vreg_s1c_1p2: smps1 {
 			regulator-name = "vreg_s1c_1p2";
-			regulator-min-microvolt = <1224000>;
-			regulator-max-microvolt = <1348000>;
+			regulator-min-microvolt = <1256000>;
+			regulator-max-microvolt = <1256000>;
 			// init 1256000
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
 
@@ -255,8 +259,8 @@
 
 		vreg_s3c_0p9: smps3 {
 			regulator-name = "vreg_s3c_0p9";
-			regulator-min-microvolt = <904000>;
-			regulator-max-microvolt = <1064000>;
+			regulator-min-microvolt = <976000>;
+			regulator-max-microvolt = <976000>;
 			// init 976000
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
 		};
@@ -280,7 +284,8 @@
 		vreg_s6c_1p8: smps6 {
 			regulator-name = "vreg_s6c_1p8";
 			regulator-min-microvolt = <1856000>;
-			regulator-max-microvolt = <2000000>;
+			regulator-max-microvolt = <1856000>;
+			//regulator-max-microvolt = <2000000>;
 			// init 1856000
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
 		};
@@ -395,7 +400,7 @@
 		vreg_l1i_0p88: ldo1 {
 			regulator-name = "vreg_l1i_0p88";
 			regulator-min-microvolt = <880000>;
-			regulator-max-microvolt = <912000>;
+			regulator-max-microvolt = <880000>; //912000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
 			regulator-allow-set-load;
 			regulator-allowed-modes = <RPMH_REGULATOR_MODE_LPM
@@ -554,8 +559,46 @@
 	};
 };
 
+&i2c4 {
+	status = "okay";
+	nex100011ub0: nex100011ub0@3e {
+		compatible  = "nexperia,nex100011ub";
+		reg         = <0x3e>;
+		biasp-gpios = <&pm8550_gpios 8 GPIO_ACTIVE_HIGH>;
+		biasn-gpios = <&pm8550_gpios 10 GPIO_ACTIVE_HIGH>;
+		status      = "okay";
+		pinctrl-0 = <&display_avdd_en_r>, <&display_avee_en_r>;
+		pinctrl-names = "default";
+	};
+
+	mpq3367a: mpq3367a@38 {
+		compatible  = "monolithicpower,mpq3367";
+		reg         = <0x38>;
+		enable-gpios = <&pm8550_gpios 1 GPIO_ACTIVE_HIGH>;
+		status      = "okay";
+	};
+};
+
 &i2c5 {
 	status = "okay";
+
+	nex100011ub1: nex100011ub1@3e {
+		compatible  = "nexperia,nex100011ub";
+		reg         = <0x3e>;
+		biasp-gpios = <&pm8550_gpios 4 GPIO_ACTIVE_HIGH>;
+		biasn-gpios = <&pm8550_gpios 9 GPIO_ACTIVE_HIGH>;
+		status      = "okay";
+		pinctrl-0 = <&display_avdd_en_l>, <&display_avee_en_l>;
+		pinctrl-names = "default";
+	};
+
+	mpq3367b: mpq3367b@38 {
+		compatible  = "monolithicpower,mpq3367";
+		reg         = <0x38>;
+		enable-gpios = <&pm8550_gpios 2 GPIO_ACTIVE_HIGH>;
+		status      = "okay";
+	};
+
 	// BOOT EEPROM
 	eeprom_core: eeprom@50 {
 		compatible  = "atmel,24c32";
@@ -635,6 +678,42 @@
 		input-enable;
 		power-source = <1>;
 		bootph-all;
+	};
+
+	display_resx1: display_resx1-state {
+		pins = "gpio3";
+		function = "normal";
+		power-source = <1>; /* 1.8 V */
+	};
+
+	display_resx2: display_resx2-state {
+		pins = "gpio11";
+		function = "normal";
+		power-source = <1>; /* 1.8 V */
+	};
+
+	display_avdd_en_l: display_avdd_en_l-state {
+		pins = "gpio4";
+		function = "normal";
+		power-source = <0>; /* 1.8 V */
+	};
+
+	display_avdd_en_r: display_avdd_en_r-state {
+		pins = "gpio8";
+		function = "normal";
+		power-source = <1>; /* 1.8 V */
+	};
+
+	display_avee_en_l: display_avee_en_l-state {
+		pins = "gpio9";
+		function = "normal";
+		power-source = <0>; /* 1.8 V */
+	};
+
+	display_avee_en_r: display_avee_en_r-state {
+		pins = "gpio10";
+		function = "normal";
+		power-source = <0>; /* 1.8 V */
 	};
 };
 
@@ -924,6 +1003,113 @@
 		drive-strength = <8>;
 		bias-pull-down;
 	};
+};
+
+&dispcc {
+	status = "okay";
+};
+
+&mdss {
+	status = "okay";
+};
+
+&mdss_mdp {
+	status = "okay";
+};
+
+&mdss_dsi0 {
+	status = "okay";
+
+	vdda-supply = <&vreg_l3i_1p2>;
+
+	panel0: panel@0 {
+		reg = <0>;
+		compatible = "deckard_panel";
+		dual-panel;
+
+		reset-gpios = <&pm8550_gpios 3 GPIO_ACTIVE_HIGH>,
+			      <&pm8550_gpios 11 GPIO_ACTIVE_HIGH>;
+
+		left-supply = <&nex100011ub1>;
+		right-supply = <&nex100011ub0>;
+		backlight-left-supply = <&mpq3367b>;
+		backlight-right-supply = <&mpq3367a>;
+		preboost-supply = <&BACKLIGHT_PREBOOST>;
+		vdda-supply = <&vreg_l12b_1p8>;
+
+		pinctrl-0 = <&display_resx1>, <&display_resx2>;
+		pinctrl-names = "default";
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			port@0 {
+				reg = <0>;
+				panel0_in: endpoint {
+					remote-endpoint = <&mdss_dsi0_out>;
+				};
+			};
+		};
+	};
+};
+
+&mdss_dsi0_out {
+	remote-endpoint = <&panel0_in>;
+	data-lanes = <0 1 2>;
+};
+
+&mdss_dsi0_phy {
+	vdds-supply = <&vreg_l1i_0p88>;
+//	phy-type = <PHY_TYPE_CPHY>;
+	status = "okay";
+};
+
+&mdss_dsi1 {
+	vdda-supply = <&vreg_l3i_1p2>;
+	status = "okay";
+
+	panel1: panel@1 {
+		reg = <0>;
+		compatible = "deckard_panel";
+		dual-panel;
+
+		reset-gpios = <&pm8550_gpios 3 GPIO_ACTIVE_HIGH>,
+			      <&pm8550_gpios 11 GPIO_ACTIVE_HIGH>;
+
+		left-supply = <&nex100011ub1>;
+		right-supply = <&nex100011ub0>;
+		backlight-left-supply = <&mpq3367b>;
+		backlight-right-supply = <&mpq3367a>;
+		preboost-supply = <&BACKLIGHT_PREBOOST>;
+		vdda-supply = <&vreg_l12b_1p8>;
+
+		pinctrl-0 = <&display_resx1>, <&display_resx2>;
+		pinctrl-names = "default";
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			port@0 {
+				reg = <0>;
+				panel1_in: endpoint {
+					remote-endpoint = <&mdss_dsi1_out>;
+				};
+			};
+		};
+	};
+};
+
+&mdss_dsi1_out {
+	remote-endpoint = <&panel1_in>;
+	data-lanes = <0 1 2>;
+};
+
+&mdss_dsi1_phy {
+	vdds-supply = <&vreg_l1i_0p88>;
+	status = "okay";
+/*
+	phy-type = <PHY_TYPE_CPHY>;
+*/
 };
 
 &ufs_mem_hc {
