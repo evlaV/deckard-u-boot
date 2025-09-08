@@ -25,6 +25,8 @@ enum rpmh_state {
 	RPMH_ACTIVE_ONLY_STATE,
 };
 
+const char *rpmh_state_str(enum rpmh_state state);
+
 /**
  * struct tcs_cmd: an individual request to RPMH.
  *
