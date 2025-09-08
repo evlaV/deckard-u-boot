@@ -127,6 +127,12 @@ config CLK_QCOM_X1E80100
 	  on the Snapdragon X1E80100 SoC. This driver supports the clocks
 	  and resets exposed by the GCC hardware block.
 
+config CLK_QCOM_RPMH
+	bool "Qualcomm RPMh controllers clocks"
+	depends on QCOM_RPMH
+	help
+	  Say Y here to enable support for configuring clocks via the RPMh.
+
 endmenu
 
 endif
