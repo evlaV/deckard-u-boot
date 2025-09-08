@@ -404,11 +404,27 @@ static void __maybe_unused msm_dump_clks(struct udevice *dev)
 	struct msm_clk_data *data = (struct msm_clk_data *)dev_get_driver_data(dev);
 	struct msm_clk_priv *priv = dev_get_priv(dev);
 	const struct gate_clk *sclk;
+	struct udevice *nulldev;
 	int val, i;
 
 	if (!data->clks) {
 		printf("No clocks\n");
 		return;
+	}
+
+	// If we have power domains, print them
+	if (!uclass_get_device_by_ofnode(UCLASS_POWER_DOMAIN,
+					dev_ofnode(dev), &nulldev)) {
+		printf("Power domains:\n");
+		for (i = 0; i < data->num_power_domains; i++) {
+			val = readl(priv->base + data->power_domains[i].reg);
+			if (data->dbg_gdsc_names)
+				printf("%-32s: %s\n", data->dbg_gdsc_names[i],
+				       (val & (GDSC_PWR_ON_MASK | GDSC_POWER_UP_COMPLETE)) ? "ON" : "OFF");
+			else
+			 	printf("GDSC-%-27d: %s\n", i,
+				       (val & (GDSC_PWR_ON_MASK | GDSC_POWER_UP_COMPLETE)) ? "ON" : "OFF");;
+		}
 	}
 
 	printf("Gate Clocks:\n");
