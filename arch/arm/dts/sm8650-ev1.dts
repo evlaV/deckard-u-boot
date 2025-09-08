@@ -26,6 +26,14 @@
 		stdout-path = "serial0:115200n8";
 	};
 
+	backlight: backlight {
+		compatible = "ev2-backlight";
+		bias0-supply = <&nex100011ub0>;
+		bias1-supply = <&nex100011ub1>;
+		backlight0-supply = <&mpq3367a>;
+		backlight1-supply = <&mpq3367b>;
+	};
+
 	gpio-keys {
 		compatible = "gpio-keys";
 
@@ -92,6 +100,33 @@
 	memory@a0000000 {
 		bootph-all;
 	};
+
+#if 0
+	framebuffer {
+	    compatible = "simple-framebuffer";
+
+	    /* KEY: Point to the reserved memory region defined above. */
+	    memory-region = <&framebuffer_mem>;
+
+	    /* Other required display properties */
+	    width = <4320>;
+	    height = <2160>;
+	    stride = <(4320 * 4)>; /* Example for 32 bits-per-pixel */
+	    format = "a8r8g8b8";    /* Example format */
+	};
+
+	reserved_memory {
+	    #address-cells = <2>;
+	    #size-cells = <2>;
+	    ranges;
+
+	    framebuffer_mem: framebuffer@7F000000 {
+		compatible = "shared-dma-pool";
+		no-map;
+		reg = <0x0 0x9bb00000 0x0 0x03000000>; /* reuse video address, size (50MB) */
+	    };
+	};
+#endif
 };
 
 &smem {
@@ -135,7 +170,6 @@
 			regulator-name = "vreg_l1b_1p8";
 			regulator-min-microvolt = <1800000>;
 			regulator-max-microvolt = <1800000>;
-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
 
 			regulator-always-on; // XXX sensors
 		};
@@ -554,8 +588,46 @@
 	};
 };
 
+&i2c4 {
+	status = "okay";
+	nex100011ub0: nex100011ub0@3e {
+		compatible  = "nexperia,nex100011ub";
+		reg         = <0x3e>;
+		biasp-gpios = <&pm8550_gpios 8 GPIO_ACTIVE_HIGH>;
+		biasn-gpios = <&pm8550_gpios 10 GPIO_ACTIVE_HIGH>;
+		status      = "okay";
+	};
+
+	mpq3367a: mpq3367a@38 {
+		compatible  = "monolithicpower,mpq3367";
+		reg         = <0x38>;
+		preboost-gpios = <&tlmm 79 GPIO_ACTIVE_HIGH>;
+		preboost-good-gpios = <&tlmm 69 GPIO_ACTIVE_HIGH>;
+		enable-gpios = <&pm8550_gpios 1 GPIO_ACTIVE_HIGH>;
+		status      = "okay";
+	};
+};
+
 &i2c5 {
 	status = "okay";
+
+	nex100011ub1: nex100011ub1@3e {
+		compatible  = "nexperia,nex100011ub";
+		reg         = <0x3e>;
+		biasp-gpios = <&pm8550_gpios 4 GPIO_ACTIVE_HIGH>;
+		biasn-gpios = <&pm8550_gpios 9 GPIO_ACTIVE_HIGH>;
+		status      = "okay";
+	};
+
+	mpq3367b: mpq3367b@38 {
+		compatible  = "monolithicpower,mpq3367";
+		reg         = <0x38>;
+		preboost-gpios = <&tlmm 79 GPIO_ACTIVE_HIGH>;
+		preboost-good-gpios = <&tlmm 69 GPIO_ACTIVE_HIGH>;
+		enable-gpios = <&pm8550_gpios 2 GPIO_ACTIVE_HIGH>;
+		status      = "okay";
+	};
+
 	// BOOT EEPROM
 	eeprom_core: eeprom@50 {
 		compatible  = "atmel,24c32";
@@ -875,6 +947,98 @@
 		drive-strength = <8>;
 		bias-pull-down;
 	};
+};
+
+&dispcc {
+	status = "okay";
+};
+
+&mdss {
+	status = "okay";
+};
+
+&mdss_mdp {
+	status = "okay";
+};
+
+&mdss_dsi0 {
+	status = "okay";
+
+	vdda-supply = <&vreg_l3i_1p2>;
+	qcom,dual-dsi-mode;
+	qcom,master-dsi;
+	dual-dsi-index = < 0 >;
+
+	panel: panel@0 {
+		reg = <0>;
+		compatible = "jdi,lpm026m648c";
+		dual-panel;
+
+		reset1-gpios = <&pm8550_gpios 3 GPIO_ACTIVE_HIGH>;
+		reset2-gpios = <&pm8550_gpios 11 GPIO_ACTIVE_HIGH>;
+		enp-gpios = <&tlmm 32 GPIO_ACTIVE_HIGH>;
+		backlight = <&backlight>;
+
+/*
+		wled1-supply = <&backlight>;
+		vdda-supply = <&vreg_l12b_1p8>;
+*/
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			port@0 {
+				reg = <0>;
+				panel0_in: endpoint {
+					remote-endpoint = <&mdss_dsi0_out>;
+				};
+			};
+
+			port@1 {
+				reg = <1>;
+				panel1_in: endpoint {
+					remote-endpoint = <&mdss_dsi1_out>;
+				};
+			};
+		};
+	};
+};
+
+&mdss_dsi0_out {
+	remote-endpoint = <&panel0_in>;
+	data-lanes = <0 1 2>;
+};
+
+&mdss_dsi0_phy {
+	vdds-supply = <&vreg_l1i_0p88>;
+//	phy-type = <PHY_TYPE_CPHY>;
+	status = "okay";
+};
+
+&mdss_dsi1 {
+	vdda-supply = <&vreg_l3i_1p2>;
+	status = "okay";
+
+	qcom,dual-dsi-mode;
+	dual-dsi-index = < 1 >;
+
+/*
+	assigned-clocks = <&dispcc DISP_CC_MDSS_BYTE1_CLK_SRC>, <&dispcc DISP_CC_MDSS_PCLK1_CLK_SRC>;
+	assigned-clock-parents = <&mdss_dsi0_phy 0>, <&mdss_dsi0_phy 1>;
+*/
+};
+
+&mdss_dsi1_out {
+	remote-endpoint = <&panel1_in>;
+	data-lanes = <0 1 2>;
+};
+
+&mdss_dsi1_phy {
+	vdds-supply = <&vreg_l1i_0p88>;
+	status = "okay";
+/*
+	phy-type = <PHY_TYPE_CPHY>;
+*/
 };
 
 &ufs_mem_hc {
