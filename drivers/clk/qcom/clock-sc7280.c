@@ -70,7 +70,7 @@ static ulong sc7280_set_rate(struct clk *clk, ulong rate)
 		clk_rcg_set_rate(priv->base, USB30_PRIM_MOCK_UTMI_CLK_CMD_RCGR, 1, 0);
 		return 19200000;
 	case GCC_PCIE1_PHY_RCHNG_CLK:
-		clk_rcg_set_rate(priv->base, PCIE1_PHY_RCHNG_CMD_RCGR, 5, CFG_CLK_SRC_GPLL0_EVEN);
+		clk_rcg_set_rate(priv->base, PCIE1_PHY_RCHNG_CMD_RCGR, (3 * 2) - 1, CFG_CLK_SRC_GPLL0_EVEN);
 		return 100000000;
 	default:
 		return rate;
