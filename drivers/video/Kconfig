@@ -920,6 +920,7 @@ config VIDEO_SEPS525
 
 source "drivers/video/zynqmp/Kconfig"
 source "drivers/video/nexell/Kconfig"
+source "drivers/video/qcom/Kconfig"
 
 config CONSOLE_SCROLL_LINES
 	int "Number of lines to scroll the console by"
