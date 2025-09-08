@@ -19,3 +19,5 @@ obj-$(CONFIG_CLK_QCOM_SM8550) += clock-sm8550.o
 obj-$(CONFIG_CLK_QCOM_X1E80100) += clock-x1e80100.o
 
 obj-$(CONFIG_CLK_QCOM_DEBUG) += debugcc/
+
+obj-$(CONFIG_CLK_QCOM_RPMH) += clk-rpmh.o
