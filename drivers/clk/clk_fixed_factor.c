@@ -36,8 +36,16 @@ static ulong clk_fixed_factor_get_rate(struct clk *clk)
 	return rate * ff->mult;
 }
 
+static int clk_fixed_factor_request(struct clk *clk)
+{
+	struct clk_fixed_factor *ff = to_clk_fixed_factor(clk->dev);
+
+	return clk_request(ff->parent.dev, &ff->parent);;
+}
+
 const struct clk_ops clk_fixed_factor_ops = {
 	.get_rate = clk_fixed_factor_get_rate,
+	.request = clk_fixed_factor_request,
 };
 
 static int clk_fixed_factor_of_to_plat(struct udevice *dev)
