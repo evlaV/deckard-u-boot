@@ -296,11 +296,23 @@ static const struct udevice_id gcc_sm8650_of_match[] = {
 	{ }
 };
 
+static int gcc_sm8650_probe(struct udevice *dev)
+{
+	phys_addr_t base = dev_read_addr(dev);
+
+	/* Force some clocks always on */
+	qcom_branch_set_clk_en(base, 0x27004); /* GCC_DISP_AHB_CLK */
+	qcom_branch_set_clk_en(base, 0x27018); /* GCC_DISP_XO_CLK */
+
+	return 0;
+}
+
 U_BOOT_DRIVER(gcc_sm8650) = {
 	.name		= "gcc_sm8650",
 	.id		= UCLASS_NOP,
 	.of_match	= gcc_sm8650_of_match,
 	.bind		= qcom_cc_bind,
+	.probe		= gcc_sm8650_probe,
 	.flags		= DM_FLAG_PRE_RELOC | DM_FLAG_DEFAULT_PD_CTRL_OFF,
 };
 
