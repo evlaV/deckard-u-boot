@@ -105,23 +105,11 @@ static const struct freq_tbl ftbl_disp_cc_mdss_ahb_clk_src[] = {
 	{ }
 };
 
-static const struct freq_tbl ftbl_disp_cc_mdss_vsync_clk_src[] = {
-	F(19200000, CFG_BI_TCXO, 1, 0, 0),
-};
-
 /* hard code per dual-dsi case */
 #define CFG_DSI0_PHY_PLL_OUT_DSICLK (1 << 8)
 #define CFG_DSI0_PHY_PLL_OUT_BYTECLK (2 << 8)
 #define CFG_DSI1_PHY_PLL_OUT_DSICLK (3 << 8)
 #define CFG_DSI1_PHY_PLL_OUT_BYTECLK (4 << 8)
-static const struct freq_tbl ftbl_disp_cc_mdss_byte0_clk_src[] = {
-	F(121574874,  CFG_DSI0_PHY_PLL_OUT_BYTECLK, 1, 0, 0),
-	{ }
-};
-
-static const struct freq_tbl ftbl_disp_cc_mdss_pclk0_clk_src[] = {
-	F(243149748,  CFG_DSI0_PHY_PLL_OUT_DSICLK, 1, 0, 0),
-};
 
 #define CFG_DISP_CC_PLL0_OUT_MAIN (1 << 8)
 static const struct freq_tbl ftbl_disp_cc_mdss_mdp_clk_src[] = {
@@ -304,6 +292,8 @@ static int sm8650_disp_cc_parent_enable(struct clk *clk, ulong id)
 
 	if (clk_valid(parent))
 		clk_enable(parent);
+
+	return 0;
 }
 
 static int sm8650_disp_cc_enable(struct clk *clk)
