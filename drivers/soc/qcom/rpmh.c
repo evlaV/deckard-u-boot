@@ -16,6 +16,21 @@
 
 #define RPMH_TIMEOUT_MS			msecs_to_jiffies(10000)
 
+const char *rpmh_state_str(enum rpmh_state state)
+{
+	switch (state) {
+	case RPMH_SLEEP_STATE:
+		return "SLEEP";
+	case RPMH_WAKE_ONLY_STATE:
+		return "WAKE_ONLY";
+	case RPMH_ACTIVE_ONLY_STATE:
+		return "ACTIVE_ONLY";
+	default:
+		printf("BUG: unknown RPMh state %d\n", state);
+		return "UNKNOWN";
+	}
+}
+
 #define DEFINE_RPMH_MSG_ONSTACK(device, s, name)	\
 	struct rpmh_request name = {			\
 		.msg = {				\
