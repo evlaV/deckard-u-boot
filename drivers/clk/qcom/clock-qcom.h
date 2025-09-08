@@ -120,4 +120,14 @@ void clk_rcg_set_rate_div(phys_addr_t base, uint32_t cmd_rcgr,
 
 int qcom_gate_clk_en(const struct msm_clk_priv *priv, unsigned long id);
 
+static inline void qcom_branch_set_clk_en(phys_addr_t base, unsigned long cbcr)
+{
+	u32 val;
+
+	val = readl(base + cbcr);
+	writel(val | BIT(0), base + cbcr);
+
+	debug("%s: base %p cbcr %lx val %x\n", __func__, (void *)base, cbcr, readl(base + cbcr));
+}
+
 #endif
