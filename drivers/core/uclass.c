@@ -6,6 +6,7 @@
  * Pavel Herrmann <morpheus.ibis@gmail.com>
  */
 
+#define DEBUG 11
 #define LOG_CATEGORY LOGC_DM
 
 #include <dm.h>
@@ -289,6 +290,7 @@ int uclass_find_device_by_namelen(enum uclass_id id, const char *name, int len,
 		return ret;
 
 	uclass_foreach_dev(dev, uc) {
+printf("	check device %s\n", dev->name);
 		if (!strncmp(dev->name, name, len) &&
 		    strlen(dev->name) == len) {
 			*devp = dev;
@@ -515,6 +517,7 @@ int uclass_get_device_by_name(enum uclass_id id, const char *name,
 
 	*devp = NULL;
 	ret = uclass_find_device_by_name(id, name, &dev);
+printf("-------- uclass %d find device %s ret %d\n", id, name, ret);
 	return uclass_get_device_tail(dev, ret, devp);
 }
 
@@ -795,6 +798,7 @@ int uclass_post_probe_device(struct udevice *dev)
 	struct uclass_driver *uc_drv;
 	int ret;
 
+printf("=========%s : dev %s\n", __func__, dev->name);
 	if (dev->parent) {
 		uc_drv = dev->parent->uclass->uc_drv;
 		if (uc_drv->child_post_probe) {
@@ -806,6 +810,7 @@ int uclass_post_probe_device(struct udevice *dev)
 
 	uc_drv = dev->uclass->uc_drv;
 	if (uc_drv->post_probe) {
+printf("=========%s : dev %s have post_probe\n", __func__, dev->name);
 		ret = uc_drv->post_probe(dev);
 		if (ret)
 			return ret;
