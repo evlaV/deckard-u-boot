@@ -136,6 +136,10 @@ int msm_dsi_cphy_timing_calc_v4(struct msm_dsi_dphy_timing *timing,
 	tmax = 64;
 	timing->shared_timings.clk_pre = linear_inter(tmax, tmin, 20, 0, false);
 
+	printf("%d, %d, %d, %d, %d",
+		timing->shared_timings.clk_pre, timing->shared_timings.clk_post,
+		timing->clk_prepare, timing->hs_exit, timing->hs_rqst);
+
 	return 0;
 }
 
@@ -236,6 +240,7 @@ static void dsi_pll_calc_ssc(struct dsi_pll_7nm *pll, struct dsi_pll_config *con
 	u64 frac;
 
 	if (!config->enable_ssc) {
+		printf("SSC not enabled\n");
 		return;
 	}
 
@@ -254,6 +259,11 @@ static void dsi_pll_calc_ssc(struct dsi_pll_7nm *pll, struct dsi_pll_config *con
 
 	config->ssc_div_per = ssc_per;
 	config->ssc_stepsize = ssc_step_size;
+
+	pr_debug("SCC: Dec:%d, frac:%llu, frac_bits:%d\n",
+		 config->decimal_div_start, frac, FRAC_BITS);
+	pr_debug("SSC: div_per:0x%X, stepsize:0x%X, adjper:0x%X\n",
+		 ssc_per, (u32)ssc_step_size, config->ssc_adj_per);
 }
 
 static void dsi_pll_ssc_commit(struct dsi_pll_7nm *pll, struct dsi_pll_config *config)
@@ -373,6 +383,8 @@ static void dsi_pll_commit(struct dsi_pll_7nm *pll, struct dsi_pll_config *confi
 static unsigned long _dsi_pll_7nm_vco_set_rate(struct dsi_pll_7nm *pll_7nm, unsigned long rate)
 {
 	struct dsi_pll_config config;
+
+	printf("DSI PLL%d rate=%lu\n", pll_7nm->plat->id, rate);
 
 	/*
 	80Hz:
@@ -551,6 +563,8 @@ static unsigned long dsi_pll_7nm_vco_recalc_rate(struct dsi_pll_7nm *pll_7nm,
 	120Hz:
 	[drm:dsi_pll_7nm_vco_recalc_rate] DSI PLL0 returning vco rate = 851187744, dec = 16, frac = aa57
 	*/
+	printf("DSI PLL%d returning vco rate = %lu, dec = %x, frac = %x for parent rate %lu\n",
+	    pll_7nm->plat->id, (unsigned long)vco_rate, dec, frac, parent_rate);
 
 	return (unsigned long)vco_rate;
 }
@@ -593,6 +607,7 @@ static int _dsi_pll_7nm_vco_prepare(struct dsi_pll_7nm *pll_7nm)
 		pr_err("PLL(%d) lock failed\n", pll_7nm->plat->id);
 		goto error;
 	}
+printf("--------- PLL(%d) lock ok\n", pll_7nm->plat->id);
 
 	/*
 	 * assert power on reset for PHY digital in case the PLL is
@@ -682,6 +697,8 @@ static int dsi_7nm_set_usecase(struct msm_dsi_phy *phy)
 {
 	void __iomem *base = phy->plat->base;
 	u32 data = 0x0;	/* internal PLL */
+
+	printf("DSI PLL%d", phy->plat->id);
 
 	switch (phy->plat->usecase) {
 	case MSM_DSI_PHY_STANDALONE:
@@ -868,6 +885,8 @@ static int dsi_pll_7nm_of_to_plat(struct udevice *dev)
 	/* Copy plat data from parent */
 	memcpy(plat, pplat, sizeof(*plat));
 
+	printf("%s: %s exit\n", dev->name, __func__);
+
 	return 0;
 }
 
@@ -876,6 +895,8 @@ static int dsi_pll_7nm_probe(struct udevice *dev)
 	struct dsi_pll_7nm *pll_7nm = dev_get_priv(dev);
 	int index = 0;
 	struct msm_dsi_phy_plat *plat = dev_get_plat(dev);
+
+printf("========%s enter parent %s priv is %p\n", __func__, dev->parent->name, plat);
 
 	pll_7nm->dev = dev;
 	pll_7nm->plat = plat;
@@ -899,6 +920,7 @@ static int dsi_pll_7nm_probe(struct udevice *dev)
 */
 
 	_dsi_pll_7nm_vco_prepare(pll_7nm);
+	printf("%s: %s exit\n", dev->name, __func__);
 	return 0;
 }
 
@@ -1041,6 +1063,7 @@ static int dsi_7nm_phy_enable(struct msm_dsi_phy *phy,
 
 	/* TODO: CPHY enable path (this is for DPHY only) */
 
+printf("----%s line %d\n", __func__, __LINE__);
 	/* Alter PHY configurations if data rate less than 1.5GHZ*/
 	less_than_1500_mhz = (clk_req->bitclk_rate <= 1500000000);
 
@@ -1164,6 +1187,7 @@ static int dsi_7nm_phy_enable(struct msm_dsi_phy *phy,
 	       base + REG_DSI_7nm_PHY_CMN_GLBL_RESCODE_OFFSET_BOT_CTRL);
 	writel(0x55, base + REG_DSI_7nm_PHY_CMN_GLBL_LPTX_STR_CTRL);
 
+printf("----%s line %d\n", __func__, __LINE__);
 	/* Remove power down from all blocks */
 	writel(0x7f, base + REG_DSI_7nm_PHY_CMN_CTRL_0);
 
@@ -1173,6 +1197,7 @@ static int dsi_7nm_phy_enable(struct msm_dsi_phy *phy,
 	if (!phy->plat->cphy_mode)
 		writel(0x40, base + REG_DSI_7nm_PHY_CMN_CTRL_2);
 
+printf("----%s line %d\n", __func__, __LINE__);
 	/* pll is touched inside dsi_7nm_set_usecase, so we need to init
 	 * pll struct first, i.e. init the pll driver.
 	 * The pll struct is init during dsi_phy_driver_probe in kernel.
@@ -1193,6 +1218,7 @@ static int dsi_7nm_phy_enable(struct msm_dsi_phy *phy,
 			__func__, ret);
 		return ret;
 	}
+printf("----%s line %d\n", __func__, __LINE__);
 
 	/* DSI PHY timings */
 	if (phy->plat->cphy_mode) {
@@ -1226,6 +1252,7 @@ static int dsi_7nm_phy_enable(struct msm_dsi_phy *phy,
 		       base + REG_DSI_7nm_PHY_CMN_TIMING_CTRL_13);
 	}
 
+printf("----%s line %d\n", __func__, __LINE__);
 	/* DSI lane settings */
 	dsi_phy_hw_v4_0_lane_settings(phy);
 
@@ -1253,6 +1280,8 @@ static void dsi_7nm_phy_disable(struct msm_dsi_phy *phy)
 {
 	void __iomem *base = phy->plat->base;
 	u32 data;
+
+	printf("");
 
 	if (dsi_phy_hw_v4_0_is_pll_on(phy))
 		pr_warn("Turning OFF PHY while PLL is on\n");
@@ -1395,20 +1424,20 @@ static int msm_dsi_phy_power_on_internal(struct msm_dsi_phy *qcom)
 	clk_set_rate(qcom->ahb_clk, 19200000);
 
 	return dsi_7nm_phy_enable(qcom, &clk_req);
-
-/*
+return 0;
+	//return dsi_pll_7nm_init(phy);
 	//clk_prepare_enable(qcom->ref_clk);
 
 	msm_dsi_phy_mipi_mode_enable(qcom);
 
 	return 0;
-*/
 }
 
 static int msm_dsi_phy_power_on(struct phy *phy)
 {
 	struct msm_dsi_phy *qcom = dev_get_priv(phy->dev);
 
+printf("======%s enter with struct phy->id %lu (internal id %d), skipped so far\n", __func__, phy->id, qcom->plat->id);
 return 0;
 	return msm_dsi_phy_power_on_internal(qcom);
 }
@@ -1496,6 +1525,7 @@ static int qcom_dsi_phy_bind(struct udevice *dev)
 	/// FIXME: CASEY: populate driver_data with configs necessary for the PLL.
 	/// IMPORTANT: we can't access data from the phy device itself since it may not be
 	/// probed when clk ops are called!
+printf("------- binding device %s\n", buf);
 	ret = device_bind_with_driver_data(dev, drv, buf, (ulong)driver_data,
 					 dev_ofnode(dev), NULL);
 	if (ret)
@@ -1507,6 +1537,8 @@ static int qcom_dsi_phy_bind(struct udevice *dev)
 static int qcom_dsi_phy_of_to_plat(struct udevice *dev)
 {
 	struct msm_dsi_phy_plat *plat = dev_get_plat(dev);
+
+	printf("%s: dev is %p\n", __func__, dev);
 
 	plat->cfg = &dsi_phy_4nm_8650_cfgs;
 	// FIXME: read from DTS
@@ -1524,6 +1556,7 @@ static int qcom_dsi_phy_of_to_plat(struct udevice *dev)
 	if (IS_ERR(plat->lane_base))
 		return PTR_ERR(plat->lane_base);
 
+printf("========%s udev %p base %p pll_base %p lane_base %p\n", __func__, dev, plat->base, plat->pll_base, plat->lane_base);
 	plat->id = dsi_phy_get_id(plat);
 	if (plat->id)
 		plat->usecase = MSM_DSI_PHY_SLAVE;
@@ -1577,6 +1610,7 @@ static int msm_dsi_phy_probe(struct udevice *dev)
 	/* Enable phy by default, so that phy pll works when clk ops is called */
 	msm_dsi_phy_power_on_internal(qcom);
 
+printf("========%s ret ok\n", __func__);
 	return ret;
 }
 
