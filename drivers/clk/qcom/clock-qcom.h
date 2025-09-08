@@ -40,7 +40,7 @@ struct vote_clk {
 };
 
 struct freq_tbl {
-	uint freq;
+	uint64_t freq;
 	uint src;
 	u8 pre_div;
 	u16 m;
