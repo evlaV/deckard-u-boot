@@ -779,6 +779,9 @@ static int i2c_post_bind(struct udevice *dev)
 
 #if CONFIG_IS_ENABLED(OF_REAL)
 	ret = dm_scan_fdt_dev(dev);
+	if (ret)
+		debug("%s: %s failed to scan device!\n", __func__,
+		      dev->name, dev_seq(dev));
 #endif
 	return ret;
 }
