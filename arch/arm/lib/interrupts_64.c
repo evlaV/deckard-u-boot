@@ -146,6 +146,9 @@ static void show_backtrace(unsigned long elr, unsigned long lr, unsigned long x2
 
 	/* Now we get the rest of the backtrace from the frame pointers */
 	while (fp) {
+		// Sometimes frame pointers get corrupted, try to catch that here
+		if ((phys_addr_t)fp > (phys_addr_t)__bss_end)
+			break;
 		print_sym(fp->lr);
 		fp = fp->prev;
 	}
