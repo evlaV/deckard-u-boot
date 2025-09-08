@@ -6,6 +6,7 @@
  * Copyright (c) 2018, Theobroma Systems Design und Consulting GmbH
  */
 
+#define DEBUG 7
 #define LOG_CATEGORY UCLASS_CLK
 
 #include <clk.h>
@@ -545,6 +546,7 @@ ulong clk_round_rate(struct clk *clk, ulong rate)
 	if (!ops->round_rate)
 		return -ENOSYS;
 
+	printf("%s %s - %pS\n", clk->dev->name, __func__, ops->round_rate);
 	return ops->round_rate(clk, rate);
 }
 
@@ -610,6 +612,8 @@ ulong clk_set_rate(struct clk *clk, ulong rate)
 	/* Clean up cached rates for us and all child clocks */
 	clk_clean_rate_cache(clkp);
 
+	printf("%s %s - %pS(%lu)\n", clk->dev->name, __func__, ops->set_rate, rate);
+
 	return ops->set_rate(clk, rate);
 }
 
@@ -632,6 +636,7 @@ int clk_set_parent(struct clk *clk, struct clk *parent)
 		return ret;
 	}
 
+	printf("%s %s - %pS\n", clk->dev->name, __func__, ops->set_parent);
 	ret = ops->set_parent(clk, parent);
 	if (ret) {
 		clk_disable(parent);
@@ -680,6 +685,7 @@ int clk_enable(struct clk *clk)
 		}
 
 		if (ops->enable) {
+			printf("%s %s - %pS\n", clk->dev->name, __func__, ops->enable);
 			ret = ops->enable(clkp ? clkp : clk);
 			if (ret) {
 				printf("Enable %s failed\n", clk->dev->name);
