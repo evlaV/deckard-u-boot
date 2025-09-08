@@ -2,7 +2,8 @@
 #
 # (C) Copyright 2023 Linaro
 
-obj-y += clock-qcom.o
+# FIXME: make clk-alpha-pll optional
+obj-y += clock-qcom.o clk-alpha-pll.o
 obj-$(CONFIG_CLK_QCOM_SDM845) += clock-sdm845.o
 obj-$(CONFIG_CLK_QCOM_APQ8016) += clock-apq8016.o
 obj-$(CONFIG_CLK_QCOM_APQ8096) += clock-apq8096.o
