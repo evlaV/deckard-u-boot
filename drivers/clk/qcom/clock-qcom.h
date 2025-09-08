@@ -93,6 +93,7 @@ struct msm_clk_data {
 struct msm_clk_priv {
 	phys_addr_t		base;
 	struct msm_clk_data	*data;
+	struct clk		*parents_map;
 };
 
 int qcom_cc_bind(struct udevice *parent);

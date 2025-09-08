@@ -15,6 +15,7 @@
 #include <clk-uclass.h>
 #include <linux/clk-provider.h>
 #include <dm.h>
+#include <dm/device_compat.h>
 #include <dm/device-internal.h>
 #include <dm/lists.h>
 #include <errno.h>
@@ -185,6 +186,32 @@ void clk_phy_mux_enable(phys_addr_t base, uint32_t cmd_rcgr, bool enabled)
 	writel(cfg, base + cmd_rcgr);
 }
 
+static int qcom_clk_parent_enable(struct clk *clk)
+{
+	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
+	struct clk *parent = &priv->parents_map[clk->id];
+
+	if (!clk_valid(parent))
+		return 0;
+
+	debug("Enabling parent clock %s:%lu for %s:%lu\n", parent->dev->name, parent->id, clk->dev->name, clk->id);
+
+	return clk_enable(parent);
+}
+
+static ulong qcom_clk_parent_set_rate(struct clk *clk, ulong rate)
+{
+	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
+	struct clk *parent = &priv->parents_map[clk->id];
+
+	if (!clk_valid(parent))
+		return 0;
+
+	debug("Setting rate %lu for parent clock %s:%lu for %s:%lu\n", rate, parent->dev->name, parent->id, clk->dev->name, clk->id);
+
+	return clk_set_rate(parent, clk->rate);
+}
+
 const struct freq_tbl *qcom_find_freq(const struct freq_tbl *f, uint rate)
 {
 	if (!f)
@@ -212,12 +239,26 @@ static int msm_clk_probe(struct udevice *dev)
 
 	priv->data = data;
 
+	priv->parents_map = kzalloc(data->num_clks * sizeof(struct clk), GFP_KERNEL);
+
 	return 0;
 }
 
 static ulong msm_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct msm_clk_data *data = (struct msm_clk_data *)dev_get_driver_data(clk->dev);
+	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
+	int ret = 0;
+
+	// FIXME: For now we're assuming that if we have a parent then rate changes should
+	// be propagated, this may not always be the case...
+	if (clk_valid(&priv->parents_map[clk->id])) {
+		ret = qcom_clk_parent_set_rate(clk, rate);
+		if (ret) {
+			dev_err(clk->dev, "Failed to set parent clock rate: %d\n", ret);
+			return 0;
+		}
+	}
 
 	if (data->set_rate)
 		return data->set_rate(clk, rate);
@@ -228,6 +269,11 @@ static ulong msm_clk_set_rate(struct clk *clk, ulong rate)
 static int msm_clk_enable(struct clk *clk)
 {
 	struct msm_clk_data *data = (struct msm_clk_data *)dev_get_driver_data(clk->dev);
+	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
+
+	/* If the clock has a parent, the pointer to it is in the data property */
+	if (clk_valid(&priv->parents_map[clk->id]))
+		qcom_clk_parent_enable(clk);
 
 	if (data->enable)
 		return data->enable(clk);
@@ -350,12 +396,24 @@ static void __maybe_unused msm_dump_clks(struct udevice *dev)
 	dump_rcgs(dev);
 }
 
+static int msm_clk_set_parent(struct clk *clk, struct clk *parent)
+{
+	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
+
+	debug("Setting parent clock %s:%lu for %s:%lu\n", parent->dev->name, parent->id, clk->dev->name, clk->id);
+
+	memcpy(&priv->parents_map[clk->id], parent, sizeof(struct clk));
+
+	return 0;
+}
+
 static struct clk_ops msm_clk_ops = {
 	.set_rate = msm_clk_set_rate,
 	.enable = msm_clk_enable,
 #if IS_ENABLED(CONFIG_CMD_CLK)
 	.dump = msm_dump_clks,
 #endif
+	.set_parent = msm_clk_set_parent,
 };
 
 U_BOOT_DRIVER(qcom_clk) = {
@@ -380,7 +438,7 @@ int qcom_cc_bind(struct udevice *parent)
 		return -ENOENT;
 
 	/* Register the clock controller */
-	ret = device_bind_with_driver_data(parent, drv, "qcom_clk", (ulong)data,
+	ret = device_bind_with_driver_data(parent, drv, parent->name, (ulong)data,
 					   dev_ofnode(parent), &clkdev);
 	if (ret)
 		return ret;
