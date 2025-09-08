@@ -143,8 +143,11 @@ void clk_rcg_set_rate_mnd(phys_addr_t base, uint32_t cmd_rcgr,
 	clk_bcr_update(base + cmd_rcgr);
 }
 
-/* root set rate for clocks with half integer and mnd_width=0 */
-void clk_rcg_set_rate(phys_addr_t base, uint32_t cmd_rcgr, int div,
+/* root set rate for clocks with half integer and mnd_width=0.
+ * pre_div is (d * 2) - 1, allowing for 1/2 fractions which have to be
+ * calculated at compile time!
+ */
+void clk_rcg_set_rate(phys_addr_t base, uint32_t cmd_rcgr, int pre_div,
 		      int source)
 {
 	u32 cfg;
@@ -158,8 +161,8 @@ void clk_rcg_set_rate(phys_addr_t base, uint32_t cmd_rcgr, int div,
 	 * Set the divider; HW permits fraction dividers (+0.5), but
 	 * for simplicity, we will support integers only
 	 */
-	if (div)
-		cfg |= (2 * div - 1) & CFG_SRC_DIV_MASK;
+	if (pre_div)
+		cfg |= pre_div & CFG_SRC_DIV_MASK;
 
 	writel(cfg, base + cmd_rcgr + RCG_CFG_REG); /* Write new clock configuration */
 
