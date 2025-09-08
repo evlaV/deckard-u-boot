@@ -198,6 +198,7 @@ struct mipi_dsi_device_info {
  * @format: pixel format for video mode
  * @lanes: number of active data lanes
  * @mode_flags: DSI operation mode related flags
+ * @index: the DSI index for dual DSI port case
  */
 struct mipi_dsi_device {
 	struct mipi_dsi_host *host;
@@ -208,6 +209,7 @@ struct mipi_dsi_device {
 	unsigned int lanes;
 	enum mipi_dsi_pixel_format format;
 	unsigned long mode_flags;
+	u32 index;
 };
 
 /**
@@ -238,12 +240,14 @@ static inline int mipi_dsi_pixel_format_to_bpp(enum mipi_dsi_pixel_format fmt)
 /**
  * struct mipi_dsi_panel_plat - DSI panel platform data
  * @device: DSI peripheral device
- * @lanes: number of active data lanes
+ * @device2: DSI peripheral device in case of dual DSI port
+ * @lanes: number of active data lanes on every DSI port
  * @format: pixel format for video mode
  * @mode_flags: DSI operation mode related flags
  */
 struct mipi_dsi_panel_plat {
 	struct mipi_dsi_device *device;
+	struct mipi_dsi_device *device2;
 	unsigned int lanes;
 	enum mipi_dsi_pixel_format format;
 	unsigned long mode_flags;
