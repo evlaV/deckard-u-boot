@@ -213,6 +213,8 @@ static void dsi_write_panel_on(struct lpm026m648c_priv *priv)
 	mdelay(200);
 	lpm026m648c_dsi_write_seq(priv, LPM02648C_MF_CMD_ACCESS_PROTECT, 0x03);
 	mdelay(200);
+	/* enable test pattern in panel */
+	lpm026m648c_dsi_write_seq(priv, 0xde, 00);
 }
 
 static int panel_info_show(struct lpm026m648c_priv *priv)
