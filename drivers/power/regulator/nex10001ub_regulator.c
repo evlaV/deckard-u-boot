@@ -30,12 +30,15 @@ struct nex100011ub_regulator_pdata {
 static int nex100011ub_regulator_set_value(struct udevice *dev, int uV)
 {
 	struct nex100011ub_regulator_pdata *pdata = dev_get_priv(dev);
-	int ret;
+	int ret, i;
 	u8 regval;
+	u8 val;
 
 	if (uV < NEX10000UB_VOLTAGE_MIN || uV > NEX10000UB_VOLTAGE_MAX)
 		return -EINVAL;
 
+
+	printf("%s: programming for %u mV\n", dev->name, uV / 1000);
 	uV -= NEX10000UB_VOLTAGE_MIN;
 
 	uV = DIV_ROUND_UP(uV, NEX10000UB_STEP_100mV);
@@ -45,15 +48,22 @@ static int nex100011ub_regulator_set_value(struct udevice *dev, int uV)
 
 	regval = uV;
 
-	printf("%s: programming for %u mv (encoded %#x)\n", dev->name, uV / 1000, regval);
-
-	ret = dm_i2c_write(pdata->i2c, NEX10001UB_REG_VPOS, &regval, 1);
-	if (ret) {
-		dev_err(dev, "i2c failed to set Vpos: %d\n", ret);
-		return ret;
+	for (i = 0; i < 10; i++) {
+		ret = dm_i2c_write(pdata->i2c, NEX10001UB_REG_VPOS, &regval, 1);
+		if (ret)
+			break;
 	}
+	if (ret)
+		dev_err(dev, "i2c failed to set Vpos: %d\n", ret);
 
-	return dm_i2c_write(pdata->i2c, NEX10001UB_REG_VNEG, &regval, 1);
+	for (i = 0; i < 10; i++) {
+		ret = dm_i2c_write(pdata->i2c, NEX10001UB_REG_VNEG, &regval, 1);
+		if (ret)
+			break;
+	}
+	if (ret)
+		dev_err(dev, "i2c failed to set Vneg: %d\n", ret);
+	return 0;
 }
 
 static int nex100011ub_regulator_get_value(struct udevice *dev)
@@ -73,15 +83,20 @@ static int nex100011ub_regulator_get_value(struct udevice *dev)
 
 static int nex100011ub_regulator_set_enable(struct udevice *dev, bool enable)
 {
-	int ret;
+	struct nex100011ub_regulator_pdata *priv = dev_get_priv(dev);
+	int ret = 0;
 
 	printf("%s: %s %d\n", dev->name, __func__, enable);
 
-	if (enable)
+	if (enable) {
 		// Taken from linux
+		dm_gpio_set_value(&priv->biasp_gpio, 1);
+		dm_gpio_set_value(&priv->biasn_gpio, 1);
 		ret = nex100011ub_regulator_set_value(dev, 5800000);
-	else
-		ret = nex100011ub_regulator_set_value(dev, 0);
+	} else {
+		dm_gpio_set_value(&priv->biasp_gpio, 0);
+		dm_gpio_set_value(&priv->biasn_gpio, 0);
+	}
 
 	return ret;
 }
@@ -122,19 +137,8 @@ static int nex100011ub_regulator_probe(struct udevice *dev)
 		return ret;
 	}
 	dev_info(dev, "i2c read vendor ID: 0x%x\n", regval);
-
-	regval = 0x11;
-	ret = dm_i2c_write(priv->i2c, NEX10001UB_REG_VPOS, &regval, 1); //+5.7v
-	if (ret) {
-		dev_err(dev, "i2c failed to set Vpos: %d\n", ret);
-		return ret;
-	}
-
-	return dm_i2c_write(priv->i2c, NEX10001UB_REG_VNEG, &regval, 1); //-5.7v
-	if (ret) {
-		dev_err(dev, "i2c failed to set Vpos: %d\n", ret);
-		return ret;
-	}
+	dm_gpio_set_value(&priv->biasp_gpio, 0);
+	dm_gpio_set_value(&priv->biasn_gpio, 0);
 	return 0;
 }
 
