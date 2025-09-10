@@ -554,8 +554,8 @@ printf("======%s tx %lu rx %lu with base %p\n", __func__, msg->tx_len, msg->rx_l
 
 	dsi_write(base + REG_DSI_CTRL, 0x177);
 	dsi_write(base + REG_DSI_INTR_CTRL, 0xAA20AA02);
-	dsi_write(base + REG_DSI_DMA_BASE, 0x1000);
-	dsi_write(base + REG_DSI_DMA_LEN, 0x4);
+	dsi_write(base + REG_DSI_DMA_BASE, dsi->tx_buf);
+	dsi_write(base + REG_DSI_DMA_LEN, len);
 	dsi_write(base + REG_DSI_VBIF_CTRL, 0x7);
 	dsi_write(base + REG_DSI_TRIG_DMA, 0x1);
 	dsi_write(base + REG_DSI_INTR_CTRL, 0xAA20AA03);
