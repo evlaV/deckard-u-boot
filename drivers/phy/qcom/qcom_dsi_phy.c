@@ -573,6 +573,10 @@ static int _dsi_pll_7nm_vco_prepare(struct dsi_pll_7nm *pll_7nm)
 {
 	int rc;
 
+	/* FIXME: Skip the 2nd DSI PLL in dual-DSI case */
+	if(pll_7nm->id == 1)
+		return 0;
+
 	/* copy from linux 80Hz config */
 	pll_7nm->vco_desired_rate = 851023681;
 
@@ -893,15 +897,15 @@ static int dsi_pll_7nm_of_to_plat(struct udevice *dev)
 static int dsi_pll_7nm_probe(struct udevice *dev)
 {
 	struct dsi_pll_7nm *pll_7nm = dev_get_priv(dev);
-	int index = 0;
 	struct msm_dsi_phy_plat *plat = dev_get_plat(dev);
 
 printf("========%s enter parent %s priv is %p\n", __func__, dev->parent->name, plat);
 
 	pll_7nm->dev = dev;
 	pll_7nm->plat = plat;
+	pll_7nm->id = plat->id;
 
-	pll_7nm_list[index] = pll_7nm;
+	pll_7nm_list[plat->id] = pll_7nm;
 
 	/* move clks registration from pll_7nm_register. But how
 	 * to model the clk tree, or configure them at once. Or
@@ -919,7 +923,8 @@ printf("========%s enter parent %s priv is %p\n", __func__, dev->parent->name, p
 	clk_dm(clk_id, clk);
 */
 
-	_dsi_pll_7nm_vco_prepare(pll_7nm);
+	if (plat->id == 0)
+		_dsi_pll_7nm_vco_prepare(pll_7nm);
 	printf("%s: %s exit\n", dev->name, __func__);
 	return 0;
 }
