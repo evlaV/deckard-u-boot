@@ -482,17 +482,10 @@ int device_probe(struct udevice *dev)
 {
 	const struct driver *drv;
 	int ret;
-int  dbg_f = 0;
 
 	if (!dev)
 		return -EINVAL;
 
-dbg_f = 0;
-if (!strncmp(dev->name, "dis", 3) || !strncmp(dev->name, "dsi", 3) || !strncmp(dev->name, "phy", 3) ||
-    !strncmp(dev->name, "power", 5) || !strncmp(dev->name, "rpmh", 4) || !strncmp(dev->name, "rsc", 3))
-	dbg_f = 1;
-
-if(dbg_f) printf("--------%s enter for dev %s\n", __func__, dev->name);
 	if (dev_get_flags(dev) & DM_FLAG_ACTIVATED)
 		return 0;
 
@@ -500,7 +493,6 @@ if(dbg_f) printf("--------%s enter for dev %s\n", __func__, dev->name);
 	if (ret)
 		return ret;
 
-if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE__);
 	drv = dev->driver;
 	assert(drv);
 
@@ -508,7 +500,6 @@ if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE_
 	if (ret)
 		goto fail;
 
-if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE__);
 	/* Ensure all parents are probed */
 	if (dev->parent) {
 		ret = device_probe(dev->parent);
@@ -527,18 +518,14 @@ if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE_
 
 	dev_or_flags(dev, DM_FLAG_ACTIVATED);
 
-if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE__);
 	if (CONFIG_IS_ENABLED(POWER_DOMAIN) && dev->parent &&
 	    (device_get_uclass_id(dev) != UCLASS_POWER_DOMAIN) &&
 	    !(drv->flags & DM_FLAG_DEFAULT_PD_CTRL_OFF)) {
-if(dbg_f) printf("--------%s for dev %s call dev_power_domain_on\n", __func__, dev->name);
 		ret = dev_power_domain_on(dev);
-if(dbg_f) printf("--------%s for dev %s call dev_power_domain_on ret %d\n", __func__, dev->name, ret);
 		if (ret)
 			goto fail;
 	}
 
-if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE__);
 	/*
 	 * Process pinctrl for everything except the root device, and
 	 * continue regardless of the result of pinctrl. Don't process pinctrl
@@ -556,13 +543,11 @@ if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE_
 	 */
 	if (dev->parent && device_get_uclass_id(dev) != UCLASS_PINCTRL) {
 		ret = pinctrl_select_state(dev, "default");
-//if(dbg_f) printf("--------%s for dev %s line %d call pinctrl_select_state ret %d\n", __func__, dev->name, __LINE__, ret);
 		if (ret && ret != -ENOSYS)
 			log_debug("Device '%s' failed to configure default pinctrl: %d (%s)\n",
 				  dev->name, ret, errno_str(ret));
 	}
 
-if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE__);
 	if (CONFIG_IS_ENABLED(IOMMU) && dev->parent &&
 	    (device_get_uclass_id(dev) != UCLASS_IOMMU)) {
 		ret = dev_iommu_enable(dev);
@@ -570,24 +555,20 @@ if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE_
 			goto fail;
 	}
 
-if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE__);
 	ret = device_get_dma_constraints(dev);
 	if (ret)
 		goto fail;
 
-if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE__);
 	ret = uclass_pre_probe_device(dev);
 	if (ret)
 		goto fail;
 
-if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE__);
 	if (dev->parent && dev->parent->driver->child_pre_probe) {
 		ret = dev->parent->driver->child_pre_probe(dev);
 		if (ret)
 			goto fail;
 	}
 
-if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE__);
 	/* Only handle devices that have a valid ofnode */
 	if (dev_has_ofnode(dev)) {
 		/*
@@ -599,14 +580,12 @@ if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE_
 			goto fail;
 	}
 
-if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE__);
 	if (drv->probe) {
 		ret = drv->probe(dev);
 		if (ret)
 			goto fail;
 	}
 
-if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE__);
 	ret = uclass_post_probe_device(dev);
 	if (ret)
 		goto fail_uclass;
@@ -618,12 +597,10 @@ if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE_
 				  dev->name, ret, errno_str(ret));
 	}
 
-if(dbg_f) printf("--------%s for dev %s line %d\n", __func__, dev->name, __LINE__);
 	ret = device_notify(dev, EVT_DM_POST_PROBE);
 	if (ret)
 		goto fail_event;
 
-if(dbg_f) printf("--------%s ok for %s\n", __func__, dev->name);
 	return 0;
 fail_event:
 fail_uclass:
@@ -636,7 +613,6 @@ fail:
 
 	device_free(dev);
 
-if(dbg_f) printf("--------%s fail %d for %s\n", __func__, ret, dev->name);
 	return ret;
 }
 
