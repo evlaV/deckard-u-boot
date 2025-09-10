@@ -814,13 +814,13 @@ static int dispcc_enable_src(const struct freq_tbl *freq)
 		case CFG_DISP_CC_PLL0_OUT_MAIN:
 			// bi_tcxo_div2 clock is routed to PLL0
 			// 1542000000 from measurements?
-			if (alpha_trion_pll_set_rate(&disp_cc_pll0, 1542000000, XO_BOARD / 2))
+			if (alpha_trion_pll_set_rate(&disp_cc_pll0, 1542000000, XO_BOARD / 4))
 				printf("Failed to set PLL0 rate!\n");
 			if (alpha_pll_lucid_evo_enable(&disp_cc_pll0))
 				printf("Failed to enable PLL0\n");
 			return 0;
 		case CFG_DISP_CC_PLL1_OUT_MAIN:
-			if (alpha_trion_pll_set_rate(&disp_cc_pll1, 1542000000, XO_BOARD / 2))
+			if (alpha_trion_pll_set_rate(&disp_cc_pll1, 1542000000, XO_BOARD / 4))
 				printf("Failed to set PLL0 rate!\n");
 			if (alpha_pll_lucid_evo_enable(&disp_cc_pll1))
 				printf("Failed to enable PLL0\n");
