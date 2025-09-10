@@ -573,7 +573,7 @@ static int spl_env_save(struct blk_desc *blk_dev, struct disk_partition *mainenv
 void trigger_xblramdump_fault() {
 	//trigger xblramdump by reading from memory we should not be reading from!
 	int memfaultaddr=0x8000000;
-	uint8_t tmpbuf = map_sysmem(memfaultaddr, 4); 
+	void * tmpbuf = map_sysmem(memfaultaddr, 4); 
 	printf("causing mem fault on 0x%0X\n",memfaultaddr);
 	printf("mem fault on: %x\n",*(volatile uint32_t *)tmpbuf);
 	unmap_sysmem(tmpbuf);
