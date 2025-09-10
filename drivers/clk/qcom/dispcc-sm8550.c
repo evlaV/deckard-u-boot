@@ -947,6 +947,15 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 	}
 }
 
+static int sm8650_disp_cc_parent_enable(struct clk *clk, ulong id)
+{
+	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
+	struct clk *parent = &priv->parents_map[id];
+
+	if (clk_valid(parent))
+		clk_enable(parent);
+}
+
 static int sm8650_disp_cc_enable(struct clk *clk)
 {
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
@@ -975,6 +984,33 @@ static int sm8650_disp_cc_enable(struct clk *clk)
 		break;
 	case DISP_CC_MDSS_MDP_CLK:
 		sm8650_disp_cc_set_rate(clk, 514000000);
+		break;
+	case DISP_CC_MDSS_BYTE0_CLK:
+		sm8650_disp_cc_parent_enable(clk, DISP_CC_MDSS_BYTE0_CLK_SRC);
+		sm8650_disp_cc_set_rate(clk, 121574874);
+		break;
+	case DISP_CC_MDSS_BYTE1_CLK:
+		sm8650_disp_cc_parent_enable(clk, DISP_CC_MDSS_BYTE1_CLK_SRC);
+		sm8650_disp_cc_set_rate(clk, 121574874);
+		break;
+	case DISP_CC_MDSS_BYTE0_INTF_CLK:
+		sm8650_disp_cc_parent_enable(clk, DISP_CC_MDSS_BYTE0_CLK_SRC);
+		sm8650_disp_cc_set_rate(clk, 121574874);
+		break;
+	case DISP_CC_MDSS_BYTE1_INTF_CLK:
+		sm8650_disp_cc_parent_enable(clk, DISP_CC_MDSS_BYTE1_CLK_SRC);
+		sm8650_disp_cc_set_rate(clk, 121574874);
+		break;
+	case DISP_CC_MDSS_VSYNC_CLK:
+		sm8650_disp_cc_set_rate(clk, 19200000);
+		break;
+	case DISP_CC_MDSS_PCLK0_CLK:
+	case DISP_CC_MDSS_PCLK1_CLK:
+		sm8650_disp_cc_set_rate(clk, 243149748);
+		break;
+	case DISP_CC_MDSS_ESC0_CLK:
+	case DISP_CC_MDSS_ESC1_CLK:
+		sm8650_disp_cc_set_rate(clk, 19200000);
 		break;
 	default:
 		break;
