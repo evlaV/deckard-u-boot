@@ -48,14 +48,33 @@
 #define PANEL_MFG_INFO_NUM_BYTES 40
 #define RESET_NUM 2
 
+enum {
+	REGULATOR_VDDA = 0,
+	REGULATOR_BACKLIGHT_LEFT,
+	REGULATOR_BACKLIGHT_RIGHT,
+	REGULATOR_LEFT,
+	REGULATOR_RIGHT,
+	REGULATOR_COUNT,
+};
+
+static const char *regulator_names[REGULATOR_COUNT] = {
+	"vdda-supply",
+	"backlight-left-supply",
+	"backlight-right-supply",
+	"left-supply",
+	"right-supply",
+};
+
 struct lpm026m648c_priv {
 	struct udevice *dev;
-	struct udevice *vdd;
-	struct udevice *backlight;
+
+	struct udevice *regs[REGULATOR_COUNT];
+
+	struct gpio_desc preboost_gpio;
+	struct gpio_desc preboost_good_gpio;
 
 	struct gpio_desc reset1_gpio;
 	struct gpio_desc reset2_gpio;
-	struct gpio_desc enp_gpio;
 
 	struct mipi_dsi_device *device;
 	struct mipi_dsi_device *device2;
@@ -313,25 +332,68 @@ static int set_brightness(struct lpm026m648c_priv *priv, u16 brightness,
 	return 0;
 }
 
+static int lpm026m648c_enable_preboost(struct udevice *dev, struct lpm026m648c_priv *priv)
+{
+	int cnt = 1000;
+	int ret;
+
+	dm_gpio_set_value(&priv->preboost_gpio, 1);
+
+	/* Wait until GPIO goes to 1 */
+	do {
+		ret = dm_gpio_get_value(&priv->preboost_good_gpio);
+		if (ret > 0)
+			break;
+
+		udelay(1000);
+	} while (cnt--);
+
+	if (!cnt)
+		dev_err(dev, "preboost-good failed.\n");
+
+	return 0;
+}
+
 static int lpm026m648c_panel_enable_backlight(struct udevice *dev)
 {
 	struct lpm026m648c_priv *priv = dev_get_priv(dev);
 	struct mipi_dsi_panel_plat *plat = dev_get_plat(dev);
 
 	printf("%s: %s\n", dev->name, __func__);
-	backlight_enable(priv->backlight);
+
+	lpm026m648c_enable_preboost(dev, priv);
+
+	mdelay(70);
+
+	regulator_set_enable_if_allowed(priv->regs[REGULATOR_BACKLIGHT_LEFT], true);
+	regulator_set_enable_if_allowed(priv->regs[REGULATOR_BACKLIGHT_RIGHT], true);
+
+	mdelay(2);
+
+	regulator_set_enable_if_allowed(priv->regs[REGULATOR_VDDA], true);
+
+	mdelay(2);
+
+	regulator_set_enable_if_allowed(priv->regs[REGULATOR_LEFT], true);
+	regulator_set_enable_if_allowed(priv->regs[REGULATOR_RIGHT], true);
+
+	mdelay(2);
+	
+	dm_gpio_set_value(&priv->reset1_gpio, 1);
+	dm_gpio_set_value(&priv->reset2_gpio, 1);
+
+	mdelay(20);
 
 printf("======= %s priv->is_dual_panel %d plat->device %p\n", __func__, priv->is_dual_panel, plat->device);
 	plat->device->mode_flags |= MIPI_DSI_MODE_LPM;
-	if (priv->is_dual_panel)
-		plat->device2->mode_flags |= MIPI_DSI_MODE_LPM;
+	plat->device2->mode_flags |= MIPI_DSI_MODE_LPM;
 
 printf("======= %s set device %p device2 %p\n", __func__, plat->device, plat->device2);
 	priv->device = plat->device;
 	priv->device2 = plat->device2;
-	mdelay(20);
-	get_panel_info(priv);
+
 	dsi_write_panel_on(priv);
+	get_panel_info(priv);
 
 	set_brightness(priv, 200, GPO1_TES1);
 
@@ -343,8 +405,8 @@ static int lpm026m648c_panel_set_backlight(struct udevice *dev, int percent)
 	struct lpm026m648c_priv *priv = dev_get_priv(dev);
 
 	printf("%s: %s percent %d\n", dev->name, __func__, percent);
-
-	return backlight_set_brightness(priv->backlight, percent);
+	
+	return set_brightness(priv, percent, GPO1_TES1);
 }
 
 static int lpm026m648c_panel_get_display_timing(struct udevice *dev,
@@ -357,25 +419,11 @@ static int lpm026m648c_panel_get_display_timing(struct udevice *dev,
 static int lpm026m648c_panel_of_to_plat(struct udevice *dev)
 {
 	struct lpm026m648c_priv *priv = dev_get_priv(dev);
-	int ret;
+	int ret, i;
 
 printf("============%s called\n", __func__);
 
-	ret = uclass_get_device_by_phandle(UCLASS_PANEL_BACKLIGHT, dev,
-					   "backlight", &priv->backlight);
-	if (ret) {
-		log_err("cannot get backlight: ret = %d\n", ret);
-		return ret;
-	}
-
 	priv->is_dual_panel = ofnode_read_bool(dev_ofnode(dev), "dual-panel");
-
-	ret = gpio_request_by_name(dev, "enp-gpios", 0,
-				   &priv->enp_gpio, GPIOD_IS_OUT);
-	if (ret) {
-		dev_err(dev, "could not decode enp-gpios (%d)\n", ret);
-		return ret;
-	}
 
 	ret = gpio_request_by_name(dev, "reset1-gpios", 0,
 				   &priv->reset1_gpio, GPIOD_IS_OUT);
@@ -389,6 +437,35 @@ printf("============%s called\n", __func__);
 	if (ret) {
 		dev_err(dev, "could not decode reset2-gpios (%d)\n", ret);
 		return ret;
+	}
+
+	ret = gpio_request_by_name(dev, "preboost-gpios", 0,
+				   &priv->preboost_gpio, GPIOD_IS_OUT);
+	if (ret) {
+		dev_err(dev, "could not decode preboost-gpios (%d)\n", ret);
+		return ret;
+	}
+
+	ret = gpio_request_by_name(dev, "preboost-good-gpios", 0,
+				   &priv->preboost_good_gpio, GPIOD_IS_IN);
+	if (ret) {
+		dev_err(dev, "could not decode preboost-good-gpios (%d)\n", ret);
+		return ret;
+	}
+
+	for (i = 0; i < REGULATOR_COUNT; i++) {
+		ret = device_get_supply_regulator(dev, regulator_names[i], &priv->regs[i]);
+		if (ret) {
+			dev_err(dev, "Cannot get power supply %s: ret=%d\n",
+				  regulator_names[i], ret);
+			return ret;
+		}
+
+		ret = regulator_set_enable_if_allowed(priv->regs[i], false);
+		if (ret) {
+			dev_warn(dev, "fail to enable power supply %s: ret=%d\n",
+				  priv->regs[i]->name, ret);
+		}
 	}
 
 	return 0;
@@ -408,20 +485,9 @@ printf("============%s called\n", __func__);
 			MIPI_DSI_CLOCK_NON_CONTINUOUS;
 
 	priv->dev = dev;
-/*
-	ret = regulator_set_enable_if_allowed(priv->vdd, 1);
-	if (ret) {
-		dev_err(dev, "%s: enabling vdd-supply failed (%d)\n",
-			  __func__, ret);
-		return ret;
-	}
-*/
 
-	mdelay(2);
-        dm_gpio_set_value(&priv->enp_gpio, 1);
-	mdelay(20);
-	dm_gpio_set_value(&priv->reset1_gpio, 1);
-	dm_gpio_set_value(&priv->reset2_gpio, 1);
+	dm_gpio_set_value(&priv->reset2_gpio, 0);
+	dm_gpio_set_value(&priv->reset1_gpio, 0);
 
 printf("============%s ret 0\n", __func__);
 	return 0;
