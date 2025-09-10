@@ -47,12 +47,16 @@ static int nex100011ub_regulator_set_value(struct udevice *dev, int uV)
 
 	printf("%s: programming for %u mv (encoded %#x)\n", dev->name, uV / 1000, regval);
 
+	dm_gpio_set_value(&pdata->biasp_gpio, 1);
+	udelay(1000);
 	ret = dm_i2c_write(pdata->i2c, NEX10001UB_REG_VPOS, &regval, 1);
 	if (ret) {
 		dev_err(dev, "i2c failed to set Vpos: %d\n", ret);
 		return ret;
 	}
 
+	dm_gpio_set_value(&pdata->biasn_gpio, 1);
+	udelay(1000);
 	return dm_i2c_write(pdata->i2c, NEX10001UB_REG_VNEG, &regval, 1);
 }
 
@@ -73,6 +77,7 @@ static int nex100011ub_regulator_get_value(struct udevice *dev)
 
 static int nex100011ub_regulator_set_enable(struct udevice *dev, bool enable)
 {
+	struct nex100011ub_regulator_pdata *pdata = dev_get_priv(dev);
 	int ret;
 
 	printf("%s: %s %d\n", dev->name, __func__, enable);
@@ -80,8 +85,10 @@ static int nex100011ub_regulator_set_enable(struct udevice *dev, bool enable)
 	if (enable)
 		// Taken from linux
 		ret = nex100011ub_regulator_set_value(dev, 5800000);
-	else
-		ret = nex100011ub_regulator_set_value(dev, 0);
+	else {
+		dm_gpio_set_value(&pdata->biasp_gpio, 0);
+		dm_gpio_set_value(&pdata->biasn_gpio, 0);
+	}
 
 	return ret;
 }
@@ -106,33 +113,9 @@ static int nex100011ub_regulator_probe(struct udevice *dev)
 		return ret;
 	}
 
-	dm_gpio_set_value(&priv->biasp_gpio, 1);
-	dm_gpio_set_value(&priv->biasn_gpio, 1);
-	udelay(1000);
-
 	ret = i2c_get_chip(dev->parent, NEX10001UB_I2C_CHIP, 1, &priv->i2c);
 	if (ret) {
 		dev_err(dev, "i2c dev get failed.\n");
-		return ret;
-	}
-
-	ret = dm_i2c_read(priv->i2c, NEX10001UB_REG_VID, &regval, 1);
-	if (ret) {
-		dev_err(dev, "i2c read VID failed: %d\n", ret);
-		return ret;
-	}
-	dev_info(dev, "i2c read vendor ID: 0x%x\n", regval);
-
-	regval = 0x11;
-	ret = dm_i2c_write(priv->i2c, NEX10001UB_REG_VPOS, &regval, 1); //+5.7v
-	if (ret) {
-		dev_err(dev, "i2c failed to set Vpos: %d\n", ret);
-		return ret;
-	}
-
-	return dm_i2c_write(priv->i2c, NEX10001UB_REG_VNEG, &regval, 1); //-5.7v
-	if (ret) {
-		dev_err(dev, "i2c failed to set Vpos: %d\n", ret);
 		return ret;
 	}
 	return 0;
