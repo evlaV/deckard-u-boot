@@ -26,14 +26,6 @@
 		stdout-path = "serial0:115200n8";
 	};
 
-	backlight: backlight {
-		compatible = "ev2-backlight";
-		bias0-supply = <&nex100011ub0>;
-		bias1-supply = <&nex100011ub1>;
-		backlight0-supply = <&mpq3367a>;
-		backlight1-supply = <&mpq3367b>;
-	};
-
 	gpio-keys {
 		compatible = "gpio-keys";
 
@@ -596,13 +588,13 @@
 		biasp-gpios = <&pm8550_gpios 8 GPIO_ACTIVE_HIGH>;
 		biasn-gpios = <&pm8550_gpios 10 GPIO_ACTIVE_HIGH>;
 		status      = "okay";
+		pinctrl-0 = <&display_avdd_en_r>, <&display_avee_en_r>;
+		pinctrl-names = "default";
 	};
 
 	mpq3367a: mpq3367a@38 {
 		compatible  = "monolithicpower,mpq3367";
 		reg         = <0x38>;
-		preboost-gpios = <&tlmm 79 GPIO_ACTIVE_HIGH>;
-		preboost-good-gpios = <&tlmm 69 GPIO_ACTIVE_HIGH>;
 		enable-gpios = <&pm8550_gpios 1 GPIO_ACTIVE_HIGH>;
 		status      = "okay";
 	};
@@ -617,13 +609,13 @@
 		biasp-gpios = <&pm8550_gpios 4 GPIO_ACTIVE_HIGH>;
 		biasn-gpios = <&pm8550_gpios 9 GPIO_ACTIVE_HIGH>;
 		status      = "okay";
+		pinctrl-0 = <&display_avdd_en_l>, <&display_avee_en_l>;
+		pinctrl-names = "default";
 	};
 
 	mpq3367b: mpq3367b@38 {
 		compatible  = "monolithicpower,mpq3367";
 		reg         = <0x38>;
-		preboost-gpios = <&tlmm 79 GPIO_ACTIVE_HIGH>;
-		preboost-good-gpios = <&tlmm 69 GPIO_ACTIVE_HIGH>;
 		enable-gpios = <&pm8550_gpios 2 GPIO_ACTIVE_HIGH>;
 		status      = "okay";
 	};
@@ -707,6 +699,42 @@
 		input-enable;
 		power-source = <1>;
 		bootph-all;
+	};
+
+	display_resx1: display_resx1-state {
+		pins = "gpio3";
+		function = "normal";
+		power-source = <1>; /* 1.8 V */
+	};
+
+	display_resx2: display_resx2-state {
+		pins = "gpio11";
+		function = "normal";
+		power-source = <1>; /* 1.8 V */
+	};
+
+	display_avdd_en_l: display_avdd_en_l-state {
+		pins = "gpio4";
+		function = "normal";
+		power-source = <0>; /* 1.8 V */
+	};
+
+	display_avdd_en_r: display_avdd_en_r-state {
+		pins = "gpio8";
+		function = "normal";
+		power-source = <1>; /* 1.8 V */
+	};
+
+	display_avee_en_l: display_avee_en_l-state {
+		pins = "gpio9";
+		function = "normal";
+		power-source = <0>; /* 1.8 V */
+	};
+
+	display_avee_en_r: display_avee_en_r-state {
+		pins = "gpio10";
+		function = "normal";
+		power-source = <0>; /* 1.8 V */
 	};
 };
 
@@ -976,13 +1004,20 @@
 
 		reset1-gpios = <&pm8550_gpios 3 GPIO_ACTIVE_HIGH>;
 		reset2-gpios = <&pm8550_gpios 11 GPIO_ACTIVE_HIGH>;
-		enp-gpios = <&tlmm 32 GPIO_ACTIVE_HIGH>;
-		backlight = <&backlight>;
 
-/*
-		wled1-supply = <&backlight>;
+		left-supply = <&nex100011ub1>;
+		right-supply = <&nex100011ub0>;
+
+		backlight-left-supply = <&mpq3367b>;
+		backlight-right-supply = <&mpq3367a>;
+
+		preboost-gpios = <&tlmm 79 GPIO_ACTIVE_HIGH>;
+		preboost-good-gpios = <&tlmm 69 GPIO_ACTIVE_HIGH>;
+
 		vdda-supply = <&vreg_l12b_1p8>;
-*/
+
+		pinctrl-0 = <&display_resx1>, <&display_resx2>;
+		pinctrl-names = "default";
 
 		ports {
 			#address-cells = <1>;
