@@ -864,7 +864,8 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		 * force the re-parent with the table.
 		 */
 		freq = qcom_find_freq(ftbl_disp_cc_mdss_byte0_clk_src, rate);
-		dispcc_enable_src(freq);
+		// The parent in DSI PLL is hard coded.
+		//dispcc_enable_src(freq);
 		clk_rcg_set_rate(priv->base, 0x8108, freq->pre_div, freq->src);
 		return freq->freq;
 
@@ -882,7 +883,8 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		 * Force with the table to re-parent to dsi phy.
 		 */
 		freq = qcom_find_freq(ftbl_disp_cc_mdss_byte0_clk_src, rate);
-		dispcc_enable_src(freq);
+		// The parent in DSI PLL is hard coded.
+		//dispcc_enable_src(freq);
 		clk_rcg_set_rate(priv->base, 0x8124, freq->pre_div, freq->src);
 		return freq->freq;
 
@@ -918,7 +920,8 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		 * The divider shall happen inside DSI PLL, ignore it here. */
 		/* TODO: this clk use clk_pixel_ops in Linux, not mnd */
 		freq = qcom_find_freq(ftbl_disp_cc_mdss_pclk0_clk_src, rate);
-		dispcc_enable_src(freq);
+		// The parent in DSI PLL is hard coded.
+		//dispcc_enable_src(freq);
 		clk_rcg_set_rate_mnd(priv->base, 0x80a8,
 				     freq->pre_div, freq->m, freq->n, freq->src, 8);
 		return 0;
@@ -931,7 +934,8 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		 * The divider shall happen inside DSI PLL, ignore it here. */
 		/* TODO: this clk use clk_pixel_ops in Linux, not mnd */
 		freq = qcom_find_freq(ftbl_disp_cc_mdss_pclk0_clk_src, rate);
-		dispcc_enable_src(freq);
+		// The parent in DSI PLL is hard coded.
+		// dispcc_enable_src(freq);
 		clk_rcg_set_rate_mnd(priv->base, 0x80c0,
 				     freq->pre_div, freq->m, freq->n, freq->src, 8);
 		return 0;
@@ -993,6 +997,21 @@ static int sm8650_disp_cc_enable(struct clk *clk)
 		break;
 	case DISP_CC_MDSS_MDP_CLK:
 		sm8650_disp_cc_set_rate(clk, 514000000);
+		break;
+	case DISP_CC_MDSS_BYTE0_INTF_CLK:
+	case DISP_CC_MDSS_BYTE1_INTF_CLK:
+		sm8650_disp_cc_set_rate(clk, 121574874);
+		break;
+	case DISP_CC_MDSS_VSYNC_CLK:
+		sm8650_disp_cc_set_rate(clk, 19200000);
+		break;
+	case DISP_CC_MDSS_PCLK0_CLK:
+	case DISP_CC_MDSS_PCLK1_CLK:
+		sm8650_disp_cc_set_rate(clk, 243149748);
+		break;
+	case DISP_CC_MDSS_ESC0_CLK:
+	case DISP_CC_MDSS_ESC1_CLK:
+		sm8650_disp_cc_set_rate(clk, 19200000);
 		break;
 	default:
 		break;
