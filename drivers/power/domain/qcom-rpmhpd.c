@@ -43,7 +43,7 @@
 struct rpmhpd {
 	struct udevice	*dev;
 	struct power_domain pd;
-	struct power_domain *parent;
+	struct rpmhpd   *parent;
 	struct rpmhpd	*peer;
 	const bool	active_only;
 	unsigned int	corner;
@@ -91,14 +91,14 @@ static struct rpmhpd cx_ao = {
 static struct rpmhpd mmcx_ao_w_cx_parent;
 static struct rpmhpd mmcx_w_cx_parent = {
 	.peer = &mmcx_ao_w_cx_parent,
-	.parent = &cx.pd,
+	.parent = &cx,
 	.res_name = "mmcx.lvl",
 };
 
 static struct rpmhpd mmcx_ao_w_cx_parent = {
 	.active_only = true,
 	.peer = &mmcx_w_cx_parent,
-	.parent = &cx_ao.pd,
+	.parent = &cx_ao,
 	.res_name = "mmcx.lvl",
 };
 
@@ -158,7 +158,20 @@ static int rpmhpd_power_on(struct power_domain *pd)
 	rpmhpds = desc->rpmhpds;
 	curr_rpmhpd = rpmhpds[pd->id];
 
-	corner = curr_rpmhpd->enable_corner;
+	if (curr_rpmhpd->enabled)
+		return 0;
+
+	if (curr_rpmhpd->parent && !curr_rpmhpd->parent->enabled) {
+		corner = curr_rpmhpd->parent->level_count - 1; //enable_corner;
+
+		ret = rpmhpd_send_corner(curr_rpmhpd->parent, RPMH_ACTIVE_ONLY_STATE, corner,
+				false);
+		if (!ret)
+			curr_rpmhpd->parent->enabled = true;
+printf("---------dev %s id %d parent is power on ret %d\n", pd->dev->name, pd->id, ret);
+	}
+
+	corner = curr_rpmhpd->level_count - 1; //enable_corner;
 
 	ret = rpmhpd_send_corner(curr_rpmhpd, RPMH_ACTIVE_ONLY_STATE, corner,
 				 false);
@@ -183,6 +196,9 @@ static int rpmhpd_power_off(struct power_domain *pd)
 
 	rpmhpds = desc->rpmhpds;
 	curr_rpmhpd = rpmhpds[pd->id];
+
+	if (!curr_rpmhpd->enabled)
+		return 0;
 
 	corner = 0;
 
