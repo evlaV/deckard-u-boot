@@ -482,6 +482,18 @@ static void dsi_phy_pll_cmn_clk_cfg1_update(struct msm_dsi_phy *phy, u32 mask,
 	writel(data, phy->plat->base + REG_DSI_7nm_PHY_CMN_CLK_CFG1);
 }
 
+static void dsi_pll_cmn_clk_cfg0_update(struct dsi_pll_7nm *pll, u32 mask,
+					u32 val)
+{
+	u32 data;
+
+	data = readl(pll->plat->base + REG_DSI_7nm_PHY_CMN_CLK_CFG0);
+	data &= ~mask;
+	data |= val & mask;
+
+	writel(data, pll->plat->base + REG_DSI_7nm_PHY_CMN_CLK_CFG0);
+}
+
 static void dsi_pll_cmn_clk_cfg1_update(struct dsi_pll_7nm *pll, u32 mask,
 					u32 val)
 {
@@ -625,8 +637,19 @@ printf("--------- PLL(%d) lock ok\n", pll_7nm->plat->id);
 	/* Hard coding downstream clock mnd for headset usage case, to avoid
 	 * create parent clocks in pll_7nm_register() */
 	writel(0xff, pll_7nm->plat->base + REG_DSI_7nm_PHY_PLL_PLL_OUTDIV_RATE);
-	writel(0xf1, pll_7nm->plat->base + REG_DSI_7nm_PHY_CMN_CLK_CFG0);
-	writel(0x13, pll_7nm->plat->base + REG_DSI_7nm_PHY_CMN_CLK_CFG1);
+	//writel(0xf1, pll_7nm->plat->base + REG_DSI_7nm_PHY_CMN_CLK_CFG0);
+	// div_3_0  = 2
+	dsi_pll_cmn_clk_cfg0_update(pll_7nm,
+				    DSI_7nm_PHY_CMN_CLK_CFG0_DIV_CTRL_3_0__MASK,
+				    1);
+	// div_7_4 = 1
+	dsi_pll_cmn_clk_cfg0_update(pll_7nm,
+				    DSI_7nm_PHY_CMN_CLK_CFG0_DIV_CTRL_7_4__MASK,
+				    0);
+	//writel(0x13, pll_7nm->plat->base + REG_DSI_7nm_PHY_CMN_CLK_CFG1);
+	dsi_pll_cmn_clk_cfg1_update(pll_7nm,
+				    DSI_7nm_PHY_CMN_CLK_CFG1_DSICLK_SEL__MASK,
+				    DSI_7nm_PHY_CMN_CLK_CFG1_DSICLK_SEL(3));
 
 error:
 	return rc;
