@@ -29,6 +29,8 @@
 #include "dsi.xml.h"
 #include "dsi_phy_7nm.xml.h"
 
+bool phy_powered_on[2];
+
 #define readl_poll_timeout_atomic readl_poll_timeout
 
 #define S_DIV_ROUND_UP(n, d)	\
@@ -424,6 +426,11 @@ static unsigned long dsi_pll_7nm_vco_set_rate(struct clk *clk, unsigned long rat
 {
 	struct dsi_pll_7nm *pll_7nm = dev_get_priv(clk->dev);
 
+	if (!phy_powered_on[pll_7nm->plat->id]) {
+		debug("%s PLL(%d) PHY is not powered on\n", __func__, pll_7nm->plat->id);
+		return 0; //-ENOSYS;
+	}
+
 	return _dsi_pll_7nm_vco_set_rate(pll_7nm, rate);
 }
 
@@ -585,6 +592,11 @@ static int _dsi_pll_7nm_vco_prepare(struct dsi_pll_7nm *pll_7nm)
 {
 	int rc;
 
+	if (pll_7nm->vco_desired_rate && pll_7nm->vco_current_rate) {
+		debug("--------- PLL(%d) already enabled\n", pll_7nm->plat->id);
+		return 0;
+	}
+
 	/* copy from linux 80Hz config */
 	pll_7nm->vco_desired_rate = 851023681;
 
@@ -659,6 +671,16 @@ static int dsi_pll_7nm_vco_prepare(struct clk *clk)
 {
 	struct dsi_pll_7nm *pll_7nm = dev_get_priv(clk->dev);
 
+	if (pll_7nm->plat->id == 1)
+		return -ENOSYS;
+
+	if (!phy_powered_on[pll_7nm->plat->id]) {
+		debug("%s PLL(%d) PHY is not powered on\n", __func__, pll_7nm->plat->id);
+		return -ENOSYS;
+	}
+
+	pll_7nm->slave = pll_7nm_list[1];
+
 	return _dsi_pll_7nm_vco_prepare(pll_7nm);
 }
 
@@ -671,6 +693,14 @@ static void dsi_pll_disable_sub(struct dsi_pll_7nm *pll)
 static int dsi_pll_7nm_vco_unprepare(struct clk *clk)
 {
 	struct dsi_pll_7nm *pll_7nm = dev_get_priv(clk->dev);
+
+	if (pll_7nm->plat->id == 1)
+		return -ENOSYS;
+
+	if (!phy_powered_on[pll_7nm->plat->id]) {
+		debug("%s PLL(%d) PHY is not powered on\n", __func__, pll_7nm->plat->id);
+		return -ENOSYS;
+	}
 
 	/*
 	 * To avoid any stray glitches while abruptly powering down the PLL
@@ -686,6 +716,9 @@ static int dsi_pll_7nm_vco_unprepare(struct clk *clk)
 	}
 	/* flush, ensure all register writes are done */
 	wmb();
+
+	pll_7nm->vco_desired_rate = 0;
+	pll_7nm->vco_current_rate = 0;
 
 	return 0;
 }
@@ -942,7 +975,7 @@ printf("========%s enter parent %s priv is %p\n", __func__, dev->parent->name, p
 	clk_dm(clk_id, clk);
 */
 
-	_dsi_pll_7nm_vco_prepare(pll_7nm);
+	//_dsi_pll_7nm_vco_prepare(pll_7nm);
 	printf("%s: %s exit\n", dev->name, __func__);
 	return 0;
 }
@@ -1227,6 +1260,7 @@ printf("----%s line %d\n", __func__, __LINE__);
 	 * But pll is another driver in uboot.
 	 * And phy should be enabled before PLL, per comments where
 	 * dsi_phy_hw_v4_0_is_pll_on() is called */
+#if 0
 	snprintf(buf, sizeof(buf), "dsi_phy%d-pll", phy->plat->id);
 	ret = uclass_get_device_by_name(UCLASS_CLK, buf, &pll_dev);
 	if (ret) {
@@ -1234,6 +1268,7 @@ printf("----%s line %d\n", __func__, __LINE__);
 			__func__, buf);
 		return ret;
 	}
+#endif
 
 	ret = dsi_7nm_set_usecase(phy);
 	if (ret) {
@@ -1279,7 +1314,9 @@ printf("----%s line %d\n", __func__, __LINE__);
 	/* DSI lane settings */
 	dsi_phy_hw_v4_0_lane_settings(phy);
 
-	printf("DSI%d PHY enabled", phy->plat->id);
+	printf("DSI%d PHY enabled\n", phy->plat->id);
+
+	phy_powered_on[phy->plat->id] = true;
 
 	return 0;
 }
@@ -1460,8 +1497,7 @@ static int msm_dsi_phy_power_on(struct phy *phy)
 {
 	struct msm_dsi_phy *qcom = dev_get_priv(phy->dev);
 
-printf("======%s enter with struct phy->id %lu (internal id %d), skipped so far\n", __func__, phy->id, qcom->plat->id);
-return 0;
+printf("======%s enter with struct phy->id %lu (internal id %d)\n", __func__, phy->id, qcom->plat->id);
 	return msm_dsi_phy_power_on_internal(qcom);
 }
 
@@ -1631,7 +1667,7 @@ static int msm_dsi_phy_probe(struct udevice *dev)
 	}
 
 	/* Enable phy by default, so that phy pll works when clk ops is called */
-	msm_dsi_phy_power_on_internal(qcom);
+	//msm_dsi_phy_power_on_internal(qcom);
 
 printf("========%s ret ok\n", __func__);
 	return ret;

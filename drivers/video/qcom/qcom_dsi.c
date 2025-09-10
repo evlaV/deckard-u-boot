@@ -73,6 +73,7 @@ struct qcom_dsi_priv {
 	unsigned int lane_mbps; /* per lane */
 	struct udevice *vdd_reg;
 	struct udevice *dsi_host;
+	struct clk_bulk bulk;
 };
 
 /* for dsi host */
@@ -1011,6 +1012,13 @@ static int dsi_phy_init(void *priv_data)
 	}
 #endif
 
+	ret = clk_enable_bulk(&dsi->bulk);
+	if (ret) {
+		dev_err(dev, "peripheral clock enable error %d\n", ret);
+		return ret;
+	}
+	
+
 	return 0;
 }
 
@@ -1225,7 +1233,6 @@ static int qcom_dsi_probe(struct udevice *dev)
 	struct qcom_dsi_priv *priv = dev_get_priv(dev);
 	struct mipi_dsi_device *device = &priv->device;
 	struct reset_ctl rst;
-	struct clk_bulk bulk;
 	struct dsi_regs *dsi_reg;
 	int ret;
 
@@ -1267,18 +1274,11 @@ printf("=============%s line %d device->index %d\n", __func__, __LINE__, device-
 	if (ret)
 		return ret;
 
-	ret = clk_get_bulk(device->dev, &bulk);
+	ret = clk_get_bulk(device->dev, &priv->bulk);
 	if (ret) {
 		dev_err(dev, "peripheral clock get error %d\n", ret);
 		goto err_reg;
 	}
-
-	ret = clk_enable_bulk(&bulk);
-	if (ret) {
-		dev_err(dev, "peripheral clock enable error %d\n", ret);
-		goto err_reg;
-	}
-
 
 #if 0
 	ret = reset_get_by_index(device->dev, 0, &rst);
@@ -1299,14 +1299,11 @@ printf("=============%s line %d device->index %d\n", __func__, __LINE__, device-
 		dev_dbg(dev, "remove and unbind all DSI child\n");
 		device_chld_remove(dev, NULL, DM_REMOVE_NORMAL);
 		device_chld_unbind(dev, NULL);
-		ret = -ENODEV;
-		goto err_clk;
+		return -ENODEV;
 	}
 
 printf("=============%s ret 0\n", __func__);
 	return 0;
-err_clk:
-	clk_disable_bulk(&bulk);
 err_reg:
 	regulator_set_enable(priv->vdd_reg, false);
 
