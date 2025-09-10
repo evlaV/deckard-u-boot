@@ -762,6 +762,7 @@ static const struct freq_tbl ftbl_disp_cc_mdss_vsync_clk_src[] = {
 /* hard code per dual-dsi case */
 #define CFG_DSI0_PHY_PLL_OUT_DSICLK (1 << 8)
 #define CFG_DSI0_PHY_PLL_OUT_BYTECLK (2 << 8)
+#define CFG_DSI1_PHY_PLL_OUT_DSICLK (3 << 8)
 #define CFG_DSI1_PHY_PLL_OUT_BYTECLK (4 << 8)
 static const struct freq_tbl ftbl_disp_cc_mdss_byte0_clk_src[] = {
 	F(121574874,  CFG_DSI0_PHY_PLL_OUT_BYTECLK, 1, 0, 0),
@@ -856,24 +857,22 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		 * .reg = 0x8120, .shift = 0, .width = 4 with test. Due to DSC ?
 		 * Or we just fall thru into the grand parent disp_cc_mdss_byte0_clk_src
 		 * at 0x8108? */
-		clk_rcg_set_rate_div(priv->base, 0x8120, 4, 0);
+		writel(0, priv->base + 0x8120);
 	case DISP_CC_MDSS_BYTE0_CLK:
 		/* There is only 1 entry in original ftbl_disp_cc_mdss_byte0_clk_src,
 		 *while parent is dsi0_phy_pll_out_byteclk with rate 121574874 in
 		 * kernel test, because re-parent can link it to dsi phy. We just
 		 * force the re-parent with the table.
 		 */
-		freq = qcom_find_freq(ftbl_disp_cc_mdss_byte0_clk_src, rate);
-		dispcc_enable_src(freq);
-		clk_rcg_set_rate(priv->base, 0x8108, freq->pre_div, freq->src);
-		return freq->freq;
+		clk_rcg_set_rate(priv->base, 0x8108, 1, CFG_DSI0_PHY_PLL_OUT_BYTECLK);
+		return rate;
 
 	case DISP_CC_MDSS_BYTE1_INTF_CLK:
 		/* Assume the divider is 1 in parent disp_cc_mdss_byte1_div_clk_src:
 		 * .reg = 0x813c, .shift = 0, .width = 4 with test. Due to DSC ?
 		 * Or we just fall thru into the grand parent disp_cc_mdss_byte1_clk_src
 		 * at 0x8124 */
-		clk_rcg_set_rate_div(priv->base, 0x813c, 4, 0);
+		writel(0, priv->base + 0x813c);
 	case DISP_CC_MDSS_BYTE1_CLK:
 		/* Its parent is disp_cc_mdss_byte1_clk_src:
 		 * .cmd_rcgr = 0x8124, .mnd_width = 0, .hid_width = 5,
@@ -881,10 +880,8 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		 * are both 121574874 in kernel test.
 		 * Force with the table to re-parent to dsi phy.
 		 */
-		freq = qcom_find_freq(ftbl_disp_cc_mdss_byte0_clk_src, rate);
-		dispcc_enable_src(freq);
-		clk_rcg_set_rate(priv->base, 0x8124, freq->pre_div, freq->src);
-		return freq->freq;
+		clk_rcg_set_rate(priv->base, 0x8124, 1, CFG_DSI0_PHY_PLL_OUT_BYTECLK);
+		return rate;
 
 	case DISP_CC_MDSS_MDP_LUT_CLK:
 		/* Its parent is disp_cc_mdss_mdp_clk_src at 0x80d8:
@@ -905,10 +902,8 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		 * rate is 19200000, same with its parent bi-tcxo-div2-clk per test.
 		 * so ignore this handling.
 		 */
-		freq = qcom_find_freq(ftbl_disp_cc_mdss_vsync_clk_src, rate);
-		dispcc_enable_src(freq);
-		clk_rcg_set_rate(priv->base, 0x80f0, freq->pre_div, freq->src);
-		return freq->freq;
+		clk_rcg_set_rate(priv->base, 0x80f0, 1, CFG_BI_TCXO);
+		return rate;
 
 	case DISP_CC_MDSS_PCLK0_CLK:
 		/* The rate of its parent disp_cc_mdss_pclk0_clk_src and grand parent
@@ -916,12 +911,8 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		 * rate are 243149748 per test. The GGGrand-parent dsi0_pll_out_div_clk
 		 * is 851024121 in 90Hz case, that's m/n = 7/2. Also 7/2 for 80/120Hz
 		 * The divider shall happen inside DSI PLL, ignore it here. */
-		/* TODO: this clk use clk_pixel_ops in Linux, not mnd */
-		freq = qcom_find_freq(ftbl_disp_cc_mdss_pclk0_clk_src, rate);
-		dispcc_enable_src(freq);
-		clk_rcg_set_rate_mnd(priv->base, 0x80a8,
-				     freq->pre_div, freq->m, freq->n, freq->src, 8);
-		return 0;
+		clk_rcg_set_rate_mnd(priv->base, 0x80a8, 1, 1, 1, CFG_DSI0_PHY_PLL_OUT_DSICLK, 8);
+		return rate;
 
 	case DISP_CC_MDSS_PCLK1_CLK:
 		/* The rate of its parent is disp_cc_mdss_pclk1_clk_src and grand parent
@@ -930,11 +921,8 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		 * is 851024121 in 90Hz case, that's m/n = 7/2. Also 7/2 for 80/120Hz
 		 * The divider shall happen inside DSI PLL, ignore it here. */
 		/* TODO: this clk use clk_pixel_ops in Linux, not mnd */
-		freq = qcom_find_freq(ftbl_disp_cc_mdss_pclk0_clk_src, rate);
-		dispcc_enable_src(freq);
-		clk_rcg_set_rate_mnd(priv->base, 0x80c0,
-				     freq->pre_div, freq->m, freq->n, freq->src, 8);
-		return 0;
+		clk_rcg_set_rate_mnd(priv->base, 0x80c0, 1, 1, 1, CFG_DSI0_PHY_PLL_OUT_DSICLK, 8);
+		return rate;
 
 	case DISP_CC_MDSS_ESC0_CLK:
 		/* Assume the divider is 1 in parent disp_cc_mdss_esc0_clk_src:
@@ -942,11 +930,8 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		 * rate is 19200000, same with its parent bi-tcxo-div2-clk per test.
 		 * so ignore this handling. Or to use the table to force the parent.
 		 */
-		freq = qcom_find_freq(ftbl_disp_cc_mdss_vsync_clk_src, rate);
-		dispcc_enable_src(freq);
-		clk_rcg_set_rate_mnd(priv->base, 0x8140,
-				     freq->pre_div, freq->m, freq->n, freq->src, 0);
-		return freq->freq;
+		clk_rcg_set_rate(priv->base, 0x8140, 1, CFG_BI_TCXO);
+		return rate;
 
 	case DISP_CC_MDSS_ESC1_CLK:
 		/* Assume the divider is 1 in parent disp_cc_mdss_esc0_clk_src:
@@ -954,11 +939,8 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		 * rate is 19200000, same with its parent bi-tcxo-div2-clk per test.
 		 * so ignore this handling. Or to use the table to force the parent.
 		 */
-		freq = qcom_find_freq(ftbl_disp_cc_mdss_vsync_clk_src, rate);
-		dispcc_enable_src(freq);
-		clk_rcg_set_rate_mnd(priv->base, 0x8158,
-				     freq->pre_div, freq->m, freq->n, freq->src, 0);
-		return freq->freq;
+		clk_rcg_set_rate(priv->base, 0x8158, 1, CFG_BI_TCXO);
+		return rate;
 
 	default:
 		return 0;
