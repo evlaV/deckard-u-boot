@@ -443,6 +443,24 @@ static void build_mem_map(void)
 				   PTE_BLOCK_INNER_SHARE;
 	}
 
+	// make the region before cmd db FAULT so the damn prefetcher doesn't cause a NOC error lololol
+	// specifically it would trigger gem_noc llc0/1/2/3, effects are semi-random cuz ye prefetcher!
+	mem_map[i].phys = 0x81c50000;
+	mem_map[i].virt = mem_map[i].phys;
+	mem_map[i].size = 0x81c60000 - 0x81c50000;
+	mem_map[i].attrs = PTE_BLOCK_MEMTYPE(MT_DEVICE_NGNRNE) |
+			 PTE_TYPE_FAULT;
+	i+=1;
+
+	// make the region after cmd db FAULT so the damn prefetcher doesn't cause a NOC error lololol
+	// this is actually the tme_uefi_merged_mem region thingy, stuff we shouldn't touch in other words
+	mem_map[i].phys = 0x81c80000;
+	mem_map[i].virt = mem_map[i].phys;
+	mem_map[i].size = 0x75000;
+	mem_map[i].attrs = PTE_BLOCK_MEMTYPE(MT_DEVICE_NGNRNE) |
+			 PTE_TYPE_FAULT;
+	i+=1;
+
 	mem_map[i].phys = UINT64_MAX;
 	mem_map[i].size = 0;
 
