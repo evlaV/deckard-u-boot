@@ -80,7 +80,7 @@ void clk_enable_vote_clk(phys_addr_t base, const struct vote_clk *vclk)
 #define APPS_CMD_RCGR_UPDATE BIT(0)
 
 /* Update clock command via CMD_RCGR */
-void clk_bcr_update(phys_addr_t apps_cmd_rcgr)
+static void clk_bcr_update(phys_addr_t apps_cmd_rcgr)
 {
 	u32 count;
 	setbits_le32(apps_cmd_rcgr, APPS_CMD_RCGR_UPDATE);
