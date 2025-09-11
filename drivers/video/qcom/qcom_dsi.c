@@ -517,13 +517,13 @@ static ssize_t qcom_mipi_dsi_host_transfer(struct mipi_dsi_host *host,
 		ret = dsi_cmds2buf_tx(host, msg);
 	}
 
+out:
 	dsi_write(dsi->base + REG_DSI_CTRL, save_ctrl);
 
 	/* from msm_dsi_host_xfer_restore() */
 	if (!(msg->flags & MIPI_DSI_MSG_USE_LPM))
 		dsi_set_tx_power_mode(1, dsi);
 
-out:
 	return ret;
 }
 
