@@ -148,12 +148,44 @@ static int dsi_cmds2buf_tx(struct mipi_dsi_host *host,
 {
 	struct qcom_mipi_dsi *dsi = host_to_dsi(host);
 	struct mipi_dsi_packet packet;
-	int ret, len, count;
+	int ret, len, count = 0;
 	void __iomem *base = dsi->base;
 	u8 *data;
 	u32 val = 0;
 
-printf("======%s tx %lu rx %lu with base %p\n", __func__, msg->tx_len, msg->rx_len, dsi->base);
+	val = dsi_read(base + REG_DSI_STATUS0);
+	printf("======%s tx %lu rx %lu with base %p status %x\n", __func__, msg->tx_len, msg->rx_len, dsi->base, val);
+	if (val & DSI_STATUS0_VIDEO_MODE_ENGINE_BUSY) {
+		while (count < 1000) {
+			val = dsi_read(base + REG_DSI_STATUS0) ;
+
+			if (!(val & DSI_STATUS0_VIDEO_MODE_ENGINE_BUSY)) 
+				break;
+
+			++count;
+		}
+
+		if (val & DSI_STATUS0_VIDEO_MODE_ENGINE_BUSY) {
+			dev_err(host->dev, "failed to wait for video engine busy (%x)\n", val);
+			return ret;
+		}
+	}
+	count = 0;
+	if (val & DSI_STATUS0_CMD_MODE_DMA_BUSY) {
+		while (count < 1000) {
+			val = dsi_read(base + REG_DSI_STATUS0) ;
+
+			if (!(val & DSI_STATUS0_CMD_MODE_DMA_BUSY)) 
+				break;
+
+			++count;
+		}
+
+		if (val & DSI_STATUS0_CMD_MODE_DMA_BUSY) {
+			dev_err(host->dev, "failed to wait for CMD DMA engine busy (%x)\n", val);
+		}
+	}
+
 	ret = mipi_dsi_create_packet(&packet, msg);
 	if (ret) {
 		dev_err(host->dev, "failed to create packet: %d\n", ret);
@@ -182,30 +214,46 @@ printf("======%s tx %lu rx %lu with base %p\n", __func__, msg->tx_len, msg->rx_l
 		memset(data + packet.size, 0xff, len - packet.size);
 
 	//dsi_write(base + REG_DSI_CTRL, 0x177);
-	dsi_write(base + REG_DSI_INTR_CTRL, 0xAA20AA02);
+	//dsi_write(base + REG_DSI_INTR_CTRL, 0xAA20AA02);
+	// Unmask
+	dsi_write(base + REG_DSI_INTR_CTRL, DSI_IRQ_MASK_CMD_DMA_DONE);
+	// Clear
+	dsi_write(base + REG_DSI_INTR_CTRL, DSI_IRQ_MASK_CMD_DMA_DONE | DSI_IRQ_CMD_DMA_DONE);
 	dsi_write(base + REG_DSI_DMA_BASE, dsi->tx_buf);
 	dsi_write(base + REG_DSI_DMA_LEN, len);
-	dsi_write(base + REG_DSI_VBIF_CTRL, 0x7);
+	//dsi_write(base + REG_DSI_VBIF_CTRL, 0x7);
 	dsi_write(base + REG_DSI_TRIG_DMA, 0x1);
-	dsi_write(base + REG_DSI_INTR_CTRL, 0xAA20AA03);
+	//dsi_write(base + REG_DSI_INTR_CTRL, 0xAA20AA03);
+	printf("Started DMA, waiting for DONE\n");
 	//printf("DSI reading irq off at 0x%u\n", base + REG_DSI_INTR_CTRL);
-	while (!val) {
-		val = dsi_read(base + REG_DSI_INTR_CTRL) & DSI_IRQ_CMD_DMA_DONE;
-		count++;
+
+	val = dsi_read(base + REG_DSI_INTR_CTRL);
+	count = 0;
+	while (!(val & (DSI_IRQ_CMD_DMA_DONE))) {
 		if (count > 100) {
 			printf("DSI CMD: count :%d dma failed\n", count);
 			printf("DSI CMD: irq value = %x\n", dsi_read(base + REG_DSI_INTR_CTRL));
-			printf("DSI CMD: err int value = %x\n", dsi_read(base + REG_DSI_ERR_INT_MASK0));
-			return -EIO;
+			goto out_err;
 		}
-		udelay(10);
+		udelay(1000);
+		val = dsi_read(base + REG_DSI_INTR_CTRL);
+		count++;
 	}
 
-	//dsi_write(base + REG_DSI_CTRL, 0x173);
-	dsi_write(base + REG_DSI_INTR_CTRL, 0xAA20AA00);
+	// Clear
+	dsi_write(base + REG_DSI_INTR_CTRL, DSI_IRQ_MASK_CMD_DMA_DONE | DSI_IRQ_CMD_DMA_DONE);
+	// Mask
+	dsi_write(base + REG_DSI_INTR_CTRL, 0);
 
-	//free(data);
 	return packet.size;
+
+out_err:
+	// Clear
+	dsi_write(base + REG_DSI_INTR_CTRL, DSI_IRQ_MASK_CMD_DMA_DONE | DSI_IRQ_CMD_DMA_DONE);
+	// Mask
+	dsi_write(base + REG_DSI_INTR_CTRL, 0);
+
+	return -EIO;
 }
 
 static int dsi_cmd_dma_rx(struct qcom_mipi_dsi *dsi,
@@ -450,23 +498,33 @@ static ssize_t qcom_mipi_dsi_host_transfer(struct mipi_dsi_host *host,
 {
 	struct qcom_mipi_dsi *dsi = host_to_dsi(host);
 	int ret;
+	u32 status;
+	u32 save_ctrl;
 
 	/* from msm_dsi_host_xfer_prepare() */
 	if (!(msg->flags & MIPI_DSI_MSG_USE_LPM))
 		dsi_set_tx_power_mode(0, dsi);
 
+	save_ctrl = dsi_read(dsi->base + REG_DSI_CTRL);
+	dsi_write(dsi->base + REG_DSI_CTRL, save_ctrl | 0x5);
+
 	if (msg->rx_buf && msg->rx_len) {
 		ret = msm_dsi_host_cmd_rx(host, msg);
 		if (ret)
-			return ret;
+			goto out;
 		ret = msg->rx_len;
 	} else {
 		ret = dsi_cmds2buf_tx(host, msg);
 	}
 
+	dsi_write(dsi->base + REG_DSI_CTRL, save_ctrl);
+
 	/* from msm_dsi_host_xfer_restore() */
 	if (!(msg->flags & MIPI_DSI_MSG_USE_LPM))
 		dsi_set_tx_power_mode(1, dsi);
+
+out:
+	return ret;
 }
 
 static const struct mipi_dsi_host_ops qcom_mipi_dsi_host_ops = {
