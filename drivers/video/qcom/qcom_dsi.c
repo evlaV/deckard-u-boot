@@ -474,32 +474,44 @@ static const struct mipi_dsi_host_ops qcom_mipi_dsi_host_ops = {
 	.transfer = qcom_mipi_dsi_host_transfer,
 };
 
+#define DSI_CLK_CTRL_ENABLE_CLKS	\
+		(DSI_CLK_CTRL_AHBS_HCLK_ON | DSI_CLK_CTRL_AHBM_SCLK_ON | \
+		DSI_CLK_CTRL_PCLK_ON | DSI_CLK_CTRL_DSICLK_ON | \
+		DSI_CLK_CTRL_BYTECLK_ON | DSI_CLK_CTRL_ESCCLK_ON | \
+		DSI_CLK_CTRL_FORCE_ON_DYN_AHBM_HCLK)
+
 static void qcom_mipi_dsi_init_ctrl(void __iomem *base)
 {
 	printf("DSI host controller init\n");
 
-	/* TODO: make sure this happens before dsi phy init */
-	dsi_write(base + REG_DSI_PHY_RESET, 0x1);
-	dsi_write(base + REG_DSI_PHY_RESET, 0x0);
+	dsi_write(base + REG_DSI_VIDEO_COMPRESSION_MODE_CTRL, 0x8700B01);
+	dsi_write(base + REG_DSI_ACTIVE_H, 0x02f80028);
+	dsi_write(base + REG_DSI_ACTIVE_V, 0x08850015);
+	dsi_write(base + REG_DSI_TOTAL, 0x0d75030f);
+	dsi_write(base + REG_DSI_ACTIVE_HSYNC, 0x00140000);
+	dsi_write(base + REG_DSI_ACTIVE_VSYNC_HPOS, 0x00000000);
+	dsi_write(base + REG_DSI_ACTIVE_VSYNC_VPOS, 0x00010000);
 
+	dsi_write(base + REG_DSI_CLK_CTRL, 0x23F);
 	dsi_write(base + REG_DSI_RESET, 0x1);
-	mdelay(10);
+	mdelay(20);
 	dsi_write(base + REG_DSI_RESET, 0x0);
 
-	dsi_write(base + REG_DSI_VIDEO_COMPRESSION_MODE_CTRL, 0x8700B01);
-	dsi_write(base + REG_DSI_CLK_CTRL, 0x23F);
 	dsi_write(base + REG_DSI_VID_CFG0, 0x2009130);
 	dsi_write(base + REG_DSI_VID_CFG1, 0x0);
+
 	dsi_write(base + REG_DSI_CMD_DMA_CTRL, 0x14000000);
+
 	dsi_write(base + REG_DSI_TRIG_CTRL, 0x80001004);
-	dsi_write(base + REG_DSI_CLKOUT_TIMING_CTRL, 0x1A27);
+	dsi_write(base + REG_DSI_CLKOUT_TIMING_CTRL, 0x1A26);
 	dsi_write(base + REG_DSI_EOT_PACKET_CTRL, 0x1);
 	dsi_write(base + REG_DSI_ERR_INT_MASK0, 0x13FF3FE0);
-	//dsi_write(base + REG_DSI_INTR_CTRL, 0xAA20AA02);
 	dsi_write(base + REG_DSI_INTR_CTRL, 0);
 	dsi_write(base + REG_DSI_CLK_CTRL, 0x23F);
 	dsi_write(base + REG_DSI_LANE_SWAP_CTRL, 0x0);
+
 	dsi_write(base + REG_DSI_CTRL, 0x171);
+
 	dsi_write(base + REG_DSI_CPHY_MODE_CTRL, 0x1);
 }
 
@@ -563,10 +575,17 @@ static int qcom_mipi_dsi_init(struct udevice *dev,
 		dev_warn(dsi->dsi_host.dev, "Phy get_lane_mbps() failed\n");
 */
 
-	qcom_mipi_dsi_init_ctrl(dsi->base);
 	dsi->tx_buf =  lmb_alloc_base(0x1000, 0x1000, 0xf0000000, LMB_NONE);
 	dsi->rx_buf =  malloc(0x1000);
+
+	dsi_write(dsi->base + REG_DSI_PHY_RESET, 0x1);
+	mdelay(1);
+	dsi_write(dsi->base + REG_DSI_PHY_RESET, 0x0);
+	mdelay(1);
+
 	ret = phy_ops->init(device);
+
+	qcom_mipi_dsi_init_ctrl(dsi->base);
 
 	return 0;
 }
