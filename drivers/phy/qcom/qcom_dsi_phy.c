@@ -657,7 +657,7 @@ printf("--------- PLL(%d) lock ok\n", pll_7nm->plat->id);
 	// div_7_4 = 1
 	dsi_pll_cmn_clk_cfg0_update(pll_7nm,
 				    DSI_7nm_PHY_CMN_CLK_CFG0_DIV_CTRL_7_4__MASK,
-				    0);
+				    1);
 	//writel(0x13, pll_7nm->plat->base + REG_DSI_7nm_PHY_CMN_CLK_CFG1);
 	dsi_pll_cmn_clk_cfg1_update(pll_7nm,
 				    DSI_7nm_PHY_CMN_CLK_CFG1_DSICLK_SEL__MASK,
