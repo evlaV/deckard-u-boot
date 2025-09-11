@@ -3,6 +3,7 @@
  * Copyright (c) 2024, Linaro Limited
  */
 
+#if 0
 &vreg_bob2 {
 	/delete-property/ regulator-always-on;
 };
@@ -46,3 +47,4 @@
 &vreg_l7m_3p3 {
 	/delete-property/ regulator-always-on;
 };
+#endif
