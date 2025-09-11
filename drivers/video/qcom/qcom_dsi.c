@@ -61,6 +61,7 @@
 /* for bridge */
 struct qcom_dsi_priv {
 	struct mipi_dsi_device device;
+	void __iomem *hw_base;
 	void __iomem *base;
 	void __iomem *phy_base;
 	struct udevice *panel;
@@ -109,379 +110,6 @@ static inline u32 dsi_read(void *addr)
 {
 	return readl(addr);
 }
-
-#if 0
-static inline void dsi_set(void *addr, u32 mask)
-{
-	dsi_write(addr, dsi_read(addr) | mask);
-}
-
-static void mdss_dsi_host_init(struct dsi_regs *dsi_reg, int num_of_lanes)
-{
-	uint8_t dlnx_en;
-	uint32_t ctrl_mode = BIT(8) | BIT(0); /* Enable DSI and CLKlane. */
-
-	switch (num_of_lanes) {
-	default:
-	case 1:
-		dlnx_en = 1;
-		break;
-
-	case 2:
-		dlnx_en = 3;
-		break;
-
-	case 3:
-		dlnx_en = 7;
-		break;
-
-	case 4:
-		dlnx_en = 0x0F;
-		break;
-	}
-
-	/*
-	 * Need to send pixel data before sending the ON commands
-	 * so need to configure controller to VIDEO MODE.
-	 */
-	ctrl_mode |= BIT(1);
-
-	mdss_dsi_clock_config(dsi_reg);
-	dsi_write(dsi_reg->trig_ctrl, DSI_DMA_STREAM1 << 8 | DSI_DMA_TRIGGER_SEL);
-	dsi_write(dsi_reg->ctrl, dlnx_en << 4 | ctrl_mode);
-	dsi_write(dsi_reg->cmd_mode_dma_ctrl,
-		DSI_EMBED_MODE1 << 28 | DSI_POWER_MODE2 << 26 |
-		DSI_PACK_TYPE1 << 24 | DSI_VC1 << 22 | DSI_DT1 << 16 | DSI_WC1);
-	dsi_write(dsi_reg->eot_packet_ctrl, 0x1);
-}
-
-static void mdss_dsi_reset(void)
-{
-	/*
-	 * Disable DSI Controller, DSI lane states,
-	 * DSI command-mode and DSI video-mode engines
-	 */
-	dsi_write(dsi_reg->ctrl, 0x0);
-
-	/* DSI soft reset */
-	dsi_write(dsi_reg->soft_reset, 0x1);
-	dsi_write(dsi_reg->soft_reset, 0x0);
-
-	/* set hs timer count speed */
-	dsi_write(dsi_reg->hs_timer_ctrl, HS_TX_TO | TIMER_RESOLUTION << 16);
-
-	/* dma fifo reset */
-	dsi_write(dsi_reg->tpg_dma_fifo_reset, 0x1);
-	dsi_write(dsi_reg->tpg_dma_fifo_reset, 0x0);
-}
-
-void mdss_dsi_video_mode_config(struct display_timing *timings, uint32_t bpp)
-{
-	u32 hs_start = 0, vs_start = 0; /* take sync start as 0 */
-	u32 h_total = timing->hback_porch.typ + timing->hsync_len.typ +
-		timing->hactive.typ + timing->hfront_porch.typ;
-	u32 v_total = timing->vback_porch.typ + timing->vsync_len.typ +
-		timing->vactive.typ + timing->vfront_porch.typ;
-	u32 hs_end = timing->hsync_len.typ;
-	u32 vs_end = timing->vsync_len.typ;
-	u32 ha_start = timing->hback_porch.typ + timing->hsync_len.typ;
-	u32 ha_end = ha_start + timing->hactive.typ;
-	u32 va_start = timing->vback_porch.typ + timing->vsync_len.typ;
-	u32 va_end = va_start + timing->vactive.typ;
-	u32 hdisplay = timing->hactive.typ;
-	uint16_t dst_format;
-	uint8_t lane_en = 15; /* Enable 4 lanes by default */
-
-	switch (bpp) {
-	case 16:
-		dst_format = DSI_VIDEO_DST_FORMAT_RGB565;
-		break;
-	case 18:
-		dst_format = DSI_VIDEO_DST_FORMAT_RGB666;
-		break;
-	case 24:
-	default:
-		dst_format = DSI_VIDEO_DST_FORMAT_RGB888;
-		break;
-	}
-
-/* TODO:
-	if (is_bonded_dsi) {
-		h_total /= 2;
-		hs_end /= 2;
-		ha_start /= 2;
-		ha_end /= 2;
-		hdisplay /= 2;
-	}
-*/
-
-	dsi_write(dsi_reg->video_mode_active_h, (ha_end << 16) | ha_start);
-	dsi_write(dsi_reg->video_mode_active_v, (va_end << 16) | va_start);
-	dsi_write(dsi_reg->video_mode_active_total,
-		((v_total  - 1) << 16) | (h_total - 1));
-
-	dsi_write(dsi_reg->video_mode_active_hsync, hs_start | (hs_end << 16));
-	dsi_write(dsi_reg->video_mode_active_vsync, 0x0);
-	dsi_write(dsi_reg->video_mode_active_vsync_vpos, vs_start | (vs_end << 16));
-
-	dsi_write(dsi_reg->video_mode_ctrl,
-			DSI_EOF_BLLP_PWR << 12 | dst_format << 4 | TRAFFIC_MODE << 8);
-
-/*
-	dsi_write(dsi_reg->hs_timer_ctrl, HS_TX_TO | TIMER_RESOLUTION << 16);
-*/
-
-	dsi_write(dsi_reg->ctrl, lane_en << 4 | DSI_VIDEO_EN << 1 | DSI_EN | DSI_CLKLN_EN << 8);
-}
-
-int mdss_dsi_config(struct display_timing *timings, uint32_t num_of_lanes, uint32_t bpp)
-{
-	mdss_dsi_reset();
-	if ((mdss_dsi_phy_10nm_init(timings, num_of_lanes, bpp)) != 0) {
-		printk(BIOS_ERR, "dsi phy setup returned error\n");
-		return CB_ERR;
-	}
-
-	mdss_dsi_host_init(num_of_lanes);
-
-	return CB_SUCCESS;
-}
-
-void mdss_dsi_clock_config(struct dsi_regs *dsi_reg)
-{
-	/* Clock for AHI Bus Master, for DMA out from memory */
-	dsi_write(dsi_reg->clk_ctrl, 0);
-	dsi_set(dsi_reg->clk_ctrl, DSI_AHBM_SCLK_ON | DSI_FORCE_ON_DYN_AHBM_HCLK);
-
-	/* Clock for MDP/DSI, for DMA out from MDP */
-	dsi_set(dsi_reg->clk_ctrl, DSI_PCLK_ON);
-
-	/* Clock for rest of DSI */
-	dsi_set(dsi_reg->clk_ctrl, DSI_AHBS_HCLK_ON | DSI_DSICLK_ON |
-		  DSI_BYTECLK_ON | DSI_ESCCLK_ON);
-}
-
-static void mdss_dsi_set_intr(void)
-{
-	dsi_write(dsi_reg->int_ctrl, 0x0);
-
-	/* Enable all HW interrupts. */
-	dsi_set(dsi_reg->int_ctrl, DSI_CMD_MODE_DMA_DONE_MASK | DSI_CMD_MODE_MDP_DONE_MASK |
-			DSI_VIDEO_MODE_DONE_MASK | DSI_ERROR_MASK | DSI_BTA_DONE_MASK);
-}
-
-static int mdss_dsi_cmd_dma_trigger_for_panel(struct dsi_regs *dsi_reg)
-{
-	uint32_t read_value;
-	uint32_t count = 0;
-	int status = 0;
-
-	mdss_dsi_set_intr(dsi_reg);
-	dsi_write(dsi_reg->cmd_mode_dma_sw_trigger, 0x1);
-	dsb();
-
-	read_value = dsi_read(dsi_reg->int_ctrl) & 0x1;
-
-	while (read_value != 0x1) {
-		read_value = dsi_read(dsi_reg->int_ctrl) & 0x1;
-		count++;
-		if (count > 0xffff) {
-			status = -1;
-			printk(BIOS_ERR,
-				"Panel CMD: count :%d command mode dma test failed\n", count);
-			printk(BIOS_ERR,
-			       "Panel CMD: read value = %x, addr=%p\n",
-			       read_value, (dsi_reg->int_ctrl));
-			return status;
-		}
-	}
-
-	dsi_write(dsi_reg->int_ctrl, (dsi_read(dsi_reg->int_ctrl) | 0x01000001));
-	return status;
-}
-
-static int mdss_dsi_send_init_cmd(enum mipi_dsi_transaction type, const u8 *body,
-					  u8 len)
-{
-	uint8_t *pload = _dma_coherent;
-	uint32_t size;
-	int ret = CB_SUCCESS;
-	int data = 0;
-	uint32_t *bp = NULL;
-
-	if (len > 2) {
-		pload[0] = len;
-		pload[1] = 0;
-		pload[2] = type;
-		pload[3] = BIT(7) | BIT(6);
-
-		/* The payload size has to be a multiple of 4 */
-		memcpy(pload + 4, body, len);
-		size = ALIGN_UP(len + 4, DSI_PAYLOAD_SIZE_ALIGN);
-		memset(pload + 4 + len, 0, size - 4 - len);
-		assert(size < DSI_PAYLOAD_BYTE_BOUND);
-	} else {
-		pload[0] = body[0];
-		pload[1] = len > 1 ? body[1] : 0;
-		pload[2] = type;
-		pload[3] = BIT(7);
-		size = 4;
-	}
-
-	bp = (uint32_t *)pload;
-
-	/* Enable custom pattern stored in TPG DMA FIFO */
-	data = DSI_CMD_DMA_PATTERN_SEL;
-
-	/* select CMD_DMA_FIFO_MODE to 1 */
-	data |= DSI_TPG_DMA_FIFO_MODE;
-	data |= DSI_CMD_DMA_TPG_EN;
-
-	dsi_write(dsi_reg->test_pattern_gen_ctrl, data);
-	for (int j = 0; j < size; j += 4) {
-		dsi_write(dsi_reg->test_pattern_gen_cmd_dma_init_val, *bp);
-		bp++;
-	}
-
-	if ((size % 8) != 0)
-		dsi_write(dsi_reg->test_pattern_gen_cmd_dma_init_val, 0x0);
-
-	dsi_write(dsi_reg->dma_cmd_length, size);
-	dsi_write(dsi_reg->cmd_mode_dma_sw_trigger, 0x1);
-	if (mdss_dsi_cmd_dma_trigger_for_panel())
-		ret = CB_ERR;
-
-	/* Reset the DMA TPG FIFO */
-	dsi_write(dsi_reg->tpg_dma_fifo_reset, 0x1);
-	dsi_write(dsi_reg->tpg_dma_fifo_reset, 0x0);
-
-	/* Disable CMD_DMA_TPG */
-	dsi_write(dsi_reg->test_pattern_gen_ctrl, 0x0);
-
-	udelay(80);
-
-	return ret;
-}
-
-static void mdss_dsi_clear_intr(struct dsi_regs *dsi_reg)
-{
-	dsi_write(dsi_reg->int_ctrl, 0x0);
-
-	/* Clear all the hardware interrupts */
-	setbits32(dsi_reg->int_ctrl, DSI_CMD_MODE_DMA_DONE_AK | DSI_CMD_MODE_MDP_DONE_AK |
-			DSI_VIDEO_MODE_DONE_AK |  DSI_BTA_DONE_AK | DSI_ERROR_AK);
-	dsi_write(dsi_reg->err_int_mask0, 0x13FF3BFF);
-}
-
-int mdss_dsi_panel_initialize(struct dsi_regs *dsi_reg, const u8 *init_cmds)
-{
-	uint32_t ctrl_mode = 0;
-
-	assert(init_cmds != NULL);
-	ctrl_mode = dsi_read(dsi_reg->ctrl);
-
-	/* Enable command mode before sending the commands */
-	dsi_write(dsi_reg->ctrl, ctrl_mode | 0x04);
-
-/* TODO: send cmds in panel driver
-	int ret = mipi_panel_parse_init_commands(init_cmds, mdss_dsi_send_init_cmd);
-*/
-	dsi_write(dsi_reg->ctrl, ctrl_mode);
-	mdss_dsi_clear_intr(dsi_reg);
-
-	return ret;
-}
-
-
-/////////////////////////////////////////////////////////////
-
-
-
-static enum dsi_color dsi_color_from_mipi(u32 fmt)
-{
-	switch (fmt) {
-	case MIPI_DSI_FMT_RGB888:
-		return DSI_RGB888;
-	case MIPI_DSI_FMT_RGB666:
-		return DSI_RGB666_CONF2;
-	case MIPI_DSI_FMT_RGB666_PACKED:
-		return DSI_RGB666_CONF1;
-	case MIPI_DSI_FMT_RGB565:
-		return DSI_RGB565_CONF1;
-	default:
-		log_err("MIPI color invalid, so we use rgb888\n");
-	}
-	return DSI_RGB888;
-}
-
-static int dsi_pll_get_clkout_khz(int clkin_khz, int idf, int ndiv, int odf)
-{
-	int divisor = idf * odf;
-
-	/* prevent from division by 0 */
-	if (!divisor)
-		return 0;
-
-	return DIV_ROUND_CLOSEST(clkin_khz * ndiv, divisor);
-}
-
-static int dsi_pll_get_params(struct qcom_dsi_priv *dsi,
-			      int clkin_khz, int clkout_khz,
-			      int *idf, int *ndiv, int *odf)
-{
-	int i, o, n, n_min, n_max;
-	int fvco_min, fvco_max, delta, best_delta; /* all in khz */
-
-	/* Early checks preventing division by 0 & odd results */
-	if (clkin_khz <= 0 || clkout_khz <= 0)
-		return -EINVAL;
-
-	fvco_min = dsi->lane_min_kbps * 2 * ODF_MAX;
-	fvco_max = dsi->lane_max_kbps * 2 * ODF_MIN;
-
-	best_delta = 1000000; /* big started value (1000000khz) */
-
-	for (i = IDF_MIN; i <= IDF_MAX; i++) {
-		/* Compute ndiv range according to Fvco */
-		n_min = ((fvco_min * i) / (2 * clkin_khz)) + 1;
-		n_max = (fvco_max * i) / (2 * clkin_khz);
-
-		/* No need to continue idf loop if we reach ndiv max */
-		if (n_min >= NDIV_MAX)
-			break;
-
-		/* Clamp ndiv to valid values */
-		if (n_min < NDIV_MIN)
-			n_min = NDIV_MIN;
-		if (n_max > NDIV_MAX)
-			n_max = NDIV_MAX;
-
-		for (o = ODF_MIN; o <= ODF_MAX; o *= 2) {
-			n = DIV_ROUND_CLOSEST(i * o * clkout_khz, clkin_khz);
-			/* Check ndiv according to vco range */
-			if (n < n_min || n > n_max)
-				continue;
-			/* Check if new delta is better & saves parameters */
-			delta = dsi_pll_get_clkout_khz(clkin_khz, i, n, o) -
-				clkout_khz;
-			if (delta < 0)
-				delta = -delta;
-			if (delta < best_delta) {
-				*idf = i;
-				*ndiv = n;
-				*odf = o;
-				best_delta = delta;
-			}
-			/* fast return in case of "perfect result" */
-			if (!delta)
-				return 0;
-		}
-	}
-
-	return 0;
-}
-#endif
-
 
 static int qcom_mipi_dsi_host_attach(struct mipi_dsi_host *host,
 				   struct mipi_dsi_device *device)
@@ -911,6 +539,7 @@ static int qcom_mipi_dsi_init(struct udevice *dev,
 		dev_err(device->dev, "dsi dt register address error\n");
 		return -EINVAL;
 	}
+	dsi->base += 4;
 	/* offset in xml is wrong, we should shift it by 4 */
 	//dsi->base -= 4;
 
@@ -1239,18 +868,17 @@ static int qcom_dsi_probe(struct udevice *dev)
 	struct qcom_dsi_priv *priv = dev_get_priv(dev);
 	struct mipi_dsi_device *device = &priv->device;
 	struct reset_ctl rst;
-	struct dsi_regs *dsi_reg;
 	int ret;
 
 	device->dev = dev;
 
 printf("=============%s enter\n", __func__);
-	priv->base = dev_read_addr_ptr(dev);
-	dsi_reg = priv->base;
-	if (!priv->base) {
+	priv->hw_base = dev_read_addr_ptr(dev);
+	if (!priv->hw_base) {
 		dev_err(dev, "dsi dt register address error\n");
 		return -EINVAL;
 	}
+	priv->base = priv->hw_base + 4;
 
 	ret = ofnode_read_u32_default(dev_ofnode(dev), "dual-dsi-index", -1);
 	if (ret == 0 || ret == 1)
@@ -1298,7 +926,7 @@ printf("=============%s line %d device->index %d\n", __func__, __LINE__, device-
 #endif
 
 	/* check hardware version */
-	priv->hw_version = dsi_read(dsi_reg);
+	priv->hw_version = dsi_read(priv->hw_base + REG_DSI_6G_HW_VERSION);
 	printf("Got hw_version: 0x%x\n", priv->hw_version);
 	if (priv->hw_version != 0x20080000) {
 		dev_err(dev, "DSI version 0x%x not supported\n", priv->hw_version);
