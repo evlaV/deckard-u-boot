@@ -802,7 +802,8 @@ int qcom_dpu_probe(struct udevice *dev)
 	struct qcom_dpu_priv *priv = dev_get_priv(dev);
 	struct video_priv *uc_priv = dev_get_uclass_priv(dev);
 	struct clk_bulk bulk;
-	struct udevice *bridge = NULL;
+	struct udevice *bridge0 = NULL;
+	struct udevice *bridge1 = NULL;
 	struct udevice *panel = NULL;
 	struct display_timing timings;
 	const struct device_node *np;
@@ -838,34 +839,35 @@ printf("=========%s enter, FLG_RELOC? %lu\n", __func__, gd->flags & GD_FLG_RELOC
 */
 
 	if (IS_ENABLED(CONFIG_VIDEO_BRIDGE)) {
-		ret = uclass_get_device(UCLASS_VIDEO_BRIDGE, 0, &bridge);
+		ret = uclass_get_device(UCLASS_VIDEO_BRIDGE, 0, &bridge0);
 		if (ret) {
 			dev_dbg(dev,
 				"No video bridge, err %d\n", ret);
 			return ret;
 		}
 
-		if (bridge) {
-			ret = video_bridge_attach(bridge);
+		if (bridge0) {
+			ret = video_bridge_attach(bridge0);
 			if (ret) {
-				dev_err(bridge, "fail to attach bridge\n");
+				dev_err(dev, "fail to attach bridge\n");
 				return ret;
 			}
 		}
-		np = ofnode_to_np(dev_ofnode(bridge));
+
+		np = ofnode_to_np(dev_ofnode(bridge0));
 		if (of_find_property(np, "qcom,dual-dsi-mode", &len)) {
-			dev_dbg(bridge, "Dual DSI is found. To attach it\n");
-			ret = uclass_get_device(UCLASS_VIDEO_BRIDGE, 1, &bridge);
+			dev_dbg(dev, "Dual DSI is found. To attach it\n");
+			ret = uclass_get_device(UCLASS_VIDEO_BRIDGE, 1, &bridge1);
 			if (ret) {
 				dev_dbg(dev,
 					"No video bridge, err %d\n", ret);
 				return ret;
 			}
 
-			if (bridge) {
-				ret = video_bridge_attach(bridge);
+			if (bridge1) {
+				ret = video_bridge_attach(bridge1);
 				if (ret) {
-					dev_err(bridge, "fail to attach bridge\n");
+					dev_err(dev, "fail to attach bridge\n");
 					return ret;
 				}
 			}
@@ -882,6 +884,7 @@ printf("=========%s line %d\n", __func__, __LINE__);
 		return ret;
 	}
 
+#if 0
 printf("=========%s line %d\n", __func__, __LINE__);
 	ret = panel_get_display_timing(panel, &timings);
 printf("=========%s line %d get panel timing ret %d\n", __func__, __LINE__, ret);
@@ -892,6 +895,13 @@ printf("=========%s line %d get panel timing ret %d\n", __func__, __LINE__, ret)
 			dev_err(dev, "decode display timing error %d\n", ret);
 			return ret;
 		}
+	}
+#endif
+
+	video_bridge_get_display_timing(bridge0,  &timings);
+	if (ret) {
+		dev_err(dev, "fail to get display timings\n");
+		return ret;
 	}
 
 printf("=========%s line %d\n", __func__, __LINE__);
@@ -914,22 +924,10 @@ printf("=========%s line %d\n", __func__, __LINE__);
 printf("=========%s uc_priv->bpix %d, uc_priv 0x%x\n", __func__, uc_priv->bpix, uc_priv);
 
 
-	/* Call panel api directly instead of via bridge, as we have 2 bridges.
-	 * But we cannot call dsi_host_enable in bridge backlight api this way.
-	 * Then we need to enable dsi in dsi_host_init */
-	ret = panel_enable_backlight(panel);
-	if (ret) {
-		dev_err(dev, "panel %s enable backlight error %d\n",
-			panel->name, ret);
-		return ret;
-	}
-
 	/* FIXME: do we have data cached ? */
 	video_set_flush_dcache(dev, true);
 
 	mdss_vbif_setup(priv->vbif_base);
-	mdss_intf_fetch_start_config(priv->dpu_base, priv->cat);
-	mdp_dsc_setup(priv->cat, priv->dpu_base);
 
 	/* hard coding 4 rect from 2 SSPP */
 	mdss_sspp_config(dev, priv->dpu_base + priv->cat->sspp[0].base, true, 0);
@@ -940,8 +938,25 @@ printf("=========%s uc_priv->bpix %d, uc_priv 0x%x\n", __func__, uc_priv->bpix, 
 	mdss_layer_mixer_setup(priv->dpu_base, priv->cat);
 	mdp_pingpong_setup(priv->cat, priv->dpu_base);
 
+	mdp_dsc_setup(priv->cat, priv->dpu_base);
+
+	mdss_intf_fetch_start_config(priv->dpu_base, priv->cat);
+
 	/* flush all registers */
 	mdp_video_on(priv->cat, priv->dpu_base);
+
+	video_bridge_set_backlight(bridge0, 100);
+	video_bridge_set_backlight(bridge1, 100);
+
+	/* Call panel api directly instead of via bridge, as we have 2 bridges.
+	 * But we cannot call dsi_host_enable in bridge backlight api this way.
+	 * Then we need to enable dsi in dsi_host_init */
+	ret = panel_enable_backlight(panel);
+	if (ret) {
+		dev_err(dev, "panel %s enable backlight error %d\n",
+			panel->name, ret);
+		return ret;
+	}
 
 printf("=========%s exit ok\n", __func__);
 

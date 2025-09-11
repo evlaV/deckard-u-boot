@@ -553,7 +553,7 @@ printf("======%s tx %lu rx %lu with base %p\n", __func__, msg->tx_len, msg->rx_l
 	if (packet.size < len)
 		memset(data + packet.size, 0xff, len - packet.size);
 
-	dsi_write(base + REG_DSI_CTRL, 0x177);
+	//dsi_write(base + REG_DSI_CTRL, 0x177);
 	dsi_write(base + REG_DSI_INTR_CTRL, 0xAA20AA02);
 	dsi_write(base + REG_DSI_DMA_BASE, dsi->tx_buf);
 	dsi_write(base + REG_DSI_DMA_LEN, len);
@@ -573,7 +573,7 @@ printf("======%s tx %lu rx %lu with base %p\n", __func__, msg->tx_len, msg->rx_l
 		udelay(10);
 	}
 
-	dsi_write(base + REG_DSI_CTRL, 0x173);
+	//dsi_write(base + REG_DSI_CTRL, 0x173);
 	dsi_write(base + REG_DSI_INTR_CTRL, 0xAA20AA00);
 
 	//free(data);
@@ -848,22 +848,18 @@ static const struct mipi_dsi_host_ops qcom_mipi_dsi_host_ops = {
 
 static void qcom_mipi_dsi_init_ctrl(void __iomem *base)
 {
-	printf("Hard coding DSI host controller\n");
+	printf("DSI host controller init\n");
 
 	/* TODO: make sure this happens before dsi phy init */
 	dsi_write(base + REG_DSI_PHY_RESET, 0x1);
 	dsi_write(base + REG_DSI_PHY_RESET, 0x0);
 
-	dsi_write(base + REG_DSI_VIDEO_COMPRESSION_MODE_CTRL, 0x8700B01);
-	dsi_write(base + REG_DSI_ACTIVE_H, 0x2F80028);
-	dsi_write(base + REG_DSI_ACTIVE_V, 0x8850015);
-	dsi_write(base + REG_DSI_TOTAL, 0x88D030F);
-	dsi_write(base + REG_DSI_ACTIVE_HSYNC, 0x140000);
-	dsi_write(base + REG_DSI_ACTIVE_VSYNC_HPOS, 0x0);
-	dsi_write(base + REG_DSI_ACTIVE_VSYNC_VPOS, 0x10000);
-	dsi_write(base + REG_DSI_CLK_CTRL, 0x23F);
 	dsi_write(base + REG_DSI_RESET, 0x1);
+	mdelay(10);
 	dsi_write(base + REG_DSI_RESET, 0x0);
+
+	dsi_write(base + REG_DSI_VIDEO_COMPRESSION_MODE_CTRL, 0x8700B01);
+	dsi_write(base + REG_DSI_CLK_CTRL, 0x23F);
 	dsi_write(base + REG_DSI_VID_CFG0, 0x2009130);
 	dsi_write(base + REG_DSI_VID_CFG1, 0x0);
 	dsi_write(base + REG_DSI_CMD_DMA_CTRL, 0x14000000);
@@ -877,6 +873,13 @@ static void qcom_mipi_dsi_init_ctrl(void __iomem *base)
 	dsi_write(base + REG_DSI_LANE_SWAP_CTRL, 0x0);
 	dsi_write(base + REG_DSI_CTRL, 0x171);
 	dsi_write(base + REG_DSI_CPHY_MODE_CTRL, 0x1);
+}
+
+static void qcom_mipi_dsi_host_enable(void __iomem *base)
+{
+	printf("DSI host controller enable\n");
+
+	dsi_write(base + REG_DSI_CTRL, 0x173);
 }
 
 static int qcom_mipi_dsi_init(struct udevice *dev,
@@ -941,11 +944,13 @@ static int qcom_mipi_dsi_init(struct udevice *dev,
 
 static int qcom_mipi_dsi_enable(struct udevice *dev)
 {
-	//struct qcom_mipi_dsi *dsi = dev_get_priv(dev);
+	struct qcom_mipi_dsi *dsi = dev_get_priv(dev);
 
 	dev_dbg(dev, "Enable DSI host\n");
 	/* Switch to video mode for panel-bridge enable & panel enable */
 	//qcom_mipi_dsi_set_mode(dsi, MIPI_DSI_MODE_VIDEO);
+
+	qcom_mipi_dsi_host_enable(dsi->base);
 
 	return 0;
 }
@@ -1017,7 +1022,6 @@ static int dsi_phy_init(void *priv_data)
 		dev_err(dev, "peripheral clock enable error %d\n", ret);
 		return ret;
 	}
-	
 
 	return 0;
 }
@@ -1179,9 +1183,8 @@ static int qcom_dsi_get_display_timing(struct udevice *dev, struct display_timin
 static int qcom_dsi_set_backlight(struct udevice *dev, int percent)
 {
 	struct qcom_dsi_priv *priv = dev_get_priv(dev);
-	struct mipi_dsi_host *dsi_host;
-	int ret;
 
+#if 0
 	dev_err(dev, "panel %s backlight enabling skipped to avoid panic for temp\n", priv->panel->name);
 //	return 0;
 
@@ -1210,6 +1213,9 @@ static int qcom_dsi_set_backlight(struct udevice *dev, int percent)
 	// 	dev_err(dev, "failed to enable mipi dsi host\n");
 	// 	return ret;
 	// }
+#else
+	return dsi_host_enable(priv->dsi_host);
+#endif
 
 	return 0;
 }
