@@ -93,7 +93,6 @@
 		bootph-all;
 	};
 
-#if 0
 	framebuffer {
 	    compatible = "simple-framebuffer";
 
@@ -106,19 +105,6 @@
 	    stride = <(4320 * 4)>; /* Example for 32 bits-per-pixel */
 	    format = "a8r8g8b8";    /* Example format */
 	};
-
-	reserved_memory {
-	    #address-cells = <2>;
-	    #size-cells = <2>;
-	    ranges;
-
-	    framebuffer_mem: framebuffer@7F000000 {
-		compatible = "shared-dma-pool";
-		no-map;
-		reg = <0x0 0x9bb00000 0x0 0x03000000>; /* reuse video address, size (50MB) */
-	    };
-	};
-#endif
 };
 
 &smem {
