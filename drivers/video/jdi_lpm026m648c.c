@@ -218,6 +218,7 @@ static void dsi_write_panel_on(struct lpm026m648c_priv *priv)
 	lpm026m648c_dsi_write_seq(priv, LPM02648C_DISP_SET5, BE16(VID_VS_DELAY),
 				  0x00, 0x00, 0x00);
 	lpm026m648c_dsi_write_seq(priv, LPM02648C_TE_GPIO_CTL, 0x00, 0x6A, 0x02);
+	lpm026m648c_dsi_write_seq(priv, 0xde, 0x01);
 	/* TODO: add hard coded dsc cmd for now, use dsc helper later */
 	lpm026m648c_dsi_write_buffer(priv, pps_cmd);
 	lpm026m648c_dsi_write_seq(priv, MIPI_DCS_GET_COMPRESSION_MODE, 0x01);
