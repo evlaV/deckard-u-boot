@@ -577,7 +577,7 @@ static void mdss_intf_fetch_start_config(void *dpu_base, struct dpu_mdss_cfg *ca
 	int i;
 
 	/* config 2 DSI intf that's on 2nd and 3rd intf */
-	for (i = 2; i < 4; i++) {
+	for (i = 1; i < 3; i++) {
 		base = dpu_base + cat->intf[i].base;
 
 		/* config for 90Hz */
@@ -604,9 +604,9 @@ static void mdss_intf_fetch_start_config(void *dpu_base, struct dpu_mdss_cfg *ca
 		writel(0x80800000, base + INTF_CONFIG);
 		writel(0x1, base + INTF_TIMING_ENGINE_EN);
 
-		if (i == 2)
+		if (i == 1)
 			writel(0xF0000, base + INTF_MUX);
-		else /* intf 3 */
+		else /* intf 2 */
 			writel(0xF0002, base + INTF_MUX);
 	}
 
