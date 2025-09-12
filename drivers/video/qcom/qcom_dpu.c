@@ -942,12 +942,6 @@ printf("=========%s uc_priv->bpix %d, uc_priv 0x%x\n", __func__, uc_priv->bpix, 
 
 	mdss_intf_fetch_start_config(priv->dpu_base, priv->cat);
 
-	/* flush all registers */
-	mdp_video_on(priv->cat, priv->dpu_base);
-
-	video_bridge_set_backlight(bridge0, 100);
-	video_bridge_set_backlight(bridge1, 100);
-
 	/* Call panel api directly instead of via bridge, as we have 2 bridges.
 	 * But we cannot call dsi_host_enable in bridge backlight api this way.
 	 * Then we need to enable dsi in dsi_host_init */
@@ -957,6 +951,12 @@ printf("=========%s uc_priv->bpix %d, uc_priv 0x%x\n", __func__, uc_priv->bpix, 
 			panel->name, ret);
 		return ret;
 	}
+
+	/* flush all registers */
+	mdp_video_on(priv->cat, priv->dpu_base);
+
+	video_bridge_set_backlight(bridge0, 100);
+	video_bridge_set_backlight(bridge1, 100);
 
 printf("=========%s exit ok\n", __func__);
 
