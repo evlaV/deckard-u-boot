@@ -695,6 +695,7 @@ static void mdss_layer_mixer_setup(void *dpu_base, struct dpu_mdss_cfg *cat)
 			writel(0x100, base + LM_BLEND0_OP + stage_off);
 		}
 		writel(0x8700438, base + LM_OUT_SIZE);
+		op_mode = 0x2;
 		if (i & 1)
 			op_mode |= BIT(31); /* split right half in stage */
 		writel(op_mode, base + LM_OP_MODE);
