@@ -47,7 +47,7 @@ static int simple_video_probe(struct udevice *dev)
 		log_err("%s: invalid width or height: %d\n", __func__, ret);
 		return ret ?: -EINVAL;
 	}
-	ofnode_read_u32(node, "rot", &rot);
+	ofnode_read_u32(node, "rot", &rot); //gabe: what happens if user doesn't specify rot -- what value is returned here?
 	uc_priv->rot = rot;
 	uc_priv->xsize = width;
 	uc_priv->ysize = height;
@@ -78,6 +78,8 @@ static int simple_video_probe(struct udevice *dev)
 		log_err("%s: invalid format: %s\n", __func__, format);
 		return -EINVAL;
 	}
+
+	uc_priv->vidconsole_drv_name = "vidconsole0";
 
 	return 0;
 }

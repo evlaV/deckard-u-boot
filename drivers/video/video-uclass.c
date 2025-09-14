@@ -708,14 +708,15 @@ static int video_post_probe(struct udevice *dev)
 	if (priv->vidconsole_drv_name)
 		drv_name = priv->vidconsole_drv_name;
 	ret = device_bind_driver(dev, drv_name, str, &cons);
+	//printf("%s: device_bind_driver [%s] [%s] \n", __func__, drv_name, str);
 	if (ret) {
-		debug("%s: Cannot bind console driver\n", __func__);
+		printf("%s: Cannot bind console driver\n", __func__);
 		return ret;
 	}
 
 	ret = device_probe(cons);
 	if (ret) {
-		debug("%s: Cannot probe console driver\n", __func__);
+		printf("%s: Cannot probe console driver\n", __func__);
 		return ret;
 	}
 
@@ -723,7 +724,7 @@ static int video_post_probe(struct udevice *dev)
 	    !CONFIG_IS_ENABLED(SPLASH_SCREEN) && !plat->hide_logo) {
 		ret = show_splash(dev);
 		if (ret) {
-			log_debug("Cannot show splash screen\n");
+			printf("Cannot show splash screen\n");
 			return ret;
 		}
 	}
