@@ -771,6 +771,13 @@ bool deckard_shutdown_condition(struct udevice *pmic)
 	return false;
 }
 
+#if defined(CONFIG_SYS_CONSOLE_IS_IN_ENV) && \
+defined(CONFIG_SYS_CONSOLE_OVERWRITE_ROUTINE)
+int overwrite_console(void)
+{
+	return 0;
+}
+#endif
 
 int deckard_prepare_for_boot()
 {
