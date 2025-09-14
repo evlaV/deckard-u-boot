@@ -341,13 +341,13 @@ int stdio_add_devices(void)
 		int ret;
 
 		if (!IS_ENABLED(CONFIG_SYS_CONSOLE_IS_IN_ENV)) {
-			for (ret = uclass_first_device_check(UCLASS_VIDEO,
-							     &vdev);
-					vdev;
-					ret = uclass_next_device_check(&vdev)) {
+			printf("xxxxxxxxx\n");
+			for (ret = uclass_first_device_check(UCLASS_VIDEO, &vdev); vdev; ret = uclass_next_device_check(&vdev)) {
+				printf("%s: probe video device '%s' (ret=%d)\n",__func__, vdev->name, ret);
 				if (ret)
-					printf("%s: Failed to probe video device '%s' (ret=%d)\n",
-					       __func__, vdev->name, ret);
+				{
+					printf("%s: Failed to probe video device '%s' (ret=%d)\n",__func__, vdev->name, ret);
+				}
 			}
 		}
 		if (IS_ENABLED(CONFIG_SPLASH_SCREEN) &&

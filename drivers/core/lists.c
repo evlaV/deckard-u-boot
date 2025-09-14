@@ -28,6 +28,7 @@ struct driver *lists_driver_lookup_name(const char *name)
 	struct driver *entry;
 
 	for (entry = drv; entry != drv + n_ents; entry++) {
+		//printf("entry->name = %s\n",entry->name);
 		if (!strcmp(name, entry->name))
 			return entry;
 	}
@@ -160,9 +161,11 @@ int device_bind_driver_to_node(struct udevice *parent, const char *drv_name,
 
 	drv = lists_driver_lookup_name(drv_name);
 	if (!drv) {
-		dm_warn("Cannot find driver '%s'\n", drv_name);
+		printf("Cannot find driver '%s'\n", drv_name);
 		return -ENOENT;
 	}
+
+	printf("device_bind_driver_to_node x1 '%s'\n", drv_name);
 	ret = device_bind_with_driver_data(parent, drv, dev_name, 0 /* data */,
 					   node, devp);
 

@@ -641,6 +641,8 @@ static int video_post_probe(struct udevice *dev)
 	struct udevice *cons;
 	int ret;
 
+	printf("%s: gabe video_post_probe x1\n", __func__);
+
 	/* Set up the line and display size */
 	priv->fb = map_sysmem(plat->base, plat->size);
 	if (!priv->line_length)
@@ -699,7 +701,7 @@ static int video_post_probe(struct udevice *dev)
 	} else {
 		snprintf(name, sizeof(name), "%s.vidconsole%d", dev->name,
 			 priv->rot);
-		snprintf(drv, sizeof(drv), "vidconsole%d", priv->rot);
+		snprintf(drv, sizeof(drv), "vidconsole%d", priv->rot); //gabe why use "priv->rot" seems super odd, I end up with "10" coming out of this
 	}
 
 	str = strdup(name);
@@ -708,14 +710,15 @@ static int video_post_probe(struct udevice *dev)
 	if (priv->vidconsole_drv_name)
 		drv_name = priv->vidconsole_drv_name;
 	ret = device_bind_driver(dev, drv_name, str, &cons);
+	printf("%s: device_bind_driver [%s] [%s] \n", __func__, drv_name, str);
 	if (ret) {
-		debug("%s: Cannot bind console driver\n", __func__);
+		printf("%s: Cannot bind console driver\n", __func__);
 		return ret;
 	}
 
 	ret = device_probe(cons);
 	if (ret) {
-		debug("%s: Cannot probe console driver\n", __func__);
+		printf("%s: Cannot probe console driver\n", __func__);
 		return ret;
 	}
 
@@ -723,7 +726,7 @@ static int video_post_probe(struct udevice *dev)
 	    !CONFIG_IS_ENABLED(SPLASH_SCREEN) && !plat->hide_logo) {
 		ret = show_splash(dev);
 		if (ret) {
-			log_debug("Cannot show splash screen\n");
+			printf("Cannot show splash screen\n");
 			return ret;
 		}
 	}
