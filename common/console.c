@@ -248,8 +248,13 @@ int cd_count[MAX_FILES];
 
 static void console_devices_set(int file, struct stdio_dev *dev)
 {
-	console_devices[file][0] = dev;
-	cd_count[file] = 1;
+	if(console_devices[file]) 
+	{
+		//these can only be used if iomux_doenv() has been used to allocate memory on each stdin/stdout/stderr 
+		//otherwise will fault
+		console_devices[file][0] = dev;
+		cd_count[file] = 1;
+	}
 }
 
 /**
@@ -1222,6 +1227,26 @@ int console_init_r(void)
 			break;
 	}
 
+	if (CONFIG_IS_ENABLED(CONSOLE_MUX)) {
+		if(iomux_doenv(stdin, inputdev->name)) 
+		{
+			printf("stdin failed setup");
+			return 1;
+		}
+
+		if( iomux_doenv(stdout, outputdev->name))
+		{
+			printf("stdout failed setup");
+			return 1;
+		}
+
+		if(iomux_doenv(stderr, outputdev->name))
+		{
+			printf("stderr failed setup");
+			return 1;
+		}
+	}
+	
 	/* Initializes output console first */
 	if (outputdev != NULL) {
 		console_setfile_and_devices(stdout, outputdev);
