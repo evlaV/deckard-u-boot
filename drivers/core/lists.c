@@ -165,7 +165,7 @@ int device_bind_driver_to_node(struct udevice *parent, const char *drv_name,
 		return -ENOENT;
 	}
 
-	printf("device_bind_driver_to_node x1 '%s'\n", drv_name);
+	//printf("device_bind_driver_to_node x1 '%s'\n", drv_name);
 	ret = device_bind_with_driver_data(parent, drv, dev_name, 0 /* data */,
 					   node, devp);
 

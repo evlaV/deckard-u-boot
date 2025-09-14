@@ -641,7 +641,7 @@ static int video_post_probe(struct udevice *dev)
 	struct udevice *cons;
 	int ret;
 
-	printf("%s: gabe video_post_probe x1\n", __func__);
+	//printf("%s: gabe video_post_probe x1\n", __func__);
 
 	/* Set up the line and display size */
 	priv->fb = map_sysmem(plat->base, plat->size);
@@ -710,7 +710,7 @@ static int video_post_probe(struct udevice *dev)
 	if (priv->vidconsole_drv_name)
 		drv_name = priv->vidconsole_drv_name;
 	ret = device_bind_driver(dev, drv_name, str, &cons);
-	printf("%s: device_bind_driver [%s] [%s] \n", __func__, drv_name, str);
+	//printf("%s: device_bind_driver [%s] [%s] \n", __func__, drv_name, str);
 	if (ret) {
 		printf("%s: Cannot bind console driver\n", __func__);
 		return ret;
