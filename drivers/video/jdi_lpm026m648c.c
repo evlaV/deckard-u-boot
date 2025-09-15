@@ -481,6 +481,7 @@ printf("============%s called\n", __func__);
 
 	priv->dev = dev;
 
+	dm_gpio_set_value(&priv->preboost_gpio, 0);
 	dm_gpio_set_value(&priv->reset2_gpio, 0);
 	dm_gpio_set_value(&priv->reset1_gpio, 0);
 
