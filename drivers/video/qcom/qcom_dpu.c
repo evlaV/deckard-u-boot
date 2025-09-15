@@ -634,8 +634,8 @@ void mdp_setup_stage(struct dpu_mdss_cfg *cat, void *dpu_base)
 */
 	void *base = dpu_base + cat->ctl[0].base;
 
-	for (int lm = 0; lm < PIPES_PER_PLANE; lm++) {
-		if (lm < PIPES_PER_STAGE) {
+	for (int lm = LM_0; lm < (LM_0 + PIPES_PER_PLANE); lm++) {
+		if (lm < (LM_0 + PIPES_PER_STAGE)) {
 			writel(0x1080000, base + CTL_LAYER(lm));
 			writel(0x200, base + CTL_LAYER_EXT2(lm));
 		} else {
