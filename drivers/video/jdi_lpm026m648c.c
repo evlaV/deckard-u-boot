@@ -461,12 +461,6 @@ printf("============%s called\n", __func__);
 				  regulator_names[i], ret);
 			return ret;
 		}
-
-		ret = regulator_set_enable_if_allowed(priv->regs[i], false);
-		if (ret) {
-			dev_warn(dev, "fail to enable power supply %s: ret=%d\n",
-				  priv->regs[i]->name, ret);
-		}
 	}
 
 	return 0;
