@@ -25,6 +25,7 @@ struct nex100011ub_regulator_pdata {
 	struct udevice *i2c;
 	struct gpio_desc biasp_gpio;
 	struct gpio_desc biasn_gpio;
+	unsigned int enabled;
 };
 
 static int nex100011ub_regulator_set_value(struct udevice *dev, int uV)
@@ -57,7 +58,15 @@ static int nex100011ub_regulator_set_value(struct udevice *dev, int uV)
 
 	dm_gpio_set_value(&pdata->biasn_gpio, 1);
 	udelay(1000);
-	return dm_i2c_write(pdata->i2c, NEX10001UB_REG_VNEG, &regval, 1);
+	ret = dm_i2c_write(pdata->i2c, NEX10001UB_REG_VNEG, &regval, 1);
+	if (ret) {
+		dev_err(dev, "i2c failed to set Vneg: %d\n", ret);
+		return ret;
+	}
+
+	pdata->enabled = 1;
+
+	return 0;
 }
 
 static int nex100011ub_regulator_get_value(struct udevice *dev)
@@ -65,6 +74,9 @@ static int nex100011ub_regulator_get_value(struct udevice *dev)
 	u8 regval;
 	int ret;
 	struct nex100011ub_regulator_pdata *pdata = dev_get_priv(dev);
+
+	if (!pdata->enabled)
+		return -EINVAL;
 
 	ret = dm_i2c_read(pdata->i2c, NEX10001UB_REG_VNEG, &regval, 1);
 	if (ret) {
@@ -78,25 +90,30 @@ static int nex100011ub_regulator_get_value(struct udevice *dev)
 static int nex100011ub_regulator_set_enable(struct udevice *dev, bool enable)
 {
 	struct nex100011ub_regulator_pdata *pdata = dev_get_priv(dev);
-	int ret;
 
 	printf("%s: %s %d\n", dev->name, __func__, enable);
 
-	if (enable)
-		// Taken from linux
-		ret = nex100011ub_regulator_set_value(dev, 5800000);
-	else {
-		dm_gpio_set_value(&pdata->biasp_gpio, 0);
-		dm_gpio_set_value(&pdata->biasn_gpio, 0);
+	if (enable) {
+		if (pdata->enabled)
+			return 0;
+
+		return nex100011ub_regulator_set_value(dev, 5800000);
 	}
 
-	return ret;
+	if (!pdata->enabled)
+		return 0;
+
+	dm_gpio_set_value(&pdata->biasp_gpio, 0);
+	dm_gpio_set_value(&pdata->biasn_gpio, 0);
+
+	pdata->enabled = 0;
+
+	return 0;
 }
 
 static int nex100011ub_regulator_probe(struct udevice *dev)
 {
 	struct nex100011ub_regulator_pdata *priv = dev_get_priv(dev);
-	u8 regval;
 	int ret;
 
 	printf("%s! %s\n!", __func__, dev->name);
@@ -118,6 +135,12 @@ static int nex100011ub_regulator_probe(struct udevice *dev)
 		dev_err(dev, "i2c dev get failed.\n");
 		return ret;
 	}
+
+	dm_gpio_set_value(&priv->biasp_gpio, 0);
+	dm_gpio_set_value(&priv->biasn_gpio, 0);
+
+	priv->enabled = 0;
+
 	return 0;
 }
 
