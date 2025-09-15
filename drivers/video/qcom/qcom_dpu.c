@@ -507,13 +507,15 @@ static void mdss_sspp_config(struct udevice *dev, void *base, bool rect0, int x_
 	writel(0x22335777, base + SSPP_CREQ_LUT_0);
 	writel(0x112222, base + SSPP_CREQ_LUT_1);
 	writel(0x1, base + SSPP_QOS_CTRL);
-	//writel(0x5, base + SSPP_CLK_CTRL);
-	writel(2, base + SSPP_CLK_CTRL);
+	writel(0x5, base + SSPP_CLK_CTRL);
 }
 
 static void mdss_vbif_setup(void *regs_vbif)
 {
 	u32 reg_lvl = 0x40;
+
+	writel(0x33333333, regs_vbif + VBIF_OUT_AXI_AMEMTYPE_CONF0);
+   	writel(0x33333333, regs_vbif + VBIF_OUT_AXI_AMEMTYPE_CONF1);
 
 	writel(0x400040, regs_vbif + VBIF_XINL_QOS_RP_REMAP_000);
 	writel(0x400040, regs_vbif + VBIF_XINL_QOS_RP_REMAP_000 + reg_lvl);
