@@ -474,18 +474,22 @@ static void mdss_sspp_config(struct udevice *dev, void *base, bool rect0, int x_
 		writel(x_off, base + SSPP_SRC_XY); /* 0x438 * N */
 		writel(0x8700438, base + SSPP_OUT_SIZE);
 		writel(0, base + SSPP_OUT_XY);
-		writel(0x236FF, base + SSPP_SRC_FORMAT);
+		//writel(0x236FF, base + SSPP_SRC_FORMAT);
+		writel(0x236FF | BIT(22), base + SSPP_SRC_FORMAT);
 		writel(0x3020001, base + SSPP_SRC_UNPACK_PATTERN);
 		writel(0x80000000, base + SSPP_SRC_OP_MODE);
+		writel(0xff00ff, base + SSPP_SRC_CONSTANT_COLOR);
 		writel(0x9, base + SSPP_CDP_CNTL);
 	} else {
 		writel(plat->base, base + SSPP_SRC1_ADDR);
 		writel(x_off, base + SSPP_SRC_XY_REC1); /* 0x438 * N */
 		writel(0x8700438, base + SSPP_OUT_SIZE_REC1);
 		writel(0x438, base + SSPP_OUT_XY_REC1);
-		writel(0x236FF, base + SSPP_SRC_FORMAT_REC1);
+		//writel(0x236FF, base + SSPP_SRC_FORMAT_REC1);
+		writel(0x236FF | BIT(22), base + SSPP_SRC_FORMAT_REC1);
 		writel(0x3020001, base + SSPP_SRC_UNPACK_PATTERN_REC1);
 		writel(0x80000000, base + SSPP_SRC_OP_MODE_REC1);
+		writel(0x445544, base + SSPP_SRC_CONSTANT_COLOR_REC1);
 		writel(0x9, base + SSPP_CDP_CNTL_REC1);
 	}
 	writel(0x43804380, base + SSPP_SRC_YSTRIDE0);
@@ -584,6 +588,7 @@ static void mdss_intf_fetch_start_config(void *dpu_base, struct dpu_mdss_cfg *ca
 		base = dpu_base + cat->intf[i].base;
 
 		/* config for 90Hz */
+		writel(BIT(23), base + INTF_CONFIG); //INTF_CONFIG_DSI_VIDEO_STOP_MODE
 		writel(0x3100014, base + INTF_HSYNC_CTL);
 		writel(0x293960, base + INTF_VSYNC_PERIOD_F0);
 		writel(0x310, base + INTF_VSYNC_PULSE_WIDTH_F0);
@@ -604,8 +609,7 @@ static void mdss_intf_fetch_start_config(void *dpu_base, struct dpu_mdss_cfg *ca
 		writel(0x18F0028, base + INTF_DISPLAY_DATA_HCTL);
 		writel(0, base + INTF_ACTIVE_DATA_HCTL);
 		writel(0x293031, base + INTF_PROG_FETCH_START);
-		writel(0x80800000, base + INTF_CONFIG);
-		writel(0x1, base + INTF_TIMING_ENGINE_EN);
+		//writel(0x80800000, base + INTF_CONFIG);
 
 		if (i == 1)
 			writel(0xF0000, base + INTF_MUX);
@@ -613,13 +617,16 @@ static void mdss_intf_fetch_start_config(void *dpu_base, struct dpu_mdss_cfg *ca
 			writel(0xF0002, base + INTF_MUX);
 	}
 
-	writel(0xF0000000, ctl_base + CTL_TOP);
 	/* enable 2 DSI interface */
-	writel(0x6, ctl_base + CTL_INTF_ACTIVE);
-	writel(0, ctl_base + CTL_WB_ACTIVE);
-	writel(0xF, ctl_base + CTL_DSC_ACTIVE);
 	writel(2, ctl_base + CTL_INTF_MASTER);
-	writel(0x3, ctl_base + CTL_MERGE_3D_ACTIVE);
+
+	writel(0xF, ctl_base + CTL_DSC_ACTIVE);
+	writel(0xF, ctl_base + CTL_DSC_FLUSH);
+
+	writel(0x6, ctl_base + CTL_INTF_ACTIVE);
+	writel(0x6, ctl_base + CTL_INTF_FLUSH);
+
+	//writel(0x3, ctl_base + CTL_MERGE_3D_ACTIVE);
 }
 
 /* configure the mixer blending in ctl */
@@ -788,13 +795,12 @@ void mdp_video_on(struct dpu_mdss_cfg *cat, void *dpu_base)
 */
 	void *ctl_base = dpu_base + cat->ctl[0].base;
 
-	writel(0x3, ctl_base + CTL_MERGE_3D_FLUSH);
-	writel(0x6, ctl_base + CTL_INTF_FLUSH);
-	writel(0xF, ctl_base + CTL_DSC_FLUSH);
-	writel(0x80C21BC0, ctl_base + CTL_FLUSH);
-	/* enable INTF_TIMING_ENGINE_EN of 2 dsi here in timing */
+	//writel(0x3, ctl_base + CTL_MERGE_3D_FLUSH);
+	//writel(0x80C21BC0, ctl_base + CTL_FLUSH);
 	writel(0x3, ctl_base + CTL_FETCH_PIPE_ACTIVE);
-	writel(0x421BC0, ctl_base + CTL_FLUSH);
+	writel(0xF0000000, ctl_base + CTL_TOP);
+	writel(0x80421BC0, ctl_base + CTL_FLUSH);
+	//writel(0x421BC0, ctl_base + CTL_FLUSH);
 }
 
 /* copy from rk_vop.c and stm32_ltdc.c
@@ -956,62 +962,18 @@ printf("=========%s uc_priv->bpix %d, uc_priv 0x%x\n", __func__, uc_priv->bpix, 
 
 	mdss_intf_fetch_start_config(priv->dpu_base, priv->cat);
 
-	/* Call panel api directly instead of via bridge, as we have 2 bridges.
-	 * But we cannot call dsi_host_enable in bridge backlight api this way.
-	 * Then we need to enable dsi in dsi_host_init */
-	ret = panel_enable_backlight(panel);
-	if (ret) {
-		dev_err(dev, "panel %s enable backlight error %d\n",
-			panel->name, ret);
-		return ret;
-	}
-
 	/* flush all registers */
 	mdp_video_on(priv->cat, priv->dpu_base);
 
-	video_bridge_set_backlight(bridge0, 100);
-	video_bridge_set_backlight(bridge1, 100);
-
-printf("=========%s exit ok\n", __func__);
-
-#if 0
-	struct rkvop_driverdata *ops =
-		(struct rkvop_driverdata *)dev_get_driver_data(dev);
-	ofnode port, node;
-
-	priv->regs = dev_read_addr_ptr(dev);
-	priv->win_offset = ops->win_offset;
-	priv->dsp_offset = ops->dsp_offset;
-
-	/*
-	 * Try all the ports until we find one that works. In practice this
-	 * tries EDP first if available, then HDMI.
-	 *
-	 * Note that rockchip_vop_set_clk() always uses NPLL as the source
-	 * clock so it is currently not possible to use more than one display
-	 * device simultaneously.
-	 */
-	port = dev_read_subnode(dev, "port");
-	if (!ofnode_valid(port)) {
-		debug("%s(%s): 'port' subnode not found\n",
-		      __func__, dev_read_name(dev));
-		return -EINVAL;
+	for (int i = 1; i < 3; i++) {
+		void *base = priv->dpu_base + priv->cat->intf[i].base;
+		writel(0x1, base + INTF_TIMING_ENGINE_EN);
 	}
-
-	for (node = ofnode_first_subnode(port);
-	     ofnode_valid(node);
-	     node = dev_read_next_subnode(node)) {
-		ret = rk_display_init(dev, plat->base, node);
-		if (ret)
-			debug("Device failed: ret=%d\n", ret);
-		if (!ret)
-			break;
-	}
-	video_set_flush_dcache(dev, 1);
 
 	//video_bridge_set_backlight(bridge0, 100);
 	//video_bridge_set_backlight(bridge1, 100);
 
+printf("=========%s exit ok\n", __func__);
 	return 0;
 }
 
