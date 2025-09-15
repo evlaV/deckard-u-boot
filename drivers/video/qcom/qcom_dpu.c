@@ -1015,7 +1015,7 @@ printf("=========%s called\n", __func__);
 	uc_plat->align = SZ_2M;
 	dev_dbg(dev, "frame buffer max size %d bytes align %x\n",
 		uc_plat->size, uc_plat->align);
-	uc_plat->base = 0x9bb00000;
+	uc_plat->base = 0xaf400000; //0x9bb00000;
 printf("frame buffer @ %#lx max size %d bytes align %x\n", uc_plat->base, uc_plat->size, uc_plat->align);
 
 	return 0;

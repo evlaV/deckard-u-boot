@@ -62,10 +62,10 @@
 			no-map;
 		};
 
-		framebuffer_mem: framebuffer@9bb00000 {
+		framebuffer_mem: framebuffer@af400000 {
 			no-map;
 			/* reuse video address, size (50MB) */
-			reg = <0x0 0x9bb00000 0x0 0x03000000>;
+			reg = <0x0 0xaf400000 0x0 0x03000000>;
 		};
 	};
 
