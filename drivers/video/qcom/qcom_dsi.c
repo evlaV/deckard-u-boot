@@ -678,7 +678,7 @@ static void qcom_mipi_dsi_init_ctrl(void __iomem *base)
 	dsi_write(base + REG_DSI_CLK_CTRL, 0x23F);
 	dsi_write(base + REG_DSI_LANE_SWAP_CTRL, 0x0);
 
-	dsi_write(base + REG_DSI_CTRL, 0x171);
+	dsi_write(base + REG_DSI_CTRL, 0x173);
 
 	dsi_write(base + REG_DSI_CPHY_MODE_CTRL, 0x1);
 }
@@ -687,7 +687,7 @@ static void qcom_mipi_dsi_host_enable(void __iomem *base)
 {
 	printf("DSI host controller enable\n");
 
-	dsi_write(base + REG_DSI_CTRL, 0x173);
+	/* NOP */
 }
 
 static int qcom_mipi_dsi_init(struct udevice *dev,
@@ -838,6 +838,8 @@ static int dsi_phy_init(void *priv_data)
 		dev_err(dev, "peripheral clock enable error %d\n", ret);
 		return ret;
 	}
+
+	
 
 	return 0;
 }

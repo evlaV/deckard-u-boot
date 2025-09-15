@@ -908,6 +908,16 @@ printf("=========%s line %d get panel timing ret %d\n", __func__, __LINE__, ret)
 		return ret;
 	}
 
+	/* Call panel api directly instead of via bridge, as we have 2 bridges.
+	 * But we cannot call dsi_host_enable in bridge backlight api this way.
+	 * Then we need to enable dsi in dsi_host_init */
+	ret = panel_enable_backlight(panel);
+	if (ret) {
+		dev_err(dev, "panel %s enable backlight error %d\n",
+			panel->name, ret);
+		return ret;
+	}
+
 printf("=========%s line %d\n", __func__, __LINE__);
 	dev_dbg(dev, "Set pixel clock req %d hz get %ld hz\n",
 		timings.pixelclock.typ, rate);
@@ -999,8 +1009,8 @@ printf("=========%s exit ok\n", __func__);
 	}
 	video_set_flush_dcache(dev, 1);
 
-	return ret;
-#endif
+	//video_bridge_set_backlight(bridge0, 100);
+	//video_bridge_set_backlight(bridge1, 100);
 
 	return 0;
 }
