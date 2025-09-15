@@ -10,35 +10,77 @@
 #include <linux/delay.h>
 #include <power/regulator.h>
 
-#define MPQ3367_REG_CTL0		0
-#define OTID				BIT(7)
-#define PWM_DIMMING			(1 << 5)
-#define ANALOG_DIMMING			(2 << 5)
-#define FREQ_SPREAD_DISABLE		(3 << 1)
-#define CTL0_DEFAULT	(OTID | PWM_DIMMING | FREQ_SPREAD_DISABLE)
+// MPQ3367 register addresses
+#define MPQ3367_FUNC1_SET_REG   0x00
+#define MPQ3367_FUNC2_SET_REG   0x01
+#define MPQ3367_FAULT_REG       0x02
+#define MPQ3367_ID_REG          0x03
 
-#define MPQ3367_REG_VID		3
+#define MPQ3367_DIMMING_SHIFT   5
+#define MPQ3367_DIMMING_MASK    0x03
+#define MPQ3367_PWM_DIMMING     0x01
 
 #define MPQ3367_I2C_CHIP	0x38
 
 struct mpq3367_regulator_pdata {
 	struct udevice *i2c;
 	struct gpio_desc en;
+	bool enabled;
 };
 
 static int mpq3367_regulator_set_enable(struct udevice *dev, bool enable)
 {
-	u8 regval = CTL0_DEFAULT;
+	u8 regval;
 	int ret;
 	struct mpq3367_regulator_pdata *pdata = dev_get_plat(dev);
 
+	pr_info(dev, "%s %d\n", __func__, enable);
+
 	if (enable) {
-		ret = dm_i2c_write(pdata->i2c, MPQ3367_REG_CTL0, &regval, 1);
+		if (pdata->enabled)
+			return 0;
+
+		dm_gpio_set_value(&pdata->en, 1);
+
+		udelay(20000);
+
+		ret = dm_i2c_read(pdata->i2c, MPQ3367_FUNC1_SET_REG, &regval, 1);
+		if (ret) {
+			dev_err(dev, "i2c read ctl0 failed: %d\n", ret);
+			return ret;
+		}
+
+		regval &= ~(MPQ3367_DIMMING_MASK << MPQ3367_DIMMING_SHIFT);
+		regval |= MPQ3367_PWM_DIMMING << MPQ3367_DIMMING_SHIFT;
+
+		ret = dm_i2c_write(pdata->i2c, MPQ3367_FUNC1_SET_REG, &regval, 1);
 		if (ret) {
 			dev_err(dev, "i2c write ctl0 failed: %d\n", ret);
 			return ret;
 		}
+
+		udelay(1000000);
+
+		dm_i2c_read(pdata->i2c, MPQ3367_FUNC1_SET_REG, &regval, 1);
+		pr_info(dev, "MPQ3367_FUNC1 %x\n", regval);
+		dm_i2c_read(pdata->i2c, MPQ3367_FUNC2_SET_REG, &regval, 1);
+		pr_info(dev, "MPQ3367_FUNC2 %x\n", regval);
+		dm_i2c_read(pdata->i2c, MPQ3367_FAULT_REG, &regval, 1);
+		pr_info(dev, "MPQ3367_FAULT %x\n", regval);
+		dm_i2c_read(pdata->i2c, MPQ3367_ID_REG, &regval, 1);
+		pr_info(dev, "MPQ3367_ID %x\n", regval);
+
+		pdata->enabled = 1;
+
+		return 0;
 	}
+
+	if (!pdata->enabled)
+		return 0;
+
+	dm_gpio_set_value(&pdata->en, 0);
+
+	pdata->enabled = 0;
 
 	return 0;
 }
@@ -47,8 +89,7 @@ static int mpq3367_regulator_set_enable(struct udevice *dev, bool enable)
 static int mpq3367_regulator_probe(struct udevice *dev)
 {
 	struct mpq3367_regulator_pdata *pdata = dev_get_plat(dev);
-	u8 regval = CTL0_DEFAULT;
-	int ret, cnt;
+	int ret;
 
 	ret = gpio_request_by_name(dev, "enable-gpios", 0, &pdata->en,
 				   GPIOD_IS_OUT);
@@ -63,7 +104,9 @@ static int mpq3367_regulator_probe(struct udevice *dev)
 		return ret;
 	}
 	
-	dm_gpio_set_value(&pdata->en, 1);
+	dm_gpio_set_value(&pdata->en, 0);
+
+	pdata->enabled = 0;
 
 	return 0;
 }
