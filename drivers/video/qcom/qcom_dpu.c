@@ -18,6 +18,9 @@
 //#include "mdssreg.h"
 #include "catalog/dpu_hw_catalog.h"
 
+#define FLD_INTF_2_SW_TRG_MUX             BIT(8)
+#define SPLIT_DISPLAY_LOWER_PIPE_CTRL   0x3F0
+
 /* ==================== CTL registers ===================== */
 #define   CTL_LAYER(lm)                 \
 	(((lm) == LM_5) ? (0x024) : (((lm) - LM_0) * 0x004))
@@ -644,7 +647,7 @@ static void mdss_sspp_config(struct udevice *dev, void *base, bool rect0, int x_
 	writel(0x22335777, base + SSPP_CREQ_LUT_0);
 	writel(0x112222, base + SSPP_CREQ_LUT_1);
 	writel(0x1, base + SSPP_QOS_CTRL);
-	writel(0x5, base + SSPP_CLK_CTRL);
+	//writel(0x5, base + SSPP_CLK_CTRL);
 }
 
 static void mdss_vbif_setup(void *regs_vbif)
@@ -721,9 +724,9 @@ static void mdss_intf_fetch_start_config(void *dpu_base, struct dpu_mdss_cfg *ca
 		base = dpu_base + cat->intf[i].base;
 
 		/* config for 90Hz */
-		writel(BIT(23), base + INTF_CONFIG); //INTF_CONFIG_DSI_VIDEO_STOP_MODE
+		writel(BIT(23) | BIT(31), base + INTF_CONFIG); //INTF_CONFIG_DSI_VIDEO_STOP_MODE
 		writel(0x3100014, base + INTF_HSYNC_CTL);
-		writel(0x293960, base + INTF_VSYNC_PERIOD_F0);
+		writel(0x001eec90, base + INTF_VSYNC_PERIOD_F0);
 		writel(0x310, base + INTF_VSYNC_PULSE_WIDTH_F0);
 		writel(0x2F70028, base + INTF_DISPLAY_HCTL);
 		writel(0x4050, base + INTF_DISPLAY_V_START_F0);
@@ -741,7 +744,7 @@ static void mdss_intf_fetch_start_config(void *dpu_base, struct dpu_mdss_cfg *ca
 		writel(0x1011, base + INTF_CONFIG2);
 		writel(0x18F0028, base + INTF_DISPLAY_DATA_HCTL);
 		writel(0, base + INTF_ACTIVE_DATA_HCTL);
-		writel(0x293031, base + INTF_PROG_FETCH_START);
+		writel(0x001ee361, base + INTF_PROG_FETCH_START);
 		//writel(0x80800000, base + INTF_CONFIG);
 
 		if (i == 1)
@@ -1094,6 +1097,8 @@ printf("=========%s uc_priv->bpix %d, uc_priv 0x%x\n", __func__, uc_priv->bpix, 
 	mdp_dsc_setup(priv->cat, priv->dpu_base);
 
 	mdss_intf_fetch_start_config(priv->dpu_base, priv->cat);
+
+	writel(FLD_INTF_2_SW_TRG_MUX, priv->dpu_base + SPLIT_DISPLAY_LOWER_PIPE_CTRL);
 
 	/* flush all registers */
 	mdp_video_on(priv->cat, priv->dpu_base);
