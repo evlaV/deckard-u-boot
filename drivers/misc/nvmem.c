@@ -8,6 +8,7 @@
 #include <misc.h>
 #include <nvmem.h>
 #include <rtc.h>
+#include <power/pmic.h>
 #include <dm/device_compat.h>
 #include <dm/ofnode.h>
 #include <dm/read.h>
@@ -15,15 +16,17 @@
 
 int nvmem_cell_read(struct nvmem_cell *cell, void *buf, size_t size)
 {
+	int ret;
+
 	dev_dbg(cell->nvmem, "%s: off=%u size=%zu\n", __func__, cell->offset, size);
-	if (size != cell->size)
+	if (cell->size && size != cell->size)
 		return -EINVAL;
 
 	switch (cell->nvmem->driver->id) {
 	case UCLASS_I2C_EEPROM:
 		return i2c_eeprom_read(cell->nvmem, cell->offset, buf, size);
 	case UCLASS_MISC: {
-		int ret = misc_read(cell->nvmem, cell->offset, buf, size);
+		ret = misc_read(cell->nvmem, cell->offset, buf, size);
 
 		if (ret < 0)
 			return ret;
@@ -33,6 +36,13 @@ int nvmem_cell_read(struct nvmem_cell *cell, void *buf, size_t size)
 	}
 	case UCLASS_RTC:
 		return dm_rtc_read(cell->nvmem, cell->offset, buf, size);
+	case UCLASS_PMIC:
+		ret = pmic_reg_read(cell->nvmem, cell->offset);
+		if (ret < 0)
+			return -EIO;
+		*(uint *)buf = ret;
+
+		return 0;
 	default:
 		return -ENOSYS;
 	}
@@ -58,6 +68,8 @@ int nvmem_cell_write(struct nvmem_cell *cell, const void *buf, size_t size)
 	}
 	case UCLASS_RTC:
 		return dm_rtc_write(cell->nvmem, cell->offset, buf, size);
+	case UCLASS_PMIC:
+		return pmic_write(cell->nvmem, cell->offset, buf, size);
 	default:
 		return -ENOSYS;
 	}
@@ -102,6 +114,7 @@ static int nvmem_get_device(ofnode node, struct udevice **nvmem)
 		UCLASS_I2C_EEPROM,
 		UCLASS_MISC,
 		UCLASS_RTC,
+		UCLASS_PMIC,
 	};
 
 	for (i = 0; i < ARRAY_SIZE(ids); i++) {

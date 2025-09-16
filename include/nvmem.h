@@ -40,7 +40,7 @@ struct nvmem_device {
 
 struct udevice;
 
-#if CONFIG_IS_ENABLED(NVMEM)
+#if CONFIG_IS_ENABLED(NVMEM) || CONFIG_IS_ENABLED(SPL_NVMEM)
 
 /**
  * nvmem_cell_read() - Read the value of an nvmem cell
