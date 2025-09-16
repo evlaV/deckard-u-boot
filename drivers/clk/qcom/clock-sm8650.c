@@ -213,15 +213,23 @@ static ulong sm8650_set_rate(struct clk *clk, ulong rate)
 	}
 }
 
+static bool *enabled_clocks;
+
 static int sm8650_enable(struct clk *clk)
 {
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
 	const char *clk_name;
+	int ret;
 
 	if (clk->id < ARRAY_SIZE(sm8650_clks) && sm8650_clks[clk->id].name)
 		clk_name = sm8650_clks[clk->id].name;
 	else
 		clk_name = "";
+
+	if (enabled_clocks[clk->id]) {
+		printf("%s: clock %s (%d) already enabled\n", __func__, clk_name, clk->id);
+		return 0;
+	}
 
 	debug("%s: clk %s (%lu)\n", __func__, clk_name, clk->id);
 
@@ -243,7 +251,13 @@ static int sm8650_enable(struct clk *clk)
 		break;
 	}
 
-	return qcom_gate_clk_en(priv, clk->id);
+	ret = qcom_gate_clk_en(priv, clk->id);
+	if (ret)
+		return ret;
+
+	enabled_clocks[clk->id] = true;
+
+	return 0;
 }
 
 static const struct qcom_reset_map sm8650_gcc_resets[] = {
@@ -323,6 +337,8 @@ static int gcc_sm8650_probe(struct udevice *dev)
 	/* Force some clocks always on */
 	qcom_branch_set_clk_en(base, 0x27004); /* GCC_DISP_AHB_CLK */
 	qcom_branch_set_clk_en(base, 0x27018); /* GCC_DISP_XO_CLK */
+
+	enabled_clocks = kzalloc(sizeof(bool) * ARRAY_SIZE(sm8650_clks), GFP_KERNEL);
 
 	return 0;
 }

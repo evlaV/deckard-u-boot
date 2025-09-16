@@ -100,9 +100,9 @@
 	    memory-region = <&framebuffer_mem>;
 
 	    /* Other required display properties */
-	    width = <4320>;
+	    width = <(4320 / 2)>;
 	    height = <2160>;
-	    stride = <(4320 * 4)>; /* Example for 32 bits-per-pixel */
+	    stride = <((4320 / 2) * 4)>; /* Example for 32 bits-per-pixel */
 	    format = "a8r8g8b8";    /* Example format */
 	};
 };
@@ -994,20 +994,20 @@
 		dual-panel;
 
 		reset1-gpios = <&pm8550_gpios 3 GPIO_ACTIVE_HIGH>;
-		reset2-gpios = <&pm8550_gpios 11 GPIO_ACTIVE_HIGH>;
+		//reset2-gpios = <&pm8550_gpios 11 GPIO_ACTIVE_HIGH>;
 
 		left-supply = <&nex100011ub1>;
-		right-supply = <&nex100011ub0>;
+		//right-supply = <&nex100011ub0>;
 
 		backlight-left-supply = <&mpq3367b>;
-		backlight-right-supply = <&mpq3367a>;
+		//backlight-right-supply = <&mpq3367a>;
 
 		preboost-gpios = <&tlmm 79 GPIO_ACTIVE_HIGH>;
 		preboost-good-gpios = <&tlmm 69 GPIO_ACTIVE_HIGH>;
 
 		vdda-supply = <&vreg_l12b_1p8>;
 
-		pinctrl-0 = <&display_resx1>, <&display_resx2>;
+		pinctrl-0 = <&display_resx1>;
 		pinctrl-names = "default";
 
 		ports {

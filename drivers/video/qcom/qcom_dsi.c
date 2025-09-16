@@ -655,7 +655,7 @@ static void qcom_mipi_dsi_init_ctrl(void __iomem *base)
 	dsi_write(base + REG_DSI_VIDEO_COMPRESSION_MODE_CTRL, 0x8700B01);
 	dsi_write(base + REG_DSI_ACTIVE_H, 0x02f80028);
 	dsi_write(base + REG_DSI_ACTIVE_V, 0x08850015);
-	dsi_write(base + REG_DSI_TOTAL, 0x0d75030f);
+	dsi_write(base + REG_DSI_TOTAL, 0x0a18030f);
 	dsi_write(base + REG_DSI_ACTIVE_HSYNC, 0x00140000);
 	dsi_write(base + REG_DSI_ACTIVE_VSYNC_HPOS, 0x00000000);
 	dsi_write(base + REG_DSI_ACTIVE_VSYNC_VPOS, 0x00010000);
@@ -673,10 +673,12 @@ static void qcom_mipi_dsi_init_ctrl(void __iomem *base)
 	dsi_write(base + REG_DSI_TRIG_CTRL, 0x80001004);
 	dsi_write(base + REG_DSI_CLKOUT_TIMING_CTRL, 0x1A26);
 	dsi_write(base + REG_DSI_EOT_PACKET_CTRL, 0x1);
-	dsi_write(base + REG_DSI_ERR_INT_MASK0, 0x13FF3FE0);
+	//dsi_write(base + REG_DSI_ERR_INT_MASK0, 0x13FF3FE0);
+	//dsi_write(base + REG_DSI_ERR_INT_MASK0, 0);
 	dsi_write(base + REG_DSI_INTR_CTRL, 0);
 	dsi_write(base + REG_DSI_CLK_CTRL, 0x23F);
 	dsi_write(base + REG_DSI_LANE_SWAP_CTRL, 0x0);
+	dsi_write(base + REG_DSI_LANE_CTRL, DSI_LANE_CTRL_HS_REQ_SEL_PHY);
 
 	dsi_write(base + REG_DSI_CTRL, 0x173);
 

@@ -199,12 +199,12 @@
 #define LM_BORDER_COLOR_1                 0x010
 
 /* These register are offset to mixer base + stage base */
-#define LM_BLEND0_OP                     0x00
-#define LM_BLEND0_CONST_ALPHA            0x04
-#define LM_FG_COLOR_FILL_COLOR_0         0x08
-#define LM_FG_COLOR_FILL_COLOR_1         0x0C
-#define LM_FG_COLOR_FILL_SIZE            0x10
-#define LM_FG_COLOR_FILL_XY              0x14
+#define LM_BLEND0_OP                     0x20
+#define LM_BLEND0_CONST_ALPHA            0x24
+#define LM_FG_COLOR_FILL_COLOR_0         0x28
+#define LM_FG_COLOR_FILL_COLOR_1         0x2C
+#define LM_FG_COLOR_FILL_SIZE            0x30
+#define LM_FG_COLOR_FILL_XY              0x34
 
 #define LM_BLEND0_FG_ALPHA               0x04
 #define LM_BLEND0_BG_ALPHA               0x08
@@ -400,7 +400,7 @@
 
 /* 4 pipe usage case */
 #define STAGES_PER_PLANE	2
-#define PIPES_PER_STAGE		2
+#define PIPES_PER_STAGE		1
 #define PIPES_PER_PLANE		(PIPES_PER_STAGE * STAGES_PER_PLANE)
 
 
@@ -604,33 +604,35 @@ static void mdss_sspp_config(struct udevice *dev, void *base, bool rect0, int x_
 	write32(mdp_sspp->sspp_src_op_mode, flip_bits);
 #endif
 
-	if (rect0) {
-		/* gd->fb_base is from reserve_video() */
-		writel(plat->base, base + SSPP_SRC0_ADDR);
-		writel(x_off, base + SSPP_SRC_XY); /* 0x438 * N */
-		writel(0x8700438, base + SSPP_OUT_SIZE);
-		writel(0, base + SSPP_OUT_XY);
-		//writel(0x236FF, base + SSPP_SRC_FORMAT);
-		writel(0x236FF | BIT(22), base + SSPP_SRC_FORMAT);
-		writel(0x3020001, base + SSPP_SRC_UNPACK_PATTERN);
-		writel(0x80000000, base + SSPP_SRC_OP_MODE);
-		writel(0xff00ff, base + SSPP_SRC_CONSTANT_COLOR);
-		writel(0x9, base + SSPP_CDP_CNTL);
-	} else {
-		writel(plat->base, base + SSPP_SRC1_ADDR);
-		writel(x_off, base + SSPP_SRC_XY_REC1); /* 0x438 * N */
-		writel(0x8700438, base + SSPP_OUT_SIZE_REC1);
-		writel(0x438, base + SSPP_OUT_XY_REC1);
-		//writel(0x236FF, base + SSPP_SRC_FORMAT_REC1);
-		writel(0x236FF | BIT(22), base + SSPP_SRC_FORMAT_REC1);
-		writel(0x3020001, base + SSPP_SRC_UNPACK_PATTERN_REC1);
-		writel(0x80000000, base + SSPP_SRC_OP_MODE_REC1);
-		writel(0x445544, base + SSPP_SRC_CONSTANT_COLOR_REC1);
-		writel(0x9, base + SSPP_CDP_CNTL_REC1);
-	}
-	writel(0x43804380, base + SSPP_SRC_YSTRIDE0);
+	/* gd->fb_base is from reserve_video() */
+	writel(plat->base, base + SSPP_SRC0_ADDR);
+	writel(0, base + SSPP_SRC_XY); /* 0x438 * N */
+	writel(0x8700438, base + SSPP_OUT_SIZE);
+	writel(0, base + SSPP_OUT_XY);
+	//writel(0x236FF, base + SSPP_SRC_FORMAT);
+	writel(0x236FF /*| BIT(22)*/, base + SSPP_SRC_FORMAT);
+	writel(0x3020001, base + SSPP_SRC_UNPACK_PATTERN);
+	writel(0x80000000, base + SSPP_SRC_OP_MODE);
+	//writel(0xff00ff, base + SSPP_SRC_CONSTANT_COLOR);
+	writel(0x9, base + SSPP_CDP_CNTL);
+
+	writel(plat->base, base + SSPP_SRC1_ADDR);
+	writel(x_off, base + SSPP_SRC_XY_REC1); /* 0x438 * N */
+	writel(0x8700438, base + SSPP_OUT_SIZE_REC1);
+	writel(0x438, base + SSPP_OUT_XY_REC1);
+	//writel(0x236FF, base + SSPP_SRC_FORMAT_REC1);
+	writel(0x236FF /*| BIT(22)*/, base + SSPP_SRC_FORMAT_REC1);
+	writel(0x3020001, base + SSPP_SRC_UNPACK_PATTERN_REC1);
+	writel(0x80000000, base + SSPP_SRC_OP_MODE_REC1);
+	//writel(0x445544, base + SSPP_SRC_CONSTANT_COLOR_REC1);
+	writel(0x9, base + SSPP_CDP_CNTL_REC1);
+
+	writel(0x87, base + SSPP_FETCH_CONFIG);
+
+	writel(0x22002200, base + SSPP_SRC_YSTRIDE0);
 	writel(0, base + SSPP_SRC_YSTRIDE1);
 	writel(0x8700438, base + SSPP_SRC_SIZE);
+	writel(0x8700438, base + SSPP_SRC_SIZE_REC1);
 	writel(0, base + SSPP_SW_PIX_EXT_C0_LR);
 	writel(0, base + SSPP_SW_PIX_EXT_C0_TB);
 	writel(0x8700438, base + SSPP_SW_PIX_EXT_C0_REQ_PIXELS);
@@ -657,6 +659,7 @@ static void mdss_vbif_setup(void *regs_vbif)
 	writel(0x33333333, regs_vbif + VBIF_OUT_AXI_AMEMTYPE_CONF0);
    	writel(0x33333333, regs_vbif + VBIF_OUT_AXI_AMEMTYPE_CONF1);
 
+#if 0
 	writel(0x400040, regs_vbif + VBIF_XINL_QOS_RP_REMAP_000);
 	writel(0x400040, regs_vbif + VBIF_XINL_QOS_RP_REMAP_000 + reg_lvl);
 	writel(0x11411141, regs_vbif + VBIF_XINL_QOS_RP_REMAP_000 + 0x8);
@@ -673,54 +676,16 @@ static void mdss_vbif_setup(void *regs_vbif)
 	writel(0x66566656, regs_vbif + VBIF_XINL_QOS_RP_REMAP_000 + reg_lvl + 0x30);
 	writel(0x77677767, regs_vbif + VBIF_XINL_QOS_RP_REMAP_000 + 0x38);
 	writel(0x77677767, regs_vbif + VBIF_XINL_QOS_RP_REMAP_000 + reg_lvl + 0x38);
+#endif
 }
 
-static void mdss_intf_fetch_start_config(void *dpu_base, struct dpu_mdss_cfg *cat)
+static void mdss_intf_setup(void *dpu_base, struct dpu_mdss_cfg *cat)
 {
-#if 0
-	uint32_t v_total, h_total, fetch_start, vfp_start;
-	uint32_t prefetch_avail, prefetch_needed;
-	uint32_t fetch_enable = PROG_FETCH_START_EN;
-
-	/*
-	 * MDP programmable fetch is for MDP with rev >= 1.05.
-	 * Programmable fetch is not needed if vertical back porch
-	 * plus vertical pulse width plus extra line for the extra h_total
-	 * added during fetch start is >= 24.
-	 */
-	if ((edid->mode.vbl - edid->mode.vso + 1) >= MDSS_MDP_MAX_PREFILL_FETCH)
-		return;
-
-	/*
-	 * Fetch should always be outside the active lines. If the fetching
-	 * is programmed within active region, hardware behavior is unknown.
-	 */
-	v_total = edid->mode.va + edid->mode.vbl;
-	h_total = edid->mode.ha + edid->mode.hbl;
-	vfp_start = edid->mode.va + edid->mode.vbl - edid->mode.vso;
-	prefetch_avail = v_total - vfp_start;
-	prefetch_needed = MDSS_MDP_MAX_PREFILL_FETCH - edid->mode.vbl + edid->mode.vso;
-
-	/*
-	 * In some cases, vertical front porch is too high. In such cases limit
-	 * the mdp fetch lines  as the last (25 - vbp - vpw) lines of
-	 * vertical front porch.
-	 */
-	if (prefetch_avail > prefetch_needed)
-		prefetch_avail = prefetch_needed;
-
-	fetch_start = (v_total - prefetch_avail) * h_total + h_total + 1;
-	write32(mdp_intf->intf_prof_fetch_start, fetch_start);
-	write32(mdp_intf->intf_config, fetch_enable);
-#endif
-
 	void *base;
-	/* assume the 1st ctl in active case of sm8650 */
-	void *ctl_base = dpu_base + cat->ctl->base;
 	int i;
 
 	/* config 2 DSI intf that's on 2nd and 3rd intf */
-	for (i = 1; i < 3; i++) {
+	for (i = 1; i < 2; i++) {
 		base = dpu_base + cat->intf[i].base;
 
 		/* config for 90Hz */
@@ -752,17 +717,20 @@ static void mdss_intf_fetch_start_config(void *dpu_base, struct dpu_mdss_cfg *ca
 		else /* intf 2 */
 			writel(0xF0002, base + INTF_MUX);
 	}
+}
+
+static void mdss_intf_fetch_start_config(void *dpu_base, struct dpu_mdss_cfg *cat)
+{
+	void *ctl_base = dpu_base + cat->ctl[0].base;
 
 	/* enable 2 DSI interface */
-	writel(2, ctl_base + CTL_INTF_MASTER);
+	writel(BIT(1), ctl_base + CTL_INTF_MASTER);
 
-	writel(0xF, ctl_base + CTL_DSC_ACTIVE);
-	writel(0xF, ctl_base + CTL_DSC_FLUSH);
+	writel(0x3, ctl_base + CTL_DSC_ACTIVE);
+	writel(0x3, ctl_base + CTL_DSC_FLUSH);
 
-	writel(0x6, ctl_base + CTL_INTF_ACTIVE);
-	writel(0x6, ctl_base + CTL_INTF_FLUSH);
-
-	//writel(0x3, ctl_base + CTL_MERGE_3D_ACTIVE);
+	writel(BIT(1), ctl_base + CTL_INTF_ACTIVE);
+	writel(BIT(1), ctl_base + CTL_INTF_FLUSH);
 }
 
 /* configure the mixer blending in ctl */
@@ -778,19 +746,32 @@ void mdp_setup_stage(struct dpu_mdss_cfg *cat, void *dpu_base)
 	void *base = dpu_base + cat->ctl[0].base;
 
 	for (int lm = LM_0; lm < (LM_0 + PIPES_PER_PLANE); lm++) {
-		if (lm < (LM_0 + PIPES_PER_STAGE)) {
+		void *lm_base = dpu_base + cat->mixer[lm - LM_0].base;
+
+		//if (lm < (LM_0 + PIPES_PER_STAGE)) {
 			writel(0x1080000, base + CTL_LAYER(lm));
 			writel(0x200, base + CTL_LAYER_EXT2(lm));
-		} else {
-			writel(0x1400000, base + CTL_LAYER(lm));
-			writel(0x2000, base + CTL_LAYER_EXT2(lm));
-		}
+		//} else {
+		//	writel(0x1400000, base + CTL_LAYER(lm));
+		//	writel(0x2000, base + CTL_LAYER_EXT2(lm));
+		//}
 		writel(0, base + CTL_LAYER_EXT(lm));
 		writel(0, base + CTL_LAYER_EXT3(lm));
 		writel(0, base + CTL_LAYER_EXT4(lm));
+
+		writel(0x8700438, lm_base + LM_OUT_SIZE);
+
+		u32 op_mode = 0x2;
+		if (lm == LM_1)
+			op_mode |= BIT(31); /* split right half in stage */
+		writel(op_mode, lm_base + LM_OP_MODE);
+
+		writel(0x100, lm_base + LM_BLEND0_OP);
+		writel(0xFF0000, lm_base + LM_BLEND0_CONST_ALPHA);
 	}
 }
 
+#if 0
 /**
  * _stage_offset(): returns the relative offset of the blend registers
  * for the stage to be setup
@@ -848,6 +829,7 @@ static void mdss_layer_mixer_setup(void *dpu_base, struct dpu_mdss_cfg *cat)
 	}
 	mdp_setup_stage(cat, dpu_base);
 }
+#endif
 
 #if 0
 /* sequence from coreboot */
@@ -870,7 +852,7 @@ void mdp_dsc_setup(struct dpu_mdss_cfg *cat, void *dpu_base)
 	const struct dpu_dsc_sub_blks *sblk;
 	int i;
 
-	for (i = 0; i < 4; i++) {
+	for (i = 0; i < 2; i++) {
 		base = dpu_base + cat->dsc[i].base;
 		sblk = cat->dsc[i].sblk;
 
@@ -914,7 +896,7 @@ void mdp_pingpong_setup(struct dpu_mdss_cfg *cat, void *dpu_base)
 	int i;
 
 	/* 2 pp map to 4 pipe in quad-pipe case */
-	for (i = 0; i < 2; i++) {
+	for (i = 0; i < 1; i++) {
 		base = dpu_base + cat->pingpong[i].sblk->dither.base;
 		dpu_write(base + PP_DITHER_EN, 0);
 	}
@@ -933,9 +915,9 @@ void mdp_video_on(struct dpu_mdss_cfg *cat, void *dpu_base)
 
 	//writel(0x3, ctl_base + CTL_MERGE_3D_FLUSH);
 	//writel(0x80C21BC0, ctl_base + CTL_FLUSH);
-	writel(0x3, ctl_base + CTL_FETCH_PIPE_ACTIVE);
+	writel(BIT(0), ctl_base + CTL_FETCH_PIPE_ACTIVE);
 	writel(0xF0000000, ctl_base + CTL_TOP);
-	writel(0x80421BC0, ctl_base + CTL_FLUSH);
+	writel(0x804208C0, ctl_base + CTL_FLUSH);
 	//writel(0x421BC0, ctl_base + CTL_FLUSH);
 }
 
@@ -1000,6 +982,7 @@ printf("=========%s enter, FLG_RELOC? %lu\n", __func__, gd->flags & GD_FLG_RELOC
 			}
 		}
 
+#if 0
 		np = ofnode_to_np(dev_ofnode(bridge0));
 		if (of_find_property(np, "qcom,dual-dsi-mode", &len)) {
 			dev_dbg(dev, "Dual DSI is found. To attach it\n");
@@ -1018,6 +1001,7 @@ printf("=========%s enter, FLG_RELOC? %lu\n", __func__, gd->flags & GD_FLG_RELOC
 				}
 			}
 		}
+#endif
 	} else {
 		dev_dbg(dev,
 			"ERROR: Please enable video bridge in defconfig\n");
@@ -1085,25 +1069,29 @@ printf("=========%s uc_priv->bpix %d, uc_priv 0x%x\n", __func__, uc_priv->bpix, 
 
 	mdss_vbif_setup(priv->vbif_base);
 
-	/* hard coding 4 rect from 2 SSPP */
-	mdss_sspp_config(dev, priv->dpu_base + priv->cat->sspp[0].base, true, 0);
-	mdss_sspp_config(dev, priv->dpu_base + priv->cat->sspp[0].base, false, 1080);
-	mdss_sspp_config(dev, priv->dpu_base + priv->cat->sspp[1].base, true, 1080 * 2);
-	mdss_sspp_config(dev, priv->dpu_base + priv->cat->sspp[1].base, false, 1080 * 3);
-
-	mdss_layer_mixer_setup(priv->dpu_base, priv->cat);
-	mdp_pingpong_setup(priv->cat, priv->dpu_base);
+	mdss_intf_setup(priv->dpu_base, priv->cat);
 
 	mdp_dsc_setup(priv->cat, priv->dpu_base);
 
+	mdp_setup_stage(priv->cat, priv->dpu_base);
+
+	/* hard coding 4 rect from 2 SSPP */
+	mdss_sspp_config(dev, priv->dpu_base + priv->cat->sspp[0].base, true, 1080);
+	//mdss_sspp_config(dev, priv->dpu_base + priv->cat->sspp[0].base, false, 1080);
+	//mdss_sspp_config(dev, priv->dpu_base + priv->cat->sspp[1].base, true, 1080 * 2);
+	//mdss_sspp_config(dev, priv->dpu_base + priv->cat->sspp[1].base, false, 1080 * 3);
+
+	//mdss_layer_mixer_setup(priv->dpu_base, priv->cat);
+	//mdp_pingpong_setup(priv->cat, priv->dpu_base);
+
 	mdss_intf_fetch_start_config(priv->dpu_base, priv->cat);
 
-	writel(FLD_INTF_2_SW_TRG_MUX, priv->dpu_base + SPLIT_DISPLAY_LOWER_PIPE_CTRL);
+	//writel(FLD_INTF_2_SW_TRG_MUX, priv->dpu_base + SPLIT_DISPLAY_LOWER_PIPE_CTRL);
 
 	/* flush all registers */
 	mdp_video_on(priv->cat, priv->dpu_base);
 
-	for (int i = 1; i < 3; i++) {
+	for (int i = 1; i < 2; i++) {
 		void *base = priv->dpu_base + priv->cat->intf[i].base;
 		writel(0x1, base + INTF_TIMING_ENGINE_EN);
 	}
@@ -1117,7 +1105,7 @@ dpu_kms_mdp_snapshot();
 	return 0;
 }
 
-#define LCD_MAX_WIDTH 4320
+#define LCD_MAX_WIDTH (4320/2)
 #define LCD_MAX_HEIGHT 2160
 static int qcom_dpu_bind(struct udevice *dev)
 {

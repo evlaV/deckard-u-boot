@@ -775,6 +775,7 @@ static const struct freq_tbl ftbl_disp_cc_mdss_pclk0_clk_src[] = {
 
 #define CFG_DISP_CC_PLL0_OUT_MAIN (1 << 8)
 static const struct freq_tbl ftbl_disp_cc_mdss_mdp_clk_src[] = {
+#if 0
 	F(19200000, CFG_BI_TCXO, 1, 0, 0),
 	F(85714286, CFG_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
 	F(100000000, CFG_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
@@ -783,8 +784,9 @@ static const struct freq_tbl ftbl_disp_cc_mdss_mdp_clk_src[] = {
 	F(200000000, CFG_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
 	F(325000000, CFG_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
 	F(375000000, CFG_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
+#endif
 	F(514000000, CFG_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
-	F(690000000, CFG_DISP_CC_PLL0_OUT_MAIN, 2, 0, 0),
+//	F(690000000, CFG_DISP_CC_PLL0_OUT_MAIN, 2, 0, 0),
 	{ }
 };
 
@@ -845,12 +847,14 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 	dev_err(clk->dev, "set clk %s (%lu) rate: %lu\n", name, clk->id, rate);
 
 	switch (clk->id) {
+#if 0
 	case DISP_CC_MDSS_AHB_CLK:
 		freq = qcom_find_freq(ftbl_disp_cc_mdss_ahb_clk_src, rate);
 		dispcc_enable_src(freq);
 		printf("Picked rate %llu for DISP_CC_MDSS_AHB_CLK\n", freq->freq);
 		clk_rcg_set_rate(priv->base, 0x82e8, freq->pre_div, freq->src);
 		return freq->freq;
+#endif
 
 	case DISP_CC_MDSS_BYTE0_INTF_CLK:
 		/* Assume the divider is 1 in parent disp_cc_mdss_byte0_div_clk_src:
@@ -883,11 +887,13 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		clk_rcg_set_rate(priv->base, 0x8124, 1, CFG_DSI0_PHY_PLL_OUT_BYTECLK);
 		return rate;
 
+#if 0
 	case DISP_CC_MDSS_MDP_LUT_CLK:
 		/* Its parent is disp_cc_mdss_mdp_clk_src at 0x80d8:
 		 * .cmd_rcgr = 0x80d8, .mnd_width = 0, .hid_width = 5,
 		 * So fall thru to DISP_CC_MDSS_MDP_CLK.
 		 */
+#endif
 	case DISP_CC_MDSS_MDP_CLK:
 		freq = qcom_find_freq(ftbl_disp_cc_mdss_mdp_clk_src, rate);
 		dispcc_enable_src(freq);
@@ -896,6 +902,7 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		clk_rcg_set_rate(priv->base, 0x80d8, freq->pre_div, freq->src);
 		return freq->freq;
 
+#if 0
 	case DISP_CC_MDSS_VSYNC_CLK:
 		/* Assume the divider is 1 in parent disp_cc_mdss_vsync_clk_src :
 		 * .cmd_rcgr = 0x80f0, .mnd_width = 0, .hid_width = 5,
@@ -904,6 +911,7 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		 */
 		clk_rcg_set_rate(priv->base, 0x80f0, 1, CFG_BI_TCXO);
 		return rate;
+#endif
 
 	case DISP_CC_MDSS_PCLK0_CLK:
 		/* The rate of its parent disp_cc_mdss_pclk0_clk_src and grand parent
@@ -956,6 +964,8 @@ static int sm8650_disp_cc_parent_enable(struct clk *clk, ulong id)
 		clk_enable(parent);
 }
 
+static bool *enabled_clocks;
+
 static int sm8650_disp_cc_enable(struct clk *clk)
 {
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
@@ -965,6 +975,11 @@ static int sm8650_disp_cc_enable(struct clk *clk)
 		name = sm8650_disp_clks[clk->id].name;
 	else
 		name = "unknown";
+
+	if (enabled_clocks[clk->id]) {
+		printf("%s: clock %s (%d) already enabled\n", __func__, name, clk->id);
+		return 0;
+	}
 
 /*
 	switch (clk->id) {
@@ -980,7 +995,7 @@ static int sm8650_disp_cc_enable(struct clk *clk)
 
 	switch (clk->id) {
 	case DISP_CC_MDSS_AHB_CLK:
-		sm8650_disp_cc_set_rate(clk, 19200000);
+		//sm8650_disp_cc_set_rate(clk, 19200000);
 		break;
 	case DISP_CC_MDSS_MDP_CLK:
 		sm8650_disp_cc_set_rate(clk, 514000000);
@@ -1002,7 +1017,7 @@ static int sm8650_disp_cc_enable(struct clk *clk)
 		sm8650_disp_cc_set_rate(clk, 121574874);
 		break;
 	case DISP_CC_MDSS_VSYNC_CLK:
-		sm8650_disp_cc_set_rate(clk, 19200000);
+		//sm8650_disp_cc_set_rate(clk, 19200000);
 		break;
 	case DISP_CC_MDSS_PCLK0_CLK:
 	case DISP_CC_MDSS_PCLK1_CLK:
@@ -1018,6 +1033,8 @@ static int sm8650_disp_cc_enable(struct clk *clk)
 
 	dev_err(clk->dev, "enable clk %s (%lu)\n", name, clk->id);
 	qcom_gate_clk_en(priv, clk->id);
+
+	enabled_clocks[clk->id] = true;
 
 	return 0;
 }
@@ -1107,6 +1124,9 @@ static int dispcc_sm8650_probe(struct udevice *dev)
 
 	/* Keep some clocks always on */
 	qcom_branch_set_clk_en(base, 0xe054); /* DISP_CC_XO_CLK */
+
+	enabled_clocks = kzalloc(sizeof(bool) * ARRAY_SIZE(sm8650_disp_clks), GFP_KERNEL);
+
 	return 0;
 }
 

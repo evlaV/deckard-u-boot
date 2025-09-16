@@ -37,6 +37,8 @@
 #define VBP		800
 #define GPO1_TES1	233
 #define GPO1_TEW1	17
+#define GPO1_TES1_120_BOE	4068
+#define RTN 59
 
 /*
  * Camera capture signal on panel tester is GPIO2 routed out TE pin
@@ -51,18 +53,18 @@
 enum {
 	REGULATOR_VDDA = 0,
 	REGULATOR_BACKLIGHT_LEFT,
-	REGULATOR_BACKLIGHT_RIGHT,
+	//REGULATOR_BACKLIGHT_RIGHT,
 	REGULATOR_LEFT,
-	REGULATOR_RIGHT,
+	//REGULATOR_RIGHT,
 	REGULATOR_COUNT,
 };
 
 static const char *regulator_names[REGULATOR_COUNT] = {
 	"vdda-supply",
 	"backlight-left-supply",
-	"backlight-right-supply",
+	//"backlight-right-supply",
 	"left-supply",
-	"right-supply",
+	//"right-supply",
 };
 
 struct lpm026m648c_priv {
@@ -194,6 +196,7 @@ static void dsi_write_panel_on(struct lpm026m648c_priv *priv)
 	pps_cmd[0] = LPM02648C_PPS_SET;
 */
 
+#if 0
 	lpm026m648c_dsi_write_seq(priv, LPM02648C_MF_CMD_ACCESS_PROTECT, 0x04);
 	lpm026m648c_dsi_write_seq(priv, LPM02648C_SEQ_CTL, 0x00);
 	lpm026m648c_dsi_write_seq(priv, LPM02648C_DSI_CTL,
@@ -218,21 +221,56 @@ static void dsi_write_panel_on(struct lpm026m648c_priv *priv)
 	lpm026m648c_dsi_write_seq(priv, LPM02648C_DISP_SET5, BE16(VID_VS_DELAY),
 				  0x00, 0x00, 0x00);
 	lpm026m648c_dsi_write_seq(priv, LPM02648C_TE_GPIO_CTL, 0x00, 0x6A, 0x02);
+#else
+	lpm026m648c_dsi_write_seq(priv, LPM02648C_MF_CMD_ACCESS_PROTECT, 0x00);
+	lpm026m648c_dsi_write_seq(priv, LPM02648C_SEQ_CTL, 0x00);
+	lpm026m648c_dsi_write_seq(priv, LPM02648C_DSI_CTL,
+			0x20, 0x6b, 0x80, 0x06, 0x33, 0x9A, 0x00,
+			0x1a, 0x7a);
+	lpm026m648c_dsi_write_seq(priv, LPM02648C_DISP_MODE, 0x54, 0x00, 0x00,
+			0x00);
+	lpm026m648c_dsi_write_seq(priv, LPM02648C_GEN_OUTPIN_SET,
+			BE16(GPO1_TES1_120_BOE), BE16(GPO1_TEW1), 0x00, 0x00,
+			0x00, 0x00,
+			BE16(GPO1_TES1_120_BOE-CAMERA_TRIGGER_OFFSET),
+			BE16(CAMERA_TRIGGER_OFFSET * 2 + GPO1_TEW1));
+	lpm026m648c_dsi_write_seq(priv, LPM02648C_DISP_SET3, 0x0B, 0x70, 0x08,
+			0x48, 0x00, 0x00, 0x13, 0x01, 0xFF, 0x00, 0x01, 0x09,
+			0x16, 0x16, 0x00, 0x00, 0x00, 0x01, 0x40, 0x0C, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00,
+			0x70, 0x08, 0xD0, 0x02, 0x21, 0x6F, 0x08, 0x5A, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00);
+	lpm026m648c_dsi_write_seq(priv, LPM02648C_DISP_SET1, RTN, 0x86, LE16(VBP),
+			0x08, 0x70, BE16(VFP), 0x00, 0x00, 0x08, 0x3A, 0x00, 0x00,
+			0x17, 0x00, 0x17);
+	lpm026m648c_dsi_write_seq(priv, LPM02648C_DISP_SET3_2, 0x00);
+	lpm026m648c_dsi_write_seq(priv, LPM02648C_DISP_SET4, 0x8b, 0x00, 0x80,
+			0x46, 0x61, 0x00, 0x8b);
+	lpm026m648c_dsi_write_seq(priv, LPM02648C_DISP_SET5, BE16(VID_VS_DELAY),
+			0x00, 0x00, 0x00);
+	lpm026m648c_dsi_write_seq(priv, LPM02648C_TE_GPIO_CTL, 0x00, 0x6A, 0x02);
+
+#endif
 	//lpm026m648c_dsi_write_seq(priv, 0xde, 0x01);
 	/* TODO: add hard coded dsc cmd for now, use dsc helper later */
 	lpm026m648c_dsi_write_buffer(priv, pps_cmd);
+#if 0
 	lpm026m648c_dsi_write_seq(priv, MIPI_DCS_GET_COMPRESSION_MODE, 0x01);
 	lpm026m648c_dsi_write_seq(priv, MIPI_DCS_SET_TEAR_SCANLINE, 0x00, 0x00);
 	lpm026m648c_dsi_write_seq(priv, MIPI_DCS_SET_TEAR_ON, 0x00);
 	lpm026m648c_dsi_write_seq(priv, MIPI_DCS_SET_ADDRESS_MODE, 0x00);
 	lpm026m648c_dsi_write_seq(priv, MIPI_DCS_SET_PIXEL_FORMAT, 0x77);
-	lpm026m648c_dsi_write_seq(priv, MIPI_DCS_EXIT_SLEEP_MODE);
-	mdelay(170);
-	lpm026m648c_dsi_write_seq(priv, MIPI_DCS_SET_DISPLAY_ON);
 	lpm026m648c_dsi_write_seq(priv, LPM02648C_SEQ_CTL, 0x80);
 	mdelay(200);
 	lpm026m648c_dsi_write_seq(priv, LPM02648C_MF_CMD_ACCESS_PROTECT, 0x03);
 	mdelay(200);
+#else
+	lpm026m648c_dsi_write_seq(priv, MIPI_DCS_SET_TEAR_ON, 0x00);
+#endif
+	lpm026m648c_dsi_write_seq(priv, MIPI_DCS_EXIT_SLEEP_MODE);
+	mdelay(170);
+	lpm026m648c_dsi_write_seq(priv, MIPI_DCS_SET_DISPLAY_ON);
 }
 
 static int panel_info_show(struct lpm026m648c_priv *priv)
@@ -367,7 +405,7 @@ static int lpm026m648c_panel_enable_backlight(struct udevice *dev)
 	mdelay(70);
 
 	regulator_set_enable_if_allowed(priv->regs[REGULATOR_BACKLIGHT_LEFT], true);
-	regulator_set_enable_if_allowed(priv->regs[REGULATOR_BACKLIGHT_RIGHT], true);
+	//regulator_set_enable_if_allowed(priv->regs[REGULATOR_BACKLIGHT_RIGHT], true);
 
 	mdelay(2);
 
@@ -376,22 +414,22 @@ static int lpm026m648c_panel_enable_backlight(struct udevice *dev)
 	mdelay(2);
 
 	regulator_set_enable_if_allowed(priv->regs[REGULATOR_LEFT], true);
-	regulator_set_enable_if_allowed(priv->regs[REGULATOR_RIGHT], true);
+	//regulator_set_enable_if_allowed(priv->regs[REGULATOR_RIGHT], true);
 
 	mdelay(2);
 	
 	dm_gpio_set_value(&priv->reset1_gpio, 1);
-	dm_gpio_set_value(&priv->reset2_gpio, 1);
+	//dm_gpio_set_value(&priv->reset2_gpio, 1);
 
 	mdelay(20);
 
 printf("======= %s priv->is_dual_panel %d plat->device %p\n", __func__, priv->is_dual_panel, plat->device);
 	plat->device->mode_flags |= MIPI_DSI_MODE_LPM;
-	plat->device2->mode_flags |= MIPI_DSI_MODE_LPM;
+	//plat->device2->mode_flags |= MIPI_DSI_MODE_LPM;
 
 printf("======= %s set device %p device2 %p\n", __func__, plat->device, plat->device2);
 	priv->device = plat->device;
-	priv->device2 = plat->device2;
+	//priv->device2 = plat->device2;
 
 	dsi_write_panel_on(priv);
 	get_panel_info(priv);
@@ -424,7 +462,7 @@ static int lpm026m648c_panel_of_to_plat(struct udevice *dev)
 
 printf("============%s called\n", __func__);
 
-	priv->is_dual_panel = ofnode_read_bool(dev_ofnode(dev), "dual-panel");
+	priv->is_dual_panel = false; //ofnode_read_bool(dev_ofnode(dev), "dual-panel");
 
 	ret = gpio_request_by_name(dev, "reset1-gpios", 0,
 				   &priv->reset1_gpio, GPIOD_IS_OUT);
@@ -433,12 +471,14 @@ printf("============%s called\n", __func__);
 		return ret;
 	}
 
+#if 0
 	ret = gpio_request_by_name(dev, "reset2-gpios", 0,
 				   &priv->reset2_gpio, GPIOD_IS_OUT);
 	if (ret) {
 		dev_err(dev, "could not decode reset2-gpios (%d)\n", ret);
 		return ret;
 	}
+#endif
 
 	ret = gpio_request_by_name(dev, "preboost-gpios", 0,
 				   &priv->preboost_gpio, GPIOD_IS_OUT);
@@ -482,7 +522,7 @@ printf("============%s called\n", __func__);
 	priv->dev = dev;
 
 	dm_gpio_set_value(&priv->preboost_gpio, 0);
-	dm_gpio_set_value(&priv->reset2_gpio, 0);
+	//dm_gpio_set_value(&priv->reset2_gpio, 0);
 	dm_gpio_set_value(&priv->reset1_gpio, 0);
 
 printf("============%s ret 0\n", __func__);

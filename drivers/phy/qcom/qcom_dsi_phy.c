@@ -642,27 +642,27 @@ printf("--------- PLL(%d) lock ok\n", pll_7nm->plat->id);
 	if (pll_7nm->slave)
 		dsi_pll_phy_dig_reset(pll_7nm->slave);
 
-	dsi_pll_enable_global_clk(pll_7nm);
-	if (pll_7nm->slave)
-		dsi_pll_enable_global_clk(pll_7nm->slave);
-
 	/* Hard coding downstream clock mnd for headset usage case, to avoid
 	 * create parent clocks in pll_7nm_register() */
-	writel(0xff, pll_7nm->plat->base + REG_DSI_7nm_PHY_PLL_PLL_OUTDIV_RATE);
+	//writel(0xff, pll_7nm->plat->base + REG_DSI_7nm_PHY_PLL_PLL_OUTDIV_RATE);
+	writel(0, pll_7nm->plat->base + REG_DSI_7nm_PHY_PLL_PLL_OUTDIV_RATE);
 	//writel(0xf1, pll_7nm->plat->base + REG_DSI_7nm_PHY_CMN_CLK_CFG0);
 	// div_3_0  = 2
 	dsi_pll_cmn_clk_cfg0_update(pll_7nm,
 				    DSI_7nm_PHY_CMN_CLK_CFG0_DIV_CTRL_3_0__MASK,
-				    1);
+				    DSI_7nm_PHY_CMN_CLK_CFG0_DIV_CTRL_3_0(1));
 	// div_7_4 = 1
 	dsi_pll_cmn_clk_cfg0_update(pll_7nm,
 				    DSI_7nm_PHY_CMN_CLK_CFG0_DIV_CTRL_7_4__MASK,
-				    1);
+				    DSI_7nm_PHY_CMN_CLK_CFG0_DIV_CTRL_7_4(1));
 	//writel(0x13, pll_7nm->plat->base + REG_DSI_7nm_PHY_CMN_CLK_CFG1);
 	dsi_pll_cmn_clk_cfg1_update(pll_7nm,
 				    DSI_7nm_PHY_CMN_CLK_CFG1_DSICLK_SEL__MASK,
 				    DSI_7nm_PHY_CMN_CLK_CFG1_DSICLK_SEL(3));
 
+	dsi_pll_enable_global_clk(pll_7nm);
+	if (pll_7nm->slave)
+		dsi_pll_enable_global_clk(pll_7nm->slave);
 error:
 	return rc;
 }
@@ -679,7 +679,7 @@ static int dsi_pll_7nm_vco_prepare(struct clk *clk)
 		return -ENOSYS;
 	}
 
-	pll_7nm->slave = pll_7nm_list[1];
+	//pll_7nm->slave = pll_7nm_list[1];
 
 	return _dsi_pll_7nm_vco_prepare(pll_7nm);
 }
@@ -1617,10 +1617,12 @@ static int qcom_dsi_phy_of_to_plat(struct udevice *dev)
 
 printf("========%s udev %p base %p pll_base %p lane_base %p\n", __func__, dev, plat->base, plat->pll_base, plat->lane_base);
 	plat->id = dsi_phy_get_id(plat);
-	if (plat->id)
+	/*if (plat->id)
 		plat->usecase = MSM_DSI_PHY_SLAVE;
 	else
 		plat->usecase = MSM_DSI_PHY_MASTER;
+		*/
+	plat->usecase = MSM_DSI_PHY_STANDALONE;
 
 	return 0;
 }

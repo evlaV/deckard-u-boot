@@ -600,6 +600,11 @@ static int qcom_power_set(struct power_domain *pwr, bool on)
 		return -ENODEV;
 
 	value = readl(base + map->reg);
+	
+	if (value & (GDSC_PWR_ON_MASK | GDSC_POWER_UP_COMPLETE)) {
+		printf("%s: GDSC %d already enabled\n", __func__, pwr->id);
+		return 0;
+	}
 
 	if (on)
 		value &= ~GDSC_SW_COLLAPSE_MASK;
