@@ -10,87 +10,83 @@
 #include <errno.h>
 #include <led.h>
 #include <log.h>
+#include <pwm.h>
 #include <asm/io.h>
 #include <dm/lists.h>
 #include <linux/bitops.h>
+#include <linux/time.h>
 #include <power/pmic.h>
 
 #define REG_TYPE		0x4
 #define REG_SUBTYPE		0x5
 
-// HACK default setup for blue LED only 
-// PWM module is in separate address space, same PMIC
-#define REG_LPG_PWM_SIZE_CLK		0x41
-#define REG_LPG_PWM_FREQ_PREDIV_CLK	0x42
-#define REG_LPG_PWM_TYPE_CONFIG		0x43
-#define REG_LPG_PWM_VALUE_LSB		0x44
-#define REG_LPG_PWM_VALUE_MSB		0x45
-#define REG_LPG_ENABLE_CONTROL		0x46
-#define REG_LPG_PWM_SYNC            0x47
+#define REG_SIZE_PER_LPG	0x100
 
 // LED module defines, base adddress should also be base address from DTS
-#define LED_BASE_ADDR              0xEF00
-#define TRILED_REG_EN_CTL 0x46
-#define TRILED_TYPE 0x19
-#define TRILED_SUBTYPE_LED3H0L12 0x02
+#define LED_BASE_ADDR			0xEF00
+#define TRILED_REG_EN_CTL		0x46
+#define TRILED_TYPE			0x19
+#define TRILED_SUBTYPE_LED3H0L12	0x02
 
 /* LED_CONFIG structures */
 struct qpnp_tri_led_priv {
-    struct udevice *pmic;
-	
-	u32 base;
+	struct udevice *pmic;
+	struct udevice *pwm;
+
 	u8 mask;
-	u16 pwm_addr;
+	u32 base;
+	u16 period;
+	u16 channel_index;
+	enum led_state_t state;
 };
+
+extern int qcom_lpg_pwm_output_type_set(struct udevice *dev, u32 channel_id,
+				 u32 output_type);
 
 static enum led_state_t qcom_tri_led_get_state(struct udevice *dev)
 {
-	enum led_state_t state = LEDST_OFF;
+	struct qpnp_tri_led_priv *priv = dev_get_priv(dev);
 
-	return state;
+	return priv->state;
 }
 
-// TODO Make this support blinking fast and slow
-// TODO Also it seems to hold state on a reboot from whatever linux was doing... probable need to wipe that out
-static int qcom_tri_led_set_state(struct udevice *dev, enum led_state_t state)
+static int qcom_tri_led_set_period(struct udevice *dev, int period_ns)
 {
 	struct qpnp_tri_led_priv *priv = dev_get_priv(dev);
 
-    if ( priv == NULL || priv->pmic == NULL ) {
-        return -1;
-    }
+	priv->period = period_ns;
 
-	// ret = pmic_reg_read(priv->pmic, priv->base + REG_TYPE);
-	pmic_reg_write(priv->pmic, priv->pwm_addr + REG_LPG_PWM_SIZE_CLK, 0x03);
+	return 0;
+}
 
-    if ( state == LEDST_ON ) {
-        // PWM_FREQ = PWM_FREQ_CLK_SELECT / (2 ^ (PWM_SIZE)) * ( 2 ^ ( PWM_FREQ_EXPONENT ) * PWM_FREQ_PRE_DIVIDE )
-        // PWM_FREQ_CLK_SELECT = 0x1 ( 1 kHz )
-        // PWM_SIZE  = 0x1 ( 9 bit PWM )
-        pmic_reg_write(priv->pmic, priv->pwm_addr + REG_LPG_PWM_SIZE_CLK, 0x03);
+// TODO Make this support blinking fast and slow
+static int qcom_tri_led_set_state(struct udevice *dev, enum led_state_t state)
+{
+	struct qpnp_tri_led_priv *priv = dev_get_priv(dev);
+	uint period_ns = 0;
+	uint duty_ns = 0;
 
-        // PWM_FREQ_EXPONENT = 0x001 ( 1 )
-        // PWM_FREQ_PRE_DIVIDE = 0x00 ( 1 )
-        pmic_reg_write(priv->pmic, priv->pwm_addr + REG_LPG_PWM_FREQ_PREDIV_CLK, 0x01);
+	if ( priv == NULL || priv->pmic == NULL )
+		return -1;
 
-        // PWM_VALUE_LSB = 0x0F ?? this sets the brightness
-        pmic_reg_write(priv->pmic, priv->pwm_addr + REG_LPG_PWM_VALUE_LSB, 0x07);
+	if (state == LEDST_BLINK || LEDST_ON)
+		duty_ns = USEC_PER_SEC;
 
-        // set PWM sync so PWM_VALUE_LSB takes effect
-        pmic_reg_write(priv->pmic, priv->pwm_addr + REG_LPG_PWM_SYNC, 0x01);
+	if (state == LEDST_BLINK)
+		period_ns = USEC_PER_SEC;
 
-        // Enable PWM
-        pmic_reg_write(priv->pmic, priv->pwm_addr + REG_LPG_ENABLE_CONTROL, 0x80);
+	if (state == LEDST_ON || state == LEDST_BLINK) {
+		pwm_set_config(priv->pwm, priv->channel_index, period_ns, duty_ns);
+		pwm_set_enable(priv->pwm, priv->channel_index, !!duty_ns);
 
-        // LED Enable
-        pmic_clrsetbits(priv->pmic, LED_BASE_ADDR + TRILED_REG_EN_CTL, priv->mask, priv->mask);
-    } else {
-        // Disable PWM
-        pmic_reg_write(priv->pmic, priv->pwm_addr + REG_LPG_ENABLE_CONTROL, 0x00);
+		pmic_clrsetbits(priv->pmic, LED_BASE_ADDR + TRILED_REG_EN_CTL,
+				priv->mask, priv->mask);
+	} else {
+		pmic_clrsetbits(priv->pmic, LED_BASE_ADDR + TRILED_REG_EN_CTL,
+				priv->mask, 0x00);
+	}
 
-        // Disable LED
-        pmic_clrsetbits(priv->pmic, LED_BASE_ADDR + TRILED_REG_EN_CTL, priv->mask, 0x00);
-    }
+	priv->state = state;
 
 	return 0;
 }
@@ -98,17 +94,17 @@ static int qcom_tri_led_set_state(struct udevice *dev, enum led_state_t state)
 static const struct led_ops qcom_tri_led_ops = {
 	.get_state = qcom_tri_led_get_state,
 	.set_state = qcom_tri_led_set_state,
+	.set_period = qcom_tri_led_set_period,
 };
 
 static int qcom_tri_led_probe(struct udevice *dev)
 {
 	struct led_uc_plat *uc_plat = dev_get_uclass_plat(dev);
 	struct qpnp_tri_led_priv *priv = dev_get_priv(dev);
-	//ofnode node = dev_ofnode(dev);
+	struct ofnode_phandle_args args;
 	int ret;
 	u64 base;
 	u32 mask;
-	u32 pwm_addr;
 
 	/* Ignore the top-level pon node */
 	if (!uc_plat->label)
@@ -118,6 +114,21 @@ static int qcom_tri_led_probe(struct udevice *dev)
 	 * PMIC device to use in pmic_reg_* calls.
 	 */
 	priv->pmic = dev->parent->parent;
+
+	ret = dev_read_phandle_with_args(dev, "pwms", "#pwm-cells", 0,
+					 0, &args);
+	if (ret < 0) {
+		printf("failed to get pwm args for led: %s ret: %d\n", dev->name, ret);
+	}
+
+	priv->channel_index = args.args[0];
+	priv->period = args.args[1];
+
+	ret = uclass_get_device_by_ofnode(UCLASS_PWM, args.node, &priv->pwm);
+	if (ret < 0) {
+		printf("failed to get pwm for led: %s ret: %d\n", dev->name, ret);
+		return -EINVAL;
+	}
 
 	/* Get the address of the parent */
 	base = dev_read_addr(dev->parent);
@@ -136,23 +147,18 @@ static int qcom_tri_led_probe(struct udevice *dev)
 	}
 	priv->mask = (u8)mask;
 
-	ret = dev_read_u32(dev, "pwm-base-addr", &pwm_addr);
-	if (ret != 0) 
-	{
-		printf("%s: Provide pwm-base-addr property for each LED\n", dev->name);
-		return -EINVAL;
-	}
-	priv->pwm_addr = (u16)pwm_addr;
-
 	/* Do a sanity check */
 	ret = pmic_reg_read(priv->pmic, priv->base + REG_TYPE);
 	if (ret != TRILED_TYPE) {
-		printf("%s: unexpected PMIC function type %d\n", dev->name, ret);
+		printf("%s: unexpected PMIC function type %d\n",
+			dev->name, ret);
 		return -ENXIO;
 	}
+
 	ret = pmic_reg_read(priv->pmic, priv->base + REG_SUBTYPE);
 	if (ret != TRILED_SUBTYPE_LED3H0L12) {
-		printf("%s: unexpected PMIC function sub type %d\n", dev->name, ret);
+		printf("%s: unexpected PMIC function sub type %d\n",
+			dev->name, ret);
 		return -ENXIO;
 	}
 
@@ -172,13 +178,12 @@ static int qcom_tri_led_bind(struct udevice *parent)
 
 		if (!ofnode_is_enabled(node)) {
 			continue;
-        }
+		}
 
 		ret = device_bind_driver_to_node(parent, "qcom-led",
 						 ofnode_get_name(node),
 						 node, &dev);
 		if (ret) {
-			// printf("Failed to bind %s! %d\n", label, ret);
 			printf("led_qcom Failed to bind! %d\n", ret);
 			return ret;
 		}
