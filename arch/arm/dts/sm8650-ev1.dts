@@ -675,19 +675,64 @@
 
 	led0: blue {
 		bit-mask = <0x20>;
-		pwm-base-addr = <0xea00>;
+		pwms = <&pm8550_pwm_1 2 1000000>;
 		bootph-all;
 	};
 
 	led1: green {
 		bit-mask = <0x40>;
-		pwm-base-addr = <0xe900>;
+		pwms = <&pm8550_pwm_1 1 1000000>;
 		bootph-all;
 	};
 
 	led2: red {
 		bit-mask = <0x80>;
-		pwm-base-addr = <0xe800>;
+		pwm-pmic = <&pm8550>;
+		pwms = <&pm8550_pwm_1 0 1000000>;
+		bootph-all;
+	};
+};
+
+&pmk8550_sdam_21 {
+	status = "okay";
+	bootph-all;
+};
+
+&pmk8550_sdam_22 {
+	status = "okay";
+	bootph-all;
+};
+
+&pm8550_pwm_1 {
+	status = "okay";
+
+	lpg@1 {
+		qcom,lpg-chan-id = <1>;
+		qcom,ramp-step-ms = <100>;
+		qcom,ramp-low-index = <0>;
+		qcom,ramp-high-index = <19>;
+		qcom,ramp-pattern-repeat;
+		qcom,lpg-sdam-base = <0x48>;
+		bootph-all;
+	};
+
+	lpg@2 {
+		qcom,lpg-chan-id = <2>;
+		qcom,ramp-step-ms = <100>;
+		qcom,ramp-low-index = <0>;
+		qcom,ramp-high-index = <19>;
+		qcom,ramp-pattern-repeat;
+		qcom,lpg-sdam-base = <0x56>;
+		bootph-all;
+	};
+
+	lpg@3 {
+		qcom,lpg-chan-id = <3>;
+		qcom,ramp-step-ms = <100>;
+		qcom,ramp-low-index = <0>;
+		qcom,ramp-high-index = <19>;
+		qcom,ramp-pattern-repeat;
+		qcom,lpg-sdam-base = <0x64>;
 		bootph-all;
 	};
 };
