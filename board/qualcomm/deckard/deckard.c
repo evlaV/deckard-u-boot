@@ -441,7 +441,7 @@ int fastboot_set_reboot_flag(enum fastboot_reboot_reason reason)
 /* Check for vol- button - if pressed - stop autoboot */
 int misc_init_r(void)
 {
-	struct udevice     *btn, *led;
+	struct udevice     *btn, *led = NULL;
 	int                 ret;
 	enum button_state_t state;
 	char * bootedslot;
@@ -598,6 +598,10 @@ int misc_init_r(void)
 			env_set("serial#", DECKARD_DUMMY_SERIAL_NUMB);
 			env_save();
 		}
+
+		if (led)
+			led_set_state(led, LEDST_BLINK);
+
 		run_command("fastboot -l 0x880000000 -s 0x10000000 usb 0", 0);
 	}
 
