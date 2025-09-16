@@ -8,7 +8,7 @@
 
 #ccflags-y += -DDEBUG
 
-obj-$(CONFIG_DM_PWM)		+= pwm-uclass.o
+obj-$(CONFIG_$(PHASE_)DM_PWM)	+= pwm-uclass.o
 
 obj-$(CONFIG_PWM_ASPEED)	+= pwm-aspeed.o
 obj-$(CONFIG_PWM_AT91)		+= pwm-at91.o

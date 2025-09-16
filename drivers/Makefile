@@ -20,6 +20,7 @@ obj-$(CONFIG_$(PHASE_)FIRMWARE) +=firmware/
 obj-$(CONFIG_$(PHASE_)I2C) += i2c/
 obj-$(CONFIG_$(PHASE_)INPUT) += input/
 obj-$(CONFIG_$(PHASE_)LED) += led/
+obj-$(CONFIG_$(PHASE_)DM_PWM) += pwm/
 obj-$(CONFIG_$(PHASE_)MMC) += mmc/
 obj-y += mtd/
 obj-$(CONFIG_MULTIPLEXER) += mux/

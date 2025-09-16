@@ -68,12 +68,28 @@ config PWM_MTK
 	  This PWM is found on MT7622, MT7623, and MT7629. It supports a
 	  programmable period and duty cycle.
 
+config SPL_DM_PWM
+	bool "Enable PWM support in SPL"
+	depends on SPL_DM
+	help
+	  The PWM subsystem adds a small amount of overhead to the image.
+	  If this is acceptable and you have a need to use PWMs in SPL,
+	  enable this option. You will need to enable device tree in SPL
+	  for this to work.
+
 config PWM_QCOM_LPG
 	bool "Enable support for the Qualcomm LPG PWM"
 	depends on DM_PWM
 	help
 	   Enable support for Qualcomm Light Pulse Generator PWM driver
 	   which allow to control Breath given period and duty to LED
+
+config SPL_PWM_QCOM_LPG
+	bool "Enable support for the Qualcomm LPG PWM"
+	depends on SPL_DM_PWM
+	help
+	   Enable support for Qualcomm Light Pulse Generator PWM driver
+	   in SPL which allow to control Breath given period and duty to LED
 
 config PWM_ROCKCHIP
 	bool "Enable support for the Rockchip PWM"
