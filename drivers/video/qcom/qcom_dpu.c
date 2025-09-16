@@ -14,6 +14,7 @@
 #include <linux/sizes.h>
 
 #include "dpu_hw_mdss.h"
+#include "dpu_hwio.h"
 //#include "mdssreg.h"
 #include "catalog/dpu_hw_catalog.h"
 
@@ -426,6 +427,143 @@ struct qcom_dpu_priv {
 };
 
 #define MDSS_MDP_MAX_PREFILL_FETCH 24
+
+void msm_disp_snapshot_add_block(u32 len,
+		void __iomem *base_addr, const char *fmt, ...)
+{
+}
+
+struct qcom_dpu_priv *local_priv;
+struct dpu_kms {
+	void *mmio;
+} dpu_kms_inst;
+
+static void dpu_kms_mdp_snapshot(void)
+{
+	int i;
+	const struct dpu_mdss_cfg *cat = local_priv->cat;
+	struct dpu_kms *dpu_kms = &dpu_kms_inst;
+	void __iomem *base;
+
+	dpu_kms->mmio = local_priv->dpu_base;
+
+	/* dump CTL sub-blocks HW regs info */
+	for (i = 0; i < cat->ctl_count; i++)
+		msm_disp_snapshot_add_block(cat->ctl[i].len,
+				dpu_kms->mmio + cat->ctl[i].base, "%s",
+				cat->ctl[i].name);
+
+	/* dump DSPP sub-blocks HW regs info */
+	for (i = 0; i < cat->dspp_count; i++) {
+		base = dpu_kms->mmio + cat->dspp[i].base;
+		msm_disp_snapshot_add_block(cat->dspp[i].len, base,
+					    "%s", cat->dspp[i].name);
+
+		if (cat->dspp[i].sblk && cat->dspp[i].sblk->pcc.len > 0)
+			msm_disp_snapshot_add_block(cat->dspp[i].sblk->pcc.len,
+						    base + cat->dspp[i].sblk->pcc.base, "%s_%s",
+						    cat->dspp[i].name,
+						    cat->dspp[i].sblk->pcc.name);
+	}
+
+	/* dump INTF sub-blocks HW regs info */
+	for (i = 0; i < cat->intf_count; i++)
+		msm_disp_snapshot_add_block(cat->intf[i].len,
+				dpu_kms->mmio + cat->intf[i].base, "%s",
+				cat->intf[i].name);
+
+	/* dump PP sub-blocks HW regs info */
+	for (i = 0; i < cat->pingpong_count; i++) {
+		base = dpu_kms->mmio + cat->pingpong[i].base;
+		msm_disp_snapshot_add_block(cat->pingpong[i].len, base,
+					    "%s", cat->pingpong[i].name);
+
+		/* TE2 sub-block has length of 0, so will not print it */
+
+		if (cat->pingpong[i].sblk && cat->pingpong[i].sblk->dither.len > 0)
+			msm_disp_snapshot_add_block(cat->pingpong[i].sblk->dither.len,
+						    base + cat->pingpong[i].sblk->dither.base,
+						    "%s_%s", cat->pingpong[i].name,
+						    cat->pingpong[i].sblk->dither.name);
+	}
+
+	/* dump SSPP sub-blocks HW regs info */
+	for (i = 0; i < cat->sspp_count; i++) {
+		base = dpu_kms->mmio + cat->sspp[i].base;
+		msm_disp_snapshot_add_block(cat->sspp[i].len, base,
+					    "%s", cat->sspp[i].name);
+
+		if (cat->sspp[i].sblk && cat->sspp[i].sblk->scaler_blk.len > 0)
+			msm_disp_snapshot_add_block(cat->sspp[i].sblk->scaler_blk.len,
+						    base + cat->sspp[i].sblk->scaler_blk.base,
+						    "%s_%s", cat->sspp[i].name,
+						    cat->sspp[i].sblk->scaler_blk.name);
+
+		if (cat->sspp[i].sblk && cat->sspp[i].sblk->csc_blk.len > 0)
+			msm_disp_snapshot_add_block(cat->sspp[i].sblk->csc_blk.len,
+						    base + cat->sspp[i].sblk->csc_blk.base,
+						    "%s_%s", cat->sspp[i].name,
+						    cat->sspp[i].sblk->csc_blk.name);
+	}
+
+	/* dump LM sub-blocks HW regs info */
+	for (i = 0; i < cat->mixer_count; i++)
+		msm_disp_snapshot_add_block(cat->mixer[i].len,
+				dpu_kms->mmio + cat->mixer[i].base,
+				"%s", cat->mixer[i].name);
+
+	/* dump WB sub-blocks HW regs info */
+	for (i = 0; i < cat->wb_count; i++)
+		msm_disp_snapshot_add_block(cat->wb[i].len,
+				dpu_kms->mmio + cat->wb[i].base, "%s",
+				cat->wb[i].name);
+
+	if (cat->mdp[0].features & BIT(DPU_MDP_PERIPH_0_REMOVED)) {
+		msm_disp_snapshot_add_block(MDP_PERIPH_TOP0,
+				dpu_kms->mmio + cat->mdp[0].base, "top");
+		msm_disp_snapshot_add_block(cat->mdp[0].len - MDP_PERIPH_TOP0_END,
+				dpu_kms->mmio + cat->mdp[0].base + MDP_PERIPH_TOP0_END, "top_2");
+	} else {
+		msm_disp_snapshot_add_block(cat->mdp[0].len,
+				dpu_kms->mmio + cat->mdp[0].base, "top");
+	}
+
+	/* dump CWB sub-blocks HW regs info */
+	for (i = 0; i < cat->cwb_count; i++)
+		msm_disp_snapshot_add_block(cat->cwb[i].len,
+					    dpu_kms->mmio + cat->cwb[i].base, cat->cwb[i].name);
+
+	/* dump DSC sub-blocks HW regs info */
+	for (i = 0; i < cat->dsc_count; i++) {
+		base = dpu_kms->mmio + cat->dsc[i].base;
+		msm_disp_snapshot_add_block(cat->dsc[i].len, base,
+					    "%s", cat->dsc[i].name);
+
+		if (cat->dsc[i].features & BIT(DPU_DSC_HW_REV_1_2)) {
+			struct dpu_dsc_blk enc = cat->dsc[i].sblk->enc;
+			struct dpu_dsc_blk ctl = cat->dsc[i].sblk->ctl;
+
+			msm_disp_snapshot_add_block(enc.len, base + enc.base, "%s_%s",
+						    cat->dsc[i].name, enc.name);
+			msm_disp_snapshot_add_block(ctl.len, base + ctl.base, "%s_%s",
+						    cat->dsc[i].name, ctl.name);
+		}
+	}
+
+	if (cat->cdm)
+		msm_disp_snapshot_add_block(cat->cdm->len,
+					    dpu_kms->mmio + cat->cdm->base,
+					    "%s", cat->cdm->name);
+
+	for (i = 0; i < local_priv->cat->vbif_count; i++) {
+		const struct dpu_vbif_cfg *vbif = &local_priv->cat->vbif[i];
+
+		msm_disp_snapshot_add_block(vbif->len,
+					    local_priv->vbif_base + vbif->base,
+					    "%s", vbif->name);
+	}
+}
+
 
 /* call 4 times to configure rect0/rect1 of DMA0/1 on 8650 */
 static void mdss_sspp_config(struct udevice *dev, void *base, bool rect0, int x_off)
