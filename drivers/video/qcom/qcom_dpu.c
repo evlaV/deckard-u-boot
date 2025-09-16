@@ -1101,7 +1101,7 @@ printf("=========%s uc_priv->bpix %d, uc_priv 0x%x\n", __func__, uc_priv->bpix, 
 
 printf("=========%s exit ok\n", __func__);
 local_priv = priv;
-dpu_kms_mdp_snapshot();
+//dpu_kms_mdp_snapshot();
 	return 0;
 }
 
@@ -1131,6 +1131,7 @@ static const struct udevice_id dpu_ids[] = {
 static const struct video_ops dpu_ops = {
 };
 
+#if 1
 U_BOOT_DRIVER(qcom_dpu) = {
 	.name	= "qcom_dpu",
 	.id	= UCLASS_VIDEO,
@@ -1142,3 +1143,5 @@ U_BOOT_DRIVER(qcom_dpu) = {
 	.priv_auto	= sizeof(struct qcom_dpu_priv),
 	.flags  = DM_FLAG_PRE_RELOC | DM_FLAG_LEAVE_PD_ON,
 };
+#endif
+

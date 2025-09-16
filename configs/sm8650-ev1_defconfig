@@ -1407,7 +1407,8 @@ CONFIG_BUTTON_KEYBOARD=y
 #
 # IOMMU device drivers
 #
-# CONFIG_IOMMU is not set
+CONFIG_IOMMU=y
+CONFIG_QCOM_HYP_SMMU=y
 
 #
 # LED Support
