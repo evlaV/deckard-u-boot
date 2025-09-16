@@ -33,6 +33,11 @@ struct nvmem_cell {
 	size_t size;
 };
 
+struct nvmem_device {
+	struct udevice *nvmem;
+	unsigned int addr;
+};
+
 struct udevice;
 
 #if CONFIG_IS_ENABLED(NVMEM)
@@ -105,6 +110,15 @@ int nvmem_cell_get_by_index(struct udevice *dev, int index,
  */
 int nvmem_cell_get_by_name(struct udevice *dev, const char *name,
 			   struct nvmem_cell *cell);
+
+int nvmem_device_read(struct nvmem_device *nvmem, unsigned int offset, void *buf,
+	       size_t size);
+
+int nvmem_device_write(struct nvmem_device *nvmem, unsigned int offset, const void *buf,
+		size_t size);
+
+int nvmem_get_by_name(struct udevice *dev, const char *name,
+		      struct nvmem_device *nvmem_dev);
 
 #else /* CONFIG_NVMEM */
 

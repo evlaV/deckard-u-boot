@@ -40,8 +40,8 @@ int nvmem_cell_read(struct nvmem_cell *cell, void *buf, size_t size)
 
 int nvmem_cell_write(struct nvmem_cell *cell, const void *buf, size_t size)
 {
-	dev_dbg(cell->nvmem, "%s: off=%u size=%zu\n", __func__, cell->offset, size);
-	if (size != cell->size)
+	dev_dbg(cell->nvmem, "%s: off=0x%x size=%zu\n", __func__, cell->offset, size);
+	if (cell->size && size != cell->size)
 		return -EINVAL;
 
 	switch (cell->nvmem->driver->id) {
@@ -63,10 +63,30 @@ int nvmem_cell_write(struct nvmem_cell *cell, const void *buf, size_t size)
 	}
 }
 
+int nvmem_device_read(struct nvmem_device *nvmem_dev, unsigned int offset, void *buf, size_t size)
+{
+	struct nvmem_cell cell = { 0 };
+
+	cell.nvmem = nvmem_dev->nvmem;
+	cell.offset = nvmem_dev->addr + offset;
+
+	return nvmem_cell_read(&cell, buf, size);
+}
+
+int nvmem_device_write(struct nvmem_device *nvmem_dev, unsigned int offset, const void *buf, size_t size)
+{
+	struct nvmem_cell cell = { 0 };
+
+	cell.nvmem = nvmem_dev->nvmem;
+	cell.offset = nvmem_dev->addr + offset;
+
+	return nvmem_cell_write(&cell, buf, size);
+}
+
 /**
  * nvmem_get_device() - Get an nvmem device for a cell
  * @node: ofnode of the nvmem device
- * @cell: Cell to look up
+ * @nvmem: nvmem device
  *
  * Try to find a nvmem-compatible device by going through the nvmem interfaces.
  *
@@ -75,7 +95,7 @@ int nvmem_cell_write(struct nvmem_cell *cell, const void *buf, size_t size)
  * * -ENODEV if we didn't find anything
  * * A negative error if there was a problem looking up the device
  */
-static int nvmem_get_device(ofnode node, struct nvmem_cell *cell)
+static int nvmem_get_device(ofnode node, struct udevice **nvmem)
 {
 	int i, ret;
 	enum uclass_id ids[] = {
@@ -85,7 +105,7 @@ static int nvmem_get_device(ofnode node, struct nvmem_cell *cell)
 	};
 
 	for (i = 0; i < ARRAY_SIZE(ids); i++) {
-		ret = uclass_get_device_by_ofnode(ids[i], node, &cell->nvmem);
+		ret = uclass_get_device_by_ofnode(ids[i], node, nvmem);
 		if (!ret)
 			return 0;
 		if (ret != -ENODEV && ret != -EPFNOSUPPORT)
@@ -110,7 +130,7 @@ int nvmem_cell_get_by_index(struct udevice *dev, int index,
 	if (ret)
 		return ret;
 
-	ret = nvmem_get_device(ofnode_get_parent(args.node), cell);
+	ret = nvmem_get_device(ofnode_get_parent(args.node), &cell->nvmem);
 	if (ret)
 		return ret;
 
@@ -138,4 +158,33 @@ int nvmem_cell_get_by_name(struct udevice *dev, const char *name,
 		return index;
 
 	return nvmem_cell_get_by_index(dev, index, cell);
+}
+
+int nvmem_get_by_name(struct udevice *dev, const char *name,
+		      struct nvmem_device *nvmem_dev)
+{
+	struct ofnode_phandle_args args;
+	int index;
+	int ret;
+
+	index = dev_read_stringlist_search(dev, "nvmem-names", name);
+	if (index < 0)
+		return index;
+
+	ret = dev_read_phandle_with_args(dev, "nvmem", NULL, 0, index,
+					 &args);
+	if (ret)
+		return ret;
+
+	ret = nvmem_get_device(ofnode_get_parent(args.node), &nvmem_dev->nvmem);
+	if (ret)
+		return ret;
+
+	nvmem_dev->addr = ofnode_get_addr_size_index_notrans(args.node, 0, NULL);
+	if (nvmem_dev->addr == FDT_ADDR_T_NONE) {
+		dev_dbg(nvmem_dev->nvmem, "missing address or size for %s\n",
+			ofnode_get_name(args.node));
+		return -EINVAL;
+	}
+	return 0;
 }
