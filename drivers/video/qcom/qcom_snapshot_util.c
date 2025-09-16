@@ -5,9 +5,30 @@
 
 #define pr_fmt(fmt)	"[drm:%s:%d] " fmt, __func__, __LINE__
 
-#include <generated/utsrelease.h>
+#include <linux/compat.h>
+#include <linux/io.h>
+#include <linux/ioport.h>
+#include <linux/kernel.h>
+#include <linux/sizes.h>
+#include <linux/types.h>
+#include <malloc.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <vsprintf.h>
 
-#include "msm_disp_snapshot.h"
+//#include <generated/utsrelease.h>
+//#include "msm_disp_snapshot.h"
+
+#define REG_DUMP_ALIGN		16
+
+struct msm_disp_state_block {
+	char name[SZ_128];
+	//struct list_head node;
+	unsigned int size;
+	u32 *state;
+	void __iomem *base_addr;
+};
+
 
 static void msm_disp_state_dump_regs(u32 **reg, u32 aligned_len, void __iomem *base_addr)
 {
@@ -25,7 +46,7 @@ static void msm_disp_state_dump_regs(u32 **reg, u32 aligned_len, void __iomem *b
 	addr = base_addr;
 	end_addr = base_addr + aligned_len;
 
-	*reg = kvzalloc(len_padded, GFP_KERNEL);
+	*reg = (u32 *)kzalloc(len_padded, 0);
 	if (!*reg)
 		return;
 
@@ -46,14 +67,14 @@ static void msm_disp_state_dump_regs(u32 **reg, u32 aligned_len, void __iomem *b
 }
 
 static void msm_disp_state_print_regs(const u32 *dump_addr, u32 len,
-		void __iomem *base_addr, struct drm_printer *p)
+		void __iomem *base_addr)
 {
 	int i;
 	void __iomem *addr;
 	u32 num_rows;
 
 	if (!dump_addr) {
-		drm_printf(p, "Registers not stored\n");
+		printf("Registers not stored\n");
 		return;
 	}
 
@@ -61,7 +82,7 @@ static void msm_disp_state_print_regs(const u32 *dump_addr, u32 len,
 	num_rows = len / REG_DUMP_ALIGN;
 
 	for (i = 0; i < num_rows; i++) {
-		drm_printf(p, "0x%lx : %08x %08x %08x %08x\n",
+		printf("0x%lx : %08x %08x %08x %08x\n",
 				(unsigned long)(addr - base_addr),
 				dump_addr[i * 4], dump_addr[i * 4 + 1],
 				dump_addr[i * 4 + 2], dump_addr[i * 4 + 3]);
@@ -69,7 +90,8 @@ static void msm_disp_state_print_regs(const u32 *dump_addr, u32 len,
 	}
 }
 
-void msm_disp_state_print(struct msm_disp_state *state, struct drm_printer *p)
+#if 0
+void msm_disp_state_print(struct msm_disp_state *state)
 {
 	struct msm_disp_state_block *block, *tmp;
 
@@ -78,22 +100,26 @@ void msm_disp_state_print(struct msm_disp_state *state, struct drm_printer *p)
 		return;
 	}
 
+/*
 	drm_printf(p, "---\n");
 	drm_printf(p, "kernel: " UTS_RELEASE "\n");
 	drm_printf(p, "module: " KBUILD_MODNAME "\n");
 	drm_printf(p, "dpu devcoredump\n");
 	drm_printf(p, "time: %lld.%09ld\n",
 		state->time.tv_sec, state->time.tv_nsec);
+*/
 
 	list_for_each_entry_safe(block, tmp, &state->blocks, node) {
-		drm_printf(p, "====================%s================\n", block->name);
+		printf("====================%s================\n", block->name);
 		msm_disp_state_print_regs(block->state, block->size, block->base_addr, p);
 	}
 
+/*
 	drm_printf(p, "===================dpu drm state================\n");
 
 	if (state->atomic_state)
 		drm_atomic_print_new_state(state->atomic_state, p);
+*/
 }
 
 static void msm_disp_capture_atomic_state(struct msm_disp_state *disp_state)
@@ -166,29 +192,59 @@ void msm_disp_state_free(void *data)
 	kfree(disp_state);
 }
 
-void msm_disp_snapshot_add_block(struct msm_disp_state *disp_state, u32 len,
+/* for ref */
+int printf(const char *fmt, ...)
+{
+	struct printf_info info;
+
+	va_list va;
+	int ret;
+
+	info.putc = putc_normal;
+	va_start(va, fmt);
+	ret = _vprintf(&info, fmt, va);
+	va_end(va);
+
+	return ret;
+}
+
+int vsnprintf(char *buf, size_t size, const char *fmt, va_list va)
+{
+	struct printf_info info;
+
+	info.outstr = buf;
+	info.putc = putc_outstr;
+	_vprintf(&info, fmt, va);
+	*info.outstr = '\0';
+
+	return info.outstr - buf;
+}
+#endif
+
+struct msm_disp_state_block glb_blk;
+void msm_disp_snapshot_add_block(u32 len,
 		void __iomem *base_addr, const char *fmt, ...)
 {
-	struct msm_disp_state_block *new_blk;
-	struct va_format vaf;
+	struct msm_disp_state_block *new_blk = &glb_blk;
+	//struct va_format vaf;
 	va_list va;
-
-	new_blk = kzalloc(sizeof(struct msm_disp_state_block), GFP_KERNEL);
-	if (!new_blk)
-		return;
 
 	va_start(va, fmt);
 
+/*
 	vaf.fmt = fmt;
 	vaf.va = &va;
 	snprintf(new_blk->name, sizeof(new_blk->name), "%pV", &vaf);
-
+*/
+	vsnprintf(new_blk->name, sizeof(new_blk->name), fmt, va);
 	va_end(va);
 
-	INIT_LIST_HEAD(&new_blk->node);
 	new_blk->size = ALIGN(len, REG_DUMP_ALIGN);
 	new_blk->base_addr = base_addr;
 
 	msm_disp_state_dump_regs(&new_blk->state, new_blk->size, base_addr);
-	list_add_tail(&new_blk->node, &disp_state->blocks);
+
+	printf("====================%s================\n", new_blk->name);
+	msm_disp_state_print_regs(new_blk->state, new_blk->size, new_blk->base_addr);
+	free(new_blk->state);
 }

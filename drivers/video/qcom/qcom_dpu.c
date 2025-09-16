@@ -428,11 +428,6 @@ struct qcom_dpu_priv {
 
 #define MDSS_MDP_MAX_PREFILL_FETCH 24
 
-void msm_disp_snapshot_add_block(u32 len,
-		void __iomem *base_addr, const char *fmt, ...)
-{
-}
-
 struct qcom_dpu_priv *local_priv;
 struct dpu_kms {
 	void *mmio;
@@ -1112,6 +1107,8 @@ printf("=========%s uc_priv->bpix %d, uc_priv 0x%x\n", __func__, uc_priv->bpix, 
 	//video_bridge_set_backlight(bridge1, 100);
 
 printf("=========%s exit ok\n", __func__);
+local_priv = priv;
+dpu_kms_mdp_snapshot();
 	return 0;
 }
 
