@@ -67,6 +67,21 @@
 			status = "disabled";
 		};
 
+		pm8550_pwm_1: pwms@e800 {
+			compatible = "qcom,pwm-lpg";
+			reg = <0xe800>;
+			#pwm-cells = <2>;
+			reg-names = "lpg-base";
+			qcom,num-lpg-channels = <3>;
+			nvmem = <&pmk8550_sdam_21 &pmk8550_sdam_22>;
+			nvmem-names = "lpg_chan_sdam", "lut_sdam";
+			qcom,lut-sdam-base = <0x45>;
+			qcom,lut-patterns = <0 10 20 30 40 50 60 70 80 90 100
+					     90 80 70 60 50 40 30 20 10 0>;
+			qcom,tick-duration-us = <7800>;
+			bootph-all;
+		};
+
 		pm8550_pwm: pwm {
 			compatible = "qcom,pm8550-pwm", "qcom,pm8350c-pwm";
 			#pwm-cells = <2>;
