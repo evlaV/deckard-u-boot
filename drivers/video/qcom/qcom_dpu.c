@@ -610,10 +610,10 @@ static void mdss_sspp_config(struct udevice *dev, void *base, bool rect0, int x_
 	writel(0x8700438, base + SSPP_OUT_SIZE);
 	writel(0, base + SSPP_OUT_XY);
 	//writel(0x236FF, base + SSPP_SRC_FORMAT);
-	writel(0x236FF /*| BIT(22)*/, base + SSPP_SRC_FORMAT);
+	writel(0x236FF | BIT(22), base + SSPP_SRC_FORMAT);
 	writel(0x3020001, base + SSPP_SRC_UNPACK_PATTERN);
 	writel(0x80000000, base + SSPP_SRC_OP_MODE);
-	//writel(0xff00ff, base + SSPP_SRC_CONSTANT_COLOR);
+	writel(0xff33ff, base + SSPP_SRC_CONSTANT_COLOR);
 	writel(0x9, base + SSPP_CDP_CNTL);
 
 	writel(plat->base, base + SSPP_SRC1_ADDR);
@@ -621,10 +621,10 @@ static void mdss_sspp_config(struct udevice *dev, void *base, bool rect0, int x_
 	writel(0x8700438, base + SSPP_OUT_SIZE_REC1);
 	writel(0x438, base + SSPP_OUT_XY_REC1);
 	//writel(0x236FF, base + SSPP_SRC_FORMAT_REC1);
-	writel(0x236FF /*| BIT(22)*/, base + SSPP_SRC_FORMAT_REC1);
+	writel(0x236FF | BIT(22), base + SSPP_SRC_FORMAT_REC1);
 	writel(0x3020001, base + SSPP_SRC_UNPACK_PATTERN_REC1);
 	writel(0x80000000, base + SSPP_SRC_OP_MODE_REC1);
-	//writel(0x445544, base + SSPP_SRC_CONSTANT_COLOR_REC1);
+	writel(0x445544, base + SSPP_SRC_CONSTANT_COLOR_REC1);
 	writel(0x9, base + SSPP_CDP_CNTL_REC1);
 
 	writel(0x87, base + SSPP_FETCH_CONFIG);

@@ -142,7 +142,15 @@ static void dsi_set_tx_power_mode(int mode, struct qcom_mipi_dsi *dsi)
 	dsi_write(dsi->base + REG_DSI_CMD_DMA_CTRL, data);
 }
 
-//#define REG_DSI_VBIF_CTRL	(0x01CC - 4)
+static inline void dsi_flush_cache(uintptr_t addr, int length)
+{
+	uintptr_t start_addr = (uintptr_t)addr & ~(CONFIG_SYS_CACHELINE_SIZE - 1);
+	uintptr_t end_addr = ALIGN((uintptr_t)addr + length, CONFIG_SYS_CACHELINE_SIZE);
+
+	flush_dcache_range((unsigned long)start_addr, (unsigned long)end_addr);
+}
+
+#define REG_DSI_VBIF_CTRL	(0x01CC - 4)
 static int dsi_cmds2buf_tx(struct mipi_dsi_host *host,
 			   const struct mipi_dsi_msg *msg)
 {
@@ -216,31 +224,35 @@ static int dsi_cmds2buf_tx(struct mipi_dsi_host *host,
 	if (packet.size < len)
 		memset(data + packet.size, 0xff, len - packet.size);
 
-#if 0
-	//dsi_write(base + REG_DSI_CTRL, 0x177);
-	//dsi_write(base + REG_DSI_INTR_CTRL, 0xAA20AA02);
+#if 1
+	dsi_flush_cache(dsi->tx_buf, len);
+
+	dsi_write(base + REG_DSI_TEST_PATTERN_GEN_CTRL, 0);
+
+	dsi_write(base + REG_DSI_DMA_BASE, dsi->tx_buf);
+	dsi_write(base + REG_DSI_DMA_LEN, len);
+	dsi_write(base + REG_DSI_VBIF_CTRL, 0x7);
+
 	// Unmask
 	dsi_write(base + REG_DSI_INTR_CTRL, DSI_IRQ_MASK_CMD_DMA_DONE);
 	// Clear
 	dsi_write(base + REG_DSI_INTR_CTRL, DSI_IRQ_MASK_CMD_DMA_DONE | DSI_IRQ_CMD_DMA_DONE);
-	dsi_write(base + REG_DSI_DMA_BASE, dsi->tx_buf);
-	dsi_write(base + REG_DSI_DMA_LEN, len);
-	//dsi_write(base + REG_DSI_VBIF_CTRL, 0x7);
-	dsi_write(base + REG_DSI_TRIG_DMA, 0x1);
-	//dsi_write(base + REG_DSI_INTR_CTRL, 0xAA20AA03);
-	printf("Started DMA, waiting for DONE\n");
-	//printf("DSI reading irq off at 0x%u\n", base + REG_DSI_INTR_CTRL);
 
-	val = dsi_read(base + REG_DSI_INTR_CTRL);
+
+	dsi_write(base + REG_DSI_TRIG_DMA, 0x1);
+
+	val = dsi_read(base + REG_DSI_INTR_CTRL) & DSI_IRQ_CMD_DMA_DONE;
 	count = 0;
-	while (!(val & (DSI_IRQ_CMD_DMA_DONE))) {
-		if (count > 100) {
+	ret = 0;
+	while (!val) {
+		if (count > 0xffff) {
 			printf("DSI CMD: count :%d dma failed\n", count);
-			printf("DSI CMD: irq value = %x\n", dsi_read(base + REG_DSI_INTR_CTRL));
-			goto out_err;
+			//printf("DSI CMD: irq value = %x\n", dsi_read(base + REG_DSI_INTR_CTRL));
+			ret = -EIO;
+			break;
 		}
-		udelay(1000);
-		val = dsi_read(base + REG_DSI_INTR_CTRL);
+		udelay(10);
+		val = dsi_read(base + REG_DSI_INTR_CTRL) & DSI_IRQ_CMD_DMA_DONE;
 		count++;
 	}
 
@@ -249,15 +261,7 @@ static int dsi_cmds2buf_tx(struct mipi_dsi_host *host,
 	// Mask
 	dsi_write(base + REG_DSI_INTR_CTRL, 0);
 
-	return packet.size;
-
-out_err:
-	// Clear
-	dsi_write(base + REG_DSI_INTR_CTRL, DSI_IRQ_MASK_CMD_DMA_DONE | DSI_IRQ_CMD_DMA_DONE);
-	// Mask
-	dsi_write(base + REG_DSI_INTR_CTRL, 0);
-
-	return -EIO;
+	return ret < 0 ? ret : packet.size;
 #elif 0
 	// Unmask
 	dsi_write(base + REG_DSI_INTR_CTRL, DSI_IRQ_MASK_CMD_DMA_DONE);

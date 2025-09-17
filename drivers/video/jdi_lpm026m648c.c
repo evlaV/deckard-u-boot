@@ -25,20 +25,36 @@
 #define LPM02648C_DISP_SET3_2			0xcd
 #define LPM02648C_DISP_SET4			0xcf
 #define LPM02648C_DISP_SET5			0xec
+#define LPM02648C_DISP_SET6			0xef
 #define LPM02648C_TE_GPIO_CTL			0xbe
 #define LPM02648C_PPS_SET			0xe6
+#define LPM02648C_MFG_INFO			0xbf
+#define 	VENDOR_OFFSET			27
+#define 	VCOM120_OFFSET			13
+#define 	VCOM90_OFFSET			15
 
 // Brightness settings
 #define BRIGHTNESS_DEFAULT 256
-#define BRIGHTNESS_MAX_120 380
+#define BRIGHTNESS_MAX_120 367
 
+// Panel settings
 #define VFP		700
-#define VID_VS_DELAY	400
-#define VBP		800
-#define GPO1_TES1	233
-#define GPO1_TEW1	17
+#define VID_VS_DELAY	1112
+#define VBP		23
+#define GPO1_TES1_144_SHARP	150
+#define GPO1_TES1_120_SHARP	100
+#define GPO1_TES1_144_BOE	3435
 #define GPO1_TES1_120_BOE	4068
+#define GPO1_TES1_144_JDI	GPO1_TES1_144_BOE
+#define GPO1_TES1_120_JDI	GPO1_TES1_120_BOE
+#define GPO1_TES1_90		5446
+#define GPO1_TEW1			0
 #define RTN 59
+
+// Panel Vendor types
+#define VENDOR_SHARP	'S'
+#define VENDOR_JDI		'J'
+#define VENDOR_BOE		'B'
 
 /*
  * Camera capture signal on panel tester is GPIO2 routed out TE pin
@@ -48,7 +64,6 @@
 #define CAMERA_TRIGGER_OFFSET 50
 
 #define PANEL_MFG_INFO_NUM_BYTES 40
-#define RESET_NUM 2
 
 enum {
 	REGULATOR_VDDA = 0,
@@ -173,14 +188,17 @@ static u8 pps_cmd[] = {
 	0x70, 0x00, 0x30, 0x02, 0x1c, 0x02, 0x1c, 0x02, 0x00, 
 	0x02, 0x0e, 0x00, 0x20, 0x04, 0xa6, 0x00, 0x07, 0x00, 
 	0x0c, 0x02, 0x0b, 0x02, 0x1f, 0x18, 0x00, 0x10, 0xf0, 
+
 	0x03, 0x0c, 0x20, 0x00, 0x06, 0x0b, 0x0b, 0x33, 0x0e, 
 	0x1c, 0x2a, 0x38, 0x46, 0x54, 0x62, 0x69, 0x70, 0x77, 
 	0x79, 0x7b, 0x7d, 0x7e, 0x01, 0x02, 0x01, 0x00, 0x09, 
-	0x40, 0x09, 0xbe, 0x19, 0xfc, 0x19, 0xfa, 0x19, 0xf8, 
+	0x40, 0x09, 0xbe, 0x19, 0xfc, 0x19, 0xfa, 0x19, 0xf8,
+
 	0x1a, 0x38, 0x1a, 0x78, 0x1a, 0xb6, 0x2a, 0xf6, 0x2b, 
 	0x34, 0x2b, 0x74, 0x3b, 0x74, 0x6b, 0xf4, 0x00, 0x00, 
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
 	0x00, 0x00, 
@@ -252,7 +270,8 @@ static void dsi_write_panel_on(struct lpm026m648c_priv *priv)
 			0x00, 0x00,
 			BE16(GPO1_TES1_120_BOE-CAMERA_TRIGGER_OFFSET),
 			BE16(CAMERA_TRIGGER_OFFSET * 2 + GPO1_TEW1));
-	lpm026m648c_dsi_write_seq(priv, LPM02648C_DISP_SET3, 0x0B, 0x70, 0x08,
+	lpm026m648c_dsi_write_seq(priv, LPM02648C_DISP_SET3, 
+			0x0B, 0x70, 0x08,
 			0x48, 0x00, 0x00, 0x13, 0x01, 0xFF, 0x00, 0x01, 0x09,
 			0x16, 0x16, 0x00, 0x00, 0x00, 0x01, 0x40, 0x0C, 0x00,
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00,
@@ -358,19 +377,26 @@ static void get_panel_info(struct lpm026m648c_priv *priv)
 	panel_info_show(priv);
 }
 
-static int set_brightness(struct lpm026m648c_priv *priv, u16 brightness,
-			  u16 pulse_offset_rows)
+static int set_brightness(struct lpm026m648c_priv *priv, u16 brightness)
 {
-	u16 gpo1_tes1 = pulse_offset_rows;
+	u16 gpo1_tes1 = GPO1_TES1_120_BOE;
 	u16 gpo1_tew1;
 	u16 cam_trig_start = 0, cam_trig_width = 0;
+	u16 votal_120 = 2160 + 404 + 1 + 20;
+	u16 votal_90 = 2160 + 404 + 1 + 20;
 
 	gpo1_tew1 = brightness > BRIGHTNESS_MAX_120 ?
 		    BRIGHTNESS_MAX_120 : brightness;
 
+	// Scale brightness based on current mode
+	gpo1_tew1 = gpo1_tew1 * votal_90 / votal_120;
+	//gpo1_tes1 = GPO1_TES1_90;
+
+#if 0
 	priv->device->mode_flags &= ~MIPI_DSI_MODE_LPM;
 	if (priv->is_dual_panel)
 		priv->device2->mode_flags &= ~MIPI_DSI_MODE_LPM;
+#endif
 
 	if (brightness) {
 		cam_trig_start = (gpo1_tes1 > CAMERA_TRIGGER_OFFSET) ?
@@ -383,9 +409,12 @@ static int set_brightness(struct lpm026m648c_priv *priv, u16 brightness,
 				  0x00, 0x00, BE16(cam_trig_start),
 				  BE16(cam_trig_width));
 
+#if 0
 	priv->device->mode_flags |= MIPI_DSI_MODE_LPM;
 	if (priv->is_dual_panel)
 		priv->device2->mode_flags |= MIPI_DSI_MODE_LPM;
+#endif
+
 	return 0;
 }
 
@@ -452,7 +481,7 @@ printf("======= %s set device %p device2 %p\n", __func__, plat->device, plat->de
 	dsi_write_panel_on(priv);
 	get_panel_info(priv);
 
-	//set_brightness(priv, 200, GPO1_TES1);
+	set_brightness(priv, BRIGHTNESS_DEFAULT);
 
 	return 0;
 }
@@ -463,7 +492,7 @@ static int lpm026m648c_panel_set_backlight(struct udevice *dev, int percent)
 
 	printf("%s: %s percent %d\n", dev->name, __func__, percent);
 	
-	return set_brightness(priv, percent, GPO1_TES1);
+	return 0; //set_brightness(priv, percent, GPO1_TES1);
 }
 
 static int lpm026m648c_panel_get_display_timing(struct udevice *dev,
