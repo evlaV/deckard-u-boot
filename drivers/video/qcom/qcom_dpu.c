@@ -609,27 +609,28 @@ static void mdss_sspp_config(struct udevice *dev, void *base, bool rect0, int x_
 	writel(0, base + SSPP_SRC_XY); /* 0x438 * N */
 	writel(0x8700438, base + SSPP_OUT_SIZE);
 	writel(0, base + SSPP_OUT_XY);
-	//writel(0x236FF, base + SSPP_SRC_FORMAT);
-	writel(0x236FF | BIT(22), base + SSPP_SRC_FORMAT);
+	writel(0x236FF, base + SSPP_SRC_FORMAT);
+	//writel(0x236FF | BIT(22), base + SSPP_SRC_FORMAT);
 	writel(0x3020001, base + SSPP_SRC_UNPACK_PATTERN);
 	writel(0x80000000, base + SSPP_SRC_OP_MODE);
-	writel(0xff33ff, base + SSPP_SRC_CONSTANT_COLOR);
+	//writel(0xff33ff, base + SSPP_SRC_CONSTANT_COLOR);
 	writel(0x9, base + SSPP_CDP_CNTL);
 
 	writel(plat->base, base + SSPP_SRC1_ADDR);
 	writel(x_off, base + SSPP_SRC_XY_REC1); /* 0x438 * N */
 	writel(0x8700438, base + SSPP_OUT_SIZE_REC1);
 	writel(0x438, base + SSPP_OUT_XY_REC1);
-	//writel(0x236FF, base + SSPP_SRC_FORMAT_REC1);
-	writel(0x236FF | BIT(22), base + SSPP_SRC_FORMAT_REC1);
+	writel(0x236FF, base + SSPP_SRC_FORMAT_REC1);
+	//writel(0x236FF | BIT(22), base + SSPP_SRC_FORMAT_REC1);
 	writel(0x3020001, base + SSPP_SRC_UNPACK_PATTERN_REC1);
 	writel(0x80000000, base + SSPP_SRC_OP_MODE_REC1);
-	writel(0x445544, base + SSPP_SRC_CONSTANT_COLOR_REC1);
+	//writel(0x445544, base + SSPP_SRC_CONSTANT_COLOR_REC1);
 	writel(0x9, base + SSPP_CDP_CNTL_REC1);
 
 	writel(0x87, base + SSPP_FETCH_CONFIG);
 
-	writel(0x22002200, base + SSPP_SRC_YSTRIDE0);
+	//writel(0x22002200, base + SSPP_SRC_YSTRIDE0);
+	writel(0x21c021c0, base + SSPP_SRC_YSTRIDE0);
 	writel(0, base + SSPP_SRC_YSTRIDE1);
 	writel(0x8700438, base + SSPP_SRC_SIZE);
 	writel(0x8700438, base + SSPP_SRC_SIZE_REC1);
@@ -1059,6 +1060,7 @@ printf("=========%s line %d\n", __func__, __LINE__);
 	uc_priv->bpix = VIDEO_BPP32;
 	uc_priv->xsize = timings.hactive.typ;
 	uc_priv->ysize = timings.vactive.typ;
+	//uc_priv->line_length = 8704;
 	uc_priv->rot = 0;
 //printf("=========%s uc_priv->bpix %d\n", __func__, VIDEO_BPP32);
 printf("=========%s uc_priv->bpix %d, uc_priv 0x%x\n", __func__, uc_priv->bpix, uc_priv);
