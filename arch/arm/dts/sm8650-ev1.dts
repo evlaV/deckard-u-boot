@@ -89,6 +89,12 @@
 		regulator-always-on;
 	};
 
+	BACKLIGHT_PREBOOST: backlight_preboost {
+		compatible = "ti,tps61377";
+		en-gpio = <&tlmm 79 GPIO_ACTIVE_HIGH>;
+		pgood-gpio = <&tlmm 69 GPIO_ACTIVE_HIGH>;
+	};
+
 	memory@a0000000 {
 		bootph-all;
 	};
@@ -993,18 +999,11 @@
 		compatible = "jdi,lpm026m648c";
 		dual-panel;
 
-		reset1-gpios = <&pm8550_gpios 3 GPIO_ACTIVE_HIGH>;
-		//reset2-gpios = <&pm8550_gpios 11 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&pm8550_gpios 3 GPIO_ACTIVE_HIGH>;
 
-		left-supply = <&nex100011ub1>;
-		//right-supply = <&nex100011ub0>;
-
-		backlight-left-supply = <&mpq3367b>;
-		//backlight-right-supply = <&mpq3367a>;
-
-		preboost-gpios = <&tlmm 79 GPIO_ACTIVE_HIGH>;
-		preboost-good-gpios = <&tlmm 69 GPIO_ACTIVE_HIGH>;
-
+		vdd-supply = <&nex100011ub1>;
+		backlight-supply = <&mpq3367b>;
+		preboost-supply = <&BACKLIGHT_PREBOOST>;
 		vdda-supply = <&vreg_l12b_1p8>;
 
 		pinctrl-0 = <&display_resx1>;
@@ -1017,13 +1016,6 @@
 				reg = <0>;
 				panel0_in: endpoint {
 					remote-endpoint = <&mdss_dsi0_out>;
-				};
-			};
-
-			port@1 {
-				reg = <1>;
-				panel1_in: endpoint {
-					remote-endpoint = <&mdss_dsi1_out>;
 				};
 			};
 		};

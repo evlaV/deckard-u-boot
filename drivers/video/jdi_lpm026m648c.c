@@ -67,19 +67,17 @@
 
 enum {
 	REGULATOR_VDDA = 0,
-	REGULATOR_BACKLIGHT_LEFT,
-	//REGULATOR_BACKLIGHT_RIGHT,
-	REGULATOR_LEFT,
-	//REGULATOR_RIGHT,
+	REGULATOR_PREBOOST,
+	REGULATOR_BACKLIGHT,
+	REGULATOR_VDD,
 	REGULATOR_COUNT,
 };
 
 static const char *regulator_names[REGULATOR_COUNT] = {
 	"vdda-supply",
-	"backlight-left-supply",
-	//"backlight-right-supply",
-	"left-supply",
-	//"right-supply",
+	"preboost-supply",
+	"backlight-supply",
+	"vdd-supply",
 };
 
 struct lpm026m648c_priv {
@@ -87,21 +85,11 @@ struct lpm026m648c_priv {
 
 	struct udevice *regs[REGULATOR_COUNT];
 
-	struct gpio_desc preboost_gpio;
-	struct gpio_desc preboost_good_gpio;
-
-	struct gpio_desc reset1_gpio;
-	struct gpio_desc reset2_gpio;
+	struct gpio_desc reset_gpio;
 
 	struct mipi_dsi_device *device;
-	struct mipi_dsi_device *device2;
-	u8 panel_mfg_info[PANEL_MFG_INFO_NUM_BYTES*2];
+	u8 panel_mfg_info[PANEL_MFG_INFO_NUM_BYTES];
 	u8 panel_read_data[512];
-
-/*
-	struct drm_dsc_config dsc_cfg;
-*/
-	bool is_dual_panel;
 };
 
 /* 90Hz */
@@ -121,65 +109,15 @@ static const struct display_timing default_timing = {
 	do {										\
 		u8 d[] = {cmd, seq};							\
 		mipi_dsi_dcs_write_buffer(priv->device, d, ARRAY_SIZE(d));		\
-		if (priv->is_dual_panel) {						\
-			mipi_dsi_dcs_write_buffer(priv->device2, d, ARRAY_SIZE(d));	\
-		}									\
 	} while (0)
 
 #define lpm026m648c_dsi_write_buffer(priv, d)						\
 	do {										\
 		mipi_dsi_dcs_write_buffer(priv->device, d, ARRAY_SIZE(d));		\
-		if (priv->is_dual_panel) {						\
-			mipi_dsi_dcs_write_buffer(priv->device2, d, ARRAY_SIZE(d));	\
-		}									\
 	} while (0)
 
 #define BE16(x) (x)>>8, (x)&0xff
 #define LE16(x) (x)&0xff, (x)>>8
-
-#if 0
-static int dsi_populate_dsc_params(struct lpm026m648c_priv *priv)
-{
-	int ret;
-	struct drm_dsc_config *dsc = &priv->dsc_cfg;
-
-	dsc->simple_422 = 0;
-	dsc->convert_rgb = 1;
-	dsc->vbr_enable = 0;
-
-	drm_dsc_set_const_params(dsc);
-	drm_dsc_set_rc_buf_thresh(dsc);
-
-	/* handle only bpp = bpc = 8, pre-SCR panels */
-	ret = drm_dsc_setup_rc_params(dsc, DRM_DSC_1_1_PRE_SCR);
-	if (ret < 0)
-		dev_err(priv->dev, "failed to setup dsc params\n");
-
-	dsc->initial_scale_value = drm_dsc_initial_scale_value(dsc);
-	dsc->line_buf_depth = dsc->bits_per_component + 1;
-
-	return drm_dsc_compute_rc_parameters(dsc);
-}
-
-static int lpm026m648c_init_dsc_config(struct lpm026m648c_priv *priv)
-{
-	priv->dsc_cfg = (struct drm_dsc_config) {
-		.dsc_version_major = 0x1,
-		.dsc_version_minor = 0x2,
-		.slice_height = 48,
-		.slice_width = 540,
-		.slice_count = 4,
-		.bits_per_component = 8,
-		.bits_per_pixel = 8 << 4,
-		.block_pred_enable = true,
-
-		.pic_width = 2160,
-		.pic_height = 2160,
-	};
-
-	return dsi_populate_dsc_params(priv);
-}
-#endif
 
 /* dump from Linux kernel */
 static u8 pps_cmd[] = {
@@ -202,62 +140,10 @@ static u8 pps_cmd[] = {
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
 	0x00, 0x00, 
-
-#if 0
-	0x12, 0x00, 0x00, 0x89, 0x30, 0x80, 0x08, 0x70,
-	0x08, 0x70, 0x00, 0x30, 0x02, 0x1c, 0x02, 0x1c,
-	0x02, 0x00, 0x02, 0x0e, 0x00, 0x20, 0x04, 0xa6,
-	0x00, 0x07, 0x00, 0x0c, 0x02, 0x0b, 0x02, 0x1f,
-	0x18, 0x00, 0x10, 0xf0, 0x03, 0x0c, 0x20, 0x00,
-	0x06, 0x0b, 0x0b, 0x33, 0x0e, 0x1c, 0x2a, 0x38,
-	0x46, 0x54, 0x62, 0x69, 0x70, 0x77, 0x79, 0x7b,
-	0x7d, 0x7e, 0x01, 0x02, 0x01, 0x00, 0x09, 0x40,
-	0x09, 0xbe, 0x19, 0xfc, 0x19, 0xfa, 0x19, 0xf8,
-	0x1a, 0x38, 0x1a, 0x78, 0x1a, 0xb6, 0x2a, 0xf6,
-	0x2b, 0x34, 0x2b, 0x74, 0x3b, 0x74, 0x6b, 0xf4,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-#endif
 };
 
 static void dsi_write_panel_on(struct lpm026m648c_priv *priv)
 {
-/*
-	u8 pps_cmd[1 + sizeof(struct drm_dsc_picture_parameter_set)];
-
-	drm_dsc_pps_payload_pack((void *)&pps_cmd[1], &priv->dsc_cfg);
-	pps_cmd[0] = LPM02648C_PPS_SET;
-*/
-
-#if 0
-	lpm026m648c_dsi_write_seq(priv, LPM02648C_MF_CMD_ACCESS_PROTECT, 0x04);
-	lpm026m648c_dsi_write_seq(priv, LPM02648C_SEQ_CTL, 0x00);
-	lpm026m648c_dsi_write_seq(priv, LPM02648C_DSI_CTL,
-				  0x20, 0x6b, 0x80, 0x06, 0x33, 0x8a, 0x00,
-				  0x1a, 0x7a);
-	lpm026m648c_dsi_write_seq(priv, LPM02648C_DISP_MODE, 0x54, 0x00, 0x00,
-				  0x00);
-	lpm026m648c_dsi_write_seq(priv, LPM02648C_GEN_OUTPIN_SET,
-				  BE16(GPO1_TES1), BE16(GPO1_TEW1), 0x00, 0x00,
-				  0x00, 0x00,
-				  BE16(GPO1_TES1-CAMERA_TRIGGER_OFFSET),
-				  BE16(CAMERA_TRIGGER_OFFSET * 2 + GPO1_TEW1));
-	lpm026m648c_dsi_write_seq(priv, LPM02648C_DISP_SET2, 0x1e);
-	lpm026m648c_dsi_write_seq(priv, LPM02648C_DISP_SET3, 0x70, 0x08, 0xd0,
-				  0x02, 0x21, 0x6f, 0x08, 0x5a, 0x00, 0x00,
-				  0x00, 0x00, 0x00, 0x00, 0x00, 0x00);
-	lpm026m648c_dsi_write_seq(priv, LPM02648C_DISP_SET1, 0x42, 0x86,
-				  LE16(VBP), 0x08, 0x70, BE16(VFP));
-	lpm026m648c_dsi_write_seq(priv, LPM02648C_DISP_SET3_2, 0x00);
-	lpm026m648c_dsi_write_seq(priv, LPM02648C_DISP_SET4, 0x8b, 0x00, 0x80,
-				  0x46, 0x61, 0x00, 0x8b);
-	lpm026m648c_dsi_write_seq(priv, LPM02648C_DISP_SET5, BE16(VID_VS_DELAY),
-				  0x00, 0x00, 0x00);
-	lpm026m648c_dsi_write_seq(priv, LPM02648C_TE_GPIO_CTL, 0x00, 0x6A, 0x02);
-#else
 	lpm026m648c_dsi_write_seq(priv, LPM02648C_MF_CMD_ACCESS_PROTECT, 0x00);
 	lpm026m648c_dsi_write_seq(priv, LPM02648C_SEQ_CTL, 0x00);
 	lpm026m648c_dsi_write_seq(priv, LPM02648C_DSI_CTL,
@@ -288,23 +174,9 @@ static void dsi_write_panel_on(struct lpm026m648c_priv *priv)
 			0x00, 0x00, 0x00);
 	lpm026m648c_dsi_write_seq(priv, LPM02648C_TE_GPIO_CTL, 0x00, 0x6A, 0x02);
 
-#endif
-	//lpm026m648c_dsi_write_seq(priv, 0xde, 0x01);
 	/* TODO: add hard coded dsc cmd for now, use dsc helper later */
 	lpm026m648c_dsi_write_buffer(priv, pps_cmd);
-#if 0
-	lpm026m648c_dsi_write_seq(priv, MIPI_DCS_GET_COMPRESSION_MODE, 0x01);
-	lpm026m648c_dsi_write_seq(priv, MIPI_DCS_SET_TEAR_SCANLINE, 0x00, 0x00);
 	lpm026m648c_dsi_write_seq(priv, MIPI_DCS_SET_TEAR_ON, 0x00);
-	lpm026m648c_dsi_write_seq(priv, MIPI_DCS_SET_ADDRESS_MODE, 0x00);
-	lpm026m648c_dsi_write_seq(priv, MIPI_DCS_SET_PIXEL_FORMAT, 0x77);
-	lpm026m648c_dsi_write_seq(priv, LPM02648C_SEQ_CTL, 0x80);
-	mdelay(200);
-	lpm026m648c_dsi_write_seq(priv, LPM02648C_MF_CMD_ACCESS_PROTECT, 0x03);
-	mdelay(200);
-#else
-	lpm026m648c_dsi_write_seq(priv, MIPI_DCS_SET_TEAR_ON, 0x00);
-#endif
 	lpm026m648c_dsi_write_seq(priv, MIPI_DCS_EXIT_SLEEP_MODE);
 	mdelay(170);
 	lpm026m648c_dsi_write_seq(priv, MIPI_DCS_SET_DISPLAY_ON);
@@ -312,67 +184,55 @@ static void dsi_write_panel_on(struct lpm026m648c_priv *priv)
 
 static int panel_info_show(struct lpm026m648c_priv *priv)
 {
-	unsigned int id, offset, panel_num;
+	unsigned int offset = 0;
 	u8 *info = priv->panel_mfg_info;
 
-	panel_num = priv->is_dual_panel ? 2 : 1;
-	for (id = 0; id < panel_num; id++) {
-		offset =  id*PANEL_MFG_INFO_NUM_BYTES;
+	printf("****** Panel info:\n");
+	printf(" SupplierID  %x\n",
+			info[1+offset] << 8 | info[0+offset]);
+	printf(" DriverICProductCode  %x\n",
+			info[3+offset] << 8 | info[2+offset]);
+	printf(" brightnessDataW255  %x\n", info[5+offset]);
+	printf(" colorPointofWhiteX  %x\n",  info[6+offset]);
+	printf(" colorPointofWhiteY  %x\n",  info[7+offset]);
+	printf(" contrast  %x\n",  info[8+offset]);
+	printf(" gamma  %x\n",  info[9+offset]);
+	printf(" brightnessDataW32  %x\n",  info[12+offset]);
+	printf(" vcom1  %x\n",  info[13+offset]);
+	printf(" vcom2  %x\n",  info[14+offset]);
+	printf(" colorPointofRedX  %x\n",  info[21+offset]);
+	printf(" colorPointofRedY  %x\n",  info[22+offset]);
+	printf(" colorPointofGreenX  %x\n",  info[23+offset]);
+	printf(" colorPointofGreenY  %x\n",  info[24+offset]);
+	printf(" colorPointofBlueX  %x\n",  info[25+offset]);
+	printf(" colorPointofBlueY  %x\n",  info[26+offset]);
+	printf(" format  %x\n",  info[27+offset]);
+	printf(" vendor1  %x\n",  info[28+offset]);
+	printf(" vendor2  %x\n",  info[29+offset]);
+	printf(" mdlBaseCode1  %x\n",  info[30+offset]);
+	printf(" mdlBaseCode2  %x\n",  info[31+offset]);
+	printf(" mdlBaseCode3  %x\n",  info[32+offset]);
+	printf(" id  %x\n",  info[33+offset]);
+	printf(" serialization3  %x\n",  info[34+offset]);
+	printf(" serialization2  %x\n",  info[35+offset]);
+	printf(" serialization1  %x\n",  info[36+offset]);
+	printf(" year  %x\n",  info[37+offset]);
+	printf(" week  %x\n",  info[38+offset]);
+	printf(" day  %x\n",  info[39+offset]);
 
-		printf("****** JDI Panel info for %s panel:\n",
-			   id ? "right" : "left");
-		printf(" SupplierID  %x\n",
-			   info[1+offset] << 8 | info[0+offset]);
-		printf(" DriverICProductCode  %x\n",
-			   info[3+offset] << 8 | info[2+offset]);
-		printf(" brightnessDataW255  %x\n", info[5+offset]);
-		printf(" colorPointofWhiteX  %x\n",  info[6+offset]);
-		printf(" colorPointofWhiteY  %x\n",  info[7+offset]);
-		printf(" contrast  %x\n",  info[8+offset]);
-		printf(" gamma  %x\n",  info[9+offset]);
-		printf(" brightnessDataW32  %x\n",  info[12+offset]);
-		printf(" vcom1  %x\n",  info[13+offset]);
-		printf(" vcom2  %x\n",  info[14+offset]);
-		printf(" colorPointofRedX  %x\n",  info[21+offset]);
-		printf(" colorPointofRedY  %x\n",  info[22+offset]);
-		printf(" colorPointofGreenX  %x\n",  info[23+offset]);
-		printf(" colorPointofGreenY  %x\n",  info[24+offset]);
-		printf(" colorPointofBlueX  %x\n",  info[25+offset]);
-		printf(" colorPointofBlueY  %x\n",  info[26+offset]);
-		printf(" format  %x\n",  info[27+offset]);
-		printf(" vendor1  %x\n",  info[28+offset]);
-		printf(" vendor2  %x\n",  info[29+offset]);
-		printf(" mdlBaseCode1  %x\n",  info[30+offset]);
-		printf(" mdlBaseCode2  %x\n",  info[31+offset]);
-		printf(" mdlBaseCode3  %x\n",  info[32+offset]);
-		printf(" id  %x\n",  info[33+offset]);
-		printf(" serialization3  %x\n",  info[34+offset]);
-		printf(" serialization2  %x\n",  info[35+offset]);
-		printf(" serialization1  %x\n",  info[36+offset]);
-		printf(" year  %x\n",  info[37+offset]);
-		printf(" week  %x\n",  info[38+offset]);
-		printf(" day  %x\n",  info[39+offset]);
-	}
 	return 0;
 }
 
 static void get_panel_info(struct lpm026m648c_priv *priv)
 {
-	struct mipi_dsi_device *device;
-	unsigned int id, offset, panel_num;
-	int ret;
 	u8 panel_info_regs[] = { 0xBF };
 	u8 *info = priv->panel_mfg_info;
+	int ret;
 
-	panel_num = priv->is_dual_panel ? 2 : 1;
-	for (id = 0; id < panel_num; id++) {
-		offset =  id*PANEL_MFG_INFO_NUM_BYTES;
-		device = id ? priv->device2 : priv->device;
-		ret = mipi_dsi_generic_read(device, panel_info_regs, 1,
-				&info[offset], PANEL_MFG_INFO_NUM_BYTES);
-		if (ret < 0)
-			dev_err(priv->dev, "failed to read panel%d info\n", id);
-	}
+	ret = mipi_dsi_generic_read(priv->device, panel_info_regs, 1,
+			info, PANEL_MFG_INFO_NUM_BYTES);
+	if (ret < 0)
+		dev_err(priv->dev, "failed to read panel info\n");
 
 	panel_info_show(priv);
 }
@@ -394,8 +254,6 @@ static int set_brightness(struct lpm026m648c_priv *priv, u16 brightness)
 
 #if 0
 	priv->device->mode_flags &= ~MIPI_DSI_MODE_LPM;
-	if (priv->is_dual_panel)
-		priv->device2->mode_flags &= ~MIPI_DSI_MODE_LPM;
 #endif
 
 	if (brightness) {
@@ -411,31 +269,7 @@ static int set_brightness(struct lpm026m648c_priv *priv, u16 brightness)
 
 #if 0
 	priv->device->mode_flags |= MIPI_DSI_MODE_LPM;
-	if (priv->is_dual_panel)
-		priv->device2->mode_flags |= MIPI_DSI_MODE_LPM;
 #endif
-
-	return 0;
-}
-
-static int lpm026m648c_enable_preboost(struct udevice *dev, struct lpm026m648c_priv *priv)
-{
-	int cnt = 1000;
-	int ret;
-
-	dm_gpio_set_value(&priv->preboost_gpio, 1);
-
-	/* Wait until GPIO goes to 1 */
-	do {
-		ret = dm_gpio_get_value(&priv->preboost_good_gpio);
-		if (ret > 0)
-			break;
-
-		udelay(1000);
-	} while (cnt--);
-
-	if (!cnt)
-		dev_err(dev, "preboost-good failed.\n");
 
 	return 0;
 }
@@ -447,12 +281,11 @@ static int lpm026m648c_panel_enable_backlight(struct udevice *dev)
 
 	printf("%s: %s\n", dev->name, __func__);
 
-	lpm026m648c_enable_preboost(dev, priv);
+	regulator_set_enable_if_allowed(priv->regs[REGULATOR_PREBOOST], true);
 
 	mdelay(70);
 
-	regulator_set_enable_if_allowed(priv->regs[REGULATOR_BACKLIGHT_LEFT], true);
-	//regulator_set_enable_if_allowed(priv->regs[REGULATOR_BACKLIGHT_RIGHT], true);
+	regulator_set_enable_if_allowed(priv->regs[REGULATOR_BACKLIGHT], true);
 
 	mdelay(2);
 
@@ -460,23 +293,19 @@ static int lpm026m648c_panel_enable_backlight(struct udevice *dev)
 
 	mdelay(2);
 
-	regulator_set_enable_if_allowed(priv->regs[REGULATOR_LEFT], true);
-	//regulator_set_enable_if_allowed(priv->regs[REGULATOR_RIGHT], true);
+	regulator_set_enable_if_allowed(priv->regs[REGULATOR_VDD], true);
 
 	mdelay(2);
 	
-	dm_gpio_set_value(&priv->reset1_gpio, 1);
-	//dm_gpio_set_value(&priv->reset2_gpio, 1);
+	dm_gpio_set_value(&priv->reset_gpio, 1);
 
 	mdelay(20);
 
-printf("======= %s priv->is_dual_panel %d plat->device %p\n", __func__, priv->is_dual_panel, plat->device);
+printf("======= %s plat->device %p\n", __func__, plat->device);
 	plat->device->mode_flags |= MIPI_DSI_MODE_LPM;
-	//plat->device2->mode_flags |= MIPI_DSI_MODE_LPM;
 
 printf("======= %s set device %p device2 %p\n", __func__, plat->device, plat->device2);
 	priv->device = plat->device;
-	//priv->device2 = plat->device2;
 
 	dsi_write_panel_on(priv);
 	get_panel_info(priv);
@@ -509,35 +338,10 @@ static int lpm026m648c_panel_of_to_plat(struct udevice *dev)
 
 printf("============%s called\n", __func__);
 
-	priv->is_dual_panel = false; //ofnode_read_bool(dev_ofnode(dev), "dual-panel");
-
-	ret = gpio_request_by_name(dev, "reset1-gpios", 0,
-				   &priv->reset1_gpio, GPIOD_IS_OUT);
+	ret = gpio_request_by_name(dev, "reset-gpios", 0,
+				   &priv->reset_gpio, GPIOD_IS_OUT);
 	if (ret) {
-		dev_err(dev, "could not decode reset1-gpios (%d)\n", ret);
-		return ret;
-	}
-
-#if 0
-	ret = gpio_request_by_name(dev, "reset2-gpios", 0,
-				   &priv->reset2_gpio, GPIOD_IS_OUT);
-	if (ret) {
-		dev_err(dev, "could not decode reset2-gpios (%d)\n", ret);
-		return ret;
-	}
-#endif
-
-	ret = gpio_request_by_name(dev, "preboost-gpios", 0,
-				   &priv->preboost_gpio, GPIOD_IS_OUT);
-	if (ret) {
-		dev_err(dev, "could not decode preboost-gpios (%d)\n", ret);
-		return ret;
-	}
-
-	ret = gpio_request_by_name(dev, "preboost-good-gpios", 0,
-				   &priv->preboost_good_gpio, GPIOD_IS_IN);
-	if (ret) {
-		dev_err(dev, "could not decode preboost-good-gpios (%d)\n", ret);
+		dev_err(dev, "could not decode reset-gpios (%d)\n", ret);
 		return ret;
 	}
 
@@ -568,9 +372,7 @@ printf("============%s called\n", __func__);
 
 	priv->dev = dev;
 
-	dm_gpio_set_value(&priv->preboost_gpio, 0);
-	//dm_gpio_set_value(&priv->reset2_gpio, 0);
-	dm_gpio_set_value(&priv->reset1_gpio, 0);
+	dm_gpio_set_value(&priv->reset_gpio, 0);
 
 printf("============%s ret 0\n", __func__);
 	return 0;
