@@ -990,11 +990,8 @@
 	status = "okay";
 
 	vdda-supply = <&vreg_l3i_1p2>;
-	qcom,dual-dsi-mode;
-	qcom,master-dsi;
-	dual-dsi-index = < 0 >;
 
-	panel: panel@0 {
+	panel0: panel@0 {
 		reg = <0>;
 		compatible = "jdi,lpm026m648c";
 		dual-panel;
@@ -1037,13 +1034,32 @@
 	vdda-supply = <&vreg_l3i_1p2>;
 	status = "okay";
 
-	qcom,dual-dsi-mode;
-	dual-dsi-index = < 1 >;
+	panel1: panel@1 {
+		reg = <0>;
+		compatible = "jdi,lpm026m648c";
+		dual-panel;
 
-/*
-	assigned-clocks = <&dispcc DISP_CC_MDSS_BYTE1_CLK_SRC>, <&dispcc DISP_CC_MDSS_PCLK1_CLK_SRC>;
-	assigned-clock-parents = <&mdss_dsi0_phy 0>, <&mdss_dsi0_phy 1>;
-*/
+		reset-gpios = <&pm8550_gpios 11 GPIO_ACTIVE_HIGH>;
+
+		vdd-supply = <&nex100011ub0>;
+		backlight-supply = <&mpq3367a>;
+		preboost-supply = <&BACKLIGHT_PREBOOST>;
+		vdda-supply = <&vreg_l12b_1p8>;
+
+		pinctrl-0 = <&display_resx2>;
+		pinctrl-names = "default";
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			port@0 {
+				reg = <0>;
+				panel1_in: endpoint {
+					remote-endpoint = <&mdss_dsi1_out>;
+				};
+			};
+		};
+	};
 };
 
 &mdss_dsi1_out {

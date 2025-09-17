@@ -213,7 +213,7 @@ static int qcom_clk_parent_enable(struct clk *clk)
 	if (!clk_valid(parent))
 		return 0;
 
-	debug("Enabling parent clock %s:%lu for %s:%lu\n", parent->dev->name, parent->id, clk->dev->name, clk->id);
+	printf("Enabling parent clock %s:%lu for %s:%lu\n", parent->dev->name, parent->id, clk->dev->name, clk->id);
 
 	return clk_enable(parent);
 }
@@ -226,7 +226,7 @@ static ulong qcom_clk_parent_set_rate(struct clk *clk, ulong rate)
 	if (!clk_valid(parent))
 		return 0;
 
-	debug("Setting rate %lu for parent clock %s:%lu for %s:%lu\n", rate, parent->dev->name, parent->id, clk->dev->name, clk->id);
+	printf("Setting rate %lu for parent clock %s:%lu for %s:%lu\n", rate, parent->dev->name, parent->id, clk->dev->name, clk->id);
 
 	return clk_set_rate(parent, clk->rate);
 }
@@ -439,7 +439,7 @@ static int msm_clk_set_parent(struct clk *clk, struct clk *parent)
 {
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
 
-	debug("Setting parent clock %s:%lu for %s:%lu\n", parent->dev->name, parent->id, clk->dev->name, clk->id);
+	printf("Setting parent clock %s:%lu for %s:%lu\n", parent->dev->name, parent->id, clk->dev->name, clk->id);
 
 	memcpy(&priv->parents_map[clk->id], parent, sizeof(struct clk));
 

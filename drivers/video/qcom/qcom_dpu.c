@@ -8,7 +8,6 @@
 #include <dm/device.h>
 #include <dm/device_compat.h>
 #include <dm/read.h>
-#include <panel.h>
 #include <video.h>
 #include <video_bridge.h>
 #include <linux/sizes.h>
@@ -856,7 +855,6 @@ int qcom_dpu_probe(struct udevice *dev)
 	struct clk_bulk bulk;
 	struct udevice *bridge0 = NULL;
 	struct udevice *bridge1 = NULL;
-	struct udevice *panel = NULL;
 	struct display_timing timings;
 	const struct device_node *np;
 	ulong rate;
@@ -883,67 +881,31 @@ printf("=========%s enter, FLG_RELOC? %lu\n", __func__, gd->flags & GD_FLG_RELOC
 		return ret;
 	}
 
-	if (IS_ENABLED(CONFIG_VIDEO_BRIDGE)) {
-		ret = uclass_get_device(UCLASS_VIDEO_BRIDGE, 0, &bridge0);
-		if (ret) {
-			dev_dbg(dev,
-				"No video bridge, err %d\n", ret);
-			return ret;
-		}
-
-		if (bridge0) {
-			ret = video_bridge_attach(bridge0);
-			if (ret) {
-				dev_err(dev, "fail to attach bridge\n");
-				return ret;
-			}
-		}
-
-#if 0
-		np = ofnode_to_np(dev_ofnode(bridge0));
-		if (of_find_property(np, "qcom,dual-dsi-mode", &len)) {
-			dev_dbg(dev, "Dual DSI is found. To attach it\n");
-			ret = uclass_get_device(UCLASS_VIDEO_BRIDGE, 1, &bridge1);
-			if (ret) {
-				dev_dbg(dev,
-					"No video bridge, err %d\n", ret);
-				return ret;
-			}
-
-			if (bridge1) {
-				ret = video_bridge_attach(bridge1);
-				if (ret) {
-					dev_err(dev, "fail to attach bridge\n");
-					return ret;
-				}
-			}
-		}
-#endif
-	} else {
-		dev_dbg(dev,
-			"ERROR: Please enable video bridge in defconfig\n");
-	}
-
-printf("=========%s line %d\n", __func__, __LINE__);
-	ret = uclass_get_device(UCLASS_PANEL, 0, &panel);
+	ret = uclass_get_device(UCLASS_VIDEO_BRIDGE, 0, &bridge0);
 	if (ret) {
-		dev_err(dev, "panel device error %d\n", ret);
+		dev_dbg(dev,
+				"No video bridge, err %d\n", ret);
 		return ret;
 	}
 
-#if 0
-printf("=========%s line %d\n", __func__, __LINE__);
-	ret = panel_get_display_timing(panel, &timings);
-printf("=========%s line %d get panel timing ret %d\n", __func__, __LINE__, ret);
+	ret = video_bridge_attach(bridge0);
 	if (ret) {
-		ret = ofnode_decode_display_timing(dev_ofnode(panel),
-						   0, &timings);
+		dev_err(dev, "fail to attach bridge\n");
+		return ret;
+	}
+
+	ret = uclass_get_device(UCLASS_VIDEO_BRIDGE, 1, &bridge1);
+	if (ret) {
+		dev_dbg(dev, "No video bridge1, err %d\n", ret);
+	}
+
+	if (bridge1) {
+		ret = video_bridge_attach(bridge1);
 		if (ret) {
-			dev_err(dev, "decode display timing error %d\n", ret);
-			return ret;
+			dev_err(dev, "fail to attach bridge1\n");
+			//return ret;
 		}
 	}
-#endif
 
 	video_bridge_get_display_timing(bridge0, &timings);
 	if (ret) {
@@ -953,12 +915,17 @@ printf("=========%s line %d get panel timing ret %d\n", __func__, __LINE__, ret)
 
 	ret = video_bridge_set_backlight(bridge0, 100);
 	if (ret) {
-		dev_err(dev, "panel %s enable backlight error %d\n",
-			panel->name, ret);
+		dev_err(dev, "bridge enable backlight error %d\n", ret);
 		return ret;
 	}
 
-	//video_bridge_set_backlight(bridge1, 100);
+	if (bridge1) {
+		ret = video_bridge_set_backlight(bridge1, 100);
+		if (ret) {
+			dev_err(dev, "bridge1 enable backlight error %d\n", ret);
+			//return ret;
+		}
+	}
 
 printf("=========%s line %d\n", __func__, __LINE__);
 	dev_dbg(dev, "Set pixel clock req %d hz get %ld hz\n",
@@ -1004,7 +971,30 @@ printf("=========%s uc_priv->bpix %d, xsize %d ysize %d\n", __func__, uc_priv->b
 	mdp_ctl_flush(priv->dpu_base, priv->cat, CTL_0, SSPP_DMA0, true,
 		      LM_0, LM_1);
 
+	if (bridge1) {
+		mdss_intf_setup(priv->dpu_base, priv->cat, INTF_2, PINGPONG_2);
+
+		mdp_dsc_setup(priv->dpu_base, priv->cat, DSC_2, PINGPONG_2);
+		mdp_dsc_setup(priv->dpu_base, priv->cat, DSC_3, PINGPONG_3);
+
+		mdp_setup_stage_rec1(priv->dpu_base, priv->cat, CTL_1, LM_2, SSPP_DMA1, 2160, 2160, false);
+		mdp_setup_stage_rec1(priv->dpu_base, priv->cat, CTL_1, LM_3, SSPP_DMA1, 2160, 2160, true);
+
+		mdss_sspp_config_rec1(priv->dpu_base, priv->cat, uc_plat->base,
+				2160 * 4, SSPP_DMA1, 2160, 2160, 0);
+
+		mdss_intf_fetch_start_config(priv->dpu_base, priv->cat,
+				CTL_1, INTF_2, DSC_2, DSC_3);
+
+		//writel(FLD_INTF_2_SW_TRG_MUX, priv->dpu_base + SPLIT_DISPLAY_LOWER_PIPE_CTRL);
+
+		mdp_ctl_flush(priv->dpu_base, priv->cat, CTL_1, SSPP_DMA1, true,
+				LM_2, LM_3);
+	}
+
 	mdp_intf_enable(priv->dpu_base, priv->cat, INTF_1);
+	if (bridge1)
+		mdp_intf_enable(priv->dpu_base, priv->cat, INTF_2);
 
 
 printf("=========%s exit ok\n", __func__);

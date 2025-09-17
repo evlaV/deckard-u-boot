@@ -884,7 +884,7 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		 * are both 121574874 in kernel test.
 		 * Force with the table to re-parent to dsi phy.
 		 */
-		clk_rcg_set_rate(priv->base, 0x8124, 1, CFG_DSI0_PHY_PLL_OUT_BYTECLK);
+		clk_rcg_set_rate(priv->base, 0x8124, 1, CFG_DSI1_PHY_PLL_OUT_BYTECLK);
 		return rate;
 
 #if 0
@@ -929,7 +929,7 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		 * is 851024121 in 90Hz case, that's m/n = 7/2. Also 7/2 for 80/120Hz
 		 * The divider shall happen inside DSI PLL, ignore it here. */
 		/* TODO: this clk use clk_pixel_ops in Linux, not mnd */
-		clk_rcg_set_rate_mnd(priv->base, 0x80c0, 1, 1, 1, CFG_DSI0_PHY_PLL_OUT_DSICLK, 8);
+		clk_rcg_set_rate_mnd(priv->base, 0x80c0, 1, 1, 1, CFG_DSI1_PHY_PLL_OUT_DSICLK, 8);
 		return rate;
 
 	case DISP_CC_MDSS_ESC0_CLK:
@@ -960,8 +960,10 @@ static int sm8650_disp_cc_parent_enable(struct clk *clk, ulong id)
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
 	struct clk *parent = &priv->parents_map[id];
 
-	if (clk_valid(parent))
+
+	if (clk_valid(parent)) {
 		clk_enable(parent);
+	}
 }
 
 static bool *enabled_clocks;

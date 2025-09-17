@@ -123,7 +123,7 @@ int msm_dsi_cphy_timing_calc_v4(struct msm_dsi_dphy_timing *timing,
 	tmax = 64;
 	timing->shared_timings.clk_pre = linear_inter(tmax, tmin, 20, 0, false);
 
-	printf("%d, %d, %d, %d, %d",
+	printf("%s: %d, %d, %d, %d, %d\n", __func__,
 		timing->shared_timings.clk_pre, timing->shared_timings.clk_post,
 		timing->clk_prepare, timing->hs_exit, timing->hs_rqst);
 
@@ -576,7 +576,7 @@ static int _dsi_pll_7nm_vco_prepare(struct dsi_pll_7nm *pll_7nm)
 	int rc;
 
 	if (pll_7nm->vco_desired_rate && pll_7nm->vco_current_rate) {
-		debug("--------- PLL(%d) already enabled\n", pll_7nm->plat->id);
+		printf("--------- PLL(%d) already enabled\n", pll_7nm->plat->id);
 		return 0;
 	}
 
@@ -652,11 +652,8 @@ static int dsi_pll_7nm_vco_prepare(struct clk *clk)
 {
 	struct dsi_pll_7nm *pll_7nm = dev_get_priv(clk->dev);
 
-	if (pll_7nm->plat->id == 1)
-		return -ENOSYS;
-
 	if (!pll_7nm->plat->phy_powered_on) {
-		debug("%s PLL(%d) PHY is not powered on\n", __func__, pll_7nm->plat->id);
+		printf("%s PLL(%d) PHY is not powered on\n", __func__, pll_7nm->plat->id);
 		return -ENOSYS;
 	}
 
@@ -674,7 +671,7 @@ static int dsi_pll_7nm_vco_unprepare(struct clk *clk)
 	struct dsi_pll_7nm *pll_7nm = dev_get_priv(clk->dev);
 
 	if (!pll_7nm->plat->phy_powered_on) {
-		debug("%s PLL(%d) PHY is not powered on\n", __func__, pll_7nm->plat->id);
+		printf("%s PLL(%d) PHY is not powered on\n", __func__, pll_7nm->plat->id);
 		return -ENOSYS;
 	}
 
@@ -727,7 +724,7 @@ static int dsi_7nm_set_usecase(struct msm_dsi_phy *phy)
 	void __iomem *base = phy->plat->base;
 	u32 data = 0x0;	/* internal PLL */
 
-	printf("DSI PLL%d", phy->plat->id);
+	printf("dsi_7nm_set_usecase DSI PLL%d\n", phy->plat->id);
 
 	switch (phy->plat->usecase) {
 	case MSM_DSI_PHY_STANDALONE:
