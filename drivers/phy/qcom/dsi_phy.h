@@ -115,6 +115,7 @@ struct msm_dsi_phy_plat {
 	const struct msm_dsi_phy_cfg *cfg;
 	enum msm_dsi_phy_usecase usecase;
 	bool cphy_mode;
+	bool phy_powered_on;
 };
 
 struct dsi_pll_7nm {
