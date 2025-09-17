@@ -945,21 +945,20 @@ printf("=========%s line %d get panel timing ret %d\n", __func__, __LINE__, ret)
 	}
 #endif
 
-	video_bridge_get_display_timing(bridge0,  &timings);
+	video_bridge_get_display_timing(bridge0, &timings);
 	if (ret) {
 		dev_err(dev, "fail to get display timings\n");
 		return ret;
 	}
 
-	/* Call panel api directly instead of via bridge, as we have 2 bridges.
-	 * But we cannot call dsi_host_enable in bridge backlight api this way.
-	 * Then we need to enable dsi in dsi_host_init */
-	ret = panel_enable_backlight(panel);
+	ret = video_bridge_set_backlight(bridge0, 100);
 	if (ret) {
 		dev_err(dev, "panel %s enable backlight error %d\n",
 			panel->name, ret);
 		return ret;
 	}
+
+	//video_bridge_set_backlight(bridge1, 100);
 
 printf("=========%s line %d\n", __func__, __LINE__);
 	dev_dbg(dev, "Set pixel clock req %d hz get %ld hz\n",
@@ -1007,12 +1006,10 @@ printf("=========%s uc_priv->bpix %d, xsize %d ysize %d\n", __func__, uc_priv->b
 
 	mdp_intf_enable(priv->dpu_base, priv->cat, INTF_1);
 
-	//video_bridge_set_backlight(bridge0, 100);
-	//video_bridge_set_backlight(bridge1, 100);
 
 printf("=========%s exit ok\n", __func__);
 local_priv = priv;
-dpu_kms_mdp_snapshot();
+//dpu_kms_mdp_snapshot();
 	return 0;
 }
 

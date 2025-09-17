@@ -75,6 +75,7 @@ struct qcom_dsi_priv {
 	struct udevice *vdd_reg;
 	struct udevice *dsi_host;
 	struct clk_bulk bulk;
+	struct display_timing timings;
 };
 
 /* for dsi host */
@@ -89,12 +90,6 @@ struct qcom_mipi_dsi {
 	phys_addr_t tx_buf;
 	u8 *rx_buf;
 };
-
-static struct qcom_dsi_priv_global {
-	struct qcom_dsi_priv *priv0;
-	struct qcom_dsi_priv *priv1;
-	bool dual_dsi;
-} qcom_dsi_global;
 
 static inline struct qcom_mipi_dsi *host_to_dsi(struct mipi_dsi_host *host)
 {
@@ -159,11 +154,9 @@ static int dsi_cmds2buf_tx(struct mipi_dsi_host *host,
 	int ret, len, count = 0;
 	void __iomem *base = dsi->base;
 	u8 *data;
-	unsigned int i, fifo_writes;
 	u32 val = 0;
 
 	val = dsi_read(base + REG_DSI_STATUS0);
-	printf("======%s tx %lu rx %lu with base %p status %x\n", __func__, msg->tx_len, msg->rx_len, dsi->base, val);
 	if (val & DSI_STATUS0_VIDEO_MODE_ENGINE_BUSY) {
 		while (count < 1000) {
 			val = dsi_read(base + REG_DSI_STATUS0) ;
@@ -179,23 +172,6 @@ static int dsi_cmds2buf_tx(struct mipi_dsi_host *host,
 			return ret;
 		}
 	}
-#if 0
-	count = 0;
-	if (val & DSI_STATUS0_CMD_MODE_DMA_BUSY) {
-		while (count < 1000) {
-			val = dsi_read(base + REG_DSI_STATUS0) ;
-
-			if (!(val & DSI_STATUS0_CMD_MODE_DMA_BUSY)) 
-				break;
-
-			++count;
-		}
-
-		if (val & DSI_STATUS0_CMD_MODE_DMA_BUSY) {
-			dev_err(host->dev, "failed to wait for CMD DMA engine busy (%x)\n", val);
-		}
-	}
-#endif
 
 	ret = mipi_dsi_create_packet(&packet, msg);
 	if (ret) {
@@ -224,7 +200,6 @@ static int dsi_cmds2buf_tx(struct mipi_dsi_host *host,
 	if (packet.size < len)
 		memset(data + packet.size, 0xff, len - packet.size);
 
-#if 1
 	dsi_flush_cache(dsi->tx_buf, len);
 
 	dsi_write(base + REG_DSI_TEST_PATTERN_GEN_CTRL, 0);
@@ -262,112 +237,6 @@ static int dsi_cmds2buf_tx(struct mipi_dsi_host *host,
 	dsi_write(base + REG_DSI_INTR_CTRL, 0);
 
 	return ret < 0 ? ret : packet.size;
-#elif 0
-	// Unmask
-	dsi_write(base + REG_DSI_INTR_CTRL, DSI_IRQ_MASK_CMD_DMA_DONE);
-	// Clear
-	dsi_write(base + REG_DSI_INTR_CTRL, DSI_IRQ_MASK_CMD_DMA_DONE | DSI_IRQ_CMD_DMA_DONE);
-
-	dsi_write(base + REG_DSI_DMA_LEN, len);
-	dsi_write(base + REG_DSI_TEST_PATTERN_GEN_CTRL, DSI_TEST_PATTERN_GEN_CTRL_CMD_DMA_TPG_EN |
-							DSI_TEST_PATTERN_GEN_CTRL_TPG_DMA_FIFO_MODE |
-							DSI_TEST_PATTERN_GEN_CTRL_CMD_DMA_PATTERN_SEL(3));
-
-	data32 = (u32 *)data;
-	fifo_writes = 0;
-	for (i = 0; i < ((len+3)/4) ; ++i) {
-		printf("CMD[%d]=%x\n", i, data32[i]);
-		dsi_write(base + REG_DSI_TEST_PATTERN_GEN_CMD_DMA_INIT_VAL, data32[i]);
-		fifo_writes++;
-	}
-
-	if ((fifo_writes % 2) == 0)
-		dsi_write(base + REG_DSI_TEST_PATTERN_GEN_CMD_DMA_INIT_VAL, 0);
-
-	dsi_read(base + REG_DSI_DMA_LEN);
-	dsi_write(base + REG_DSI_TRIG_DMA, 0x1);
-
-	printf("Started DMA, waiting for DONE\n");
-	//printf("DSI reading irq off at 0x%u\n", base + REG_DSI_INTR_CTRL);
-
-	val = dsi_read(base + REG_DSI_INTR_CTRL);
-	count = 0;
-	while (!(val & (DSI_IRQ_CMD_DMA_DONE))) {
-		if (count > 100) {
-			printf("DSI CMD: count :%d dma failed\n", count);
-			printf("DSI CMD: irq value = %x\n", dsi_read(base + REG_DSI_INTR_CTRL));
-			goto out_err;
-		}
-		udelay(1000);
-		val = dsi_read(base + REG_DSI_INTR_CTRL);
-		count++;
-	}
-
-	// Clear
-	dsi_write(base + REG_DSI_INTR_CTRL, DSI_IRQ_MASK_CMD_DMA_DONE | DSI_IRQ_CMD_DMA_DONE);
-	// Mask
-	dsi_write(base + REG_DSI_INTR_CTRL, 0);
-
-	return packet.size;
-
-out_err:
-	// Clear
-	dsi_write(base + REG_DSI_INTR_CTRL, DSI_IRQ_MASK_CMD_DMA_DONE | DSI_IRQ_CMD_DMA_DONE);
-	// Mask
-	dsi_write(base + REG_DSI_INTR_CTRL, 0);
-
-	return -EIO;
-#else
-	dsi_write(base + REG_DSI_TEST_PATTERN_GEN_CTRL, DSI_TEST_PATTERN_GEN_CTRL_CMD_DMA_TPG_EN |
-							DSI_TEST_PATTERN_GEN_CTRL_TPG_DMA_FIFO_MODE |
-							DSI_TEST_PATTERN_GEN_CTRL_CMD_DMA_PATTERN_SEL(CMD_DMA_CUSTOM_PATTERN_DMA_FIFO));
-
-	for (i = 0; i < len ; i+=4) {
-		//printf("CMD[%d]=%x\n", i, *(u32 *)(&data[i]));
-		dsi_write(base + REG_DSI_TEST_PATTERN_GEN_CMD_DMA_INIT_VAL, *(u32 *)(&data[i]));
-	}
-
-	if ((len % 8) != 0)
-		dsi_write(base + REG_DSI_TEST_PATTERN_GEN_CMD_DMA_INIT_VAL, 0);
-
-	dsi_write(base + REG_DSI_DMA_LEN, len);
-
-	// Unmask
-	dsi_write(base + REG_DSI_INTR_CTRL, DSI_IRQ_MASK_CMD_DMA_DONE);
-	// Clear
-	dsi_write(base + REG_DSI_INTR_CTRL, DSI_IRQ_MASK_CMD_DMA_DONE | DSI_IRQ_CMD_DMA_DONE);
-
-	dsi_write(base + REG_DSI_TRIG_DMA, 0x1);
-
-	//printf("Started DMA for len %d, waiting for DONE\n", len);
-
-	val = dsi_read(base + REG_DSI_INTR_CTRL) & DSI_IRQ_CMD_DMA_DONE;
-	count = 0;
-	ret = 0;
-	while (!val) {
-		if (count > 0xffff) {
-			printf("DSI CMD: count :%d dma failed\n", count);
-			//printf("DSI CMD: irq value = %x\n", dsi_read(base + REG_DSI_INTR_CTRL));
-			ret = -EIO;
-			break;
-		}
-		udelay(10);
-		val = dsi_read(base + REG_DSI_INTR_CTRL) & DSI_IRQ_CMD_DMA_DONE;
-		count++;
-	}
-
-	// Clear
-	dsi_write(base + REG_DSI_INTR_CTRL, DSI_IRQ_MASK_CMD_DMA_DONE | DSI_IRQ_CMD_DMA_DONE);
-	// Mask
-	dsi_write(base + REG_DSI_INTR_CTRL, 0);
-
-	dsi_write(base + REG_DSI_TPG_DMA_FIFO_RESET, 1);
-	dsi_write(base + REG_DSI_TPG_DMA_FIFO_RESET, 0);
-
-	dsi_write(base + REG_DSI_TEST_PATTERN_GEN_CTRL, 0);
-
-	return ret < 0 ? ret : packet.size;
-#endif
 }
 
 static int dsi_cmd_dma_rx(struct qcom_mipi_dsi *dsi,
@@ -612,7 +481,6 @@ static ssize_t qcom_mipi_dsi_host_transfer(struct mipi_dsi_host *host,
 {
 	struct qcom_mipi_dsi *dsi = host_to_dsi(host);
 	int ret;
-	u32 status;
 	u32 save_ctrl;
 
 	/* from msm_dsi_host_xfer_prepare() */
@@ -677,8 +545,6 @@ static void qcom_mipi_dsi_init_ctrl(void __iomem *base)
 	dsi_write(base + REG_DSI_TRIG_CTRL, 0x80001004);
 	dsi_write(base + REG_DSI_CLKOUT_TIMING_CTRL, 0x1A26);
 	dsi_write(base + REG_DSI_EOT_PACKET_CTRL, 0x1);
-	//dsi_write(base + REG_DSI_ERR_INT_MASK0, 0x13FF3FE0);
-	//dsi_write(base + REG_DSI_ERR_INT_MASK0, 0);
 	dsi_write(base + REG_DSI_INTR_CTRL, 0);
 	dsi_write(base + REG_DSI_CLK_CTRL, 0x23F);
 	dsi_write(base + REG_DSI_LANE_SWAP_CTRL, 0x0);
@@ -689,13 +555,6 @@ static void qcom_mipi_dsi_init_ctrl(void __iomem *base)
 	dsi_write(base + REG_DSI_CPHY_MODE_CTRL, 0x1);
 }
 
-static void qcom_mipi_dsi_host_enable(void __iomem *base)
-{
-	printf("DSI host controller enable\n");
-
-	/* NOP */
-}
-
 static int qcom_mipi_dsi_init(struct udevice *dev,
 			    struct mipi_dsi_device *device,
 			    struct display_timing *timings,
@@ -703,12 +562,10 @@ static int qcom_mipi_dsi_init(struct udevice *dev,
 			    const struct mipi_dsi_phy_ops *phy_ops)
 {
 	struct qcom_mipi_dsi *dsi = dev_get_priv(dev);
-	//const struct mipi_dsi_phy_ops *phy_ops = dsi->phy_ops;
-	struct clk clk;
 	int ret;
 
 	dev_dbg(dev, "Initialize DSI host\n");
-	if (!phy_ops->init || !phy_ops->get_lane_mbps) {
+	if (!phy_ops->init) {
 		dev_err(device->dev, "Phy not properly configured\n");
 		return -ENODEV;
 	}
@@ -726,28 +583,6 @@ static int qcom_mipi_dsi_init(struct udevice *dev,
 		return -EINVAL;
 	}
 	dsi->base += 4;
-	/* offset in xml is wrong, we should shift it by 4 */
-	//dsi->base -= 4;
-
-#if 0
-	ret = clk_get_by_name(device->dev, "px_clk", &clk);
-	if (ret) {
-		dev_err(device->dev, "peripheral clock get error %d\n", ret);
-		return ret;
-	}
-
-	/*  get the pixel clock set by the clock framework */
-	timings->pixelclock.typ = clk_get_rate(&clk);
-
-	qcom_mipi_dsi_bridge_set(dsi, timings);
-#endif
-
-/*
-	ret = phy_ops->get_lane_mbps(device, timings, device->lanes,
-				     device->format, &dsi->lane_mbps);
-	if (ret)
-		dev_warn(dsi->dsi_host.dev, "Phy get_lane_mbps() failed\n");
-*/
 
 	dsi->tx_buf =  lmb_alloc_base(0x1000, 0x1000, 0xf0000000, LMB_NONE);
 	dsi->rx_buf =  malloc(0x1000);
@@ -766,13 +601,7 @@ static int qcom_mipi_dsi_init(struct udevice *dev,
 
 static int qcom_mipi_dsi_enable(struct udevice *dev)
 {
-	struct qcom_mipi_dsi *dsi = dev_get_priv(dev);
-
-	dev_dbg(dev, "Enable DSI host\n");
-	/* Switch to video mode for panel-bridge enable & panel enable */
-	//qcom_mipi_dsi_set_mode(dsi, MIPI_DSI_MODE_VIDEO);
-
-	qcom_mipi_dsi_host_enable(dsi->base);
+	/* NOP */
 
 	return 0;
 }
@@ -796,16 +625,11 @@ U_BOOT_DRIVER(qcom_mipi_dsi) = {
 	.priv_auto		= sizeof(struct qcom_mipi_dsi),
 };
 
-
-
-
-
 static int dsi_phy_init(void *priv_data)
 {
 	struct mipi_dsi_device *device = priv_data;
 	struct udevice *dev = device->dev;
 	struct qcom_dsi_priv *dsi = dev_get_priv(dev);
-	//u32 val;
 	int ret;
 
 	dev_dbg(dev, "Initialize DSI physical layer\n");
@@ -819,111 +643,10 @@ static int dsi_phy_init(void *priv_data)
 		dev_dbg(dev, "fail to power on phy\n");
 	}
 
-#if 0
-	/* Enable the regulator */
-	dsi_set(dsi, DSI_WRPCR, WRPCR_REGEN | WRPCR_BGREN);
-	ret = readl_poll_timeout(dsi->base + DSI_WISR, val, val & WISR_RRS,
-				 TIMEOUT_US);
-	if (ret) {
-		dev_dbg(dev, "!TIMEOUT! waiting REGU\n");
-		return ret;
-	}
-
-	/* Enable the DSI PLL & wait for its lock */
-	dsi_set(dsi, DSI_WRPCR, WRPCR_PLLEN);
-	ret = readl_poll_timeout(dsi->base + DSI_WISR, val, val & WISR_PLLLS,
-				 TIMEOUT_US);
-	if (ret) {
-		dev_dbg(dev, "!TIMEOUT! waiting PLL\n");
-		return ret;
-	}
-#endif
-
 	ret = clk_enable_bulk(&dsi->bulk);
 	if (ret) {
 		dev_err(dev, "peripheral clock enable error %d\n", ret);
 		return ret;
-	}
-
-	
-
-	return 0;
-}
-
-static void dsi_phy_post_set_mode(void *priv_data, unsigned long mode_flags)
-{
-	struct mipi_dsi_device *device = priv_data;
-	struct udevice *dev = device->dev;
-	struct qcom_dsi_priv *dsi = dev_get_priv(dev);
-
-	dev_dbg(dev, "Set mode %p enable %ld\n", dsi,
-		mode_flags & MIPI_DSI_MODE_VIDEO);
-
-	if (!dsi)
-		return;
-
-	/*
-	 * DSI wrapper must be enabled in video mode & disabled in command mode.
-	 * If wrapper is enabled in command mode, the display controller
-	 * register access will hang.
-	 */
-
-/*
-	if (mode_flags & MIPI_DSI_MODE_VIDEO)
-		dsi_set(dsi, DSI_WCR, WCR_DSIEN);
-	else
-		dsi_clear(dsi, DSI_WCR, WCR_DSIEN);
-*/
-}
-
-static int dsi_get_lane_mbps(void *priv_data, struct display_timing *timings,
-			     u32 lanes, u32 format, unsigned int *lane_mbps)
-{
-	struct mipi_dsi_device *device = priv_data;
-	struct udevice *dev = device->dev;
-	struct qcom_dsi_priv *dsi = dev_get_priv(dev);
-	unsigned long mpclk, tmp;
-	int idf, ndiv, odf, pll_in_khz, pll_out_khz;
-	int ret, bpp;
-	unsigned int max_mbps, target_mbps = 1000;
-
-	*lane_mbps = pll_out_khz / 1000;
-
-	dev_dbg(dev, "pll_in %ukHz pll_out %ukHz lane_mbps %uMHz\n",
-		pll_in_khz, pll_out_khz, *lane_mbps);
-
-	bpp = mipi_dsi_pixel_format_to_bpp(format);
-	if (bpp < 0) {
-		dev_err(dsi->dsi_host,
-			"failed to get bpp for pixel format %d\n",
-			format);
-		return bpp;
-	}
-
-	mpclk = DIV_ROUND_UP(timings->pixelclock.typ, 1000);
-	if (mpclk) {
-		/* take 1 / 0.8, since mbps must big than bandwidth of RGB */
-		tmp = (mpclk * (bpp / lanes) * 10 / 8) / 1000;
-		if (tmp < max_mbps)
-			target_mbps = tmp;
-		else
-			dev_err(dsi->dsi_host,
-				"DPHY clock frequency is out of range\n");
-	}
-
-	/* for external phy only the mipi_dphy_config is necessary */
-	if (generic_phy_valid(&dsi->phy)) {
-		/* need to switch a cphy version ?? required clk rate is calculated
-		 * here, then the clk is enabled in generic phy power on */
-/*
-		phy_mipi_dphy_get_default_config(timings->pixelclock.typ  * 10 / 8,
-						 bpp, lanes,
-						 &dsi->phy_opts);
-*/
-		dsi->lane_mbps = target_mbps;
-		*lane_mbps = dsi->lane_mbps;
-
-		return 0;
 	}
 
 	return 0;
@@ -931,8 +654,6 @@ static int dsi_get_lane_mbps(void *priv_data, struct display_timing *timings,
 
 static const struct mipi_dsi_phy_ops mdss_dsi_phy_ops = {
 	.init = dsi_phy_init,
-	.get_lane_mbps = dsi_get_lane_mbps,
-	.post_set_mode = dsi_phy_post_set_mode,
 };
 
 static int qcom_dsi_attach(struct udevice *dev)
@@ -940,60 +661,39 @@ static int qcom_dsi_attach(struct udevice *dev)
 	struct qcom_dsi_priv *priv = dev_get_priv(dev);
 	struct mipi_dsi_device *device = &priv->device;
 	struct mipi_dsi_panel_plat *mplat;
-	struct display_timing timings;
-	int ret, host_index;
+	int ret;
 
-printf("------------%s enter\n", __func__);
-	ret = uclass_first_device_err(UCLASS_PANEL, &priv->panel);
+	ret = uclass_get_device(UCLASS_PANEL, dev_seq(dev), &priv->panel);
 	if (ret) {
 		dev_err(dev, "panel device error %d\n", ret);
 		return ret;
 	}
 
 	mplat = dev_get_plat(priv->panel);
+	mplat->device = device;
 	device->lanes = mplat->lanes;
 	device->format = mplat->format;
 	device->mode_flags = mplat->mode_flags;
 
-	if (device->index) {
-printf("------------%s dsi device 2: %p\n", __func__, &priv->device);
-		mplat->device2 = &priv->device;
-		qcom_dsi_global.priv1 = priv;
-		qcom_dsi_global.dual_dsi = true;
-		host_index = 1;
-	} else {
-printf("------------%s dsi device 0: %p\n", __func__, &priv->device);
-		mplat->device = &priv->device;
-		qcom_dsi_global.priv0 = priv;
-		host_index = 0;
-	}
-
-	ret = panel_get_display_timing(priv->panel, &timings);
+	ret = panel_get_display_timing(priv->panel, &priv->timings);
 	if (ret) {
-		ret = ofnode_decode_display_timing(dev_ofnode(priv->panel),
-						   0, &timings);
-		if (ret) {
-			dev_err(dev, "decode display timing error %d\n", ret);
-			return ret;
-		}
+		dev_err(dev, "get panel timing error %d\n", ret);
+		return ret;
 	}
 
-printf("------------%s line %d\n", __func__, __LINE__);
-	ret = uclass_get_device(UCLASS_DSI_HOST, host_index, &priv->dsi_host);
+	ret = uclass_get_device(UCLASS_DSI_HOST, dev_seq(dev), &priv->dsi_host);
 	if (ret) {
 		dev_err(dev, "No video dsi host detected %d\n", ret);
 		return ret;
 	}
 
-printf("------------%s line %d call dsi_host_init, while qcom_mipi_dsi_init is %p\n", __func__, __LINE__, qcom_mipi_dsi_init);
-	ret = dsi_host_init(priv->dsi_host, device, &timings, 3,
+	ret = dsi_host_init(priv->dsi_host, device, &priv->timings, 4,
 			    &mdss_dsi_phy_ops);
 	if (ret) {
 		dev_err(dev, "failed to initialize mipi dsi host\n");
 		return ret;
 	}
 
-printf("------------%s exit ok\n", __func__);
 	return 0;
 }
 
@@ -1001,57 +701,29 @@ static int qcom_dsi_get_display_timing(struct udevice *dev, struct display_timin
 {
 	struct qcom_dsi_priv *priv = dev_get_priv(dev);
 
-	return panel_get_display_timing(priv->panel, timing);
+	memcpy(timing, &priv->timings, sizeof(struct display_timing));
+
+	return 0;
 }
 
 static int qcom_dsi_set_backlight(struct udevice *dev, int percent)
 {
 	struct qcom_dsi_priv *priv = dev_get_priv(dev);
+	int ret;
 
-#if 0
-	dev_err(dev, "panel %s backlight enabling skipped to avoid panic for temp\n", priv->panel->name);
-//	return 0;
-
-	ret = panel_set_backlight(priv->panel, percent);
-	if (ret) {
-		dev_err(dev, "panel %s enable backlight error %d\n",
-			priv->panel->name, ret);
+	ret = panel_enable_backlight(priv->panel);
+	if (ret)
 		return ret;
-	}
 
-	/// FIXME: CASEY: dsi_host_enable() expects struct udevice not mipi_dsi_host?
-	/// Jun: by definition, it expects udevice. This should be sort out,
-	///      otherwise, qcom_mipi_dsi_enable will panic later.
-	// dsi_host = &qcom_dsi_global.priv0->dsi_host;
-	// ret = dsi_host_enable(dsi_host->dev);
-	// if (ret) {
-	// 	dev_err(dev, "failed to enable mipi dsi host\n");
-	// 	return ret;
-	// }
-
-	// if(!qcom_dsi_global.priv1)
-	// 	return 0;
-	// dsi_host = &qcom_dsi_global.priv1->dsi_host;
-	// ret = dsi_host_enable(dsi_host->dev);
-	// if (ret) {
-	// 	dev_err(dev, "failed to enable mipi dsi host\n");
-	// 	return ret;
-	// }
-#else
-	return dsi_host_enable(priv->dsi_host);
-#endif
-
-	return 0;
+	return panel_set_backlight(priv->panel, percent);
 }
 
 static int qcom_dsi_bind(struct udevice *dev)
 {
 	int ret;
 
-printf("=============%s enter\n", __func__);
 	ret = device_bind_driver_to_node(dev, "qcom_mipi_dsi", "mdss_dsi",
 					 dev_ofnode(dev), NULL);
-printf("=============%s result %d, will scan panel next\n", __func__, ret);
 	if (ret)
 		return ret;
 
@@ -1062,25 +734,16 @@ static int qcom_dsi_probe(struct udevice *dev)
 {
 	struct qcom_dsi_priv *priv = dev_get_priv(dev);
 	struct mipi_dsi_device *device = &priv->device;
-	struct reset_ctl rst;
 	int ret;
 
 	device->dev = dev;
 
-printf("=============%s enter\n", __func__);
 	priv->hw_base = dev_read_addr_ptr(dev);
 	if (!priv->hw_base) {
 		dev_err(dev, "dsi dt register address error\n");
 		return -EINVAL;
 	}
 	priv->base = priv->hw_base + 4;
-
-	ret = ofnode_read_u32_default(dev_ofnode(dev), "dual-dsi-index", -1);
-	if (ret == 0 || ret == 1)
-		device->index = ret;
-	else
-		return ret;
-printf("=============%s line %d device->index %d\n", __func__, __LINE__, device->index);
 
 	ret = generic_phy_get_by_name(dev, "dsi", &priv->phy);
 	if (ret && ret != -ENODATA) {
@@ -1109,17 +772,6 @@ printf("=============%s line %d device->index %d\n", __func__, __LINE__, device-
 		goto err_reg;
 	}
 
-#if 0
-	ret = reset_get_by_index(device->dev, 0, &rst);
-	if (ret) {
-		dev_err(dev, "missing dsi hardware reset\n");
-		goto err_clk;
-	}
-
-	/* Reset */
-	reset_deassert(&rst);
-#endif
-
 	/* check hardware version */
 	priv->hw_version = dsi_read(priv->hw_base + REG_DSI_6G_HW_VERSION);
 	printf("Got hw_version: 0x%x\n", priv->hw_version);
@@ -1131,12 +783,10 @@ printf("=============%s line %d device->index %d\n", __func__, __LINE__, device-
 		return -ENODEV;
 	}
 
-printf("=============%s ret 0\n", __func__);
 	return 0;
 err_reg:
 	regulator_set_enable(priv->vdd_reg, false);
 
-printf("=============%s ret %d\n", __func__, ret);
 	return ret;
 }
 
