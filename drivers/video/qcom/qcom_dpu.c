@@ -1061,7 +1061,7 @@ printf("=========%s line %d\n", __func__, __LINE__);
 	uc_priv->xsize = timings.hactive.typ;
 	uc_priv->ysize = timings.vactive.typ;
 	//uc_priv->line_length = 8704;
-	uc_priv->rot = 0;
+	uc_priv->rot = 2;
 //printf("=========%s uc_priv->bpix %d\n", __func__, VIDEO_BPP32);
 printf("=========%s uc_priv->bpix %d, uc_priv 0x%x\n", __func__, uc_priv->bpix, uc_priv);
 
