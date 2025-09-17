@@ -397,39 +397,13 @@
 #define DSC_DATA_IN_SWAP           0x08
 #define DSC_CLK_CTRL               0x0C
 
-
-/* 4 pipe usage case */
-#define STAGES_PER_PLANE	2
-#define PIPES_PER_STAGE		1
-#define PIPES_PER_PLANE		(PIPES_PER_STAGE * STAGES_PER_PLANE)
-
-
-
-
-
-
-
 #define dpu_write(reg, val) writel(val, reg)
-
-
-/* traffic shaper clock in Hz */
-#define TS_CLK			19200000
 
 struct qcom_dpu_priv {
 	void *dpu_base;
 	void *vbif_base;
 	struct dpu_mdss_cfg *cat;
-/*
-	struct mdp_sspp_regs *mdp_sspp[2];
-	struct mdp_layer_mixer_regs *mdp_layer_mixer[4];
-	struct mdp_dsc_regs *mdp_dsc[4];
-	struct mdp_intf_regs *mdp_intf[2];
-	struct mdp_ctl_regs *mdp_ctl;
-	struct vbif_rt_regs *vbif_rt;
-*/
 };
-
-#define MDSS_MDP_MAX_PREFILL_FETCH 24
 
 struct qcom_dpu_priv *local_priv;
 struct dpu_kms {
@@ -563,86 +537,62 @@ static void dpu_kms_mdp_snapshot(void)
 }
 
 
-/* call 4 times to configure rect0/rect1 of DMA0/1 on 8650 */
-static void mdss_sspp_config(struct udevice *dev, void *base, bool rect0, int x_off)
+static void mdss_sspp_config_rec1(void *dpu_base, struct dpu_mdss_cfg *cat, uint32_t fb,
+				  unsigned fb_stride, unsigned sspp_id, unsigned height,
+				  unsigned width, int x_off)
 {
-	struct video_uc_plat *plat = dev_get_uclass_plat(dev);
-#if 0
-	uint32_t img_size, out_size, stride;
-	uint32_t fb_off = 0;
-	uint32_t flip_bits = 0;
-	uint32_t src_xy = 0;
-	uint32_t dst_xy = 0;
+	void *base = NULL;
+	int i;
 
-	/* write active region size*/
-	img_size = (edid->mode.va << 16) | edid->mode.ha;
-	out_size = img_size;
-	stride = (edid->mode.ha * edid->framebuffer_bits_per_pixel/8);
+	for (i = 0; i < cat->sspp_count; ++i) {
+		if (cat->sspp[i].id == sspp_id) {
+			base = dpu_base + cat->sspp[i].base;
+			break;
+		}
+	}
 
-	dst_xy = (edid->mode.vborder << 16) | edid->mode.hborder;
-	src_xy = dst_xy;
+	if (!base) {
+		WARN_ON(!base);
+		return;
+	}
 
-	printk(BIOS_INFO, "%s: src=%x fb_off=%x src_xy=%x dst_xy=%x\n",
-		   __func__, out_size, fb_off, src_xy, dst_xy);
-
-	/* gd->fb_base is from reserve_video() */
-	write32(mdp_sspp->sspp_src0, gd->fb_base);
-	write32(mdp_sspp->sspp_src_ystride0, stride);
-	write32(mdp_sspp->sspp_src_size, out_size);
-	write32(mdp_sspp->sspp_out_size, out_size);
-	write32(mdp_sspp->sspp_src_xy, src_xy);
-	write32(mdp_sspp->sspp_out_xy, dst_xy);
-
-	/* Tight Packing 4bpp Alpha 8-bit A R B G */
-	write32(mdp_sspp->sspp_src_format, 0x000236ff);
-	write32(mdp_sspp->sspp_src_unpack_pattern, 0x03020001);
-
-	flip_bits |= SW_PIX_EXT_OVERRIDE;
-	write32(mdp_sspp->sspp_sw_pic_ext_c0_req_pixels, out_size);
-	write32(mdp_sspp->sspp_sw_pic_ext_c1c2_req_pixels, out_size);
-	write32(mdp_sspp->sspp_sw_pic_ext_c3_req_pixels, out_size);
-	write32(mdp_sspp->sspp_src_op_mode, flip_bits);
-#endif
-
-	/* gd->fb_base is from reserve_video() */
-	writel(plat->base, base + SSPP_SRC0_ADDR);
-	writel(0, base + SSPP_SRC_XY); /* 0x438 * N */
-	writel(0x8700438, base + SSPP_OUT_SIZE);
+	writel(fb, base + SSPP_SRC0_ADDR);
+	writel(x_off, base + SSPP_SRC_XY);
+	writel((height << 16) | (width >> 1), base + SSPP_SRC_SIZE);
+	writel((height << 16) | (width >> 1), base + SSPP_OUT_SIZE);
 	writel(0, base + SSPP_OUT_XY);
 	writel(0x236FF, base + SSPP_SRC_FORMAT);
-	//writel(0x236FF | BIT(22), base + SSPP_SRC_FORMAT);
+		writel(0x236FF | BIT(22), base + SSPP_SRC_FORMAT);
 	writel(0x3020001, base + SSPP_SRC_UNPACK_PATTERN);
 	writel(0x80000000, base + SSPP_SRC_OP_MODE);
-	//writel(0xff33ff, base + SSPP_SRC_CONSTANT_COLOR);
+		writel(0xff33ff, base + SSPP_SRC_CONSTANT_COLOR);
 	writel(0x9, base + SSPP_CDP_CNTL);
 
-	writel(plat->base, base + SSPP_SRC1_ADDR);
-	writel(x_off, base + SSPP_SRC_XY_REC1); /* 0x438 * N */
-	writel(0x8700438, base + SSPP_OUT_SIZE_REC1);
-	writel(0x438, base + SSPP_OUT_XY_REC1);
+	writel(fb, base + SSPP_SRC1_ADDR);
+	writel(x_off + (width >> 1), base + SSPP_SRC_XY_REC1);
+	writel((height << 16) | (width >> 1), base + SSPP_SRC_SIZE_REC1);
+	writel((height << 16) | (width >> 1), base + SSPP_OUT_SIZE_REC1);
+	writel((width >> 1), base + SSPP_OUT_XY_REC1);
 	writel(0x236FF, base + SSPP_SRC_FORMAT_REC1);
-	//writel(0x236FF | BIT(22), base + SSPP_SRC_FORMAT_REC1);
+		writel(0x236FF | BIT(22), base + SSPP_SRC_FORMAT_REC1);
 	writel(0x3020001, base + SSPP_SRC_UNPACK_PATTERN_REC1);
 	writel(0x80000000, base + SSPP_SRC_OP_MODE_REC1);
-	//writel(0x445544, base + SSPP_SRC_CONSTANT_COLOR_REC1);
+		writel(0x445544, base + SSPP_SRC_CONSTANT_COLOR_REC1);
 	writel(0x9, base + SSPP_CDP_CNTL_REC1);
 
 	writel(0x87, base + SSPP_FETCH_CONFIG);
 
-	//writel(0x22002200, base + SSPP_SRC_YSTRIDE0);
-	writel(0x21c021c0, base + SSPP_SRC_YSTRIDE0);
+	writel((fb_stride << 16) | fb_stride, base + SSPP_SRC_YSTRIDE0);
 	writel(0, base + SSPP_SRC_YSTRIDE1);
-	writel(0x8700438, base + SSPP_SRC_SIZE);
-	writel(0x8700438, base + SSPP_SRC_SIZE_REC1);
 	writel(0, base + SSPP_SW_PIX_EXT_C0_LR);
 	writel(0, base + SSPP_SW_PIX_EXT_C0_TB);
-	writel(0x8700438, base + SSPP_SW_PIX_EXT_C0_REQ_PIXELS);
+	writel((height << 16) | (width >> 1), base + SSPP_SW_PIX_EXT_C0_REQ_PIXELS);
 	writel(0, base + SSPP_SW_PIX_EXT_C1C2_LR);
 	writel(0, base + SSPP_SW_PIX_EXT_C1C2_TB);
-	writel(0x8700438, base + SSPP_SW_PIX_EXT_C1C2_REQ_PIXELS);
+	writel((height << 16) | (width >> 1), base + SSPP_SW_PIX_EXT_C1C2_REQ_PIXELS);
 	writel(0, base + SSPP_SW_PIX_EXT_C3_LR);
 	writel(0, base + SSPP_SW_PIX_EXT_C3_TB);
-	writel(0x8700438, base + SSPP_SW_PIX_EXT_C3_REQ_PIXELS);
+	writel((height << 16) | (width >> 1), base + SSPP_SW_PIX_EXT_C3_REQ_PIXELS);
 	writel(0x3, base + SSPP_MULTIRECT_OPMODE);
 	writel(0x80000000, base + SSPP_UBWC_ERROR_STATUS);
 	writel(0x3FFFF, base + SSPP_DANGER_LUT);
@@ -680,246 +630,219 @@ static void mdss_vbif_setup(void *regs_vbif)
 #endif
 }
 
-static void mdss_intf_setup(void *dpu_base, struct dpu_mdss_cfg *cat)
+static void mdss_intf_setup(void *dpu_base, struct dpu_mdss_cfg *cat,
+			    unsigned intf_id, unsigned pp_id)
 {
-	void *base;
-	int i;
+	unsigned intf = intf_id - INTF_0;
+	unsigned pp = pp_id - PINGPONG_0;
+	void *base = dpu_base + cat->intf[intf].base;
 
-	/* config 2 DSI intf that's on 2nd and 3rd intf */
-	for (i = 1; i < 2; i++) {
-		base = dpu_base + cat->intf[i].base;
+	/* config for 90Hz */
+	writel(BIT(23) | BIT(31), base + INTF_CONFIG); //INTF_CONFIG_DSI_VIDEO_STOP_MODE
+	writel(0x3100014, base + INTF_HSYNC_CTL);
+	writel(0x001eec90, base + INTF_VSYNC_PERIOD_F0);
+	writel(0x310, base + INTF_VSYNC_PULSE_WIDTH_F0);
+	writel(0x2F70028, base + INTF_DISPLAY_HCTL);
+	writel(0x4050, base + INTF_DISPLAY_V_START_F0);
+	writel(0x1A174F, base + INTF_DISPLAY_V_END_F0);
+	writel(0, base + INTF_ACTIVE_HCTL);
+	writel(0, base + INTF_ACTIVE_V_START_F0);
+	writel(0, base + INTF_ACTIVE_V_END_F0);
+	writel(0, base + INTF_BORDER_COLOR);
+	writel(0xFF, base + INTF_UNDERFLOW_COLOR);
+	writel(0, base + INTF_HSYNC_SKEW);
+	writel(0, base + INTF_POLARITY_CTL);
+	writel(3, base + INTF_FRAME_LINE_COUNT_EN);
+	writel(0x213F, base + INTF_PANEL_FORMAT);
+	writel(0x1011, base + INTF_CONFIG2);
+	writel(0x18F0028, base + INTF_DISPLAY_DATA_HCTL);
+	writel(0, base + INTF_ACTIVE_DATA_HCTL);
+	writel(0x001ee361, base + INTF_PROG_FETCH_START);
 
-		/* config for 90Hz */
-		writel(BIT(23) | BIT(31), base + INTF_CONFIG); //INTF_CONFIG_DSI_VIDEO_STOP_MODE
-		writel(0x3100014, base + INTF_HSYNC_CTL);
-		writel(0x001eec90, base + INTF_VSYNC_PERIOD_F0);
-		writel(0x310, base + INTF_VSYNC_PULSE_WIDTH_F0);
-		writel(0x2F70028, base + INTF_DISPLAY_HCTL);
-		writel(0x4050, base + INTF_DISPLAY_V_START_F0);
-		writel(0x1A174F, base + INTF_DISPLAY_V_END_F0);
-		writel(0, base + INTF_ACTIVE_HCTL);
-		writel(0, base + INTF_ACTIVE_V_START_F0);
-		writel(0, base + INTF_ACTIVE_V_END_F0);
-		writel(0, base + INTF_BORDER_COLOR);
-		writel(0xFF, base + INTF_UNDERFLOW_COLOR);
-		writel(0, base + INTF_HSYNC_SKEW);
-		writel(0, base + INTF_POLARITY_CTL);
-		writel(3, base + INTF_FRAME_LINE_COUNT_EN);
-		//writel(0x80800000, base + INTF_CONFIG);
-		writel(0x213F, base + INTF_PANEL_FORMAT);
-		writel(0x1011, base + INTF_CONFIG2);
-		writel(0x18F0028, base + INTF_DISPLAY_DATA_HCTL);
-		writel(0, base + INTF_ACTIVE_DATA_HCTL);
-		writel(0x001ee361, base + INTF_PROG_FETCH_START);
-		//writel(0x80800000, base + INTF_CONFIG);
-
-		if (i == 1)
-			writel(0xF0000, base + INTF_MUX);
-		else /* intf 2 */
-			writel(0xF0002, base + INTF_MUX);
-	}
+	writel(0xF0000 | pp, base + INTF_MUX);
 }
 
-static void mdss_intf_fetch_start_config(void *dpu_base, struct dpu_mdss_cfg *cat)
+static void mdss_intf_fetch_start_config(void *dpu_base, struct dpu_mdss_cfg *cat,
+					 unsigned ctl_id, unsigned intf_id,
+					 unsigned dsc0_id, unsigned dsc1_id)
 {
-	void *ctl_base = dpu_base + cat->ctl[0].base;
+	unsigned intf = intf_id - INTF_0;
+	unsigned ctl = ctl_id - CTL_0;
+	unsigned dsc0 = dsc0_id - DSC_0;
+	unsigned dsc1 = dsc1_id - DSC_0;
+	void *ctl_base = dpu_base + cat->ctl[ctl].base;
 
 	/* enable 2 DSI interface */
-	writel(BIT(1), ctl_base + CTL_INTF_MASTER);
+	writel(BIT(intf), ctl_base + CTL_INTF_MASTER);
 
-	writel(0x3, ctl_base + CTL_DSC_ACTIVE);
-	writel(0x3, ctl_base + CTL_DSC_FLUSH);
+	writel(BIT(dsc0) | BIT(dsc1), ctl_base + CTL_DSC_ACTIVE);
+	writel(BIT(dsc0) | BIT(dsc1), ctl_base + CTL_DSC_FLUSH);
 
-	writel(BIT(1), ctl_base + CTL_INTF_ACTIVE);
-	writel(BIT(1), ctl_base + CTL_INTF_FLUSH);
+	writel(BIT(intf), ctl_base + CTL_INTF_ACTIVE);
+	writel(BIT(intf), ctl_base + CTL_INTF_FLUSH);
 }
 
 /* configure the mixer blending in ctl */
-void mdp_setup_stage(struct dpu_mdss_cfg *cat, void *dpu_base)
+void mdp_setup_stage_rec1(void *dpu_base, struct dpu_mdss_cfg *cat,
+		     unsigned ctl_id, unsigned lm_id, unsigned sspp_id,
+		     unsigned height, unsigned width, bool split)
 {
-/*
-	uint32_t ctl0_reg_val;
+	unsigned ctl = ctl_id - CTL_0;
+	unsigned lm = lm_id - LM_0;
+	void *base = dpu_base + cat->ctl[ctl].base;
+	void *lm_base = dpu_base + cat->mixer[lm].base;
+	u32 op_mode = 0x2;
 
-	ctl0_reg_val = VIG_0 | LAYER_MIXER_0 | CTL | INTF;
-	write32(mdp_ctl->ctl_intf_flush, INTF_FLUSH);
-	write32(mdp_ctl->ctl_flush, ctl0_reg_val);
-*/
-	void *base = dpu_base + cat->ctl[0].base;
+	switch (sspp_id) {
+	case SSPP_DMA0:
+		writel(BIT(24) | BIT(19), base + CTL_LAYER(lm_id));
+		break;
+	case SSPP_DMA1:
+		writel(BIT(24) | BIT(22), base + CTL_LAYER(lm_id));
+		break;
+	default:
+		WARN_ON(sspp_id);
+	};
 
-	for (int lm = LM_0; lm < (LM_0 + PIPES_PER_PLANE); lm++) {
-		void *lm_base = dpu_base + cat->mixer[lm - LM_0].base;
+	switch (sspp_id) {
+	case SSPP_DMA0:
+		writel(BIT(9), base + CTL_LAYER_EXT2(lm_id));
+		break;
+	case SSPP_DMA1:
+		writel(BIT(13), base + CTL_LAYER_EXT2(lm_id));
+		break;
+	default:
+		WARN_ON(sspp_id);
+	};
 
-		//if (lm < (LM_0 + PIPES_PER_STAGE)) {
-			writel(0x1080000, base + CTL_LAYER(lm));
-			writel(0x200, base + CTL_LAYER_EXT2(lm));
-		//} else {
-		//	writel(0x1400000, base + CTL_LAYER(lm));
-		//	writel(0x2000, base + CTL_LAYER_EXT2(lm));
-		//}
-		writel(0, base + CTL_LAYER_EXT(lm));
-		writel(0, base + CTL_LAYER_EXT3(lm));
-		writel(0, base + CTL_LAYER_EXT4(lm));
+	writel(0, base + CTL_LAYER_EXT(lm_id));
+	writel(0, base + CTL_LAYER_EXT3(lm_id));
+	writel(0, base + CTL_LAYER_EXT4(lm_id));
 
-		writel(0x8700438, lm_base + LM_OUT_SIZE);
+	writel((height << 16) | (width >> 1), lm_base + LM_OUT_SIZE);
 
-		u32 op_mode = 0x2;
-		if (lm == LM_1)
-			op_mode |= BIT(31); /* split right half in stage */
-		writel(op_mode, lm_base + LM_OP_MODE);
+	if (split)
+		op_mode |= BIT(31); /* split right half in stage */
+	writel(op_mode, lm_base + LM_OP_MODE);
 
-		writel(0x100, lm_base + LM_BLEND0_OP);
-		writel(0xFF0000, lm_base + LM_BLEND0_CONST_ALPHA);
+	writel(0x100, lm_base + LM_BLEND0_OP);
+	writel(0xFF0000, lm_base + LM_BLEND0_CONST_ALPHA);
+}
+
+void mdp_dsc_setup(void *dpu_base, struct dpu_mdss_cfg *cat, unsigned dsc_id,
+		   unsigned pp_id)
+{
+	unsigned dsc = dsc_id - DSC_0;
+	unsigned pp = pp_id - PINGPONG_0;
+	void *base = dpu_base + cat->dsc[dsc].base;
+	const struct dpu_dsc_sub_blks *sblk = cat->dsc[dsc].sblk;
+
+	dpu_write(base + DSC_CMN_MAIN_CNF, 0x103);
+	dpu_write(base + sblk->enc.base + ENC_DF_CTRL, 0x95C0202);
+	dpu_write(base + sblk->enc.base + DSC_MAIN_CONF, 0x20120258);
+	dpu_write(base + sblk->enc.base + DSC_PICTURE_SIZE, 0x8700870);
+	dpu_write(base + sblk->enc.base + DSC_SLICE_SIZE, 0x30021C);
+	dpu_write(base + sblk->enc.base + DSC_MISC_SIZE, 0x21C);
+	dpu_write(base + sblk->enc.base + DSC_HRD_DELAYS, 0x20E0200);
+	dpu_write(base + sblk->enc.base + DSC_RC_SCALE, 0x20);
+	dpu_write(base + sblk->enc.base + DSC_RC_SCALE_INC_DEC, 0x704A6);
+	dpu_write(base + sblk->enc.base + DSC_RC_OFFSETS_1, 0xC);
+	dpu_write(base + sblk->enc.base + DSC_RC_OFFSETS_2, 0x21F020B);
+	dpu_write(base + sblk->enc.base + DSC_RC_OFFSETS_3, 0x10F01800);
+	dpu_write(base + sblk->enc.base + DSC_RC_OFFSETS_4, 0x0);
+	dpu_write(base + sblk->enc.base + DSC_FLATNESS_QP, 0x983);
+	dpu_write(base + sblk->enc.base + DSC_RC_MODEL_SIZE, 0x2000);
+	dpu_write(base + sblk->enc.base + DSC_RC_CONFIG, 0x3316B06);
+	dpu_write(base + sblk->ctl.base + DSC_CFG, 0x3801);
+	dpu_write(base + sblk->enc.base + DSC_RC_BUF_THRESH_0, 0x382A1C0E);
+	dpu_write(base + sblk->enc.base + DSC_RC_BUF_THRESH_1, 0x69625446);
+	dpu_write(base + sblk->enc.base + DSC_RC_BUF_THRESH_2, 0x7B797770);
+	dpu_write(base + sblk->enc.base + DSC_RC_BUF_THRESH_3, 0x7E7D);
+	dpu_write(base + sblk->enc.base + DSC_RC_MIN_QP_0, 0x308400);
+	dpu_write(base + sblk->enc.base + DSC_RC_MAX_QP_0, 0x731484);
+	dpu_write(base + sblk->enc.base + DSC_RC_RANGE_BPG_OFFSETS_0, 0x3CF80002);
+	dpu_write(base + sblk->enc.base + DSC_RC_MIN_QP_1, 0x318C63);
+	dpu_write(base + sblk->enc.base + DSC_RC_MAX_QP_1, 0xA4A0E7);
+	dpu_write(base + sblk->enc.base + DSC_RC_RANGE_BPG_OFFSETS_1, 0x36E38E3A);
+	dpu_write(base + sblk->enc.base + DSC_RC_MIN_QP_2, 0xD394A5);
+	dpu_write(base + sblk->enc.base + DSC_RC_MAX_QP_2, 0xF6B58B);
+	dpu_write(base + sblk->enc.base + DSC_RC_RANGE_BPG_OFFSETS_2, 0x34D34D36);
+	dpu_write(base + sblk->ctl.base + DSC_CTL, pp);
+}
+
+void mdp_ctl_flush(void *dpu_base, struct dpu_mdss_cfg *cat,
+		   unsigned ctl_id, unsigned sspp_id,
+		   bool dsc, unsigned lm0_id, unsigned lm1_id)
+{
+	unsigned ctl = ctl_id - CTL_0;
+	void *ctl_base = dpu_base + cat->ctl[ctl].base;
+	uint32_t flush = BIT(17) |	// CTL
+			 BIT(31); 	// INTF
+
+	switch (sspp_id) {
+	case SSPP_DMA0:
+		writel(BIT(0), ctl_base + CTL_FETCH_PIPE_ACTIVE);
+		flush |= BIT(11);
+		break;
+	case SSPP_DMA1:
+		writel(BIT(1), ctl_base + CTL_FETCH_PIPE_ACTIVE);
+		flush |= BIT(12);
+		break;
+	default:
+		WARN_ON(sspp_id);
 	}
-}
 
-#if 0
-/**
- * _stage_offset(): returns the relative offset of the blend registers
- * for the stage to be setup
- * @ctx:     mixer ctx contains the mixer to be programmed
- * @stage: stage index to setup
- */
-static inline int _stage_offset(struct dpu_lm_sub_blks *sblk, enum dpu_stage stage)
-{
-	if (stage != DPU_STAGE_BASE && stage <= sblk->maxblendstages)
-		return sblk->blendstage_base[stage - DPU_STAGE_0];
-
-	return -EINVAL;
-}
-
-static void mdss_layer_mixer_setup(void *dpu_base, struct dpu_mdss_cfg *cat)
-{
-	uint32_t op_mode = 0x2;
-#if 0
-	uint32_t mdp_rgb_size;
-	uint32_t left_staging_level;
-
-	/* write active region size*/
-	mdp_rgb_size = (edid->mode.va << 16) | edid->mode.ha;
-
-	write32(mdp_layer_mixer->layer_out_size, mdp_rgb_size);
-	write32(mdp_layer_mixer->layer_op_mode, 0x0);
-	for (int i = 0; i < 6; i++) {
-		write32(mdp_layer_mixer->layer_blend[i].layer_blend_op, 0x100);
-		write32(mdp_layer_mixer->layer_blend[i].layer_blend_const_alpha, 0x00ff0000);
+	switch (lm0_id) {
+	case 0:
+		break;
+	case LM_0:
+		flush |= BIT(6);
+		break;
+	case LM_1:
+		flush |= BIT(7);
+		break;
+	case LM_2:
+		flush |= BIT(8);
+		break;
+	case LM_3:
+		flush |= BIT(9);
+		break;
+	default:
+		WARN_ON(lm0_id);
 	}
 
-	/* Enable border fill */
-	left_staging_level = BORDER_OUT;
-	left_staging_level |= VIG_0_OUT;
-
-	/* Base layer for layer mixer 0 */
-	write32(mdp_ctl->ctl_layer0, left_staging_level);
-#endif
-	for (int i = 0; i < PIPES_PER_PLANE; i++) {
-		void *base = dpu_base + cat->mixer[i].base;
-		/* we only have one stage in uboot, no plane overlap */
-		//for (int stage = DPU_STAGE_0; i < sblk->maxblendstages; stage++) {
-		for (int stage = DPU_STAGE_0; stage < DPU_STAGE_0 + 1; stage++) {
-			u32 stage_off = _stage_offset(cat->mixer[i].sblk, stage);
-			if (WARN_ON(stage_off < 0))
-				return;
-			writel(0xFF0000, base + LM_BLEND0_CONST_ALPHA + stage_off);
-			writel(0x100, base + LM_BLEND0_OP + stage_off);
-		}
-		writel(0x8700438, base + LM_OUT_SIZE);
-		op_mode = 0x2;
-		if (i & 1)
-			op_mode |= BIT(31); /* split right half in stage */
-		writel(op_mode, base + LM_OP_MODE);
+	switch (lm1_id) {
+	case 0:
+		break;
+	case LM_0:
+		flush |= BIT(6);
+		break;
+	case LM_1:
+		flush |= BIT(7);
+		break;
+	case LM_2:
+		flush |= BIT(8);
+		break;
+	case LM_3:
+		flush |= BIT(9);
+		break;
+	default:
+		WARN_ON(lm1_id);
 	}
-	mdp_setup_stage(cat, dpu_base);
-}
-#endif
 
-#if 0
-/* sequence from coreboot */
-void mdp_dsi_video_config(struct edid *edid)
-{
-	mdss_intf_tg_setup(edid);
-	mdss_intf_fetch_start_config(edid);
-	mdss_vbif_setup();
-	mdss_vbif_qos_remapper_setup();
-	mdss_sspp_config(edid);
-	mdss_layer_mixer_setup();
-	mdss_ctrl_config();
-	write32(mdp_intf->intf_mux, 0x0F0000);
-}
-#endif
+	if (dsc)
+		flush |= BIT(22);
 
-void mdp_dsc_setup(struct dpu_mdss_cfg *cat, void *dpu_base)
-{
-	void *base;
-	const struct dpu_dsc_sub_blks *sblk;
-	int i;
-
-	for (i = 0; i < 2; i++) {
-		base = dpu_base + cat->dsc[i].base;
-		sblk = cat->dsc[i].sblk;
-
-		dpu_write(base + DSC_CMN_MAIN_CNF, 0x103);
-		dpu_write(base + sblk->enc.base + ENC_DF_CTRL, 0x95C0202);
-		dpu_write(base + sblk->enc.base + DSC_MAIN_CONF, 0x20120258);
-		dpu_write(base + sblk->enc.base + DSC_PICTURE_SIZE, 0x8700870);
-		dpu_write(base + sblk->enc.base + DSC_SLICE_SIZE, 0x30021C);
-		dpu_write(base + sblk->enc.base + DSC_MISC_SIZE, 0x21C);
-		dpu_write(base + sblk->enc.base + DSC_HRD_DELAYS, 0x20E0200);
-		dpu_write(base + sblk->enc.base + DSC_RC_SCALE, 0x20);
-		dpu_write(base + sblk->enc.base + DSC_RC_SCALE_INC_DEC, 0x704A6);
-		dpu_write(base + sblk->enc.base + DSC_RC_OFFSETS_1, 0xC);
-		dpu_write(base + sblk->enc.base + DSC_RC_OFFSETS_2, 0x21F020B);
-		dpu_write(base + sblk->enc.base + DSC_RC_OFFSETS_3, 0x10F01800);
-		dpu_write(base + sblk->enc.base + DSC_RC_OFFSETS_4, 0x0);
-		dpu_write(base + sblk->enc.base + DSC_FLATNESS_QP, 0x983);
-		dpu_write(base + sblk->enc.base + DSC_RC_MODEL_SIZE, 0x2000);
-		dpu_write(base + sblk->enc.base + DSC_RC_CONFIG, 0x3316B06);
-		dpu_write(base + sblk->ctl.base + DSC_CFG, 0x3801);
-		dpu_write(base + sblk->enc.base + DSC_RC_BUF_THRESH_0, 0x382A1C0E);
-		dpu_write(base + sblk->enc.base + DSC_RC_BUF_THRESH_1, 0x69625446);
-		dpu_write(base + sblk->enc.base + DSC_RC_BUF_THRESH_2, 0x7B797770);
-		dpu_write(base + sblk->enc.base + DSC_RC_BUF_THRESH_3, 0x7E7D);
-		dpu_write(base + sblk->enc.base + DSC_RC_MIN_QP_0, 0x308400);
-		dpu_write(base + sblk->enc.base + DSC_RC_MAX_QP_0, 0x731484);
-		dpu_write(base + sblk->enc.base + DSC_RC_RANGE_BPG_OFFSETS_0, 0x3CF80002);
-		dpu_write(base + sblk->enc.base + DSC_RC_MIN_QP_1, 0x318C63);
-		dpu_write(base + sblk->enc.base + DSC_RC_MAX_QP_1, 0xA4A0E7);
-		dpu_write(base + sblk->enc.base + DSC_RC_RANGE_BPG_OFFSETS_1, 0x36E38E3A);
-		dpu_write(base + sblk->enc.base + DSC_RC_MIN_QP_2, 0xD394A5);
-		dpu_write(base + sblk->enc.base + DSC_RC_MAX_QP_2, 0xF6B58B);
-		dpu_write(base + sblk->enc.base + DSC_RC_RANGE_BPG_OFFSETS_2, 0x34D34D36);
-		dpu_write(base + sblk->ctl.base + DSC_CTL, i);
-	}
-}
-
-void mdp_pingpong_setup(struct dpu_mdss_cfg *cat, void *dpu_base)
-{
-	void *base;
-	int i;
-
-	/* 2 pp map to 4 pipe in quad-pipe case */
-	for (i = 0; i < 1; i++) {
-		base = dpu_base + cat->pingpong[i].sblk->dither.base;
-		dpu_write(base + PP_DITHER_EN, 0);
-	}
-}
-
-void mdp_video_on(struct dpu_mdss_cfg *cat, void *dpu_base)
-{
-/*
-	uint32_t ctl0_reg_val;
-
-	ctl0_reg_val = VIG_0 | LAYER_MIXER_0 | CTL | INTF;
-	write32(mdp_ctl->ctl_intf_flush, INTF_FLUSH);
-	write32(mdp_ctl->ctl_flush, ctl0_reg_val);
-*/
-	void *ctl_base = dpu_base + cat->ctl[0].base;
-
-	//writel(0x3, ctl_base + CTL_MERGE_3D_FLUSH);
-	//writel(0x80C21BC0, ctl_base + CTL_FLUSH);
-	writel(BIT(0), ctl_base + CTL_FETCH_PIPE_ACTIVE);
 	writel(0xF0000000, ctl_base + CTL_TOP);
-	writel(0x804208C0, ctl_base + CTL_FLUSH);
-	//writel(0x421BC0, ctl_base + CTL_FLUSH);
+	writel(flush, ctl_base + CTL_FLUSH);
+}
+
+void mdp_intf_enable(void *dpu_base, struct dpu_mdss_cfg *cat, unsigned intf_id)
+{
+	unsigned intf = intf_id - INTF_0;
+	void *base = dpu_base + cat->intf[intf].base;
+
+	writel(0x1, base + INTF_TIMING_ENGINE_EN);
 }
 
 /* copy from rk_vop.c and stm32_ltdc.c
@@ -959,13 +882,6 @@ printf("=========%s enter, FLG_RELOC? %lu\n", __func__, gd->flags & GD_FLG_RELOC
 		dev_err(dev, "clk bulk enable error %d\n", ret);
 		return ret;
 	}
-
-/*
-	rate = clk_set_rate(&pclk, timings.pixelclock.typ);
-	if (IS_ERR_VALUE(rate))
-		dev_warn(dev, "fail to set pixel clock %d hz, ret=%ld\n",
-			 timings.pixelclock.typ, rate);
-*/
 
 	if (IS_ENABLED(CONFIG_VIDEO_BRIDGE)) {
 		ret = uclass_get_device(UCLASS_VIDEO_BRIDGE, 0, &bridge0);
@@ -1060,10 +976,9 @@ printf("=========%s line %d\n", __func__, __LINE__);
 	uc_priv->bpix = VIDEO_BPP32;
 	uc_priv->xsize = timings.hactive.typ;
 	uc_priv->ysize = timings.vactive.typ;
-	//uc_priv->line_length = 8704;
 	uc_priv->rot = 2;
-//printf("=========%s uc_priv->bpix %d\n", __func__, VIDEO_BPP32);
-printf("=========%s uc_priv->bpix %d, uc_priv 0x%x\n", __func__, uc_priv->bpix, uc_priv);
+printf("=========%s uc_priv->bpix %d, xsize %d ysize %d\n", __func__, uc_priv->bpix,
+		uc_priv->xsize, uc_priv->ysize);
 
 
 	/* FIXME: do we have data cached ? */
@@ -1071,39 +986,33 @@ printf("=========%s uc_priv->bpix %d, uc_priv 0x%x\n", __func__, uc_priv->bpix, 
 
 	mdss_vbif_setup(priv->vbif_base);
 
-	mdss_intf_setup(priv->dpu_base, priv->cat);
+	mdss_intf_setup(priv->dpu_base, priv->cat, INTF_1, PINGPONG_0);
 
-	mdp_dsc_setup(priv->cat, priv->dpu_base);
+	mdp_dsc_setup(priv->dpu_base, priv->cat, DSC_0, PINGPONG_0);
+	mdp_dsc_setup(priv->dpu_base, priv->cat, DSC_1, PINGPONG_1);
 
-	mdp_setup_stage(priv->cat, priv->dpu_base);
+	mdp_setup_stage_rec1(priv->dpu_base, priv->cat, CTL_0, LM_0, SSPP_DMA0, 2160, 2160, false);
+	mdp_setup_stage_rec1(priv->dpu_base, priv->cat, CTL_0, LM_1, SSPP_DMA0, 2160, 2160, true);
 
-	/* hard coding 4 rect from 2 SSPP */
-	mdss_sspp_config(dev, priv->dpu_base + priv->cat->sspp[0].base, true, 1080);
-	//mdss_sspp_config(dev, priv->dpu_base + priv->cat->sspp[0].base, false, 1080);
-	//mdss_sspp_config(dev, priv->dpu_base + priv->cat->sspp[1].base, true, 1080 * 2);
-	//mdss_sspp_config(dev, priv->dpu_base + priv->cat->sspp[1].base, false, 1080 * 3);
+	mdss_sspp_config_rec1(priv->dpu_base, priv->cat, uc_plat->base,
+			      2160 * 4, SSPP_DMA0, 2160, 2160, 0);
 
-	//mdss_layer_mixer_setup(priv->dpu_base, priv->cat);
-	//mdp_pingpong_setup(priv->cat, priv->dpu_base);
-
-	mdss_intf_fetch_start_config(priv->dpu_base, priv->cat);
+	mdss_intf_fetch_start_config(priv->dpu_base, priv->cat,
+				     CTL_0, INTF_1, DSC_0, DSC_1);
 
 	//writel(FLD_INTF_2_SW_TRG_MUX, priv->dpu_base + SPLIT_DISPLAY_LOWER_PIPE_CTRL);
 
-	/* flush all registers */
-	mdp_video_on(priv->cat, priv->dpu_base);
+	mdp_ctl_flush(priv->dpu_base, priv->cat, CTL_0, SSPP_DMA0, true,
+		      LM_0, LM_1);
 
-	for (int i = 1; i < 2; i++) {
-		void *base = priv->dpu_base + priv->cat->intf[i].base;
-		writel(0x1, base + INTF_TIMING_ENGINE_EN);
-	}
+	mdp_intf_enable(priv->dpu_base, priv->cat, INTF_1);
 
 	//video_bridge_set_backlight(bridge0, 100);
 	//video_bridge_set_backlight(bridge1, 100);
 
 printf("=========%s exit ok\n", __func__);
 local_priv = priv;
-//dpu_kms_mdp_snapshot();
+dpu_kms_mdp_snapshot();
 	return 0;
 }
 
