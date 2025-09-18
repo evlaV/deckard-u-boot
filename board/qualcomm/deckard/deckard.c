@@ -26,6 +26,8 @@
 #include <fs.h>
 #include <image.h>
 #include <sysreset.h>
+#include <splash.h>
+#include <video.h>
 
 #include "deckard_eeprom.h"
 #include "deckard_battery.h"
@@ -124,6 +126,40 @@ static void deckard_disable_watchdog(void)
 }
 
 int pon_reason = 0;
+
+static int deckard_do_load_logo(void)
+{
+	#define DEVPARTMAXLEN 16
+	#define LOADADDRMAXLEN 16
+
+	int  argc = 5;
+	char *argv[5];
+	char arg0[] = "do_the_dew";
+	char arg1[] = "scsi";
+	char arg2[DEVPARTMAXLEN];  //e.g. "1:d"
+	char arg3[LOADADDRMAXLEN]; //e.g. "0xa7000000"
+	char arg4[] = "logo.bmp.gz";
+
+	strncpy(arg2, deckard_get_fw_part(), DEVPARTMAXLEN); //this returns 1:d for example
+	snprintf(arg3, LOADADDRMAXLEN, "0x%x", CONFIG_SYS_LOAD_ADDR); //this returns 1:d for example
+
+	argv[0]=arg0;
+	argv[1]=arg1;
+	argv[2]=arg2;
+	argv[3]=arg3;
+	argv[4]=arg4;
+
+	return do_load(NULL, 0, argc, argv, FS_TYPE_EROFS);
+}
+
+void deckard_load_logo()
+{
+	if (deckard_do_load_logo())
+		return;
+
+	bmp_info(CONFIG_SYS_LOAD_ADDR);
+	bmp_display(CONFIG_SYS_LOAD_ADDR, BMP_ALIGN_CENTER, BMP_ALIGN_CENTER);
+}
 
 static void deckard_setup(void)
 {
@@ -327,6 +363,8 @@ int misc_init_r(void)
 
 	printf("watchdog disable!!!!!!!!!!!!\n");
 	deckard_disable_watchdog();
+
+	deckard_load_logo();
 
 	deckard_setup();
 
