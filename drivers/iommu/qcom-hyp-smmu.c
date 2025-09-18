@@ -394,7 +394,7 @@ static int qcom_smmu_probe(struct udevice *dev)
 	priv->base = dev_read_addr(dev);
 	INIT_LIST_HEAD(&priv->devices);
 
-	priv->disable = current_el() > 1;
+	//priv->disable = current_el() > 1;
 
 	/* Read SMMU config */
 	val = gr0_readl(priv, ARM_SMMU_GR0_ID0);
