@@ -14,7 +14,6 @@
 
 #include "dpu_hw_mdss.h"
 #include "dpu_hwio.h"
-//#include "mdssreg.h"
 #include "catalog/dpu_hw_catalog.h"
 
 #define FLD_INTF_2_SW_TRG_MUX             BIT(8)
@@ -561,10 +560,8 @@ static void mdss_sspp_config_rec1(void *dpu_base, struct dpu_mdss_cfg *cat, uint
 	writel((height << 16) | (width >> 1), base + SSPP_OUT_SIZE);
 	writel(0, base + SSPP_OUT_XY);
 	writel(0x236FF, base + SSPP_SRC_FORMAT);
-		writel(0x236FF | BIT(22), base + SSPP_SRC_FORMAT);
 	writel(0x3020001, base + SSPP_SRC_UNPACK_PATTERN);
 	writel(0x80000000, base + SSPP_SRC_OP_MODE);
-		writel(0xff33ff, base + SSPP_SRC_CONSTANT_COLOR);
 	writel(0x9, base + SSPP_CDP_CNTL);
 
 	writel(fb, base + SSPP_SRC1_ADDR);
@@ -573,10 +570,8 @@ static void mdss_sspp_config_rec1(void *dpu_base, struct dpu_mdss_cfg *cat, uint
 	writel((height << 16) | (width >> 1), base + SSPP_OUT_SIZE_REC1);
 	writel((width >> 1), base + SSPP_OUT_XY_REC1);
 	writel(0x236FF, base + SSPP_SRC_FORMAT_REC1);
-		writel(0x236FF | BIT(22), base + SSPP_SRC_FORMAT_REC1);
 	writel(0x3020001, base + SSPP_SRC_UNPACK_PATTERN_REC1);
 	writel(0x80000000, base + SSPP_SRC_OP_MODE_REC1);
-		writel(0x445544, base + SSPP_SRC_CONSTANT_COLOR_REC1);
 	writel(0x9, base + SSPP_CDP_CNTL_REC1);
 
 	writel(0x87, base + SSPP_FETCH_CONFIG);
@@ -869,6 +864,8 @@ printf("=========%s enter, FLG_RELOC? %lu\n", __func__, gd->flags & GD_FLG_RELOC
 	priv->vbif_base = dev_remap_addr_name(dev, "vbif");
 	priv->cat = &dpu_sm8650_cfg;
 
+	video_set_flush_dcache(dev, true);
+
 	ret = clk_get_bulk(dev, &bulk);
 	if (ret) {
 		dev_err(dev, "clk bulk get error %d\n", ret);
@@ -903,7 +900,7 @@ printf("=========%s enter, FLG_RELOC? %lu\n", __func__, gd->flags & GD_FLG_RELOC
 		ret = video_bridge_attach(bridge1);
 		if (ret) {
 			dev_err(dev, "fail to attach bridge1\n");
-			//return ret;
+			return ret;
 		}
 	}
 
@@ -923,7 +920,7 @@ printf("=========%s enter, FLG_RELOC? %lu\n", __func__, gd->flags & GD_FLG_RELOC
 		ret = video_bridge_set_backlight(bridge1, 100);
 		if (ret) {
 			dev_err(dev, "bridge1 enable backlight error %d\n", ret);
-			//return ret;
+			return ret;
 		}
 	}
 
@@ -946,10 +943,6 @@ printf("=========%s line %d\n", __func__, __LINE__);
 printf("=========%s uc_priv->bpix %d, xsize %d ysize %d\n", __func__, uc_priv->bpix,
 		uc_priv->xsize, uc_priv->ysize);
 
-
-	/* FIXME: do we have data cached ? */
-	video_set_flush_dcache(dev, true);
-
 	mdss_vbif_setup(priv->vbif_base);
 
 	mdss_intf_setup(priv->dpu_base, priv->cat, INTF_1, PINGPONG_0);
@@ -965,8 +958,6 @@ printf("=========%s uc_priv->bpix %d, xsize %d ysize %d\n", __func__, uc_priv->b
 
 	mdss_intf_fetch_start_config(priv->dpu_base, priv->cat,
 				     CTL_0, INTF_1, DSC_0, DSC_1);
-
-	//writel(FLD_INTF_2_SW_TRG_MUX, priv->dpu_base + SPLIT_DISPLAY_LOWER_PIPE_CTRL);
 
 	mdp_ctl_flush(priv->dpu_base, priv->cat, CTL_0, SSPP_DMA0, true,
 		      LM_0, LM_1);
@@ -986,11 +977,11 @@ printf("=========%s uc_priv->bpix %d, xsize %d ysize %d\n", __func__, uc_priv->b
 		mdss_intf_fetch_start_config(priv->dpu_base, priv->cat,
 				CTL_1, INTF_2, DSC_2, DSC_3);
 
-		//writel(FLD_INTF_2_SW_TRG_MUX, priv->dpu_base + SPLIT_DISPLAY_LOWER_PIPE_CTRL);
-
 		mdp_ctl_flush(priv->dpu_base, priv->cat, CTL_1, SSPP_DMA1, true,
 				LM_2, LM_3);
 	}
+
+	//writel(FLD_INTF_2_SW_TRG_MUX, priv->dpu_base + SPLIT_DISPLAY_LOWER_PIPE_CTRL);
 
 	mdp_intf_enable(priv->dpu_base, priv->cat, INTF_1);
 	if (bridge1)
@@ -999,7 +990,7 @@ printf("=========%s uc_priv->bpix %d, xsize %d ysize %d\n", __func__, uc_priv->b
 
 printf("=========%s exit ok\n", __func__);
 local_priv = priv;
-//dpu_kms_mdp_snapshot();
+	//dpu_kms_mdp_snapshot();
 	return 0;
 }
 
@@ -1026,18 +1017,13 @@ static const struct udevice_id dpu_ids[] = {
 	{ }
 };
 
-static const struct video_ops dpu_ops = {
-};
-
-#if 1
+#if 1 
 U_BOOT_DRIVER(qcom_dpu) = {
 	.name	= "qcom_dpu",
 	.id	= UCLASS_VIDEO,
 	.of_match = dpu_ids,
-//	.ops	= &dpu_ops,
 	.bind	= qcom_dpu_bind,
 	.probe	= qcom_dpu_probe,
-//        .remove = rk_vop_remove,
 	.priv_auto	= sizeof(struct qcom_dpu_priv),
 	.flags  = DM_FLAG_PRE_RELOC | DM_FLAG_LEAVE_PD_ON,
 };

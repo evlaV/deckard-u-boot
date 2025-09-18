@@ -68,25 +68,30 @@
 enum {
 	REGULATOR_VDDA = 0,
 	REGULATOR_PREBOOST,
-	REGULATOR_BACKLIGHT,
-	REGULATOR_VDD,
+	REGULATOR_LEFT,
+	REGULATOR_RIGHT,
+	REGULATOR_BACKLIGHT_LEFT,
+	REGULATOR_BACKLIGHT_RIGHT,
 	REGULATOR_COUNT,
 };
 
 static const char *regulator_names[REGULATOR_COUNT] = {
 	"vdda-supply",
 	"preboost-supply",
-	"backlight-supply",
-	"vdd-supply",
+	"left-supply",
+	"right-supply",
+	"backlight-left-supply",
+	"backlight-right-supply",
 };
+
+struct udevice *panels_regs[REGULATOR_COUNT];
+struct gpio_desc reset1_gpio;
+struct gpio_desc reset2_gpio;
+static bool panels_power_probed;
+static bool panels_powered_on;
 
 struct lpm026m648c_priv {
 	struct udevice *dev;
-
-	struct udevice *regs[REGULATOR_COUNT];
-
-	struct gpio_desc reset_gpio;
-
 	struct mipi_dsi_device *device;
 	u8 panel_mfg_info[PANEL_MFG_INFO_NUM_BYTES];
 	u8 panel_read_data[512];
@@ -173,7 +178,6 @@ static void dsi_write_panel_on(struct lpm026m648c_priv *priv)
 	lpm026m648c_dsi_write_seq(priv, LPM02648C_DISP_SET5, BE16(VID_VS_DELAY),
 			0x00, 0x00, 0x00);
 	lpm026m648c_dsi_write_seq(priv, LPM02648C_TE_GPIO_CTL, 0x00, 0x6A, 0x02);
-
 	/* TODO: add hard coded dsc cmd for now, use dsc helper later */
 	lpm026m648c_dsi_write_buffer(priv, pps_cmd);
 	lpm026m648c_dsi_write_seq(priv, MIPI_DCS_SET_TEAR_ON, 0x00);
@@ -281,25 +285,32 @@ static int lpm026m648c_panel_enable_backlight(struct udevice *dev)
 
 	printf("%s: %s\n", dev->name, __func__);
 
-	regulator_set_enable_if_allowed(priv->regs[REGULATOR_PREBOOST], true);
+	if (!panels_powered_on) {
+		regulator_set_enable_if_allowed(panels_regs[REGULATOR_PREBOOST], true);
 
-	mdelay(70);
+		mdelay(70);
 
-	regulator_set_enable_if_allowed(priv->regs[REGULATOR_BACKLIGHT], true);
+		regulator_set_enable_if_allowed(panels_regs[REGULATOR_BACKLIGHT_LEFT], true);
+		regulator_set_enable_if_allowed(panels_regs[REGULATOR_BACKLIGHT_RIGHT], true);
 
-	mdelay(2);
+		mdelay(2);
 
-	regulator_set_enable_if_allowed(priv->regs[REGULATOR_VDDA], true);
+		regulator_set_enable_if_allowed(panels_regs[REGULATOR_VDDA], true);
 
-	mdelay(2);
+		mdelay(2);
 
-	regulator_set_enable_if_allowed(priv->regs[REGULATOR_VDD], true);
+		regulator_set_enable_if_allowed(panels_regs[REGULATOR_LEFT], true);
+		regulator_set_enable_if_allowed(panels_regs[REGULATOR_RIGHT], true);
 
-	mdelay(2);
-	
-	dm_gpio_set_value(&priv->reset_gpio, 1);
+		mdelay(2);
+		
+		dm_gpio_set_value(&reset1_gpio, 1);
+		dm_gpio_set_value(&reset2_gpio, 1);
 
-	mdelay(20);
+		mdelay(20);
+
+		panels_powered_on = 1;
+	}
 
 printf("======= %s plat->device %p\n", __func__, plat->device);
 	plat->device->mode_flags |= MIPI_DSI_MODE_LPM;
@@ -338,20 +349,31 @@ static int lpm026m648c_panel_of_to_plat(struct udevice *dev)
 
 printf("============%s called\n", __func__);
 
-	ret = gpio_request_by_name(dev, "reset-gpios", 0,
-				   &priv->reset_gpio, GPIOD_IS_OUT);
-	if (ret) {
-		dev_err(dev, "could not decode reset-gpios (%d)\n", ret);
-		return ret;
-	}
-
-	for (i = 0; i < REGULATOR_COUNT; i++) {
-		ret = device_get_supply_regulator(dev, regulator_names[i], &priv->regs[i]);
+	if (!panels_power_probed) {
+		ret = gpio_request_by_name(dev, "reset-gpios", 0,
+					   &reset1_gpio, GPIOD_IS_OUT);
 		if (ret) {
-			dev_err(dev, "Cannot get power supply %s: ret=%d\n",
-				  regulator_names[i], ret);
+			dev_err(dev, "could not decode reset-gpios (%d)\n", ret);
 			return ret;
 		}
+
+		ret = gpio_request_by_name(dev, "reset-gpios", 1,
+					   &reset2_gpio, GPIOD_IS_OUT);
+		if (ret) {
+			dev_err(dev, "could not decode reset-gpios (%d)\n", ret);
+			return ret;
+		}
+
+		for (i = 0; i < REGULATOR_COUNT; i++) {
+			ret = device_get_supply_regulator(dev, regulator_names[i], &panels_regs[i]);
+			if (ret) {
+				dev_err(dev, "Cannot get power supply %s: ret=%d\n",
+					  regulator_names[i], ret);
+				return ret;
+			}
+		}
+
+		panels_power_probed = 1;
 	}
 
 	return 0;
@@ -372,7 +394,8 @@ printf("============%s called\n", __func__);
 
 	priv->dev = dev;
 
-	dm_gpio_set_value(&priv->reset_gpio, 0);
+	dm_gpio_set_value(&reset1_gpio, 0);
+	dm_gpio_set_value(&reset2_gpio, 0);
 
 printf("============%s ret 0\n", __func__);
 	return 0;

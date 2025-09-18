@@ -996,14 +996,17 @@
 		compatible = "jdi,lpm026m648c";
 		dual-panel;
 
-		reset-gpios = <&pm8550_gpios 3 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&pm8550_gpios 3 GPIO_ACTIVE_HIGH>,
+			      <&pm8550_gpios 11 GPIO_ACTIVE_HIGH>;
 
-		vdd-supply = <&nex100011ub1>;
-		backlight-supply = <&mpq3367b>;
+		left-supply = <&nex100011ub1>;
+		right-supply = <&nex100011ub0>;
+		backlight-left-supply = <&mpq3367b>;
+		backlight-right-supply = <&mpq3367a>;
 		preboost-supply = <&BACKLIGHT_PREBOOST>;
 		vdda-supply = <&vreg_l12b_1p8>;
 
-		pinctrl-0 = <&display_resx1>;
+		pinctrl-0 = <&display_resx1>, <&display_resx2>;
 		pinctrl-names = "default";
 
 		ports {
@@ -1039,14 +1042,17 @@
 		compatible = "jdi,lpm026m648c";
 		dual-panel;
 
-		reset-gpios = <&pm8550_gpios 11 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&pm8550_gpios 3 GPIO_ACTIVE_HIGH>,
+			      <&pm8550_gpios 11 GPIO_ACTIVE_HIGH>;
 
-		vdd-supply = <&nex100011ub0>;
-		backlight-supply = <&mpq3367a>;
+		left-supply = <&nex100011ub1>;
+		right-supply = <&nex100011ub0>;
+		backlight-left-supply = <&mpq3367b>;
+		backlight-right-supply = <&mpq3367a>;
 		preboost-supply = <&BACKLIGHT_PREBOOST>;
 		vdda-supply = <&vreg_l12b_1p8>;
 
-		pinctrl-0 = <&display_resx2>;
+		pinctrl-0 = <&display_resx1>, <&display_resx2>;
 		pinctrl-names = "default";
 
 		ports {
