@@ -554,6 +554,7 @@ static void mdss_sspp_config_rec1(void *dpu_base, struct dpu_mdss_cfg *cat, uint
 		return;
 	}
 
+	// TOFIX use define for all bits & values
 	writel(fb, base + SSPP_SRC0_ADDR);
 	writel(x_off, base + SSPP_SRC_XY);
 	writel((height << 16) | (width >> 1), base + SSPP_SRC_SIZE);
@@ -632,6 +633,7 @@ static void mdss_intf_setup(void *dpu_base, struct dpu_mdss_cfg *cat,
 	void *base = dpu_base + cat->intf[intf].base;
 
 	/* config for 90Hz */
+	// TOFIX calculate from timings and panel data
 	writel(BIT(23) | BIT(31), base + INTF_CONFIG); //INTF_CONFIG_DSI_VIDEO_STOP_MODE
 	writel(0x3100014, base + INTF_HSYNC_CTL);
 	writel(0x001eec90, base + INTF_VSYNC_PERIOD_F0);
@@ -669,6 +671,7 @@ static void mdss_intf_fetch_start_config(void *dpu_base, struct dpu_mdss_cfg *ca
 	/* enable 2 DSI interface */
 	writel(BIT(intf), ctl_base + CTL_INTF_MASTER);
 
+	// TOFIX make dsc optional
 	writel(BIT(dsc0) | BIT(dsc1), ctl_base + CTL_DSC_ACTIVE);
 	writel(BIT(dsc0) | BIT(dsc1), ctl_base + CTL_DSC_FLUSH);
 
@@ -731,6 +734,7 @@ void mdp_dsc_setup(void *dpu_base, struct dpu_mdss_cfg *cat, unsigned dsc_id,
 	void *base = dpu_base + cat->dsc[dsc].base;
 	const struct dpu_dsc_sub_blks *sblk = cat->dsc[dsc].sblk;
 
+	// TOFIX calculate from timings and panel data
 	dpu_write(base + DSC_CMN_MAIN_CNF, 0x103);
 	dpu_write(base + sblk->enc.base + ENC_DF_CTRL, 0x95C0202);
 	dpu_write(base + sblk->enc.base + DSC_MAIN_CONF, 0x20120258);
@@ -850,12 +854,11 @@ int qcom_dpu_probe(struct udevice *dev)
 	struct clk_bulk bulk;
 	struct udevice *bridge0 = NULL;
 	struct udevice *bridge1 = NULL;
-	struct display_timing timings;
+	struct display_timing timings, timings1;
 	const struct device_node *np;
 	ulong rate;
 	int ret, len;
 
-printf("=========%s enter, FLG_RELOC? %lu\n", __func__, gd->flags & GD_FLG_RELOC);
 	/* Before relocation we don't need to do anything */
 	if (!(gd->flags & GD_FLG_RELOC))
 		return 0;
@@ -878,6 +881,7 @@ printf("=========%s enter, FLG_RELOC? %lu\n", __func__, gd->flags & GD_FLG_RELOC
 		return ret;
 	}
 
+	// TOFIX follow port/endpoint instead
 	ret = uclass_get_device(UCLASS_VIDEO_BRIDGE, 0, &bridge0);
 	if (ret) {
 		dev_dbg(dev,
@@ -891,20 +895,27 @@ printf("=========%s enter, FLG_RELOC? %lu\n", __func__, gd->flags & GD_FLG_RELOC
 		return ret;
 	}
 
+	// TOFIX follow port/endpoint instead
+	ret = uclass_get_device(UCLASS_VIDEO_BRIDGE, 0, &bridge0);
 	ret = uclass_get_device(UCLASS_VIDEO_BRIDGE, 1, &bridge1);
 	if (ret) {
 		dev_dbg(dev, "No video bridge1, err %d\n", ret);
+		return ret;
 	}
 
-	if (bridge1) {
-		ret = video_bridge_attach(bridge1);
-		if (ret) {
-			dev_err(dev, "fail to attach bridge1\n");
-			return ret;
-		}
+	ret = video_bridge_attach(bridge1);
+	if (ret) {
+		dev_err(dev, "fail to attach bridge1\n");
+		return ret;
 	}
 
 	video_bridge_get_display_timing(bridge0, &timings);
+	if (ret) {
+		dev_err(dev, "fail to get display timings\n");
+		return ret;
+	}
+
+	video_bridge_get_display_timing(bridge0, &timings1);
 	if (ret) {
 		dev_err(dev, "fail to get display timings\n");
 		return ret;
@@ -916,98 +927,94 @@ printf("=========%s enter, FLG_RELOC? %lu\n", __func__, gd->flags & GD_FLG_RELOC
 		return ret;
 	}
 
-	if (bridge1) {
-		ret = video_bridge_set_backlight(bridge1, 100);
-		if (ret) {
-			dev_err(dev, "bridge1 enable backlight error %d\n", ret);
-			return ret;
-		}
+	ret = video_bridge_set_backlight(bridge1, 100);
+	if (ret) {
+		dev_err(dev, "bridge1 enable backlight error %d\n", ret);
+		return ret;
 	}
-
-printf("=========%s line %d\n", __func__, __LINE__);
-	dev_dbg(dev, "Set pixel clock req %d hz get %ld hz\n",
-		timings.pixelclock.typ, rate);
-
-
-printf("=========%s line %d\n", __func__, __LINE__);
-	dev_dbg(dev, "%dx%d %dbpp frame buffer at 0x%lx\n",
-		timings.hactive.typ, timings.vactive.typ,
-		VNBITS(VIDEO_BPP32), uc_plat->base);
 
 	/* Configure & start DPU */
 
 	uc_priv->bpix = VIDEO_BPP32;
-	uc_priv->xsize = timings.hactive.typ;
+	uc_priv->xsize = timings.hactive.typ + timings1.hactive.typ;
 	uc_priv->ysize = timings.vactive.typ;
+	// Panels are rotated, vidconsole will rotate all console writes
 	uc_priv->rot = 2;
-printf("=========%s uc_priv->bpix %d, xsize %d ysize %d\n", __func__, uc_priv->bpix,
-		uc_priv->xsize, uc_priv->ysize);
 
 	mdss_vbif_setup(priv->vbif_base);
 
+	// TOFIX implement resources manager
+
+	/* Panel 0 */
 	mdss_intf_setup(priv->dpu_base, priv->cat, INTF_1, PINGPONG_0);
 
 	mdp_dsc_setup(priv->dpu_base, priv->cat, DSC_0, PINGPONG_0);
+	// TOFIX use companion PP id from catalog
 	mdp_dsc_setup(priv->dpu_base, priv->cat, DSC_1, PINGPONG_1);
 
+	// TOFIX use timings instead of static height/width
 	mdp_setup_stage_rec1(priv->dpu_base, priv->cat, CTL_0, LM_0, SSPP_DMA0, 2160, 2160, false);
+	// TOFIX use companion LM id from catalog
 	mdp_setup_stage_rec1(priv->dpu_base, priv->cat, CTL_0, LM_1, SSPP_DMA0, 2160, 2160, true);
 
+	// Since the panels are rotated, use the right side of the fb for panel0
 	mdss_sspp_config_rec1(priv->dpu_base, priv->cat, uc_plat->base,
-			      2160 * 4, SSPP_DMA0, 2160, 2160, 0);
+			      (2160 * 2 * 4), SSPP_DMA0, 2160, 2160, 2160);
 
 	mdss_intf_fetch_start_config(priv->dpu_base, priv->cat,
 				     CTL_0, INTF_1, DSC_0, DSC_1);
 
+	// TOFIX fill a flush bitfield from the config commands
 	mdp_ctl_flush(priv->dpu_base, priv->cat, CTL_0, SSPP_DMA0, true,
 		      LM_0, LM_1);
 
-	if (bridge1) {
-		mdss_intf_setup(priv->dpu_base, priv->cat, INTF_2, PINGPONG_2);
+	/* Panel 1 */
+	mdss_intf_setup(priv->dpu_base, priv->cat, INTF_2, PINGPONG_2);
 
-		mdp_dsc_setup(priv->dpu_base, priv->cat, DSC_2, PINGPONG_2);
-		mdp_dsc_setup(priv->dpu_base, priv->cat, DSC_3, PINGPONG_3);
+	mdp_dsc_setup(priv->dpu_base, priv->cat, DSC_2, PINGPONG_2);
+	// TOFIX use companion PP id from catalog
+	mdp_dsc_setup(priv->dpu_base, priv->cat, DSC_3, PINGPONG_3);
 
-		mdp_setup_stage_rec1(priv->dpu_base, priv->cat, CTL_1, LM_2, SSPP_DMA1, 2160, 2160, false);
-		mdp_setup_stage_rec1(priv->dpu_base, priv->cat, CTL_1, LM_3, SSPP_DMA1, 2160, 2160, true);
+	// TOFIX use timings instead of static height/width
+	mdp_setup_stage_rec1(priv->dpu_base, priv->cat, CTL_1, LM_2, SSPP_DMA1, 2160, 2160, false);
+	// TOFIX use companion LM id from catalog
+	mdp_setup_stage_rec1(priv->dpu_base, priv->cat, CTL_1, LM_3, SSPP_DMA1, 2160, 2160, true);
 
-		mdss_sspp_config_rec1(priv->dpu_base, priv->cat, uc_plat->base,
-				2160 * 4, SSPP_DMA1, 2160, 2160, 0);
+	// Since the panels are rotated, use the left side of the fb for panel0
+	mdss_sspp_config_rec1(priv->dpu_base, priv->cat, uc_plat->base,
+			(2160 * 2 * 4), SSPP_DMA1, 2160, 2160, 0);
 
-		mdss_intf_fetch_start_config(priv->dpu_base, priv->cat,
-				CTL_1, INTF_2, DSC_2, DSC_3);
+	mdss_intf_fetch_start_config(priv->dpu_base, priv->cat,
+			CTL_1, INTF_2, DSC_2, DSC_3);
 
-		mdp_ctl_flush(priv->dpu_base, priv->cat, CTL_1, SSPP_DMA1, true,
-				LM_2, LM_3);
-	}
+	// TOFIX fill a flush bitfield from the config commands
+	mdp_ctl_flush(priv->dpu_base, priv->cat, CTL_1, SSPP_DMA1, true,
+			LM_2, LM_3);
 
+	// TOFIX should we use bonded dsi instead ?
 	//writel(FLD_INTF_2_SW_TRG_MUX, priv->dpu_base + SPLIT_DISPLAY_LOWER_PIPE_CTRL);
 
 	mdp_intf_enable(priv->dpu_base, priv->cat, INTF_1);
-	if (bridge1)
-		mdp_intf_enable(priv->dpu_base, priv->cat, INTF_2);
+	mdp_intf_enable(priv->dpu_base, priv->cat, INTF_2);
 
 
-printf("=========%s exit ok\n", __func__);
-local_priv = priv;
+	//local_priv = priv;
 	//dpu_kms_mdp_snapshot();
 	return 0;
 }
 
-#define LCD_MAX_WIDTH (4320/2)
+#define LCD_MAX_WIDTH 4320
 #define LCD_MAX_HEIGHT 2160
 static int qcom_dpu_bind(struct udevice *dev)
 {
 	struct video_uc_plat *uc_plat = dev_get_uclass_plat(dev);
 
-printf("=========%s called\n", __func__);
 	uc_plat->size = (LCD_MAX_WIDTH * LCD_MAX_HEIGHT *
 			((1 << VIDEO_BPP32) / 8));
 	uc_plat->align = SZ_2M;
 	dev_dbg(dev, "frame buffer max size %d bytes align %x\n",
 		uc_plat->size, uc_plat->align);
 	uc_plat->base = 0xaf400000; //0x9bb00000;
-printf("frame buffer @ %#lx max size %d bytes align %x\n", uc_plat->base, uc_plat->size, uc_plat->align);
 
 	return 0;
 }
