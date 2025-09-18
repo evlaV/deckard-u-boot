@@ -268,6 +268,48 @@ static int rpmhpd_update_level_mapping(struct rpmhpd *rpmhpd)
 	return 0;
 }
 
+struct qcom_icc_bcm {
+	char *name;
+	u32 enable_mask;
+};
+
+static struct qcom_icc_bcm bcm_mm0 = {
+	.name = "MM0",
+};
+
+static struct qcom_icc_bcm bcm_sh1 = {
+        .name = "SH1",
+        .enable_mask = BIT(0),
+};
+
+static int qcom_icc_vote_bcm(struct udevice *rpmh, struct qcom_icc_bcm *bcm)
+{
+	struct tcs_cmd cmd;
+
+	cmd.addr = cmd_db_read_addr(bcm->name);
+	if (bcm->enable_mask)
+		cmd.data = BCM_TCS_CMD(true, true, bcm->enable_mask, bcm->enable_mask);
+	else
+		cmd.data = BCM_TCS_CMD(true, true, BCM_TCS_CMD_VOTE_MASK, BCM_TCS_CMD_VOTE_MASK);
+
+	return rpmh_write(rpmh, RPMH_ACTIVE_ONLY_STATE, &cmd, 1);
+}
+
+static int qcom_icc_vote(struct udevice *dev)
+{
+	int ret;
+
+	ret = qcom_icc_vote_bcm(dev, &bcm_mm0);
+	if (ret)
+		printf("%s: Failed to vote for MM0\n", __func__);
+
+	ret = qcom_icc_vote_bcm(dev, &bcm_sh1);
+	if (ret)
+		printf("%s: Failed to vote for MM0\n", __func__);
+
+	return 0;
+}
+
 static int rpmhpd_probe(struct udevice *dev)
 {
 	int i, ret;
@@ -304,6 +346,8 @@ static int rpmhpd_probe(struct udevice *dev)
 		if (ret)
 			return ret;
 	}
+
+	qcom_icc_vote(dev);
 
 	return ret;
 }
