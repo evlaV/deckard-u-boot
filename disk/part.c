@@ -376,6 +376,35 @@ int part_get_info(struct blk_desc *desc, int part,
 	return part_get_info_by_type(desc, part, PART_TYPE_UNKNOWN, info);
 }
 
+int part_get_dev_part_str_by_name(const char *ifname, const char *name,
+				  char *dev_part_str)
+{
+	struct disk_partition part_info;
+	struct blk_desc *blk_desc = NULL;
+	int part;
+	int i;
+
+	if (!blk_enabled())
+		return -ENOENT;
+
+	memset(dev_part_str, 0, sizeof(*dev_part_str));
+
+	for (i = 0; i < MAX_SEARCH_DEVICES; i++) {
+		blk_desc = blk_get_dev(ifname, i);
+		if (!blk_desc)
+			break;
+
+		part = part_get_info_by_name(blk_desc, name, &part_info);
+		if (part > 0) {
+			snprintf(dev_part_str, MAX_DEV_PART_STR,
+				 "%d:%d", blk_desc->devnum, part);
+			return 0;
+		}
+	}
+
+	return -ENOENT;
+}
+
 int part_get_info_whole_disk(struct blk_desc *desc,
 			     struct disk_partition *info)
 {

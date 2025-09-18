@@ -57,6 +57,8 @@ struct block_drvr {
 #define PART_NAME_LEN 32
 #define PART_TYPE_LEN 32
 #define MAX_SEARCH_PARTITIONS 128
+#define MAX_SEARCH_DEVICES 64
+#define MAX_DEV_PART_STR 6
 
 #define PART_BOOTABLE			((int)BIT(0))
 #define PART_EFI_SYSTEM_PARTITION	((int)BIT(1))
@@ -216,6 +218,8 @@ struct blk_desc *mg_disk_get_dev(int dev);
  */
 int part_get_info_by_type(struct blk_desc *desc, int part, int part_type,
 			  struct disk_partition *info);
+int part_get_dev_part_str_by_name(const char *ifname, const char *name,
+			       char *dev_part_str);
 int part_get_info(struct blk_desc *desc, int part,
 		  struct disk_partition *info);
 /**
