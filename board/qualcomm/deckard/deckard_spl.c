@@ -21,15 +21,19 @@
 #define BOOT_DEVICE_UFS_A	(BOOT_DEVICE_NONE + 1)
 #define BOOT_DEVICE_UFS_B	(BOOT_DEVICE_NONE + 2)
 
-#define DECKARD_UFS_ENV_LUN		2
-#define DECKARD_UFS_ENV_PART		1
-#define DECKARD_UFS_ENV_PART_ALT	2
+#define DECKARD_IFNAME "scsi"
 
-#define DECKARD_UFS_BOOTFW_LUN		1
+#define DECKARD_UBOOT_ENV_SLOT_A "ubootenv_a"
+#define DECKARD_UBOOT_FW_SLOT_A "ubootfw_a"
+#define DECKARD_UBOOT_SLOT_A "uboot_a"
+#define DECKARD_BOOT_ENV_SLOT_A "bootenv"
+#define DECKARD_BOOTFW_SLOT_A "xbl_a"
 
-#define DECKARD_UFS_BOOT_LUN		2
-#define DECKARD_UFS_BOOT_PART_A		3
-#define DECKARD_UFS_BOOT_PART_B		6
+#define DECKARD_UBOOT_ENV_SLOT_B "ubootenv_b"
+#define DECKARD_UBOOT_FW_SLOT_B "ubootfw_b"
+#define DECKARD_UBOOT_SLOT_B "uboot_b"
+#define DECKARD_BOOT_ENV_SLOT_B "bootenvb"
+#define DECKARD_BOOTFW_SLOT_B "xbl_b"
 
 #define BOOT_ATTEMPTS_MAX			8
 
@@ -62,6 +66,9 @@ DECLARE_GLOBAL_DATA_PTR;
 
 static ulong boot_wrapper_version __section(".data");
 
+static char *name = "uboot_a";
+static char *ifname = "scsi";
+
 static struct pon_on_off_reason pon_poff_reason;
 
 int g_boot_wrapper_version;
@@ -72,6 +79,47 @@ void save_boot_params(ulong r0)
 {
 	boot_wrapper_version = r0;
 	save_boot_params_ret();
+}
+
+static int deckard_spl_get_dev(const char *part_name)
+{
+	char dev_part_str[MAX_DEV_PART_STR];
+	char *dev_str;
+	int ret;
+
+	ret = part_get_dev_part_str_by_name(DECKARD_IFNAME, part_name,
+					    dev_part_str);
+	if (ret < 0)
+		return ret;
+
+	dev_str = strtok(dev_part_str, ":");
+	if (!dev_str)
+		return -EINVAL;
+
+	return simple_strtoul(dev_str, NULL, 10);
+}
+
+static int deckard_spl_get_part(const char *part_name)
+{
+	char dev_part_str[MAX_DEV_PART_STR];
+	char *part_str;
+	char *dev_str;
+	int ret;
+
+	ret = part_get_dev_part_str_by_name(DECKARD_IFNAME, part_name,
+					    dev_part_str);
+	if (ret < 0)
+		return ret;
+
+	dev_str = strtok(dev_part_str, ":");
+	if (!dev_str)
+		return -EINVAL;
+
+	part_str = strtok(NULL, ":");
+	if (!part_str)
+		return -EINVAL;
+
+	return simple_strtoul(part_str, NULL, 10);
 }
 
 void spl_perform_fixups(struct spl_image_info *spl_image)
@@ -334,6 +382,7 @@ static int check_for_boot_firmware_slot_change(void)
 	char *boot_fw_slot;
 	int slot_change_success;
 	int ret = 0;
+	int bootfw_lun;
 	struct blk_desc *blk_dev;
 
 	boot_fw_slot = env_get("BOOT_FW_SLOT");
@@ -344,16 +393,17 @@ static int check_for_boot_firmware_slot_change(void)
 	}
 
 	//todo use DECKARD_UFS_BOOTFW_LUN instead of hard code 1
-
 	if(strcmp(boot_fw_slot, "A") == 0)
 	{
-		blk_dev = blk_get_devnum_by_uclass_id(UCLASS_SCSI, DECKARD_UFS_BOOTFW_LUN);
-		ret = gpt_set_xbl_partition_bootable_by_slot_partfstype(blk_dev,"a");
+		bootfw_lun = deckard_spl_get_dev(DECKARD_BOOTFW_SLOT_A);
+		blk_dev = blk_get_devnum_by_uclass_id(UCLASS_SCSI, bootfw_lun);
+		ret = gpt_set_xbl_partition_bootable_by_slot_partfstype(blk_dev, "a");
 	}
 	else if(strcmp(boot_fw_slot, "B") == 0)
 	{
-		blk_dev = blk_get_devnum_by_uclass_id(UCLASS_SCSI, DECKARD_UFS_BOOTFW_LUN);
-		ret = gpt_set_xbl_partition_bootable_by_slot_partfstype(blk_dev,"b");
+		bootfw_lun = deckard_spl_get_dev(DECKARD_BOOTFW_SLOT_B);
+		blk_dev = blk_get_devnum_by_uclass_id(UCLASS_SCSI, bootfw_lun);
+		ret = gpt_set_xbl_partition_bootable_by_slot_partfstype(blk_dev, "b");
 	}
 
 	printf("check_for_boot_firmware_slot_change, ret = %d\n",ret);
@@ -506,14 +556,17 @@ static int determine_boot_target(void)
 
 static int spl_env_load(struct blk_desc *blk_dev, struct disk_partition *mainenv_info, struct disk_partition *altenv_info, void *mainbuf, void *altbuf)
 {
-	int ret;
+	int env_part_a, env_part_b;
 	long count;
+	int ret;
+
+	env_part_a = deckard_spl_get_part(DECKARD_BOOT_ENV_SLOT_A);
+	env_part_b = deckard_spl_get_part(DECKARD_BOOT_ENV_SLOT_B);
 
 	/* Read spl_env partition */
-	ret = part_get_info(blk_dev, DECKARD_UFS_ENV_PART, mainenv_info);
+	ret = part_get_info(blk_dev, env_part_a, mainenv_info);
 	if (ret == -ENOENT)
-		panic("partition %d for env not found\n",
-		       DECKARD_UFS_ENV_PART);
+		panic("partition %d for env not found\n", env_part_a);
 
 	count = blk_read(blk_dev->bdev, mainenv_info->start, mainenv_info->size, mainbuf);
 	if (count < 0)
@@ -523,10 +576,10 @@ static int spl_env_load(struct blk_desc *blk_dev, struct disk_partition *mainenv
 	altbuf = mainbuf + (mainenv_info->size * blk_dev->blksz);
 
 	/* Read spl_alt_env partition */
-	ret = part_get_info(blk_dev, DECKARD_UFS_ENV_PART_ALT, altenv_info);
+	ret = part_get_info(blk_dev, env_part_b, altenv_info);
 	if (ret == -ENOENT)
 		panic("partition %d for env_alt not found\n",
-		       DECKARD_UFS_ENV_PART_ALT);
+		       env_part_b);
 
 	count = blk_read(blk_dev->bdev, altenv_info->start, altenv_info->size, altbuf);
 	if (count < 0)
@@ -653,12 +706,15 @@ enum combined_button_state_t button_state_handler(void)
 static int set_booted_fw_slot(void)
 {
 	char active_partition_slot[2];
+	int bootfw_lun;
 	int ret = 0;
 	struct blk_desc *blk_dev;
 
-	blk_dev = blk_get_devnum_by_uclass_id(UCLASS_SCSI, DECKARD_UFS_BOOTFW_LUN);
-	ret = gpt_get_xbl_active_partition_slot(blk_dev,active_partition_slot);
-	env_set("BOOTED_FW_SLOT",active_partition_slot); //always check xbl_a / xbl_b to see which slot we are on
+	bootfw_lun = deckard_spl_get_dev(DECKARD_BOOTFW_SLOT_A);
+	blk_dev = blk_get_devnum_by_uclass_id(UCLASS_SCSI, bootfw_lun);
+	ret = gpt_get_xbl_active_partition_slot(blk_dev, active_partition_slot);
+	//always check xbl_a / xbl_b to see which slot we are on
+	env_set("BOOTED_FW_SLOT", active_partition_slot);
 
 	return ret;
 }
@@ -674,6 +730,8 @@ void qcom_spl_board_init(void)
 	char *boot_order;
 	int ret;
 	int boot_count;
+	int env_lun, boot_lun;
+	char dev_part_str[MAX_DEV_PART_STR + 1] = { 0 };
 	enum combined_button_state_t total_button_state = 0;
 	int power_button_released_since_boot = 0;
 	int power_button_release_rtc_time_since_pon  = 0;
@@ -772,11 +830,15 @@ void qcom_spl_board_init(void)
 	if (ret)
 		panic("Failed to scan SCSI (%d)\n", ret);	
 
-	blk_dev = blk_get_devnum_by_uclass_id(UCLASS_SCSI, DECKARD_UFS_ENV_LUN);
+	env_lun = deckard_spl_get_dev(DECKARD_UBOOT_ENV_SLOT_A);
+	if (env_lun < 0)
+		panic("lun for env not found\n");
+
+	blk_dev = blk_get_devnum_by_uclass_id(UCLASS_SCSI, env_lun);
 	if (!blk_dev)
 		panic("blk desc for env not found\n");
 
-	blk_show_device(UCLASS_SCSI, DECKARD_UFS_ENV_LUN);
+	blk_show_device(UCLASS_SCSI, env_lun);
 
 	if (boot_wrapper_version == 9001)
 	{
@@ -861,30 +923,53 @@ static int deckard_ufs_load_image(struct spl_image_info *spl_image,
 	struct blk_desc *blk_dev;
 	struct spl_load_info load;
 	struct disk_partition info;
-	unsigned int partid = DECKARD_UFS_BOOT_PART_A;
+	int uboot_part_a, uboot_part_b;
+	int uboot_lun;
+	unsigned int partid;
 	int ret;
-
 
 	blk_dev = NULL;
 
-	if (bootdev->boot_device == BOOT_DEVICE_UFS_B)
-		partid = DECKARD_UFS_BOOT_PART_B;
+	uboot_lun = deckard_spl_get_dev(DECKARD_UBOOT_SLOT_A);
+	if (uboot_lun < 0) {
+		printf("uboot lun with partition name %s not found\n",
+			DECKARD_UBOOT_SLOT_A);
+		return -ENODEV;
+	}
+
+	uboot_part_a = deckard_spl_get_part(DECKARD_UBOOT_SLOT_A);
+	if (uboot_part_a < 0) {
+		printf("uboot partition with name %s not found\n",
+			DECKARD_UBOOT_SLOT_A);
+		return -ENODEV;
+	}
+	partid = uboot_part_a;
+
+	if (bootdev->boot_device == BOOT_DEVICE_UFS_B) {
+		uboot_part_b = deckard_spl_get_part(DECKARD_UBOOT_SLOT_B);
+		if (uboot_part_b < 0) {
+			printf("uboot partition with name %s not found\n",
+				DECKARD_UBOOT_SLOT_B);
+			return -ENODEV;
+		}
+		partid = uboot_part_b;
+	}
 
 	if (bootdev->boot_device == BOOT_DEVICE_UFS_A ||
 	    bootdev->boot_device == BOOT_DEVICE_UFS_B) {
-		blk_dev = blk_get_devnum_by_uclass_id(UCLASS_SCSI, DECKARD_UFS_BOOT_LUN);
+		blk_dev = blk_get_devnum_by_uclass_id(UCLASS_SCSI, uboot_lun);
 		if (!blk_dev) {
-			printf("blk desc for %d %d not found\n", UCLASS_SCSI, DECKARD_UFS_BOOT_LUN);
+			printf("blk desc for %d %d not found\n", UCLASS_SCSI, uboot_lun);
 			return -ENODEV;
 		}
 
-		blk_show_device(UCLASS_SCSI, 1);
+		blk_show_device(UCLASS_SCSI, uboot_lun - 1);
 	}
 
 	ret = part_get_info(blk_dev, partid, &info);
 	if (ret == -ENOENT) {
 		printf("partition %d for blk desc for %d %d not found\n",
-		       partid, UCLASS_SCSI, DECKARD_UFS_BOOT_LUN);
+		       partid, UCLASS_SCSI, uboot_lun);
 		return -ENODEV;
 	}
 
