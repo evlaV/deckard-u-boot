@@ -41,15 +41,17 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
-#define DECKARD_SYSTEM_LUNIDX "0"
-#define DECKARD_UBOOT_LUNIDX "2"
+#define DECKARD_IFNAME "scsi"
 
-#define DECKARD_UBOOT_ENV_SLOT_A "2:4"
-#define DECKARD_UBOOT_FW_SLOT_A "2:5"
-#define DECKARD_UBOOT_ENV_SLOT_B "2:7"
-#define DECKARD_UBOOT_FW_SLOT_B "2:8"
-#define DECKARD_SLOT_A_PARTITION "0:4"
-#define DECKARD_SLOT_B_PARTITION "0:5"
+#define DECKARD_UBOOT_ENV_SLOT_A "ubootenv_a"
+#define DECKARD_UBOOT_FW_SLOT_A "ubootfw_a"
+#define DECKARD_ROOTFS_SLOT_A "rootfs-A"
+#define DECKARD_UBOOT_SLOT_A "uboot_a"
+
+#define DECKARD_UBOOT_ENV_SLOT_B "ubootenv_b"
+#define DECKARD_UBOOT_FW_SLOT_B "ubootfw_b"
+#define DECKARD_ROOTFS_SLOT_B "rootfs-B"
+#define DECKARD_UBOOT_SLOT_B "uboot_b"
 
 //these are set as a bit-mask typically when we detect a button is enabled
 #define VOLUP_BUTTON_MASK 0b100
@@ -225,6 +227,24 @@ int button_state_handler(enum combined_button_state_t total_button_state, int po
 	return 0;
 }
 
+static char *deckard_get_dev_part_str(const char *part_name)
+{
+	char dev_part_str[MAX_DEV_PART_STR];
+	int ret;
+
+	ret = part_get_dev_part_str_by_name(DECKARD_IFNAME, part_name,
+					    dev_part_str);
+	if (ret < 0)
+		return NULL;
+
+	return strdup(dev_part_str);
+}
+
+static char *deckard_get_dev_str(const char *part_name)
+{
+	return strtok(deckard_get_dev_part_str(part_name), ":");
+}
+
 const char *env_scsi_get_dev_part(void)
 {
 	ofnode node;
@@ -235,26 +255,26 @@ const char *env_scsi_get_dev_part(void)
 		bootdev = ofnode_read_string(node, "u-boot,spl-boot-device");
 		if (!bootdev) {
 			printf("No u-boot,spl-boot-device, considering slot\n");
-			return DECKARD_UBOOT_ENV_SLOT_A;
+			return deckard_get_dev_part_str(DECKARD_UBOOT_ENV_SLOT_A);
 		} else {
 			printf("Booted on slot '%s'\n", bootdev);
 
 			switch (bootdev[0]) {
 			case 'A':
-				return DECKARD_UBOOT_ENV_SLOT_A;
+				return deckard_get_dev_part_str(DECKARD_UBOOT_ENV_SLOT_A);
 				break;
 			case 'B':
-				return DECKARD_UBOOT_ENV_SLOT_B;
+				return deckard_get_dev_part_str(DECKARD_UBOOT_ENV_SLOT_B);
 				break;
 			default:
 				printf("%s: Invalid booted_slot, defaulting to A env\n", __func__);
-				return DECKARD_UBOOT_ENV_SLOT_A;
+				return deckard_get_dev_part_str(DECKARD_UBOOT_ENV_SLOT_A);
 				break;
 			}
 		}
 	} else {
 		printf("No chosen node default to A!\n");
-		return DECKARD_UBOOT_ENV_SLOT_A;
+		return deckard_get_dev_part_str(DECKARD_UBOOT_ENV_SLOT_A);
 	}
 }
 
@@ -266,20 +286,15 @@ const char *deckard_get_fw_part(void)
 	bootedslot = env_get("booted_slot");
 	switch(bootedslot[0]){
 		case 'A':
-			return DECKARD_UBOOT_FW_SLOT_A;
-			break;
-		case 'B':
-			return DECKARD_UBOOT_FW_SLOT_B;
-			break;
 		default:
-			return DECKARD_UBOOT_FW_SLOT_A;
-			break;
+			return deckard_get_dev_part_str(DECKARD_UBOOT_FW_SLOT_A);
+		case 'B':
+			return deckard_get_dev_part_str(DECKARD_UBOOT_FW_SLOT_B);
 	}
 }
 
 const char *fs_firmware_get_partition(void)
 {
-	char *bootedslot;
 	return deckard_get_fw_part();
 }
 
@@ -412,7 +427,7 @@ int fastboot_set_reboot_flag(enum fastboot_reboot_reason reason)
 {
 	if ((reason != FASTBOOT_REBOOT_REASON_FASTBOOTD) &&
 			(reason != FASTBOOT_REBOOT_REASON_OEM_EDL) &&
-			(reason != FASTBOOT_REBOOT_REASON_OEM_USB) &&			
+			(reason != FASTBOOT_REBOOT_REASON_OEM_USB) &&
 			(reason != FASTBOOT_REBOOT_REASON_BOOTLOADER))
 		return -ENOTSUPP;
 
@@ -432,7 +447,7 @@ int fastboot_set_reboot_flag(enum fastboot_reboot_reason reason)
 		printf("Setting reboot to USB mode ...\n");
 		env_set("reboot_mode", "u");
 		env_save();
- 	}
+	}
 
 	return 0;
 }
@@ -576,8 +591,8 @@ int misc_init_r(void)
 	// get board data from eeprom
 	deckard_eeprom_init();
 
-	env_set("UBOOTLUNIDX", DECKARD_UBOOT_LUNIDX);
-	env_set("SYSTEMLUNIDX", DECKARD_SYSTEM_LUNIDX);
+	env_set("UBOOTLUNIDX", deckard_get_dev_str(DECKARD_UBOOT_SLOT_A));
+	env_set("SYSTEMLUNIDX", deckard_get_dev_str(DECKARD_ROOTFS_SLOT_A));
 
 	// do we still need this?
 	bootedslot = env_get("booted_slot");
@@ -949,7 +964,7 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	char * bootedslot;
 	char * KERNEL_TARGET = "/boot/Image";
 	char * INITRD_TARGET = "/boot/initrd.uImage";
-	char partition[DEVPARTMAXLEN];
+	char *partition;
 	char label[DEVPARTMAXLEN];
 	int ret;
 	ulong image_size, addr_kernel, addr_dtb, addr_initrd;
@@ -970,16 +985,13 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	bootedslot = env_get("booted_slot");
 	switch(bootedslot[0]){
 		case 'A':
-			strncpy(partition, DECKARD_SLOT_A_PARTITION, DEVPARTMAXLEN);
+		default:
+			partition = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_A);
 			strncpy(label, "rootfs-A", DEVPARTMAXLEN);
 			break;
 		case 'B':
-			strncpy(partition, DECKARD_SLOT_B_PARTITION, DEVPARTMAXLEN);
+			partition = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_B);
 			strncpy(label, "rootfs-B", DEVPARTMAXLEN);
-			break;
-		default:
-			strncpy(partition, DECKARD_SLOT_A_PARTITION, DEVPARTMAXLEN);
-			strncpy(label, "rootfs-A", DEVPARTMAXLEN);
 			break;
 	}
 
