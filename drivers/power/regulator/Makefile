@@ -52,3 +52,4 @@ obj-$(CONFIG_DM_REGULATOR_MT6357) += mt6357_regulator.o
 obj-$(CONFIG_DM_REGULATOR_MT6359) += mt6359_regulator.o
 obj-$(CONFIG_$(PHASE_)DM_REGULATOR_MPQ3367) += mpq3367_regulator.o
 obj-$(CONFIG_$(PHASE_)DM_REGULATOR_NEX10001UB) += nex10001ub_regulator.o
+obj-$(CONFIG_$(PHASE_)DM_REGULATOR_TPS61377) += tps61377_regulator.o
