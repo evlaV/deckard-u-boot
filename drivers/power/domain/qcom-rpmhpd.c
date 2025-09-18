@@ -36,7 +36,7 @@
 struct rpmhpd {
 	struct udevice	*dev;
 	struct power_domain pd;
-	struct power_domain *parent;
+	struct rpmhpd   *parent;
 	unsigned int	enable_corner;
 	u32		level[RPMH_ARC_MAX_LEVELS];
 	size_t		level_count;
@@ -175,6 +175,15 @@ static int rpmhpd_power_on(struct power_domain *pd)
 		log_warning("%s: Power domain id (%ld) not supported\n", __func__,
 			    pd->id);
 		return 0;
+	}
+
+	if (curr_rpmhpd->parent && !curr_rpmhpd->parent->enabled) {
+		corner = curr_rpmhpd->parent->enable_corner;
+
+		ret = rpmhpd_send_corner(curr_rpmhpd->parent, RPMH_ACTIVE_ONLY_STATE, corner,
+				false);
+		if (!ret)
+			curr_rpmhpd->parent->enabled = true;
 	}
 
 	corner = curr_rpmhpd->enable_corner;
