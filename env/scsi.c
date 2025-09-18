@@ -91,9 +91,11 @@ static int env_scsi_load(void)
 	int err, part;
 	ulong count;
 	char *default_bootargs;
-	const char *dev_and_part = env_scsi_get_dev_part();
+	const char *dev_and_part;
 
 	scsi_scan(true);
+
+	dev_and_part = env_scsi_get_dev_part();
 
 	part = blk_get_device_part_str("scsi", dev_and_part,
 						&blk_dev, &info, 1);
