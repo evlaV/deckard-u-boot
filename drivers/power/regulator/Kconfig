@@ -536,3 +536,9 @@ config DM_REGULATOR_MPQ3367
 	depends on DM_REGULATOR
 	help
 	The MPQ3367 provides a step-up converter with 6 channel current sources
+
+config DM_REGULATOR_TPS61377
+	bool "Enable driver for TPS61377 Power Regulator"
+	depends on DM_REGULATOR
+	help
+	The TPS61377 provides a Synchronous Boost Converter.
