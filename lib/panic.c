@@ -51,10 +51,17 @@ void panic(const char *fmt, ...)
 	vprintf(fmt, args);
 	va_end(args);
 
-	if (CONFIG_IS_ENABLED(FRAMEPOINTER)) {
-		puts("\n");
-		unwind_stack();
-	}
+#ifdef CONFIG_XPL_BUILD
+ #ifdef SPL_FRAMEPOINTER
+	puts("\n");
+	unwind_stack();
+ #endif
+#else
+ #ifdef FRAMEPOINTER
+	puts("\n");
+	unwind_stack();
+ #endif
+#endif
 
 #endif
 	panic_finish();

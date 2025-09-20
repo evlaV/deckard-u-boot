@@ -23,7 +23,7 @@ static inline const char *symbol_lookup(unsigned long addr, unsigned long *symad
 }
 #endif
 
-#if CONFIG_IS_ENABLED(FRAMEPOINTER)
+#if CONFIG_IS_ENABLED(FRAMEPOINTER) || CONFIG_IS_ENABLED(SPL_FRAMEPOINTER)
 /**
  * unwind_stack - unwind the callstack and print a backtrace.
  */
