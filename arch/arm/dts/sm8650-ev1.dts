@@ -30,9 +30,9 @@
                ranges;
                framebuffer0: framebuffer@af400000 {
                        compatible = "simple-framebuffer";
-                       reg = <0 0xaf400000 0 (2400 * 4352 * 4)>;
+                       reg = <0 0xaf400000 0 (1080 * 4352 * 4)>;
                        width = <1088>; // real width is 1080 but seems like uboot doesn't care about stride value and just uses the width
-                       height = <2400>;
+                       height = <1080>;
                        stride = <4352>;
                        format = "x8b8g8r8";
                };
