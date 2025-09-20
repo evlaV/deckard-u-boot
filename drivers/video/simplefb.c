@@ -19,7 +19,8 @@ static int simple_video_probe(struct udevice *dev)
 	int ret;
 	fdt_addr_t base;
 	fdt_size_t size;
-	u32 width, height, rot;
+	u32 width, height;
+	u32 rot;
 
 	base = dev_read_addr_size(dev, &size);
 	if (base == FDT_ADDR_T_NONE) {
@@ -47,6 +48,8 @@ static int simple_video_probe(struct udevice *dev)
 		log_err("%s: invalid width or height: %d\n", __func__, ret);
 		return ret ?: -EINVAL;
 	}
+
+	rot=0; //valid values are 0,1,2,3
 	ofnode_read_u32(node, "rot", &rot); //gabe: what happens if user doesn't specify rot -- what value is returned here?
 	uc_priv->rot = rot;
 	uc_priv->xsize = width;

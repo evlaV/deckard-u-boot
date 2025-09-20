@@ -436,15 +436,12 @@ void draw_text_fb( struct video_priv *vid_priv, int x, int y, const char *s )
 	Pixbuf pb; 
 	pb.w=vid_priv->xsize; 
 	pb.h=vid_priv->ysize; 
-	pb.stride=1088*4; //hack
+	pb.stride=2160*4; //hack -- should we use the stride value from the framebuffer setting?
 	pb.px = vid_priv->fb;
 
-	draw_text_rot_deg_scaled_dir(&pb, 500, 500, "HELLO", 5, 2, GLYPH_FLIP_XY, TEXT_DIR_RTL, 0xFF,0x00,0xFF,0x00);
-	draw_text_rot_deg_scaled_dir(&pb, 500, 520, "ABCDEFGHIJ", 5, 2, GLYPH_FLIP_XY, TEXT_DIR_RTL, 0xFF,0x00,0xFF,0x00);
-	draw_text_rot_deg_scaled_dir(&pb, 500, 540, "BLAH", 5, 2, GLYPH_FLIP_XY, TEXT_DIR_RTL, 0xFF,0x00,0xFF,0x00);
-	draw_text_rot_deg_scaled_dir(&pb, 500, 560, "TEST", 5, 2, GLYPH_FLIP_XY, TEXT_DIR_RTL, 0xFF,0x00,0xFF,0x00);
-	draw_text_rot_deg_scaled_dir(&pb, 500, 580, "arkajarlragklajlksdjflkasjdf", 5, 2, GLYPH_FLIP_XY, TEXT_DIR_RTL, 0xFF,0x00,0xFF,0x00);
-	draw_text_rot_deg_scaled_dir(&pb, 500, 600, "dsasda _ -d-d asdf ?3 ", 5, 2, GLYPH_FLIP_XY, TEXT_DIR_RTL, 0xFF,0x00,0xFF,0x00);
+	int offset = 200;
+	draw_text_rot_deg_scaled_dir(&pb, 1080/2 - offset      , 500, "HELLO", -10, 2, GLYPH_FLIP_XY, TEXT_DIR_RTL, 0x00,0xFF,0x00,0x00);
+	draw_text_rot_deg_scaled_dir(&pb, 1080/2 + 1080 + offset, 500, "HELLO", 10, 2, GLYPH_FLIP_XY, TEXT_DIR_RTL, 0x00,0xFF,0x00,0x00);
 }
 
 int console_probe(struct udevice *dev)
