@@ -79,7 +79,7 @@ static int simple_video_probe(struct udevice *dev)
 		return -EINVAL;
 	}
 
-	uc_priv->vidconsole_drv_name = "vidconsole0";
+	uc_priv->vidconsole_drv_name = "vidconsole4";
 
 	return 0;
 }

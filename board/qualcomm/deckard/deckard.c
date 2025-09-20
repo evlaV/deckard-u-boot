@@ -547,6 +547,8 @@ int misc_init_r(void)
 
 	button_state_handler(total_button_state,power_button_state);
 
+	env_set("stdout","vidconsole,serial");
+
 	/*
 	 * Check if we have a special boot command
 	 * f - for fastboot and b - to stay in bootloader

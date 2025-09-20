@@ -35,6 +35,7 @@
                        height = <1080>;
                        stride = <4352>;
                        format = "x8b8g8r8";
+					   rot = <0>;
                };
         };
 
