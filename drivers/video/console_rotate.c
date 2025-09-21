@@ -382,7 +382,7 @@ static int console_putc_xy_4(struct udevice *dev, uint x_frac, uint y, int cp)
 	start = vid_priv->fb + linenum * vid_priv->line_length + x * pbytes;
 	line = start;
 
-#if 0
+#if 1
 	ret = fill_char_vertically(pfont, &line, vid_priv, fontdata, FLIPPED_DIRECTION);
 	if (ret)
 		return ret;
@@ -390,7 +390,7 @@ static int console_putc_xy_4(struct udevice *dev, uint x_frac, uint y, int cp)
 	draw_text_fb(vid_priv, x, y, linenum, pfont);
 #endif
 
-#if 0
+#if 1
 	//draw second copy of character on 2nd display
 	line = vid_priv->fb + linenum * vid_priv->line_length + ( x + 1080 ) * pbytes;
 	ret = fill_char_vertically(pfont, &line, vid_priv, fontdata, FLIPPED_DIRECTION);
