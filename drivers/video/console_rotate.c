@@ -305,7 +305,7 @@ typedef enum {
     TEXT_DIR_RTL = 1
 } TextDir;
 
-void draw_text_fb( struct video_priv *vid_priv, int x, int y, const char *s );
+void draw_text_fb( struct video_priv *vid_priv, int x, int y, int line, const char *s );
 
 static int console_set_row_4(struct udevice *dev, uint row, int clr)
 {
@@ -317,7 +317,6 @@ static int console_set_row_4(struct udevice *dev, uint row, int clr)
 	int i;
 	int pbytes = VNBYTES(vid_priv->bpix);
 
-#if 0
 	start = vid_priv->fb + vid_priv->ysize * vid_priv->line_length -
 		(row + 1) * fontdata->height * vid_priv->line_length;
 	line = start;
@@ -331,7 +330,7 @@ static int console_set_row_4(struct udevice *dev, uint row, int clr)
 		     vid_priv->ysize - (row + 1) * fontdata->height,
 		     vid_priv->xsize,
 		     fontdata->height);
-#endif
+
 	return 0;
 }
 
@@ -344,7 +343,7 @@ static int console_move_rows_4(struct udevice *dev, uint rowdst, uint rowsrc,
 	void *dst;
 	void *src;
 	void *end;
-#if 0
+
 	end = vid_priv->fb + vid_priv->ysize * vid_priv->line_length;
 	dst = end - (rowdst + count) * fontdata->height *
 		vid_priv->line_length;
@@ -357,7 +356,7 @@ static int console_move_rows_4(struct udevice *dev, uint rowdst, uint rowsrc,
 		     vid_priv->ysize - (rowdst + count) * fontdata->height,
 		     vid_priv->xsize,
 		     count * fontdata->height);
-#endif
+
 	return 0;
 }
 
@@ -372,32 +371,43 @@ static int console_putc_xy_4(struct udevice *dev, uint x_frac, uint y, int cp)
 	int linenum, x, ret;
 	void *start, *line;
 
-#if 0
 	u8 ch = console_utf_to_cp437(cp);
 	uchar *pfont = fontdata->video_fontdata +
 			ch * fontdata->char_pixel_bytes;
 
-	if (x_frac + VID_TO_POS(vc_priv->x_charsize) > vc_priv->xsize_frac)
+	if (x_frac + VID_TO_POS(vc_priv->x_charsize) > (vc_priv->xsize_frac / 2)) //only use half of the display to avoid stomping
 		return -EAGAIN;
 	linenum = vid_priv->ysize - y - 1;
 	x = vid_priv->xsize - VID_TO_PIXEL(x_frac) - 1;
 	start = vid_priv->fb + linenum * vid_priv->line_length + x * pbytes;
 	line = start;
 
+#if 0
 	ret = fill_char_vertically(pfont, &line, vid_priv, fontdata, FLIPPED_DIRECTION);
 	if (ret)
 		return ret;
-
-	video_damage(dev->parent,
-		     x - fontdata->width + 1,
-		     linenum - fontdata->height + 1,
-		     fontdata->width,
-		     fontdata->height);
 #else
-	draw_text_fb(vid_priv, 500, 500, "HELLO");
-	video_damage(dev->parent, 0, 0, 1000, 1000);
+	draw_text_fb(vid_priv, x, y, linenum, pfont);
 #endif
 
+#if 0
+	//draw second copy of character on 2nd display
+	line = vid_priv->fb + linenum * vid_priv->line_length + ( x + 1080 ) * pbytes;
+	ret = fill_char_vertically(pfont, &line, vid_priv, fontdata, FLIPPED_DIRECTION);
+	//ret = fill_char_vertically(pfont, &line, vid_priv, fontdata, FLIPPED_DIRECTION);
+	//ret = fill_char_vertically4(pfont, x, linenum, vid_priv, fontdata, FLIPPED_DIRECTION);
+	if (ret)
+		return ret;
+#endif
+
+	int dmg_extra_x=2;
+	int dmg_extra_y=2;
+#if 0	
+	video_damage(dev->parent, x - fontdata->width + 1 - dmg_extra_x, linenum - fontdata->height + 1 - dmg_extra_y, 
+					fontdata->width + dmg_extra_x,  fontdata->height + dmg_extra_y);
+#else
+	video_damage(dev->parent, 0, 0, 2160,2160);
+#endif
 	return VID_TO_POS(fontdata->width);
 }
 
