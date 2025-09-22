@@ -309,7 +309,8 @@ static bool qcom_geni_serial_poll_bit(const struct udevice *dev, int offset,
 		reg = readl(priv->base + offset);
 		if ((bool)(reg & field) == set)
 			return true;
-		udelay(10);
+		// Don't schedule() !
+		__udelay(10);
 		timeout_us -= 10;
 	}
 	return false;
