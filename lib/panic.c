@@ -15,6 +15,7 @@
 #endif
 #include <linux/delay.h>
 #include <stdio.h>
+#include <symbols.h>
 
 static void panic_finish(void) __attribute__ ((noreturn));
 
@@ -45,6 +46,7 @@ void panic(const char *fmt, ...)
 	va_start(args, fmt);
 	vprintf(fmt, args);
 	va_end(args);
+	unwind_stack();
 #endif
 	panic_finish();
 }
@@ -56,3 +58,6 @@ void __assert_fail(const char *assertion, const char *file, unsigned int line,
 	panic("%s:%u: %s: Assertion `%s' failed.", file, line, function,
 	      assertion);
 }
+
+/* Stub unwind_stack() for architectures to implement */
+void __weak unwind_stack(void) { }
