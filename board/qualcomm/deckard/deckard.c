@@ -492,7 +492,6 @@ int misc_init_r(void)
 		panic("No chosen node !\n");
 	}
 
-	printf("watchdog disable!!!!!!!!!!!!\n");
 	deckard_disable_watchdog();
 
 	deckard_setup();
