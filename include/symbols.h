@@ -1,5 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0+ */
 
+#ifndef __SYMBOLS_H__
+#define __SYMBOLS_H__
+
 #include <asm/types.h>
 #include <string.h>
 
@@ -22,3 +25,8 @@ static inline const char *symbol_lookup(unsigned long addr, unsigned long *symad
 	return namebuf;
 }
 #endif
+
+void unwind_stack(void);
+
+#endif // __SYMBOLS_H__
+
