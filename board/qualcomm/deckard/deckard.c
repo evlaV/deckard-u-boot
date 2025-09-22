@@ -982,7 +982,9 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 			break;
 	}
 
-	deckard_prepare_for_boot();
+	if ( !env_get("factory-mode") ) {
+		deckard_prepare_for_boot();
+	}
 
 	// Load kernel
 	if ( scsi_do_load_helper(partition, ADDR_KERNEL, KERNEL_TARGET) ) {
