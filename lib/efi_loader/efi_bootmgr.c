@@ -1137,6 +1137,8 @@ efi_status_t efi_bootmgr_update_media_device_boot_option(void)
 	efi_handle_t *handles = NULL;
 	struct eficonfig_media_boot_option *opt = NULL;
 
+	return EFI_SUCCESS;
+
 	ret = efi_locate_handle_buffer_int(BY_PROTOCOL,
 					   &efi_block_io_guid,
 					   NULL, &count,
