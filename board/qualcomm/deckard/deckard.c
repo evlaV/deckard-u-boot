@@ -8,9 +8,13 @@
 #include <cpu_func.h>
 #include <dm.h>
 #include <dm/pinctrl.h>
+#include <efi_config.h>
+#include <efi_loader.h>
+#include <efi_variable.h>
 #include <env.h>
 #include <fastboot.h>
 #include <init.h>
+#include <malloc.h>
 #include <mmc.h>
 #include <net.h>
 #include <usb.h>
@@ -95,6 +99,15 @@ int display_turn_off_force(void);
 void deckard_load_logo(enum full_screen_images_t image);
 int deckard_check_for_key_press(void);
 int deckard_prepare_for_boot(void);
+
+struct deckard_esp_info {
+	bool valid;
+	int devnum;
+	int partnum;
+};
+
+static struct deckard_esp_info efivar_store = { 0 };
+
 
 // #define CHECK_PMICS
 #ifdef CHECK_PMICS
@@ -545,6 +558,292 @@ int led_set_color_and_state(char * led_name, enum led_state_t state)
 	return ret;
 }
 
+/* Get the devnum/partnum for a partition from its GPT partlabel */
+static int deckard_find_part_by_label(const char *partname, int *devnum, int *partnum)
+{
+	int r;
+	struct udevice *blkdev;
+	struct blk_desc *desc;
+	struct uclass *blk_class;
+	struct disk_partition part;
+
+	uclass_get(UCLASS_BLK, &blk_class);
+
+	/* Devices are already probed! */
+	uclass_foreach_dev(blkdev, blk_class) {
+		if (device_get_uclass_id(blkdev) != UCLASS_BLK)
+			continue;
+
+		desc = dev_get_uclass_plat(blkdev);
+		if (!desc || desc->part_type == PART_TYPE_UNKNOWN)
+			continue;
+		/* Only look for non-removable SCSI devices (internal storage) */
+		// FIXME: we might need a more reliable way to identify internal storage!
+		if (desc->uclass_id != UCLASS_SCSI || desc->removable)
+			continue;
+
+		for (*partnum = 1;; (*partnum)++) {
+			r = part_get_info(desc, *partnum, &part);
+			/* Last partition, go next */
+			if (r < 0)
+				break;
+			/* Skip if the name doesn't match */
+			if (strncmp(partname, part.name, strlen(partname)))
+				continue;
+			// printf("Found EFI partition '%s' (%d:%d) blksz %#lx\n", part.name, desc->devnum, *partnum, desc->blksz);
+			*devnum = desc->devnum;
+
+			return 0;
+		}
+	}
+
+	return -ENODEV;
+}
+
+static int deckard_find_efi_var_store(void)
+{
+	char partname[16] = { 0 };
+	char *slot;
+
+	if (efivar_store.valid)
+		return 0;
+
+	slot = env_get("booted_slot");
+	/* Build the partition name (efi-A/efi-B) */
+	strlcat(partname, "efi-", 16);
+	strlcat(partname, slot, 16);
+	// printf("%s: searching for '%s'\n", __func__, part_name);
+
+	if (!deckard_find_part_by_label(partname, &efivar_store.devnum, &efivar_store.partnum)) {
+		efivar_store.valid = true;
+		return 0;
+	}
+
+	return -ENOENT;
+}
+
+// FIXME: exported from lib/efi_loader/efi_device_path_to_text.c
+u16 *efi_str_to_u16(const char *str);
+
+/* Find the boot entry with the matching label or the first unavailable boot entry. Returns the index of the entry or error */
+static efi_status_t deckard_efi_get_bootoption_by_label(u16 *boot_varname, size_t varname_size, const char *label, struct efi_load_option *lop)
+{
+	u16 *label16;
+	void *load_option;
+	efi_uintn_t size;
+	struct efi_load_option lo;
+
+	label16 = efi_str_to_u16(label);
+	if (!label16)
+		return EFI_OUT_OF_RESOURCES;
+
+	for (int i = 0;; i++) {
+		efi_create_indexed_name(boot_varname, varname_size, "Boot", i);
+		load_option = efi_get_var(boot_varname, &efi_global_variable_guid, &size);
+		if (!load_option) {
+			efi_free_pool(label16);
+			return i;
+		}
+
+		efi_deserialize_load_option(&lo, load_option, &size);
+		if (!u16_strcmp(lo.label, label16)) {
+			memcpy(lop, &lo, sizeof(lo));
+			efi_free_pool(label16);
+			return i;
+		}
+	}
+
+	// UNREACHABLE
+}
+
+static int deckard_efi_setup(void *ctx, struct event *event)
+{
+	u16 varname[9];
+	u32 index;
+	efi_status_t ret;
+	int r;
+	struct efi_load_option lo = { 0 };
+	struct blk_desc *desc;
+	char entry_label[32] = { 0 };
+	int esp_devnum, esp_partnum;
+	const char *slot = env_get("booted_slot");
+	if (!slot)
+		slot = "A";
+
+	/* Get the EFI subsystem up and running! */
+	ret = efi_init_obj_list();
+	if (ret != EFI_SUCCESS)
+		return -1;
+
+	snprintf(entry_label, sizeof(entry_label), "SteamOS %c", *slot);
+	/* varname is set to the entry with our label or the first available entry! */
+	ret = deckard_efi_get_bootoption_by_label((u16 *)varname, sizeof(varname), entry_label, &lo);
+	if (ret > EFI_ERROR_MASK) {
+		printf("Couldn't get EFI Boot#### variables! %#lx\n", ret);
+		return -1;
+	}
+
+	/* We already have the boot entry so we're golden, unless the magic variable is set to make us override it. */
+	if (ret < EFI_ERROR_MASK && lo.label && !env_get("efi_reset_boot_entries")) {
+		printf("EFI: not modifying boot entry %s\n", entry_label);
+		return 0;
+	}
+
+	index = ret;
+
+	/* Find the ESP where our UKI images are stored! */
+	r = deckard_find_part_by_label("esp", &esp_devnum, &esp_partnum);
+	if (r) {
+		printf("Couldn't find ESP partition: %d\n", r);
+		return r;
+	}
+
+	/* Find the EFI device path for the ESP + the UKI file path and set the Boot#### EFI variable */
+	{
+		efi_uintn_t count, size;
+		int i;
+		efi_handle_t *volume_handles = NULL;
+		struct efi_handler *handler;
+		struct efi_simple_file_system_protocol *v;
+		struct efi_device_path *device_path;
+		struct disk_part *part_data;
+		void *p;
+		char *cmdline;
+		u16 *dst;
+
+		ret = efi_locate_handle_buffer_int(BY_PROTOCOL, &efi_simple_file_system_protocol_guid,
+						   NULL, &count, (efi_handle_t **)&volume_handles);
+		if (ret != EFI_SUCCESS) {
+			printf("EFI: No block device found!");
+			return ret;
+		}
+
+		for (i = 0; i < count; i++) {
+			struct efi_block_io *block_io;
+
+			ret = efi_search_protocol(volume_handles[i],
+						&efi_simple_file_system_protocol_guid, &handler);
+			if (ret != EFI_SUCCESS) {
+				printf("efi_search_protocol() failed! efi_simple_file_system_protocol_guid\n");
+				continue;
+			}
+			ret = efi_protocol_open(handler, (void **)&v, efi_root, NULL,
+						EFI_OPEN_PROTOCOL_GET_PROTOCOL);
+			if (ret != EFI_SUCCESS) {
+				printf("efi_protocol_open() failed! \n");
+				continue;
+			}
+
+			ret = efi_search_protocol(volume_handles[i], &efi_guid_device_path, &handler);
+			if (ret != EFI_SUCCESS) {
+				printf("efi_search_protocol() failed! efi_guid_device_path\n");
+				continue;
+			}
+			ret = efi_protocol_open(handler, (void **)&device_path,
+						efi_root, NULL, EFI_OPEN_PROTOCOL_GET_PROTOCOL);
+			if (ret != EFI_SUCCESS) {
+				printf("efi_protocol_open() failed! device_path\n");
+				continue;
+			}
+
+			ret = efi_search_protocol(volume_handles[i], &efi_block_io_guid, &handler);
+			if (ret != EFI_SUCCESS) {
+				printf("efi_search_protocol() failed! efi_block_io_guid\n");
+				continue;
+			}
+			ret = efi_protocol_open(handler, (void **)&block_io,
+						efi_root, NULL, EFI_OPEN_PROTOCOL_GET_PROTOCOL);
+			if (ret != EFI_SUCCESS) {
+				printf("efi_protocol_open() failed! block_io\n");
+				continue;
+			}
+
+			/* Skip the UCLASS_BLK devices, we are looking at individual partitions */
+			if (device_get_uclass_id(volume_handles[i]->dev) != UCLASS_PARTITION)
+				continue;
+
+			/* Find the ESP device! */
+			desc = dev_get_uclass_plat(dev_get_parent(volume_handles[i]->dev));
+			if (!desc) {
+				printf("no uclass plat for %s\n", volume_handles[i]->dev->name);
+				continue;
+			}
+			part_data = dev_get_uclass_plat(volume_handles[i]->dev);
+			if (!part_data) {
+				printf("No partition uclass plat for %s\n", volume_handles[i]->dev->name);
+				continue;
+			}
+
+			if (esp_devnum != desc->devnum || esp_partnum != part_data->partnum)
+				continue;
+
+			// printf("Found ESP device path: %pD\n", device_path);
+
+			/* Add the boot options */
+			u16 tmp[32] = { 0 };
+			char tmp8[32] = { 0 };
+			snprintf(tmp8, sizeof(tmp8), "kernel-%c.efi", *slot);
+
+			// dst pointer is modified!
+			dst = tmp;
+			utf8_utf16_strncpy((u16 **)&dst, tmp8, strlen(tmp8));
+			// printf("File path: '%ls' %lu (%s)\n", tmp, u16_strlen(tmp), tmp8);
+			lo.file_path = eficonfig_create_device_path(device_path, tmp);
+			memset(tmp, 0, sizeof(tmp));
+			lo.file_path_length = efi_dp_size(lo.file_path) + sizeof(EFI_DP_END);
+			lo.label = dst = tmp;
+			utf8_utf16_strcpy(&dst, "SteamOS ");
+			utf8_utf16_strcpy(&dst, slot);
+			cmdline = malloc(256);
+			char *default_bootargs = env_get("default_bootargs");
+			/* Conditionally add a space if default_bootargs is set... */
+			snprintf(cmdline, 256, "%s%sroot=PARTLABEL=rootfs-%c init=/sbin/init ro rauc.slot=%c noresume rootwait earlycon",
+				 default_bootargs ?: "", default_bootargs ? " " : "", *slot, *slot);
+			lo.optional_data = cmdline;
+			lo.attributes = LOAD_OPTION_ACTIVE;
+
+			size = efi_serialize_load_option(&lo, (u8 **)&p);
+			if (!size) {
+				printf("EFI: Couldn't serialize load option!\n");
+				return -ENOENT;
+			}
+			free(cmdline);
+
+			/* Set the EFI variable! */
+			ret = efi_set_variable_int(varname, &efi_global_variable_guid,
+				   EFI_VARIABLE_NON_VOLATILE |
+				   EFI_VARIABLE_BOOTSERVICE_ACCESS |
+				   EFI_VARIABLE_RUNTIME_ACCESS,
+				   size, p, false);
+			if (ret != EFI_SUCCESS) {
+				printf("Couldn't set EFI var %S: %#lx\n", varname, ret);
+				ret = -1;
+			}
+			free(p);
+			break;
+		}
+		efi_free_pool(volume_handles);
+	}
+
+	/* Set BootOrder to point to our new boot entry! */
+	{
+		u16 bootorder[1] = { index };
+		ret = efi_set_variable_int(u"BootOrder", &efi_global_variable_guid,
+					EFI_VARIABLE_NON_VOLATILE |
+					EFI_VARIABLE_BOOTSERVICE_ACCESS |
+					EFI_VARIABLE_RUNTIME_ACCESS,
+					sizeof(bootorder), bootorder, false);
+		if (ret != EFI_SUCCESS) {
+			printf("Setting BootOrder failed: %#lx\n", ret);
+			return -1;
+		}
+	}
+
+	printf("EFI: Set boot entry %ls: %s\n", varname, entry_label);
+
+	return 0;
+}
+
 /* Check for vol- button - if pressed - stop autoboot */
 int misc_init_r(void)
 {
@@ -767,7 +1066,13 @@ int misc_init_r(void)
 	// otherwise override with deckard custom boot command
 	if ( !env_get("use_custom_boot") ){
 		env_set("bootcmd", "deckard_boot");
+		// env_set("bootcmd", "bootefi bootmgr");
 	}
+
+	deckard_find_efi_var_store();
+
+	/* Trigger EFI setup just before the main loop when the EFI subsystem will actually be initialised! */
+	event_register("deckard_bootefi", EVT_MAIN_LOOP, deckard_efi_setup, NULL);
 
 	printf("deckard init: done\n");
 ///////
@@ -1077,6 +1382,27 @@ int deckard_prepare_for_boot()
 	}
 
 	return 0;
+}
+
+/* EFI booting with EFI vars on a custom partition */
+efi_status_t efi_set_blk_dev_to_system_partition(void)
+{
+	int r;
+	char part_str[10];
+
+	r = deckard_find_efi_var_store();
+	if (r)
+		return EFI_DEVICE_ERROR;
+	// It would be nice to use fs_set_blk_dev_with_part() but it doesn't seem to behave quite right
+	snprintf(part_str, sizeof(part_str), "%x:%x",
+		 efivar_store.devnum, efivar_store.partnum);
+	// printf("%s: %s\n", __func__, part_str);
+	r = fs_set_blk_dev(blk_get_uclass_name(efi_system_partition.uclass_id),
+			   part_str, FS_TYPE_ANY);
+	if (r)
+		return EFI_DEVICE_ERROR;
+
+	return EFI_SUCCESS;
 }
 
 // per arm64 linux boot documenation, default text_offset is 0x80000
