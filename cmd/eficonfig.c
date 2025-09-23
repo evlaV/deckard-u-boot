@@ -34,7 +34,7 @@ static struct efi_simple_text_output_protocol *cout;
 static int avail_row;
 
 #define EFICONFIG_DESCRIPTION_MAX 32
-#define EFICONFIG_OPTIONAL_DATA_MAX 64
+#define EFICONFIG_OPTIONAL_DATA_MAX 256
 #define EFICONFIG_MENU_HEADER_ROW_NUM 3
 #define EFICONFIG_MENU_DESC_ROW_NUM 5
 
@@ -1498,8 +1498,14 @@ static efi_status_t eficonfig_edit_boot_option(u16 *varname, struct eficonfig_bo
 			efi_free_pool(fdt_dp);
 		}
 
-		if (size > 0)
+		if (size > 0) {
+			if (size > EFICONFIG_OPTIONAL_DATA_MAX * sizeof(u16)) {
+				printf("Optional data too big! (%lu > %lu)\n", size, EFICONFIG_OPTIONAL_DATA_MAX * sizeof(u16));
+				ret = EFI_OUT_OF_RESOURCES;
+				goto out;
+			}
 			memcpy(bo->optional_data, lo.optional_data, size);
+		}
 	}
 
 	while (1) {
