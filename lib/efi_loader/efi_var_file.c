@@ -12,6 +12,7 @@
 #include <log.h>
 #include <malloc.h>
 #include <mapmem.h>
+#include <memalign.h>
 #include <efi_loader.h>
 #include <efi_variable.h>
 #include <u-boot/crc.h>
@@ -30,9 +31,11 @@ static const efi_guid_t shim_lock_guid = SHIM_LOCK_GUID;
  *
  * Set the EFI system partition as current block device.
  *
+ * Can be overwritten by boards to use a specific partition
+ *
  * Return:	status code
  */
-static efi_status_t __maybe_unused efi_set_blk_dev_to_system_partition(void)
+efi_status_t __maybe_unused __weak efi_set_blk_dev_to_system_partition(void)
 {
 	char part_str[PART_STR_LEN];
 	int r;
@@ -80,6 +83,8 @@ efi_status_t efi_var_to_file(void)
 		goto out;
 	}
 	once = false;
+
+	printf("%s: %p + %lld\n", __func__, buf, len);
 
 	r = fs_write(EFI_VAR_FILE_NAME, map_to_sysmem(buf), 0, len, &actlen);
 	if (r || len != actlen)
@@ -161,11 +166,12 @@ efi_status_t efi_var_from_file(void)
 	efi_status_t ret;
 	int r;
 
-	buf = calloc(1, EFI_VAR_BUF_SIZE);
+	buf = malloc_cache_aligned(EFI_VAR_BUF_SIZE);
 	if (!buf) {
 		log_err("Out of memory\n");
 		return EFI_OUT_OF_RESOURCES;
 	}
+	memset(buf, 0, EFI_VAR_BUF_SIZE);
 
 	ret = efi_set_blk_dev_to_system_partition();
 	if (ret != EFI_SUCCESS)

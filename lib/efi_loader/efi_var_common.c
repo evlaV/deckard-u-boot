@@ -11,6 +11,7 @@
 #include <efi_variable.h>
 #include <stdlib.h>
 #include <u-boot/crc.h>
+#include <memalign.h>
 
 enum efi_secure_mode {
 	EFI_MODE_SETUP,
@@ -434,9 +435,10 @@ efi_status_t __maybe_unused efi_var_collect(struct efi_var_file **bufp, loff_t *
 	size_t old_var_name_length = 2;
 
 	*bufp = NULL; /* Avoid double free() */
-	buf = calloc(1, len);
+	buf = malloc_cache_aligned(len);
 	if (!buf)
 		return EFI_OUT_OF_RESOURCES;
+	memset(buf, 0, len);
 	var = buf->var;
 	old_var = var;
 	for (;;) {
