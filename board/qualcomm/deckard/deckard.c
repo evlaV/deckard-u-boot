@@ -8,11 +8,16 @@
 #include <cpu_func.h>
 #include <dm.h>
 #include <dm/pinctrl.h>
+#include <efi_config.h>
+#include <efi_loader.h>
+#include <efi_variable.h>
 #include <env.h>
 #include <fastboot.h>
 #include <init.h>
+#include <malloc.h>
 #include <mmc.h>
 #include <net.h>
+#include <sort.h>
 #include <usb.h>
 #include <asm/cache.h>
 #include <sysreset.h>
@@ -62,6 +67,18 @@ DECLARE_GLOBAL_DATA_PTR;
   #define DECKARD_ROOTFS_SLOT_OLD_B "system1"
 #endif
 
+#define ENV_EFI_ENABLED "enable-efi"
+#define ENV_EFI_REMOVABLE_BOOT "efi-removable-boot"
+#define ENV_EFI_RESET_BOOT_ENTRIES "efi-reset-boot-entries"
+/* Our boot entry is always 0xFAFF for convenience and to avoid conflicts */
+#define EFI_INTERNAL_BOOT_INDEX (0xFAFF)
+
+enum boot_priority {
+	BOOT_INTERNAL_ONLY,
+	BOOT_INTERNAL_FIRST,
+	BOOT_REMOVABLE_FIRST,
+};
+
 //these are set as a bit-mask typically when we detect a button is enabled
 #define VOLUP_BUTTON_MASK 0b100
 #define VOLDN_BUTTON_MASK 0b010
@@ -95,6 +112,30 @@ int display_turn_off_force(void);
 void deckard_load_logo(enum full_screen_images_t image);
 int deckard_check_for_key_press(void);
 int deckard_prepare_for_boot(void);
+
+struct deckard_esp_info {
+	bool valid;
+	int devnum;
+	int partnum;
+};
+
+static enum deckard_efi_mode {
+	/* NEVER initialise EFI subsystem */
+	EFI_MODE_DISABLED,
+	/* When attempting to boot from removable storage */
+	EFI_MODE_ONESHOT,
+	/* When the user has set the "enable-efi" variable. We will still boot
+	 * SteamOS WITHOUT EFI if efibootmgr fails to boot anything.
+	 */
+	EFI_MODE_PERMANENT,
+} g_deckard_efi_mode = EFI_MODE_DISABLED;
+
+static struct deckard_esp_info efivar_store = { 0 };
+
+bool deckard_efi_enabled(void) {
+	return g_deckard_efi_mode != EFI_MODE_DISABLED;
+}
+
 
 // #define CHECK_PMICS
 #ifdef CHECK_PMICS
@@ -288,6 +329,9 @@ int button_state_handler(enum combined_button_state_t total_button_state, int po
 			env_set("reboot_mode", "f");
 			break;
 		case VOLUP_OFF__VOLDN_ON__SELECT_ON:
+			g_deckard_efi_mode = EFI_MODE_ONESHOT;
+			/* Initialise USB to detect external storage before EFI comes up */
+			usb_init();
 			break;
 		case VOLUP_ON__VOLDN_OFF__SELECT_OFF:
 			break;
@@ -545,6 +589,99 @@ int led_set_color_and_state(char * led_name, enum led_state_t state)
 	return ret;
 }
 
+/* Get the devnum/partnum for a partition from its GPT partlabel */
+static int deckard_find_part_by_label(const char *partname, int *devnum, int *partnum)
+{
+	int r;
+	struct udevice *blkdev;
+	struct blk_desc *desc;
+	struct uclass *blk_class;
+	struct disk_partition part;
+
+	uclass_get(UCLASS_BLK, &blk_class);
+
+	/* Devices are already probed! */
+	uclass_foreach_dev(blkdev, blk_class) {
+		if (device_get_uclass_id(blkdev) != UCLASS_BLK)
+			continue;
+
+		desc = dev_get_uclass_plat(blkdev);
+		if (!desc || desc->part_type == PART_TYPE_UNKNOWN)
+			continue;
+		/* Only look for non-removable SCSI devices (internal storage) */
+		// FIXME: we might need a more reliable way to identify internal storage!
+		if (desc->uclass_id != UCLASS_SCSI || desc->removable)
+			continue;
+
+		for (*partnum = 1;; (*partnum)++) {
+			r = part_get_info(desc, *partnum, &part);
+			/* Last partition, go next */
+			if (r < 0)
+				break;
+			/* Skip if the name doesn't match */
+			if (strncmp(partname, part.name, strlen(partname)))
+				continue;
+			// printf("Found EFI partition '%s' (%d:%d) blksz %#lx\n", part.name, desc->devnum, *partnum, desc->blksz);
+			*devnum = desc->devnum;
+
+			return 0;
+		}
+	}
+
+	return -ENODEV;
+}
+
+static int deckard_find_efi_var_store(void)
+{
+	char partname[16] = { 0 };
+	char *slot;
+
+	if (efivar_store.valid)
+		return 0;
+
+	slot = env_get("booted_slot");
+	/* Build the partition name (efi-A/efi-B) */
+	strlcat(partname, "efi-", 16);
+	strlcat(partname, slot, 16);
+
+	if (!deckard_find_part_by_label(partname, &efivar_store.devnum, &efivar_store.partnum)) {
+		efivar_store.valid = true;
+		return 0;
+	}
+
+	return -ENOENT;
+}
+
+static int deckard_efi_setup(void *ctx, struct event *event)
+{
+	efi_status_t ret;
+
+	/* Get the EFI subsystem up and running! */
+	ret = efi_init_obj_list();
+	if (ret != EFI_SUCCESS) {
+		printf("EFI: Initialisation failed!\n");
+		return 0;
+	}
+
+	/*
+	* FIXME: for the golden master we will not support booting SteamOS with EFI, so skip creating the
+	* boot entry for it and setting BootOrder. We will instead allow bootmgr to set BootOrder based on
+	* detected removable storage devices (USB drive, sdcard).
+	*
+	* After GM, we can re-add the logic here to set up the SteamOS boot entry and use BootNext for
+	* the "oneshot" removable storage boot mode.
+	*/
+
+	// Now we can release the deadmans switch, if we made it here then EFI is working and we will
+	// make it to the U-Boot console
+	if (g_deckard_efi_mode == EFI_MODE_PERMANENT) {
+		env_set(ENV_EFI_ENABLED, "1");
+		env_save();
+	}
+
+	return 0;
+}
+
 /* Check for vol- button - if pressed - stop autoboot */
 int misc_init_r(void)
 {
@@ -769,6 +906,27 @@ int misc_init_r(void)
 	if ( !env_get("use_custom_boot") ){
 		env_set("bootcmd", "deckard_boot");
 	}
+
+	/* Check if EFI is enabled (enable-efi=1) */
+	if (env_get(ENV_EFI_ENABLED) && !strcmp(env_get(ENV_EFI_ENABLED), "1"))
+		g_deckard_efi_mode = EFI_MODE_PERMANENT;
+
+	// If EFI is enabled (either oneshot or permanently) then bring up the EFI subsystem
+	if (g_deckard_efi_mode) {
+		if (g_deckard_efi_mode == EFI_MODE_PERMANENT) {
+			// This is a deadmans switch, the variable will be enabled again at the end of deckard_efi_setup()
+			// If we crash while initialising EFI then it will be disabled again.
+			env_set(ENV_EFI_ENABLED, NULL);
+			env_save();
+		}
+
+		if (!deckard_find_efi_var_store())
+			/* Trigger EFI setup just before the main loop */
+			event_register("deckard_bootefi", EVT_MAIN_LOOP, deckard_efi_setup, NULL);
+		else
+			printf("EFI: Couldn't find EFI variable store partition!\n");
+	}
+
 
 	printf("deckard init: done\n");
 ///////
@@ -1080,6 +1238,27 @@ int deckard_prepare_for_boot()
 	return 0;
 }
 
+/* EFI booting with EFI vars on a custom partition */
+efi_status_t efi_set_blk_dev_to_system_partition(void)
+{
+	int r;
+	char part_str[10];
+
+	r = deckard_find_efi_var_store();
+	if (r)
+		return EFI_DEVICE_ERROR;
+	// It would be nice to use fs_set_blk_dev_with_part() but it doesn't seem to behave quite right
+	snprintf(part_str, sizeof(part_str), "%x:%x",
+		 efivar_store.devnum, efivar_store.partnum);
+	// printf("%s: %s\n", __func__, part_str);
+	r = fs_set_blk_dev(blk_get_uclass_name(efi_system_partition.uclass_id),
+			   part_str, FS_TYPE_ANY);
+	if (r)
+		return EFI_DEVICE_ERROR;
+
+	return EFI_SUCCESS;
+}
+
 // per arm64 linux boot documenation, default text_offset is 0x80000
 #define ADDR_KERNEL "0x88000000"
 // this gives us roughly 290 Megabytes for kernel, dtb, and initrd
@@ -1185,6 +1364,12 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 		// clear ship-mode ( used to boot straight to OS if coming out of ship mode )
 		env_set("ship-mode", "");
 		env_save();
+	}
+
+	// FIXME: eventually invert this so we try EFI first, maybe find a less hacky way to do this?
+	if (g_deckard_efi_mode) {
+		printf("Attempting to boot with EFI!\n");
+		run_command("bootefi bootmgr", 0);
 	}
 
 	printf("Attempting to load kernel from %s [ %s ]\n", label, partition);
