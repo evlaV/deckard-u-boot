@@ -30,7 +30,7 @@ const efi_guid_t efi_guid_device_path_to_text_protocol =
  * @str:	ASCII string
  * Return:	UTF-16 string. NULL if out of memory.
  */
-static u16 *efi_str_to_u16(char *str)
+static u16 *efi_str_to_u16(const char *str)
 {
 	efi_uintn_t len;
 	u16 *out, *dst;

@@ -225,6 +225,9 @@ static efi_status_t efi_start_obj_list(void)
 	return ret;
 }
 
+/* Check if EFI support has been enabled by the user (either with button combo or the environment variable) */
+bool deckard_efi_enabled(void);
+
 /**
  * efi_init_obj_list() - Initialize and populate EFI object list
  *
@@ -233,6 +236,14 @@ static efi_status_t efi_start_obj_list(void)
 efi_status_t efi_init_obj_list(void)
 {
 	efi_status_t ret = EFI_SUCCESS;
+
+	// Deckard: just to be super safe, ensure that we actually intended to have the EFI subsystem up
+	if (!deckard_efi_enabled()) {
+		printf("EFI: efi_init_obj_list() called but EFI support hasn't been enabled!\n"
+		       "EFI: Run 'env set enable-efi 1 && env save' to enable it permanently, or hold\n"
+		       "EFI: volume down + select during boot to oneshot boot from a USB drive.\n");
+		return EFI_NOT_STARTED;
+	}
 
 	/* Initialize only once, but start every time if correctly initialized*/
 	if (efi_obj_list_initialized == OBJ_LIST_INITIALIZED)
