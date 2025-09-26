@@ -53,6 +53,13 @@ DECLARE_GLOBAL_DATA_PTR;
 #define DECKARD_ROOTFS_SLOT_B "rootfs-B"
 #define DECKARD_UBOOT_SLOT_B "uboot_b"
 
+//add these names as alternatives for supporting old ev2 layouts -- delete once we stop using ev2's
+#define ALLOW_OLD_ROOTFS_NAME_FALLBACK
+#ifdef ALLOW_OLD_ROOTFS_NAME_FALLBACK
+  #define DECKARD_ROOTFS_SLOT_OLD_A "system0"
+  #define DECKARD_ROOTFS_SLOT_OLD_B "system1"
+#endif
+
 //these are set as a bit-mask typically when we detect a button is enabled
 #define VOLUP_BUTTON_MASK 0b100
 #define VOLDN_BUTTON_MASK 0b010
@@ -683,6 +690,17 @@ int ft_board_setup(void *fdt, struct bd_info *bd)
 		return ret;
 	}
 
+#ifdef ALLOW_OLD_ROOTFS_NAME_FALLBACK
+	/* add old rootfs fallback capability */
+	//this will indicate that u-boot has the ability to fall back to old rootfs
+	ret = fdt_setprop_string(fdt, nodeoffset, "u-boot,oldrootfssupport", "1"); //set this to 1 when display works
+	if (ret < 0) {
+		printf("WARNING: could not set u-boot,oldrootfs %s.\n",
+			   fdt_strerror(ret));
+		return ret;
+	}
+#endif
+
 	return 0;
 }
 
@@ -986,20 +1004,41 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 		case 'A':
 		default:
 			partition = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_A);
-			strncpy(label, "rootfs-A", DEVPARTMAXLEN);
+			strncpy(label, DECKARD_ROOTFS_SLOT_A, DEVPARTMAXLEN);
 			break;
 		case 'B':
 			partition = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_B);
-			strncpy(label, "rootfs-B", DEVPARTMAXLEN);
+			strncpy(label, DECKARD_ROOTFS_SLOT_B, DEVPARTMAXLEN);
 			break;
 	}
+
+#ifdef ALLOW_OLD_ROOTFS_NAME_FALLBACK
+	if(!partition)
+	{
+		printf("Trying old rootfs partition names...\n");
+		switch(bootedslot[0]){
+			case 'A':
+			default:
+				partition = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_OLD_A);
+				strncpy(label, DECKARD_ROOTFS_SLOT_OLD_A, DEVPARTMAXLEN);
+				break;
+			case 'B':
+				partition = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_OLD_B);
+				strncpy(label, DECKARD_ROOTFS_SLOT_OLD_B, DEVPARTMAXLEN);
+				break;
+		}
+	}
+#endif
 
 	if ( !env_get("factory-mode") ) {
 		deckard_prepare_for_boot();
 	}
 
+	printf("Attempting to load kernel from %s [ %s ]\n", label, partition);
+
 	// Load kernel
 	if ( scsi_do_load_helper(partition, ADDR_KERNEL, KERNEL_TARGET) ) {
+		printf("Failed to load kernel from %s [ %s ]\n", label, partition);
 		goto fail;
 	}
 
@@ -1016,6 +1055,7 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	printf("DTB_ADDR %s\n", DTB_ADDR); // debug
 	// load dtb
 	if ( deckard_load_dtb(partition, DTB_ADDR) ) {
+		printf("Failed to load dtb from %s [ %s ]\n", label, partition);
 		goto fail;
 	}
 	// get address for initrd
@@ -1026,6 +1066,7 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	printf("INITRD_ADDR %s\n", INITRD_ADDR); // debug
 	// load inird
 	if ( scsi_do_load_helper(partition, INITRD_ADDR, INITRD_TARGET) ) {
+		printf("Failed to load initrd from %s [ %s ]\n", label, partition);
 		goto fail;
 	}
 
