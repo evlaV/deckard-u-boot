@@ -387,7 +387,10 @@ int part_get_dev_part_str_by_name(const char *ifname, const char *name,
 	if (!blk_enabled())
 		return -ENOENT;
 
-	memset(dev_part_str, 0, sizeof(*dev_part_str));
+	if(dev_part_str)
+		dev_part_str[0] = '\0'; //ensure we return a zero len string by default
+	else
+		return -ENOENT; //you passed in a null pointer
 
 	for (i = 0; i < MAX_SEARCH_DEVICES; i++) {
 		blk_desc = blk_get_dev(ifname, i);
