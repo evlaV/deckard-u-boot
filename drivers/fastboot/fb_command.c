@@ -42,6 +42,7 @@ static void oem_format(char *, char *);
 static void oem_partconf(char *, char *);
 static void oem_bootbus(char *, char *);
 static void oem_console(char *, char *);
+static void oem_console_usb(char *, char *);
 static void oem_board(char *, char *);
 static void oem_reboot_edl(char *, char *);
 static void oem_stop(char *, char *);
@@ -115,6 +116,10 @@ static const struct {
 	[FASTBOOT_COMMAND_OEM_CONSOLE] = {
 		.command = "oem console",
 		.dispatch = CONFIG_IS_ENABLED(FASTBOOT_CMD_OEM_CONSOLE, (oem_console), (NULL))
+	},
+	[FASTBOOT_COMMAND_OEM_CONSOLE_USB] = {
+		.command = "oem consoleusb",
+		.dispatch = CONFIG_IS_ENABLED(FASTBOOT_CMD_OEM_CONSOLE_USB, (oem_console_usb), (NULL))
 	},
 	[FASTBOOT_COMMAND_OEM_BOARD] = {
 		.command = "oem board",
@@ -579,6 +584,7 @@ static void __maybe_unused oem_reboot_edl(char *cmd_parameter, char *response)
 }
 
 extern bool g_fastboot_running;
+extern bool g_run_fastboot_done_command;
 /**
  * oem_stop() - Stop fastboot from running
  *
@@ -590,6 +596,20 @@ static void __maybe_unused oem_stop(char *cmd_parameter, char *response)
 	g_fastboot_running = false;
 	fastboot_okay(NULL, response);
 
+}
+
+
+/**
+ * oem_consoleusb() - Execute the OEM consoleusb command
+ *
+ * @cmd_parameter: Pointer to command parameter
+ * @response: Pointer to fastboot response buffer
+ */
+static void __maybe_unused oem_console_usb(char *cmd_parameter, char *response)
+{
+	g_fastboot_running = false;
+	g_run_fastboot_done_command = true;
+	fastboot_okay(NULL, response);
 }
 
 /**

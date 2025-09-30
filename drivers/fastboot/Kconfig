@@ -253,6 +253,12 @@ config FASTBOOT_CMD_OEM_CONSOLE
 	  Add support for the "oem console" command to input and read console
 	  record buffer.
 
+config FASTBOOT_CMD_OEM_CONSOLE_USB
+	bool "Enable the 'oem consoleusb' command"
+	help
+	  Add support for the "oem consoleusb" command to switch to console usb 
+	  tty acm mode and stop using fastboot
+
 config FASTBOOT_CMD_OEM_REBOOT_EDL
 	bool "Enable the 'oem reboot-edl' command"
 	help

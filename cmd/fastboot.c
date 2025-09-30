@@ -15,8 +15,10 @@
 #include <watchdog.h>
 #include <linux/printk.h>
 #include <linux/stringify.h>
+#include <linux/delay.h>
 
 bool g_fastboot_running = false;
+bool g_run_fastboot_done_command = false;
 
 #if CONFIG_IS_ENABLED(NET)
 static int do_fastboot_udp(int argc, char *const argv[],
@@ -59,6 +61,16 @@ static int do_fastboot_tcp(int argc, char *const argv[],
 	return CMD_RET_SUCCESS;
 }
 #endif
+
+static int fastboot_done_command()
+{
+	udelay(500000); //add delay to avoid usb being used too quickly after fastboot stops using it
+	env_set("bootdelay","60");
+	env_set("stdout","usbacm");
+	env_set("stdin","usbacm");
+	env_set("stderr","usbacm");
+	return 0;
+}
 
 static int do_fastboot_usb(int argc, char *const argv[],
 			   uintptr_t buf_addr, size_t buf_size)
@@ -120,6 +132,9 @@ exit:
 	udc_device_put(udc);
 	g_dnl_unregister();
 	g_dnl_clear_detach();
+
+	if(g_run_fastboot_done_command)
+		fastboot_done_command();
 
 	return ret;
 }
