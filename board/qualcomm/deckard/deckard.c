@@ -460,6 +460,20 @@ int fastboot_set_reboot_flag(enum fastboot_reboot_reason reason)
 }
 #endif
 
+int led_set_color_and_state(char * led_name, enum led_state_t state)
+{
+	struct udevice  *led;
+	int ret = led_get_by_label(led_name, &led);
+	if ( ret < 0) {
+		printf("Couldn't find led!\n");
+		return ret;
+	}
+
+	led_set_state(led, state);
+
+	return ret;
+}
+
 /* Check for vol- button - if pressed - stop autoboot */
 int misc_init_r(void)
 {
@@ -620,9 +634,10 @@ int misc_init_r(void)
 			env_save();
 		}
 
-		if (led)
-			led_set_state(led, LEDST_BLINK);
-
+		led_set_color_and_state("red",LEDST_OFF);
+		led_set_color_and_state("green",LEDST_BLINK);
+		led_set_color_and_state("blue",LEDST_OFF);
+		
 		run_command("fastboot -l 0x880000000 -s 0x10000000 usb 0", 0);
 	}
 
