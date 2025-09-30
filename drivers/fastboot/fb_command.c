@@ -44,6 +44,7 @@ static void oem_bootbus(char *, char *);
 static void oem_console(char *, char *);
 static void oem_board(char *, char *);
 static void oem_reboot_edl(char *, char *);
+static void oem_stop(char *, char *);
 static void run_ucmd(char *, char *);
 static void run_acmd(char *, char *);
 
@@ -118,6 +119,10 @@ static const struct {
 	[FASTBOOT_COMMAND_OEM_BOARD] = {
 		.command = "oem board",
 		.dispatch = CONFIG_IS_ENABLED(FASTBOOT_OEM_BOARD, (oem_board), (NULL))
+	},
+	[FASTBOOT_COMMAND_OEM_STOP] = {
+		.command = "oem stop",
+		.dispatch = CONFIG_IS_ENABLED(FASTBOOT_OEM_STOP, (oem_stop), (NULL))
 	},
 	[FASTBOOT_COMMAND_OEM_REBOOT_EDL] = {
 		.command = "oem reboot-edl",
@@ -571,6 +576,20 @@ static void __maybe_unused oem_reboot_edl(char *cmd_parameter, char *response)
 		fastboot_fail("Cannot set recovery flag", response);
 	else
 		fastboot_okay(NULL, response);
+}
+
+extern bool g_fastboot_running;
+/**
+ * oem_stop() - Stop fastboot from running
+ *
+ * @cmd_parameter: Pointer to command parameter
+ * @response: Pointer to fastboot response buffer
+ */
+static void __maybe_unused oem_stop(char *cmd_parameter, char *response)
+{
+	g_fastboot_running = false;
+	fastboot_okay(NULL, response);
+
 }
 
 /**

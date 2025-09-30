@@ -16,6 +16,8 @@
 #include <linux/printk.h>
 #include <linux/stringify.h>
 
+bool g_fastboot_running = false;
+
 #if CONFIG_IS_ENABLED(NET)
 static int do_fastboot_udp(int argc, char *const argv[],
 			   uintptr_t buf_addr, size_t buf_size)
@@ -100,7 +102,10 @@ static int do_fastboot_usb(int argc, char *const argv[],
 		goto exit;
 	}
 
-	while (1) {
+	g_fastboot_running = true; //calling fastboot stop will set this global var to false, 
+							   //and will quit out of the while loop
+
+	while (g_fastboot_running) {
 		if (g_dnl_detach())
 			break;
 		if (ctrlc())
