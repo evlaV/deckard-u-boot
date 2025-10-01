@@ -176,7 +176,7 @@ void deckard_load_logo()
 		return;
 
 	bmp_info(CONFIG_SYS_LOAD_ADDR);
-	bmp_display(CONFIG_SYS_LOAD_ADDR, BMP_ALIGN_CENTER, BMP_ALIGN_CENTER);
+	bmp_display(CONFIG_SYS_LOAD_ADDR, 0,0);
 }
 
 static void deckard_setup(void)
