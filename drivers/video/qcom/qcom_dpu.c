@@ -565,7 +565,7 @@ static void mdss_sspp_config_rec1(void *dpu_base, const struct dpu_mdss_cfg *cat
 	writel((height << 16) | (width >> 1), base + SSPP_OUT_SIZE);
 	writel(0, base + SSPP_OUT_XY);
 	writel(0x236FF, base + SSPP_SRC_FORMAT);
-	writel(0x3020001, base + SSPP_SRC_UNPACK_PATTERN);
+	writel(0x03010002, base + SSPP_SRC_UNPACK_PATTERN);
 	writel(0x80000000, base + SSPP_SRC_OP_MODE);
 	writel(0x9, base + SSPP_CDP_CNTL);
 
@@ -575,7 +575,7 @@ static void mdss_sspp_config_rec1(void *dpu_base, const struct dpu_mdss_cfg *cat
 	writel((height << 16) | (width >> 1), base + SSPP_OUT_SIZE_REC1);
 	writel((width >> 1), base + SSPP_OUT_XY_REC1);
 	writel(0x236FF, base + SSPP_SRC_FORMAT_REC1);
-	writel(0x3020001, base + SSPP_SRC_UNPACK_PATTERN_REC1);
+	writel(0x03010002, base + SSPP_SRC_UNPACK_PATTERN_REC1);
 	writel(0x80000000, base + SSPP_SRC_OP_MODE_REC1);
 	writel(0x9, base + SSPP_CDP_CNTL_REC1);
 
@@ -953,9 +953,9 @@ int qcom_dpu_probe(struct udevice *dev)
 	// TOFIX use companion LM id from catalog
 	mdp_setup_stage_rec1(priv->dpu_base, priv->cat, CTL_0, LM_1, SSPP_DMA0, 2160, 2160, true);
 
-	// Since the panels are rotated, use the right side of the fb for panel0
+	//left display
 	mdss_sspp_config_rec1(priv->dpu_base, priv->cat, uc_plat->base,
-			      (2160 * 2 * 4), SSPP_DMA0, 2160, 2160, 2160);
+			      (2160 * 2 * 4), SSPP_DMA0, 2160, 2160, 0);
 
 	mdss_intf_fetch_start_config(priv->dpu_base, priv->cat,
 				     CTL_0, INTF_1, DSC_0, DSC_1);
@@ -976,9 +976,9 @@ int qcom_dpu_probe(struct udevice *dev)
 	// TOFIX use companion LM id from catalog
 	mdp_setup_stage_rec1(priv->dpu_base, priv->cat, CTL_1, LM_3, SSPP_DMA1, 2160, 2160, true);
 
-	// Since the panels are rotated, use the left side of the fb for panel0
+	//right display
 	mdss_sspp_config_rec1(priv->dpu_base, priv->cat, uc_plat->base,
-			(2160 * 2 * 4), SSPP_DMA1, 2160, 2160, 0);
+			(2160 * 2 * 4), SSPP_DMA1, 2160, 2160, 2160);
 
 	mdss_intf_fetch_start_config(priv->dpu_base, priv->cat,
 			CTL_1, INTF_2, DSC_2, DSC_3);
