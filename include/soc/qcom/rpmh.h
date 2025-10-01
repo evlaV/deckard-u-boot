@@ -10,6 +10,13 @@
 #include <soc/qcom/tcs.h>
 
 
+enum rpmh_regulator_mode {
+	REGULATOR_MODE_RETENTION,
+	REGULATOR_MODE_LPM,
+	REGULATOR_MODE_AUTO,
+	REGULATOR_MODE_HPM,
+};
+
 #if IS_ENABLED(CONFIG_QCOM_RPMH)
 int rpmh_write(const struct udevice *dev, enum rpmh_state state,
 	       const struct tcs_cmd *cmd, u32 n);
