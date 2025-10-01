@@ -117,7 +117,7 @@ static int rpmhpd_send_corner(struct rpmhpd *pd, int state,
 		.data = corner,
 	};
 
-	return rpmh_write(pd->dev->parent, state, &cmd, 1);
+	return rpmh_write(pd->dev, state, &cmd, 1);
 }
 
 static int rpmhpd_power_on(struct power_domain *pd)
