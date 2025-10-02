@@ -57,6 +57,16 @@
 			no-map;
 		};
 
+		ramoops: ramoops@84a00000 {
+			compatible = "ramoops";
+			reg = <0 0x84a00000 0 0x100000>;
+			record-size = <0x40000>;
+			console-size = <0x40000>;
+			pmsg-size = <0x1000>;
+			max_reason = <2>;
+			ecc-size = <16>;
+		};
+
 		video_mem: video@9bb00000 {
 			reg = <0 0x9bb00000 0 0x800000>;
 			no-map;
