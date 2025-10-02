@@ -167,6 +167,13 @@ config CMD_CONSOLE
 	help
 	  Print console devices and information.
 
+config CMD_RAMOOPS
+	bool "ramoops"
+	help
+	  default y
+	  depends on CONSOLE_RAMOOPS
+	  Print ramoops stored in pstore by the kernel
+
 config CMD_CPU
 	bool "cpu"
 	depends on CPU
