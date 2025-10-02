@@ -173,8 +173,11 @@ static int console_putc_xy_2(struct udevice *dev, uint x_frac, uint y, int cp)
 	u8 ch = console_utf_to_cp437(cp);
 	uchar *pfont = fontdata->video_fontdata +
 			ch * fontdata->char_pixel_bytes;
+	
+	int x_frac_gutter = 540;
+	x_frac = x_frac + VID_TO_POS(x_frac_gutter) ;
 
-	if (x_frac + VID_TO_POS(vc_priv->x_charsize) > vc_priv->xsize_frac)
+	if (x_frac + VID_TO_POS(vc_priv->x_charsize) > (vc_priv->xsize_frac / 2 - VID_TO_POS(x_frac_gutter)))
 		return -EAGAIN;
 	linenum = vid_priv->ysize - y - 1;
 	x = vid_priv->xsize - VID_TO_PIXEL(x_frac) - 1;
@@ -187,6 +190,18 @@ static int console_putc_xy_2(struct udevice *dev, uint x_frac, uint y, int cp)
 
 	video_damage(dev->parent,
 		     x - fontdata->width + 1,
+		     linenum - fontdata->height + 1,
+		     fontdata->width,
+		     fontdata->height);
+
+	//draw console a second time on other display
+	line = vid_priv->fb + linenum * vid_priv->line_length + (x + 2160) * pbytes;
+	ret = fill_char_vertically(pfont, &line, vid_priv, fontdata, FLIPPED_DIRECTION);
+	if (ret)
+		return ret;
+
+	video_damage(dev->parent,
+		     (x + 2160) - fontdata->width + 1,
 		     linenum - fontdata->height + 1,
 		     fontdata->width,
 		     fontdata->height);
