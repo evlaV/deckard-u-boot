@@ -27,7 +27,7 @@
 
 		framebuffer0: framebuffer@af400000 {
                        compatible = "simple-framebuffer";
-                       reg = <0 0xaf400000 0 (2160 * 17280 * 4)>;
+                       reg = <0 0xaf400000 0 0x2399000>;    //4320 * 2160 * 4 + 2048 -- aligned to 0x1000
                        width = <4320>;
                        height = <2160>;
                        stride = <17280>;
