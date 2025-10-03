@@ -930,6 +930,7 @@ int qcom_dpu_probe(struct udevice *dev)
 	/* Configure & start DPU */
 
 	uc_priv->bpix = VIDEO_BPP32;
+	uc_priv->format = VIDEO_X8B8G8R8;
 	uc_priv->xsize = timings.hactive.typ + timings1.hactive.typ;
 	uc_priv->ysize = timings.vactive.typ;
 	// Panels are rotated, vidconsole will rotate all console writes
