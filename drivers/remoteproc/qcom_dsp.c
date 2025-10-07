@@ -119,7 +119,7 @@ static int qcom_dsp_load_ext4fs(struct qcom_dsp *dsp, char *buf)
 
 	ret = ext4fs_mount();
 	if (!ret) {
-		printf("firmmware_ext4_load: Unable to mount %s %s", ifname,
+		printf("firmware_ext4_load: Unable to mount %s %s", ifname,
 			dev_and_part);
 		return -EINVAL;
 	}
@@ -144,7 +144,7 @@ static int qcom_dsp_load_erofs(struct qcom_dsp *dsp, char *buf)
 
 	ret = fs_set_blk_dev(ifname, dev_and_part, FS_TYPE_EROFS);
 	if (ret < 0) {
-		printf("firmmware_erofs_load: Unable to set blkdev %s %s\n", ifname,
+		printf("firmware_erofs_load: Unable to set blkdev %s %s\n", ifname,
 			dev_and_part);
 		return ret;
 	}
@@ -152,7 +152,7 @@ static int qcom_dsp_load_erofs(struct qcom_dsp *dsp, char *buf)
 	ret = fs_read(dsp->firmware_name, (ulong)buf, 0, CONFIG_REMOTEPROC_MAX_FW_SIZE,
 			&len_read);
 	if (ret < 0) {
-		printf("firmmware_erofs_load: fail to read %s %s\n", ifname,
+		printf("firmware_erofs_load: fail to read %s %s\n", ifname,
 			dev_and_part);
 		return ret;
 	}
