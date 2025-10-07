@@ -401,6 +401,9 @@ struct qcom_dpu_priv {
 	void *dpu_base;
 	void *vbif_base;
 	const struct dpu_mdss_cfg *cat;
+	struct clk_bulk bulk;
+	struct udevice *bridge0;
+	struct udevice *bridge1;
 };
 
 #if 0
@@ -842,20 +845,23 @@ void mdp_intf_enable(void *dpu_base, const struct dpu_mdss_cfg *cat, unsigned in
 	writel(0x1, base + INTF_TIMING_ENGINE_EN);
 }
 
+void mdp_intf_disable(void *dpu_base, const struct dpu_mdss_cfg *cat, unsigned intf_id)
+{
+	unsigned intf = intf_id - INTF_0;
+	void *base = dpu_base + cat->intf[intf].base;
+
+	writel(0, base + INTF_TIMING_ENGINE_EN);
+}
+
 int qcom_dpu_probe(struct udevice *dev)
 {
 	struct video_uc_plat *uc_plat = dev_get_uclass_plat(dev);
 	struct qcom_dpu_priv *priv = dev_get_priv(dev);
 	struct video_priv *uc_priv = dev_get_uclass_priv(dev);
-	struct clk_bulk bulk;
-	struct udevice *bridge0 = NULL;
-	struct udevice *bridge1 = NULL;
 	struct display_timing timings, timings1;
 	int ret;
 
-	/* Before relocation we don't need to do anything */
-	if (!(gd->flags & GD_FLG_RELOC))
-		return 0;
+	printf("%s\n", __func__);
 
 	priv->dpu_base = dev_remap_addr_name(dev, "mdp");
 	priv->vbif_base = dev_remap_addr_name(dev, "vbif");
@@ -863,65 +869,63 @@ int qcom_dpu_probe(struct udevice *dev)
 
 	video_set_flush_dcache(dev, true);
 
-	ret = clk_get_bulk(dev, &bulk);
+	ret = clk_get_bulk(dev, &priv->bulk);
 	if (ret) {
 		dev_err(dev, "clk bulk get error %d\n", ret);
 		return ret;
 	}
 
-	ret = clk_enable_bulk(&bulk);
+	ret = clk_enable_bulk(&priv->bulk);
 	if (ret) {
 		dev_err(dev, "clk bulk enable error %d\n", ret);
 		return ret;
 	}
 
 	// TOFIX follow port/endpoint instead
-	ret = uclass_get_device(UCLASS_VIDEO_BRIDGE, 0, &bridge0);
+	ret = uclass_get_device(UCLASS_VIDEO_BRIDGE, 0, &priv->bridge0);
 	if (ret) {
-		dev_dbg(dev,
-				"No video bridge, err %d\n", ret);
+		dev_dbg(dev, "No video bridge, err %d\n", ret);
 		return ret;
 	}
 
-	ret = video_bridge_attach(bridge0);
+	ret = video_bridge_attach(priv->bridge0);
 	if (ret) {
 		dev_err(dev, "fail to attach bridge\n");
 		return ret;
 	}
 
 	// TOFIX follow port/endpoint instead
-	ret = uclass_get_device(UCLASS_VIDEO_BRIDGE, 0, &bridge0);
-	ret = uclass_get_device(UCLASS_VIDEO_BRIDGE, 1, &bridge1);
+	ret = uclass_get_device(UCLASS_VIDEO_BRIDGE, 1, &priv->bridge1);
 	if (ret) {
 		dev_dbg(dev, "No video bridge1, err %d\n", ret);
 		return ret;
 	}
 
-	ret = video_bridge_attach(bridge1);
+	ret = video_bridge_attach(priv->bridge1);
 	if (ret) {
 		dev_err(dev, "fail to attach bridge1\n");
 		return ret;
 	}
 
-	video_bridge_get_display_timing(bridge0, &timings);
+	video_bridge_get_display_timing(priv->bridge0, &timings);
 	if (ret) {
 		dev_err(dev, "fail to get display timings\n");
 		return ret;
 	}
 
-	video_bridge_get_display_timing(bridge0, &timings1);
+	video_bridge_get_display_timing(priv->bridge0, &timings1);
 	if (ret) {
 		dev_err(dev, "fail to get display timings\n");
 		return ret;
 	}
 
-	ret = video_bridge_set_backlight(bridge0, 100);
+	ret = video_bridge_set_backlight(priv->bridge0, 100);
 	if (ret) {
 		dev_err(dev, "bridge enable backlight error %d\n", ret);
 		return ret;
 	}
 
-	ret = video_bridge_set_backlight(bridge1, 100);
+	ret = video_bridge_set_backlight(priv->bridge1, 100);
 	if (ret) {
 		dev_err(dev, "bridge1 enable backlight error %d\n", ret);
 		return ret;
@@ -992,11 +996,30 @@ int qcom_dpu_probe(struct udevice *dev)
 	mdp_intf_enable(priv->dpu_base, priv->cat, INTF_1);
 	mdp_intf_enable(priv->dpu_base, priv->cat, INTF_2);
 
-
 #if 0
 	local_priv = priv;
 	dpu_kms_mdp_snapshot();
 #endif
+	return 0;
+}
+
+static int qcom_dpu_remove(struct udevice *dev)
+{
+	struct qcom_dpu_priv *priv = dev_get_priv(dev);
+
+	printf("%s\n", __func__);	
+
+	if (!priv->bridge0 || !priv->bridge1)
+		return 0;
+
+	video_bridge_set_backlight(priv->bridge0, 0);
+	video_bridge_set_backlight(priv->bridge1, 0);
+
+	mdp_intf_enable(priv->dpu_base, priv->cat, INTF_1);
+	mdp_intf_enable(priv->dpu_base, priv->cat, INTF_2);
+
+	clk_disable_bulk(&priv->bulk);
+
 	return 0;
 }
 
@@ -1027,6 +1050,7 @@ U_BOOT_DRIVER(qcom_dpu) = {
 	.of_match = dpu_ids,
 	.bind	= qcom_dpu_bind,
 	.probe	= qcom_dpu_probe,
+	.remove	= qcom_dpu_remove,
 	.priv_auto	= sizeof(struct qcom_dpu_priv),
-	.flags  = DM_FLAG_PRE_RELOC | DM_FLAG_LEAVE_PD_ON,
+	//.flags  = DM_FLAG_LEAVE_PD_ON,
 };

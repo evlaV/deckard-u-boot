@@ -665,6 +665,8 @@ static int dsi_pll_7nm_vco_unprepare(struct clk *clk)
 {
 	struct dsi_pll_7nm *pll_7nm = dev_get_priv(clk->dev);
 
+	printf("%s\n", __func__);
+
 	if (!pll_7nm->plat->phy_powered_on) {
 		debug("%s PLL(%d) PHY is not powered on\n", __func__, pll_7nm->plat->id);
 		return -ENOSYS;
@@ -1074,7 +1076,6 @@ static bool dsi_7nm_set_continuous_clock(struct msm_dsi_phy *phy, bool enable)
 	return enable;
 }
 
-#if 0
 static void dsi_7nm_phy_disable(struct msm_dsi_phy *phy)
 {
 	void __iomem *base = phy->plat->base;
@@ -1109,7 +1110,6 @@ static void dsi_7nm_phy_disable(struct msm_dsi_phy *phy)
 
 	printf("DSI%d PHY disabled", phy->plat->id);
 }
-#endif
 
 static int msm_dsi_phy_power_on(struct phy *phy)
 {
@@ -1131,7 +1131,14 @@ static int msm_dsi_phy_power_on(struct phy *phy)
 
 static int msm_dsi_phy_power_off(struct phy *phy)
 {
-	/* TOFIX */
+	struct msm_dsi_phy *qcom = dev_get_priv(phy->dev);
+
+	printf("%s\n", __func__);
+
+	dsi_7nm_phy_disable(qcom);
+
+	clk_disable_unprepare(qcom->ref_clk);
+	clk_disable_unprepare(qcom->ahb_clk);
 
 	return 0;
 }

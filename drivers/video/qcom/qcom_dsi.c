@@ -616,10 +616,30 @@ static int qcom_mipi_dsi_probe(struct udevice *dev)
 	return 0;
 }
 
+static int qcom_mipi_dsi_remove(struct udevice *dev)
+{
+	struct qcom_mipi_dsi *dsi = dev_get_priv(dev);
+
+	printf("%s\n", __func__);
+
+	dsi_write(dsi->base + REG_DSI_PHY_RESET, 0x1);
+	mdelay(1);
+	dsi_write(dsi->base + REG_DSI_PHY_RESET, 0x0);
+	mdelay(1);
+
+	dsi_write(dsi->base + REG_DSI_CLK_CTRL, 0x23F);
+	dsi_write(dsi->base + REG_DSI_RESET, 0x1);
+	mdelay(20);
+	dsi_write(dsi->base + REG_DSI_RESET, 0x0);
+
+	return 0;
+}
+
 U_BOOT_DRIVER(qcom_mipi_dsi) = {
 	.name			= "qcom_mipi_dsi",
 	.id			= UCLASS_DSI_HOST,
 	.probe			= qcom_mipi_dsi_probe,
+	.remove			= qcom_mipi_dsi_remove,
 	.ops			= &qcom_mipi_dsi_ops,
 	.priv_auto		= sizeof(struct qcom_mipi_dsi),
 };
@@ -710,9 +730,11 @@ static int qcom_dsi_set_backlight(struct udevice *dev, int percent)
 	struct qcom_dsi_priv *priv = dev_get_priv(dev);
 	int ret;
 
-	ret = panel_enable_backlight(priv->panel);
-	if (ret)
-		return ret;
+	if (percent) {
+		ret = panel_enable_backlight(priv->panel);
+		if (ret)
+			return ret;
+	}
 
 	return panel_set_backlight(priv->panel, percent);
 }
@@ -789,6 +811,21 @@ err_reg:
 	return ret;
 }
 
+static int qcom_dsi_remove(struct udevice *dev)
+{
+	struct qcom_dsi_priv *priv = dev_get_priv(dev);
+
+	printf("%s\n", __func__);
+
+	clk_disable_bulk(&priv->bulk);
+
+	generic_phy_power_off(&priv->phy);
+
+	regulator_set_enable(priv->vdd_reg, false);
+
+	return 0;
+}
+
 struct video_bridge_ops qcom_dsi_ops = {
 	.attach = qcom_dsi_attach,
 	.get_display_timing = qcom_dsi_get_display_timing,
@@ -806,6 +843,7 @@ U_BOOT_DRIVER(qcom_dsi) = {
 	.of_match			= qcom_dsi_ids,
 	.bind				= qcom_dsi_bind,
 	.probe				= qcom_dsi_probe,
+	.remove				= qcom_dsi_remove,
 	.ops				= &qcom_dsi_ops,
 	.priv_auto		= sizeof(struct qcom_dsi_priv),
 };
