@@ -80,7 +80,17 @@ enum combined_button_state_t {
 #define DECKARD_DUMMY_SERIAL_NUMB "123456789"
 #define TCSR_BOOT_MISC_DETECT 0x01fd9000
 
-void deckard_load_logo(void);
+enum full_screen_images_t 
+{
+	BOOT_LOGO = 0,
+	BATTERY_CHARGING = 1,
+	BATTERY_DEAD = 2,
+	BATTERY_PROBLEM = 3,
+	FULLSCREEN_IMAGES_COUNT
+};
+
+int display_turn_off(void);
+void deckard_load_logo(enum full_screen_images_t image);
 int deckard_check_for_key_press(void);
 int deckard_prepare_for_boot(void);
 
@@ -149,7 +159,7 @@ static void deckard_disable_watchdog(void)
 
 int pon_reason = 0;
 
-static int deckard_do_load_logo(void)
+static int deckard_do_load_logo(char * logo_arg)
 {
 	#define DEVPARTMAXLEN 16
 	#define LOADADDRMAXLEN 16
@@ -160,7 +170,7 @@ static int deckard_do_load_logo(void)
 	char arg1[] = "scsi";
 	char arg2[DEVPARTMAXLEN];  //e.g. "1:d"
 	char arg3[LOADADDRMAXLEN]; //e.g. "0xa7000000"
-	char arg4[] = "logo.bmp.gz";
+	//char arg4[] = "logo.bmp.gz";
 
 	strncpy(arg2, deckard_get_fw_part(), DEVPARTMAXLEN); //this returns 1:d for example
 	snprintf(arg3, LOADADDRMAXLEN, "0x%x", CONFIG_SYS_LOAD_ADDR); //this returns 1:d for example
@@ -169,14 +179,31 @@ static int deckard_do_load_logo(void)
 	argv[1]=arg1;
 	argv[2]=arg2;
 	argv[3]=arg3;
-	argv[4]=arg4;
+	argv[4]=logo_arg;
 
 	return do_load(NULL, 0, argc, argv, FS_TYPE_EROFS);
 }
 
-void deckard_load_logo()
+void deckard_load_logo(enum full_screen_images_t image)
 {
-	if (deckard_do_load_logo())
+	int ret = 0;
+
+	switch(image)
+	{
+		case BOOT_LOGO:
+			ret = deckard_do_load_logo("logo.bmp.gz");
+			break;
+
+		case BATTERY_CHARGING:
+			ret = deckard_do_load_logo("logo_battery_charging.bmp.gz");
+			break;
+
+		default:
+			ret = -1;
+			break;
+	}
+
+	if ( ret != 0 )
 		return;
 
 	bmp_info(CONFIG_SYS_LOAD_ADDR);
@@ -573,7 +600,7 @@ int misc_init_r(void)
 	deckard_setup();
 
 	if ( !env_get("factory-mode") ) {
-		deckard_load_logo();
+		deckard_load_logo(BOOT_LOGO);
 	}
 
 	ret = button_get_by_label("Volume Down", &btn);
@@ -874,6 +901,12 @@ int overwrite_console(void)
 }
 #endif
 
+int display_turn_off()
+{
+	run_command("mdss stop", 0);
+	return 0;
+}
+
 int deckard_prepare_for_boot()
 {
 	struct udevice  *led_red, *led_green, *led_blue;
@@ -937,6 +970,9 @@ int deckard_prepare_for_boot()
 	
 	int deckard_shutdown_loop_counter = 1;
 
+	deckard_load_logo(BATTERY_CHARGING);	
+
+	int deckard_display_off_counter = 20; // 100ms * 20 = 2s
 	//trap in uboot while we wait for power button to be pushed
 	//we should charge and do various things here like light up the LED's etc
 	while(power_button_avail)
@@ -968,6 +1004,11 @@ int deckard_prepare_for_boot()
 			}
 		}
 		
+		if ( deckard_display_off_counter-- == 0 )
+		{
+			display_turn_off();
+		}
+
 		//polling loop -- maybe be interrupt driven somehow?
 		mdelay(100);
 	}
@@ -1152,7 +1193,7 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	env_set("ramdisk_addr_r", INITRD_ADDR);
 	env_set("fdtcontroladdr", DTB_ADDR);
 
-	run_command("mdss stop", 0);
+	display_turn_off();
 	run_command("booti ${kernel_addr_r} ${ramdisk_addr_r} ${fdtcontroladdr}", 0);
 
 	printf("!!Boot Failed, Reset!!");
@@ -1176,7 +1217,7 @@ U_BOOT_CMD(
 
 int do_deckard_logo(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
-	deckard_load_logo();
+	deckard_load_logo(BOOT_LOGO);
 	return 0;
 }
 
