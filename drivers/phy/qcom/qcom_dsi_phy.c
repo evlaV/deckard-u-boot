@@ -665,6 +665,8 @@ static int dsi_pll_7nm_vco_unprepare(struct clk *clk)
 {
 	struct dsi_pll_7nm *pll_7nm = dev_get_priv(clk->dev);
 
+	printf("%s\n", __func__);
+
 	if (!pll_7nm->plat->phy_powered_on) {
 		debug("%s PLL(%d) PHY is not powered on\n", __func__, pll_7nm->plat->id);
 		return -ENOSYS;
