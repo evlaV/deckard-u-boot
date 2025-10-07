@@ -80,6 +80,10 @@ enum combined_button_state_t {
 #define DECKARD_DUMMY_SERIAL_NUMB "123456789"
 #define TCSR_BOOT_MISC_DETECT 0x01fd9000
 
+void deckard_load_logo(void);
+int deckard_check_for_key_press(void);
+int deckard_prepare_for_boot(void);
+
 // #define CHECK_PMICS
 #ifdef CHECK_PMICS
 void check_pmic(const char *const pmic_dts, const char *const pmic_name)
@@ -568,7 +572,9 @@ int misc_init_r(void)
 
 	deckard_setup();
 
-	//deckard_load_logo();
+	if ( !env_get("factory-mode") ) {
+		deckard_load_logo();
+	}
 
 	ret = button_get_by_label("Volume Down", &btn);
 	if (ret < 0) {
@@ -877,7 +883,6 @@ int deckard_prepare_for_boot()
 	int adsp_loaded = 0;
 	int leds_avail = 0;
 	int id = 0;
-	int key_pressed = 0;
 
 	//check pon_reason to see if we were booted by a button push or warm reset (reboot command)
 
@@ -1147,6 +1152,7 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	env_set("ramdisk_addr_r", INITRD_ADDR);
 	env_set("fdtcontroladdr", DTB_ADDR);
 
+	run_command("mdss stop", 0);
 	run_command("booti ${kernel_addr_r} ${ramdisk_addr_r} ${fdtcontroladdr}", 0);
 
 	printf("!!Boot Failed, Reset!!");
@@ -1171,6 +1177,7 @@ U_BOOT_CMD(
 int do_deckard_logo(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
 	deckard_load_logo();
+	return 0;
 }
 
 U_BOOT_LONGHELP(deckard_logo,
