@@ -7,6 +7,7 @@
 #include <power-domain.h>
 #include <asm/io.h>
 #include <linux/errno.h>
+#include <linux/delay.h>
 
 #include <power-domain-uclass.h>
 #include <soc/qcom/cmd-db.h>
@@ -193,6 +194,8 @@ static int rpmhpd_power_on(struct power_domain *pd)
 
 	ret = rpmhpd_send_corner(curr_rpmhpd, RPMH_ACTIVE_ONLY_STATE, corner,
 				 false);
+	if (!ret)
+		mdelay(10);
 
 	return ret;
 }
