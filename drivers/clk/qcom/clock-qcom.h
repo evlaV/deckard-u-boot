@@ -95,6 +95,7 @@ struct msm_clk_data {
 	const char * const		*dbg_rcg_names;
 
 	int (*enable)(struct clk *clk);
+	int (*disable)(struct clk *clk);
 	unsigned long (*set_rate)(struct clk *clk, unsigned long rate);
 };
 
@@ -120,6 +121,22 @@ void clk_rcg_set_rate_div(phys_addr_t base, uint32_t cmd_rcgr,
 void clk_rcg_shared_disable(phys_addr_t base, uint32_t cmd_rcgr, int safe_source);
 
 int qcom_gate_clk_en(const struct msm_clk_priv *priv, unsigned long id);
+
+static inline int qcom_gate_clk_dis(const struct msm_clk_priv *priv, unsigned long id)
+{
+	u32 val;
+	if (id >= priv->data->num_clks || priv->data->clks[id].reg == 0) {
+		log_err("gcc@%#08llx: unknown clock ID %lu!\n",
+			priv->base, id);
+		return -ENOENT;
+	}
+
+	val = readl(priv->base + priv->data->clks[id].reg);
+	val &= ~(priv->data->clks[id].en_val);
+	writel(val, priv->base + priv->data->clks[id].reg);
+
+	return 0;
+}
 
 static inline void qcom_branch_set_clk_en(phys_addr_t base, unsigned long cbcr)
 {
