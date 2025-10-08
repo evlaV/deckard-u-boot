@@ -350,6 +350,62 @@ static int sm8650_disp_cc_enable(struct clk *clk)
 	return 0;
 }
 
+static int sm8650_disp_cc_parent_disable(struct clk *clk, ulong id)
+{
+	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
+	struct clk *parent = &priv->parents_map[id];
+
+	if (clk_valid(parent))
+		clk_disable(parent);
+
+	return 0;
+}
+
+static int sm8650_disp_cc_disable(struct clk *clk)
+{
+	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
+	const char *name;
+
+	if (clk->id < ARRAY_SIZE(sm8650_disp_clks))
+		name = sm8650_disp_clks[clk->id].name;
+	else
+		name = "unknown";
+
+	dev_dbg(clk->dev, "disable clk %s (%lu)\n", name, clk->id);
+	qcom_gate_clk_dis(priv, clk->id);
+
+	switch (clk->id) {
+	case DISP_CC_MDSS_BYTE0_CLK:
+		sm8650_disp_cc_parent_disable(clk, DISP_CC_MDSS_BYTE0_CLK_SRC);
+		break;
+	case DISP_CC_MDSS_BYTE1_CLK:
+		sm8650_disp_cc_parent_disable(clk, DISP_CC_MDSS_BYTE1_CLK_SRC);
+		break;
+	case DISP_CC_MDSS_BYTE0_INTF_CLK:
+		sm8650_disp_cc_parent_disable(clk, DISP_CC_MDSS_BYTE0_CLK_SRC);
+		break;
+	case DISP_CC_MDSS_BYTE1_INTF_CLK:
+		sm8650_disp_cc_parent_disable(clk, DISP_CC_MDSS_BYTE1_CLK_SRC);
+		break;
+	case DISP_CC_MDSS_AHB_CLK:
+		clk_rcg_shared_disable(priv->base, 0x82e8, 0);
+		break;
+	case DISP_CC_MDSS_MDP_CLK:
+		clk_rcg_shared_disable(priv->base, 0x80d8, 0);
+		break;
+	case DISP_CC_MDSS_ESC0_CLK:
+		clk_rcg_shared_disable(priv->base, 0x8140, 0);
+		break;
+	case DISP_CC_MDSS_ESC1_CLK:
+		clk_rcg_shared_disable(priv->base, 0x8140, 0);
+		break;
+	default:
+		break;
+	}
+
+	return 0;
+}
+
 
 static const struct qcom_reset_map disp_cc_sm8650_resets[] = {
 	[DISP_CC_MDSS_CORE_BCR] = { 0x8000 },
@@ -406,6 +462,7 @@ static struct msm_clk_data sm8650_disp_cc_data = {
 	.num_plls = ARRAY_SIZE(sm8650_gpll_addrs),
 
 	.enable = sm8650_disp_cc_enable,
+	.disable = sm8650_disp_cc_disable,
 	.set_rate = sm8650_disp_cc_set_rate,
 };
 
