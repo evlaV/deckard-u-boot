@@ -155,7 +155,7 @@ static int clk_rpmh_send_aggregate_command(struct clk_rpmh *c)
 {
 	struct tcs_cmd cmd = { 0 };
 	u32 cmd_state, on_val;
-	enum rpmh_state state = RPMH_SLEEP_STATE;
+	enum rpmh_state state = RPMH_ACTIVE_ONLY_STATE;
 	int ret;
 	bool wait;
 
@@ -163,21 +163,21 @@ static int clk_rpmh_send_aggregate_command(struct clk_rpmh *c)
 	cmd_state = c->aggr_state;
 	on_val = c->res_on_val;
 
-	for (; state <= RPMH_ACTIVE_ONLY_STATE; state++) {
-		if (has_state_changed(c, state)) {
-			if (cmd_state & BIT(state))
-				cmd.data = on_val;
+	/* Only vote for ACTIVE_ONLY */
 
-			wait = cmd_state && state == RPMH_ACTIVE_ONLY_STATE;
-			dev_err(c->dev, "set %s state of %s to %d (was aggr %#x)\n",
-					rpmh_state_str(state), c->res_name,
-					cmd.data, c->last_sent_aggr_state);
-			ret = clk_rpmh_send(c, state, &cmd, wait);
-			if (ret) {
-				dev_err(c->dev, "set %s state of %s failed: (%d)\n",
+	if (has_state_changed(c, state)) {
+		if (cmd_state & BIT(state))
+			cmd.data = on_val;
+
+		wait = cmd_state && state == RPMH_ACTIVE_ONLY_STATE;
+		dev_err(c->dev, "set %s state of %s to %d (was aggr %#x)\n",
+				rpmh_state_str(state), c->res_name,
+				cmd.data, c->last_sent_aggr_state);
+		ret = clk_rpmh_send(c, state, &cmd, wait);
+		if (ret) {
+			dev_err(c->dev, "set %s state of %s failed: (%d)\n",
 					rpmh_state_str(state), c->res_name, ret);
-				return ret;
-			}
+			return ret;
 		}
 	}
 
