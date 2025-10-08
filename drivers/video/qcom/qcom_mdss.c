@@ -8,16 +8,24 @@
 #include <reset.h>
 #include <video.h>
 #include <command.h>
+#include <interconnect.h>
 
 struct qcom_mdss_priv {
 	struct reset_ctl reset;
 	struct clk_bulk bulk;
+	struct icc_path *path;
 };
+
+#define MIN_IB_BW	400000000UL /* Min ib vote 400MB */
 
 int qcom_mdss_probe(struct udevice *dev)
 {
 	struct qcom_mdss_priv *priv = dev_get_priv(dev);
 	int ret;
+
+	priv->path = of_icc_get(dev, "mdp0-mem");
+	if (!IS_ERR(priv->path))
+		icc_set_bw(priv->path, 0, Bps_to_icc(MIN_IB_BW));
 
 	ret = reset_get_by_index(dev, 0, &priv->reset);
 	if (ret) {
@@ -48,6 +56,9 @@ static int qcom_mdss_remove(struct udevice *dev)
 	reset_assert(&priv->reset);
 
 	clk_disable_bulk(&priv->bulk);
+
+	if (!IS_ERR(priv->path))
+		icc_put(priv->path);
 
 	return 0;
 }
