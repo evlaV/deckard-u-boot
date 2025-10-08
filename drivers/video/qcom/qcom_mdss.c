@@ -67,3 +67,37 @@ U_BOOT_DRIVER(qcom_mdss) = {
 	.priv_auto = sizeof(struct qcom_mdss_priv),
 	.flags  = DM_FLAG_LEAVE_PD_ON,
 };
+
+static int do_mdss_ctrl(struct cmd_tbl *cmdtp, int flag, int argc,
+		  char *const argv[])
+{
+	struct udevice *dev;
+	int ret;
+
+	if (argc < 2)
+		return CMD_RET_USAGE;
+
+	if (!strcmp(argv[1], "stop")) {
+		ret = uclass_get_device_by_driver(UCLASS_SIMPLE_BUS,
+				DM_DRIVER_GET(qcom_mdss),
+				&dev);
+		if (ret) {
+			printf("Failed to get MDSS !\n");
+			return CMD_RET_FAILURE;
+		}
+
+		ret = device_remove(dev, DM_REMOVE_NORMAL);
+		if (ret){
+			printf("Failed to remove MDSS !\n");
+			return CMD_RET_FAILURE;
+		}
+
+		return CMD_RET_SUCCESS;
+	}
+	
+	return CMD_RET_USAGE;
+}
+
+U_BOOT_LONGHELP(mdss,
+	"stop - stop MDSS");
+U_BOOT_CMD(mdss, CONFIG_SYS_MAXARGS,  1,  do_mdss_ctrl, "MDSS control", mdss_help_text);
