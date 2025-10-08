@@ -218,6 +218,19 @@ void clk_rcg_shared_disable(phys_addr_t base, uint32_t cmd_rcgr, int safe_source
 	clk_bcr_update(base + cmd_rcgr);
 }
 
+static int qcom_clk_parent_disable(struct clk *clk)
+{
+	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
+	struct clk *parent = &priv->parents_map[clk->id];
+
+	if (!clk_valid(parent))
+		return 0;
+
+	debug("Disabling parent clock %s:%lu for %s:%lu\n", parent->dev->name, parent->id, clk->dev->name, clk->id);
+
+	return clk_disable(parent);
+}
+
 static int qcom_clk_parent_enable(struct clk *clk)
 {
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
@@ -309,6 +322,21 @@ static int msm_clk_enable(struct clk *clk)
 
 	if (data->enable)
 		return data->enable(clk);
+
+	return 0;
+}
+
+static int msm_clk_disable(struct clk *clk)
+{
+	struct msm_clk_data *data = (struct msm_clk_data *)dev_get_driver_data(clk->dev);
+	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
+
+	/* If the clock has a parent, the pointer to it is in the data property */
+	if (clk_valid(&priv->parents_map[clk->id]))
+		qcom_clk_parent_disable(clk);
+
+	if (data->disable)
+		return data->disable(clk);
 
 	return 0;
 }
@@ -442,6 +470,7 @@ static int msm_clk_set_parent(struct clk *clk, struct clk *parent)
 static struct clk_ops msm_clk_ops = {
 	.set_rate = msm_clk_set_rate,
 	.enable = msm_clk_enable,
+	.disable = msm_clk_disable,
 #if IS_ENABLED(CONFIG_CMD_CLK)
 	.dump = msm_dump_clks,
 #endif
