@@ -568,7 +568,7 @@ int misc_init_r(void)
 
 	deckard_setup();
 
-	deckard_load_logo();
+	//deckard_load_logo();
 
 	ret = button_get_by_label("Volume Down", &btn);
 	if (ret < 0) {
@@ -1167,3 +1167,18 @@ U_BOOT_CMD(
 	deckard_boot, CONFIG_SYS_MAXARGS,     1,      do_deckard_boot,
     "Boot Deckard system image.", deckard_boot_help_text
 );
+
+int do_deckard_logo(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
+{
+	deckard_load_logo();
+}
+
+U_BOOT_LONGHELP(deckard_logo,
+    "Show Deckard logo\n"
+);
+
+U_BOOT_CMD(
+	deckard_logo, CONFIG_SYS_MAXARGS,     1,      do_deckard_logo,
+    "Deckard display logo", deckard_logo_help_text
+);
+
