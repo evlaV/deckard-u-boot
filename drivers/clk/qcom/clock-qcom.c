@@ -203,6 +203,21 @@ void clk_rcg_set_rate_div(phys_addr_t base, uint32_t cmd_rcgr,
 	writel(cfg, base + cmd_rcgr);
 }
 
+void clk_rcg_shared_disable(phys_addr_t base, uint32_t cmd_rcgr, int safe_source)
+{
+	u32 cfg;
+
+	cfg  = readl(base + cmd_rcgr);
+
+	cfg &= ~CFG_SRC_SEL_MASK;
+	cfg |= safe_source & CFG_CLK_SRC_MASK; /* Select clock source */
+
+	writel(cfg, base + cmd_rcgr + RCG_CFG_REG); /* Write new clock configuration */
+
+	/* Inform h/w to start using the new config. */
+	clk_bcr_update(base + cmd_rcgr);
+}
+
 static int qcom_clk_parent_enable(struct clk *clk)
 {
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
