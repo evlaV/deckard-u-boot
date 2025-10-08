@@ -40,7 +40,7 @@ struct rpmhpd {
 	unsigned int	enable_corner;
 	u32		level[RPMH_ARC_MAX_LEVELS];
 	size_t		level_count;
-	bool		enabled;
+	unsigned int	enabled;
 	const char	*res_name;
 	u32		addr;
 	bool		skip_retention_level;
@@ -177,21 +177,22 @@ static int rpmhpd_power_on(struct power_domain *pd)
 		return 0;
 	}
 
+	if (curr_rpmhpd->enabled++)
+		return 0;
+
 	if (curr_rpmhpd->parent && !curr_rpmhpd->parent->enabled) {
 		corner = curr_rpmhpd->parent->enable_corner;
 
 		ret = rpmhpd_send_corner(curr_rpmhpd->parent, RPMH_ACTIVE_ONLY_STATE, corner,
 				false);
 		if (!ret)
-			curr_rpmhpd->parent->enabled = true;
+			curr_rpmhpd->parent->enabled++;
 	}
 
 	corner = curr_rpmhpd->enable_corner;
 
 	ret = rpmhpd_send_corner(curr_rpmhpd, RPMH_ACTIVE_ONLY_STATE, corner,
 				 false);
-	if (!ret)
-		curr_rpmhpd->enabled = true;
 
 	return ret;
 }
@@ -218,12 +219,18 @@ static int rpmhpd_power_off(struct power_domain *pd)
 		return 0;
 	}
 
+	if (!curr_rpmhpd->enabled)
+		return 0;
+
+	curr_rpmhpd->enabled--;
+
+	if (curr_rpmhpd->enabled)
+		return 0;
+
 	corner = 0;
 
 	ret = rpmhpd_send_corner(curr_rpmhpd, RPMH_ACTIVE_ONLY_STATE, corner,
 				 false);
-	if (!ret)
-		curr_rpmhpd->enabled = false;
 
 	return ret;
 }
@@ -286,6 +293,7 @@ static int rpmhpd_probe(struct udevice *dev)
 			continue;
 
 		priv = rpmhpds[i];
+		priv->enabled = 0;
 		priv->dev = dev;
 		priv->addr = cmd_db_read_addr(priv->res_name);
 		if (!priv->addr) {
