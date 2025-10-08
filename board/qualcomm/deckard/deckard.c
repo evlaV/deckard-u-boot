@@ -89,7 +89,9 @@ enum full_screen_images_t
 	FULLSCREEN_IMAGES_COUNT
 };
 
+bool g_display_enabled = false;
 int display_turn_off(void);
+int display_turn_off_force(void);
 void deckard_load_logo(enum full_screen_images_t image);
 int deckard_check_for_key_press(void);
 int deckard_prepare_for_boot(void);
@@ -187,6 +189,8 @@ static int deckard_do_load_logo(char * logo_arg)
 void deckard_load_logo(enum full_screen_images_t image)
 {
 	int ret = 0;
+	
+	if(!g_display_enabled) return;
 
 	switch(image)
 	{
@@ -599,6 +603,17 @@ int misc_init_r(void)
 
 	deckard_setup();
 
+	if ( env_get_ulong("display", 10, 0) == 1) {
+		g_display_enabled = true;
+		printf("DISPLAY ON\n");
+	}
+	else
+	{
+		g_display_enabled = false;
+		printf("DISPLAY OFF\n");
+		display_turn_off_force(); //force just means dont check if g_display_enabled is true
+	}
+
 	if ( !env_get("factory-mode") ) {
 		deckard_load_logo(BOOT_LOGO);
 	}
@@ -903,8 +918,14 @@ int overwrite_console(void)
 
 int display_turn_off()
 {
-	run_command("mdss stop", 0);
-	return 0;
+	if(!g_display_enabled) return 0;
+
+	return display_turn_off_force();
+}
+
+int display_turn_off_force()
+{
+	return run_command("mdss stop", 0);
 }
 
 int deckard_prepare_for_boot()
