@@ -201,11 +201,11 @@ static void deckard_battery_enable_charging(struct udevice *pm8550b)
 {
 	int ret = 0;
 
-	/* Set Fast Charge Current to 2,040 mA (0.75C) */
-	ret |= pm8550b_set_fast_charge_current(pm8550b, 2040);
+	/* Set Fast Charge Current to 1,200 mA (QPH1 path limit - exp. tested) */
+	ret |= pm8550b_set_fast_charge_current(pm8550b, 1200);
 
-	/* Set Max Fast Charge Current to 2,040 mA (0.75C) */
-	ret |= pm8550b_set_max_fast_charge_current(pm8550b, 2040);
+	/* Set Max Fast Charge Current to 1,200 mA (QPH1 path limit - exp. tested)) */
+	ret |= pm8550b_set_max_fast_charge_current(pm8550b, 1200);
 
 	/* Set Float Voltage to 8,900 mV */
 	ret |= pm8550b_set_float_voltage(pm8550b, 8900);
@@ -231,11 +231,11 @@ int deckard_spl_battery_enable_charging(struct udevice *pm8550b)
 {
 	int ret = 0;
 
-	/* Set Fast Charge Current to 2,040 mA (0.75C) */
-	ret |= pm8550b_set_fast_charge_current(pm8550b, 2040);
+	/* Set Fast Charge Current to 1,200 mA (QPH1 path limit - exp. tested) */
+	ret |= pm8550b_set_fast_charge_current(pm8550b, 1200);
 
-	/* Set Max Fast Charge Current to 2,040 mA (0.75C) */
-	ret |= pm8550b_set_max_fast_charge_current(pm8550b, 2040);
+	/* Set Max Fast Charge Current to 1,200 mA (QPH1 path limit - exp. tested)) */
+	ret |= pm8550b_set_max_fast_charge_current(pm8550b, 1200);
 
 	/* Set Float Voltage to 8,900 mV */
 	ret |= pm8550b_set_float_voltage(pm8550b, 8900);
