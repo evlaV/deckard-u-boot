@@ -1419,7 +1419,8 @@ CONFIG_INTERCONNECT_QCOM_SM8650=y
 #
 # IOMMU device drivers
 #
-# CONFIG_IOMMU is not set
+CONFIG_IOMMU=y
+CONFIG_QCOM_HYP_SMMU=y
 
 #
 # LED Support
