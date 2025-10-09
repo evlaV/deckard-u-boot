@@ -199,6 +199,14 @@ int enable_usb_serial_console(void)
 	return 0;
 }
 
+int enable_ramoops_serial_console(void)
+{
+	env_set("stdin","serial,usbacm");
+	env_set("stderr","serial,ramoops,usbacm");
+	env_set("stdout","serial,ramoops,usbacm");
+	return 0;
+}
+
 int button_state_handler(enum combined_button_state_t total_button_state, int power_button_state) 
 {
 	printf("total button state = %d, power button = %d\n", total_button_state, power_button_state);
@@ -217,6 +225,7 @@ int button_state_handler(enum combined_button_state_t total_button_state, int po
 			env_set("reboot_mode", "f");
 			break;
 		case VOLUP_OFF__VOLDN_ON__SELECT_ON:
+			enable_ramoops_serial_console();
 			break;
 		case VOLUP_ON__VOLDN_OFF__SELECT_OFF:
 			break;
