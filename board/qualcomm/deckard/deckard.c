@@ -920,6 +920,9 @@ int display_turn_off()
 {
 	if(!g_display_enabled) return 0;
 
+	if (env_get_ulong("keep_display", 10, 0) == 1)
+		return 0;
+
 	return display_turn_off_force();
 }
 
