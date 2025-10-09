@@ -118,6 +118,7 @@ struct mmu_dev {
 	struct list_head li;
 	struct udevice *dev;
 	u16 sid;
+	u16 mask;
 	u16 cbx;
 	u16 smr;
 	u32 cbar;
@@ -143,30 +144,13 @@ struct mmu_dev {
 #define gr1_setbits(priv, offset, value) \
 	gr1_writel(priv, offset, gr1_readl(priv, offset) | (value))
 
-static int get_stream_id(struct udevice *dev)
-{
-	ofnode node = dev_ofnode(dev);
-	struct ofnode_phandle_args args;
-	int count = ofnode_parse_phandle_with_args(node, "iommus",
-						   "#iommu-cells", 0, 0, &args);
-
-	if (count < 0) {
-		printf("Error: %s: iommus property not found or wrong number of cells\n",
-		       __func__);
-		return -EINVAL;
-	}
-
-	return args.args[0]; // Some mask from bit 16 onward?
-}
-
-static struct mmu_dev *alloc_dev(struct udevice *dev, int sid)
+static struct mmu_dev *alloc_dev(struct udevice *dev, int sid, int mask)
 {
 	struct qcom_smmu_priv *priv = dev_get_priv(dev->iommu);
 	struct mmu_dev *mmu_dev;
+	int ret;
 
-	if (sid < 0)
-		sid = get_stream_id(dev);
-	debug("%s %s has SID %#x\n", dev->iommu->name, dev->name, sid);
+	debug("%s %s has SID %#x mask %#x\n", dev->iommu->name, dev->name, sid, mask);
 	if (sid < 0 || sid > 0xffff) {
 		printf("\tSMMU: Invalid stream ID for %s\n", dev->name);
 		return ERR_PTR(-EINVAL);
@@ -184,6 +168,7 @@ static struct mmu_dev *alloc_dev(struct udevice *dev, int sid)
 
 	mmu_dev->dev = dev;
 	mmu_dev->sid = sid;
+	mmu_dev->mask = mask;
 
 	list_add_tail(&mmu_dev->li, &priv->devices);
 
@@ -257,7 +242,9 @@ static int configure_smr_s2cr(struct qcom_smmu_priv *priv, struct mmu_dev *mdev)
 		if (val & ARM_SMMU_SMR_VALID)
 			continue;
 
-		val = mdev->sid | ARM_SMMU_SMR_VALID;
+		val = FIELD_PREP(ARM_SMMU_SMR_ID, mdev->sid) |
+		      FIELD_PREP(ARM_SMMU_SMR_MASK, mdev->mask) |
+		      ARM_SMMU_SMR_VALID;
 		gr0_writel(priv, ARM_SMMU_GR0_SMR(i), val);
 
 		/*
@@ -302,7 +289,7 @@ static void qcom_smmu_tlb_sync(struct qcom_smmu_priv *priv, int page,
 	printf("SMMU: TLB sync timed out -- SMMU might be deadlocked\n");
 }
 
-static int qcom_smmu_connect(struct udevice *dev, int sid)
+static int qcom_smmu_connect(struct udevice *dev, int sid, int mask)
 {
 	struct mmu_dev *mdev;
 	struct qcom_smmu_priv *priv;
@@ -317,7 +304,7 @@ static int qcom_smmu_connect(struct udevice *dev, int sid)
 	if (priv->disable)
 		return 0;
 
-	mdev = alloc_dev(dev, sid);
+	mdev = alloc_dev(dev, sid, mask);
 	if (IS_ERR(mdev) && PTR_ERR(mdev) != -EEXIST) {
 		printf("%s: %s Couldn't create mmu context\n", __func__,
 		       dev->name);

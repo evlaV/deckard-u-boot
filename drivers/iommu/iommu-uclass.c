@@ -75,7 +75,7 @@ static int dev_pci_iommu_enable(struct udevice *dev)
 		dev->iommu = dev_iommu;
 		ops = device_get_ops(dev->iommu);
 		if (ops && ops->connect) {
-			ret = ops->connect(dev, sid);
+			ret = ops->connect(dev, sid, length);
 			if (ret) {
 				log_err("%s: Failed to connect '%s' to IOMMU '%s': %d\n",
 					__func__, dev->name, dev->iommu->name, ret);
@@ -123,7 +123,7 @@ int dev_iommu_enable(struct udevice *dev)
 
 		ops = device_get_ops(dev->iommu);
 		if (ops && ops->connect) {
-			ret = ops->connect(dev, -1);
+			ret = ops->connect(dev, args.args[0], args.args[1]);
 			if (ret) {
 				log_err("%s: Failed to connect '%s' to IOMMU '%s': %d\n",
 					__func__, dev->name, dev->iommu->name, ret);
