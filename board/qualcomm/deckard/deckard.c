@@ -1142,8 +1142,15 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	}
 #endif
 
-	if ( !env_get("factory-mode") ) {
+	// Do not run adsp charging if we are in factory mode or coming out of ship mode
+	if ( !env_get("factory-mode") && !env_get("ship-mode") ) {
 		deckard_prepare_for_boot();
+	}
+
+	if ( env_get("ship-mode") ) {
+		// clear ship-mode ( used to boot straight to OS if coming out of ship mode )
+		env_set("ship-mode", "");
+		env_save();
 	}
 
 	printf("Attempting to load kernel from %s [ %s ]\n", label, partition);
