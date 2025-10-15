@@ -625,8 +625,8 @@ static int deckard_find_efi_var_store(void)
 // FIXME: exported from lib/efi_loader/efi_device_path_to_text.c
 u16 *efi_str_to_u16(const char *str);
 
-/* Find the boot entry with the matching label or the first unavailable boot entry. Returns the index of the entry or error */
-static efi_status_t deckard_efi_get_bootoption_by_label(u16 *boot_varname, size_t varname_size, const char *label, struct efi_load_option *lop)
+/* Find the boot entry with the matching label or the first unused boot entry. Returns the index of the entry or error */
+static efi_status_t deckard_efi_get_bootoption_by_label_or_new(u16 *boot_varname, size_t varname_size, const char *label, struct efi_load_option *lop)
 {
 	u16 *label16;
 	void *load_option;
@@ -656,6 +656,7 @@ static efi_status_t deckard_efi_get_bootoption_by_label(u16 *boot_varname, size_
 	// UNREACHABLE
 }
 
+/* FIXME: we currently don't ever return an error here so we can fall back to non-EFI booting! */
 static int deckard_efi_setup(void *ctx, struct event *event)
 {
 	u16 varname[9];
@@ -672,20 +673,22 @@ static int deckard_efi_setup(void *ctx, struct event *event)
 
 	/* Get the EFI subsystem up and running! */
 	ret = efi_init_obj_list();
-	if (ret != EFI_SUCCESS)
-		return -1;
+	if (ret != EFI_SUCCESS) {
+		printf("EFI: Initialisation failed!\n");
+		return 0;
+	}
 
 	snprintf(entry_label, sizeof(entry_label), "SteamOS %c", *slot);
 	/* varname is set to the entry with our label or the first available entry! */
-	ret = deckard_efi_get_bootoption_by_label((u16 *)varname, sizeof(varname), entry_label, &lo);
+	ret = deckard_efi_get_bootoption_by_label_or_new((u16 *)varname, sizeof(varname), entry_label, &lo);
 	if (ret > EFI_ERROR_MASK) {
-		printf("Couldn't get EFI Boot#### variables! %#lx\n", ret);
-		return -1;
+		printf("EFI: Couldn't get any Boot#### variable! %#lx\n", ret);
+		return 0;
 	}
 
 	/* We already have the boot entry so we're golden, unless the magic variable is set to make us override it. */
 	if (ret < EFI_ERROR_MASK && lo.label && !env_get("efi_reset_boot_entries")) {
-		printf("EFI: not modifying boot entry %s\n", entry_label);
+		log_debug("EFI: not modifying boot entry %s\n", entry_label);
 		return 0;
 	}
 
@@ -694,8 +697,8 @@ static int deckard_efi_setup(void *ctx, struct event *event)
 	/* Find the ESP where our UKI images are stored! */
 	r = deckard_find_part_by_label("esp", &esp_devnum, &esp_partnum);
 	if (r) {
-		printf("Couldn't find ESP partition: %d\n", r);
-		return r;
+		printf("EFI: Couldn't find ESP partition: %d\n", r);
+		return 0;
 	}
 
 	/* Find the EFI device path for the ESP + the UKI file path and set the Boot#### EFI variable */
@@ -715,7 +718,7 @@ static int deckard_efi_setup(void *ctx, struct event *event)
 						   NULL, &count, (efi_handle_t **)&volume_handles);
 		if (ret != EFI_SUCCESS) {
 			printf("EFI: No block device found!");
-			return ret;
+			return 0;
 		}
 
 		for (i = 0; i < count; i++) {
@@ -816,7 +819,7 @@ static int deckard_efi_setup(void *ctx, struct event *event)
 				   EFI_VARIABLE_RUNTIME_ACCESS,
 				   size, p, false);
 			if (ret != EFI_SUCCESS) {
-				printf("Couldn't set EFI var %S: %#lx\n", varname, ret);
+				printf("EFI: Couldn't set EFI var %S: %#lx\n", varname, ret);
 				ret = -1;
 			}
 			free(p);
@@ -824,6 +827,9 @@ static int deckard_efi_setup(void *ctx, struct event *event)
 		}
 		efi_free_pool(volume_handles);
 	}
+
+	if (ret)
+		return 0; // ret
 
 	/* Set BootOrder to point to our new boot entry! */
 	{
@@ -834,8 +840,8 @@ static int deckard_efi_setup(void *ctx, struct event *event)
 					EFI_VARIABLE_RUNTIME_ACCESS,
 					sizeof(bootorder), bootorder, false);
 		if (ret != EFI_SUCCESS) {
-			printf("Setting BootOrder failed: %#lx\n", ret);
-			return -1;
+			printf("EFI: Setting BootOrder failed: %#lx\n", ret);
+			return 0;
 		}
 	}
 
@@ -1510,6 +1516,12 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 		// clear ship-mode ( used to boot straight to OS if coming out of ship mode )
 		env_set("ship-mode", "");
 		env_save();
+	}
+
+	// FIXME: eventually invert this so we try EFI first, maybe find a less hacky way to do this?
+	if (env_get("enable-efi")) {
+		printf("Attempting to boot with EFI!\n");
+		run_command("bootefi bootmgr", 0);
 	}
 
 	printf("Attempting to load kernel from %s [ %s ]\n", label, partition);
