@@ -1479,6 +1479,12 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 		env_save();
 	}
 
+	// FIXME: eventually invert this so we try EFI first, maybe find a less hacky way to do this?
+	if (env_get("enable-efi")) {
+		printf("Attempting to boot with EFI!\n");
+		run_command("bootefi bootmgr", 0);
+	}
+
 	printf("Attempting to load kernel from %s [ %s ]\n", label, partition);
 
 	// Load kernel
