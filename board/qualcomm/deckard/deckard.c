@@ -1206,7 +1206,7 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	// prep bootargs
 	default_bootargs = env_get("default_bootargs");
 	temp_bootargs = env_get("temp_bootargs");
-	snprintf(bootargs, PATHMAXLEN, "%s %s root=PARTLABEL=%s init=/sbin/init ro rauc.slot=%s noresume rootwait earlycon",
+	snprintf(bootargs, PATHMAXLEN, "%s %s root=PARTLABEL=%s init=/sbin/init rauc.slot=%s noresume rootwait earlycon",
 									default_bootargs ? default_bootargs : "", temp_bootargs ? temp_bootargs : "", label, bootedslot );
 	env_set("bootargs", bootargs);
 
