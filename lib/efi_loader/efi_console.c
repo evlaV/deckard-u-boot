@@ -1384,7 +1384,8 @@ efi_status_t efi_console_get_u16_string(struct efi_simple_text_input_protocol *c
 					int row, int col)
 {
 	efi_status_t ret;
-	efi_uintn_t len = 0;
+	efi_uintn_t len;
+	efi_uintn_t cursor, i;
 	struct efi_input_key key;
 
 	printf(ANSI_CURSOR_POSITION
@@ -1393,25 +1394,42 @@ efi_status_t efi_console_get_u16_string(struct efi_simple_text_input_protocol *c
 
 	efi_cin_empty_buffer();
 
+	cursor = len = u16_strlen(buf);
 	for (;;) {
+		printf(ANSI_CURSOR_POSITION "%ls" ANSI_CLEAR_LINE_TO_END ANSI_CURSOR_POSITION, row, col, buf, row, col + (int)cursor);
 		do {
 			ret = EFI_CALL(cin->read_key_stroke(cin, &key));
 			mdelay(10);
 		} while (ret == EFI_NOT_READY);
 
 		if (key.unicode_char == u'\b') {
-			if (len > 0)
-				buf[--len] = u'\0';
-
-			printf(ANSI_CURSOR_POSITION
-			       "%ls"
-			       ANSI_CLEAR_LINE_TO_END, row, col, buf);
+			if (cursor > 0) {
+				if (cursor == len) {
+					buf[--cursor] = u'\0';
+				} else {
+					for (i = cursor-1; i < len; i++)
+						buf[i] = buf[i+1];
+					cursor--;
+				}
+				len--;
+			}
+			continue;
+		} else if (key.scan_code == 8) { /* delete */
+			for (i = cursor; i <= len; i++)
+				buf[i] = buf[i+1];
+			len--;
 			continue;
 		} else if (key.unicode_char == u'\r') {
 			buf[len] = u'\0';
 			return EFI_SUCCESS;
 		} else if (key.unicode_char == 0x3 || key.scan_code == 23) {
 			return EFI_ABORTED;
+		} else if (key.scan_code == 3) {
+			cursor += (cursor < len) ? 1 : 0;
+			continue;
+		} else if (key.scan_code == 4) {
+			cursor -= (cursor > 0) ? 1 : 0;
+			continue;
 		} else if (key.unicode_char < 0x20) {
 			/* ignore control codes other than Ctrl+C, '\r' and '\b' */
 			continue;
@@ -1428,8 +1446,10 @@ efi_status_t efi_console_get_u16_string(struct efi_simple_text_input_protocol *c
 		if (len >= (count - 1))
 			continue;
 
-		buf[len] = key.unicode_char;
+		for (i = len+1; i > cursor; i--)
+			buf[i] = buf[i-1];
+		buf[cursor] = key.unicode_char;
+		cursor++;
 		len++;
-		printf(ANSI_CURSOR_POSITION "%ls", row, col, buf);
 	}
 }
