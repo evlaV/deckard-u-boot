@@ -1387,6 +1387,7 @@ efi_status_t efi_console_get_u16_string(struct efi_simple_text_input_protocol *c
 	efi_uintn_t len;
 	efi_uintn_t cursor, i;
 	struct efi_input_key key;
+	struct efi_key_state key_state;
 
 	printf(ANSI_CURSOR_POSITION
 	       ANSI_CLEAR_LINE_TO_END
@@ -1398,8 +1399,15 @@ efi_status_t efi_console_get_u16_string(struct efi_simple_text_input_protocol *c
 	for (;;) {
 		printf(ANSI_CURSOR_POSITION "%ls" ANSI_CLEAR_LINE_TO_END ANSI_CURSOR_POSITION, row, col, buf, row, col + (int)cursor);
 		do {
+			/* FIXME: we would ideally just use the proper extention protocol but we can't easily
+			 * get a handle to it... this is a big ugly hack!
+			 */
 			ret = EFI_CALL(cin->read_key_stroke(cin, &key));
-			mdelay(10);
+			if (ret == EFI_SUCCESS) {
+				key_state = next_key.key_state;
+			} else {
+				mdelay(10);
+			}
 		} while (ret == EFI_NOT_READY);
 
 		if (key.unicode_char == u'\b') {
@@ -1426,9 +1434,13 @@ efi_status_t efi_console_get_u16_string(struct efi_simple_text_input_protocol *c
 			return EFI_ABORTED;
 		} else if (key.scan_code == 3) {
 			cursor += (cursor < len) ? 1 : 0;
+			while (key_state.key_shift_state & EFI_LEFT_CONTROL_PRESSED && cursor < len && buf[cursor] != u' ')
+				cursor++;
 			continue;
 		} else if (key.scan_code == 4) {
 			cursor -= (cursor > 0) ? 1 : 0;
+			while (key_state.key_shift_state & EFI_LEFT_CONTROL_PRESSED && cursor > 0 && buf[cursor-1] != u' ')
+				cursor--;
 			continue;
 		} else if (key.unicode_char < 0x20) {
 			/* ignore control codes other than Ctrl+C, '\r' and '\b' */
