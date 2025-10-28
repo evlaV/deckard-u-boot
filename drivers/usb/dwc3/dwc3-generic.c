@@ -260,9 +260,6 @@ static int dwc3_generic_host_remove(struct udevice *dev)
 	struct dwc3_generic_host_priv *priv = dev_get_priv(dev);
 	int rc;
 
-	/* Update usb host state */
-	usb_started = false;
-
 	/* This function always returns 0 */
 	xhci_deregister(dev);
 
@@ -643,7 +640,14 @@ int dwc3_glue_child_pre_probe(struct udevice *child)
 	 */
 	device_foreach_child(dev, child->parent) {
 		if (dev != child) {
-			ret = device_remove(dev, DM_REMOVE_NORMAL);
+			/* 
+			 * In host mode we call usb_stop() to safely tear down the USB
+			 * bus devices, it will also remove the USB host device.
+			 */
+			if (device_get_uclass_id(dev) == UCLASS_USB)
+				ret = usb_stop();
+			else
+				ret = device_remove(dev, DM_REMOVE_NORMAL);
 			if (ret) {
 				debug("Failed to remove device %s\n", dev->name);
 				return ret;
