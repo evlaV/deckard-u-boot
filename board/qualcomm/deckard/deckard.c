@@ -17,6 +17,7 @@
 #include <malloc.h>
 #include <mmc.h>
 #include <net.h>
+#include <sort.h>
 #include <usb.h>
 #include <asm/cache.h>
 #include <sysreset.h>
@@ -66,6 +67,18 @@ DECLARE_GLOBAL_DATA_PTR;
   #define DECKARD_ROOTFS_SLOT_OLD_B "system1"
 #endif
 
+#define ENV_EFI_ENABLED "enable-efi"
+#define ENV_EFI_REMOVABLE_BOOT "efi-removable-boot"
+#define ENV_EFI_RESET_BOOT_ENTRIES "efi-reset-boot-entries"
+/* Our boot entry is always 0xFAFF for convenience and to avoid conflicts */
+#define EFI_INTERNAL_BOOT_INDEX (0xFAFF)
+
+enum boot_priority {
+	BOOT_INTERNAL_ONLY,
+	BOOT_INTERNAL_FIRST,
+	BOOT_REMOVABLE_FIRST,
+};
+
 //these are set as a bit-mask typically when we detect a button is enabled
 #define VOLUP_BUTTON_MASK 0b100
 #define VOLDN_BUTTON_MASK 0b010
@@ -106,6 +119,8 @@ struct deckard_esp_info {
 };
 
 static struct deckard_esp_info efivar_store = { 0 };
+/* Set with a specific key combo to trigger booting from USB */
+static bool try_removable_boot = false;
 
 
 // #define CHECK_PMICS
@@ -300,6 +315,10 @@ int button_state_handler(enum combined_button_state_t total_button_state, int po
 			env_set("reboot_mode", "f");
 			break;
 		case VOLUP_OFF__VOLDN_ON__SELECT_ON:
+			env_set(ENV_EFI_ENABLED, "1");
+			try_removable_boot = true;
+			/* Initialise USB to detect external storage */
+			usb_init();
 			break;
 		case VOLUP_ON__VOLDN_OFF__SELECT_OFF:
 			break;
@@ -624,8 +643,8 @@ static int deckard_find_efi_var_store(void)
 // FIXME: exported from lib/efi_loader/efi_device_path_to_text.c
 u16 *efi_str_to_u16(const char *str);
 
-/* Find the boot entry with the matching label or the first unused boot entry. Returns the index of the entry or error */
-static efi_status_t deckard_efi_get_bootoption_by_label_or_new(u16 *boot_varname, size_t varname_size, const char *label, struct efi_load_option *lop)
+/* Check if our SteamOS boot entry already exists and deserialise it if so */
+static efi_status_t deckard_efi_get_boot_entry(u16 *boot_varname, size_t varname_size, const char *label, struct efi_load_option *lop)
 {
 	u16 *label16;
 	void *load_option;
@@ -636,30 +655,185 @@ static efi_status_t deckard_efi_get_bootoption_by_label_or_new(u16 *boot_varname
 	if (!label16)
 		return EFI_OUT_OF_RESOURCES;
 
-	for (int i = 0;; i++) {
-		efi_create_indexed_name(boot_varname, varname_size, "Boot", i);
-		load_option = efi_get_var(boot_varname, &efi_global_variable_guid, &size);
-		if (!load_option) {
-			efi_free_pool(label16);
-			return i;
-		}
-
+	efi_create_indexed_name(boot_varname, varname_size, "Boot", EFI_INTERNAL_BOOT_INDEX);
+	load_option = efi_get_var(boot_varname, &efi_global_variable_guid, &size);
+	/* Deserialise the entry to check if it's ours, we will overwrite it if not */
+	if (load_option) {
 		efi_deserialize_load_option(&lo, load_option, &size);
 		if (!u16_strcmp(lo.label, label16)) {
 			memcpy(lop, &lo, sizeof(lo));
-			efi_free_pool(label16);
-			return i;
 		}
 	}
+	efi_free_pool(label16);
 
-	// UNREACHABLE
+	return EFI_SUCCESS;
+}
+
+static efi_status_t deckard_efi_add_boot_entry(const u16 *varname, struct efi_device_path *dp, const char *label, const char *cmdline)
+{
+	struct efi_load_option lo = {
+		.file_path = dp,
+		.file_path_length = efi_dp_size(dp) + sizeof(EFI_DP_END),
+		.optional_data = cmdline,
+		.attributes = LOAD_OPTION_ACTIVE,
+	};
+	size_t size;
+	efi_status_t ret;
+	u16 dst[32] = { 0 };
+	u16 *tmp = dst;
+	void *p;
+
+	/* Convert label to u16 string, use a tmp variable which will then point to the end of the string */
+	utf8_utf16_strncpy((u16 **)&tmp, label, strlen(label));
+	lo.label = dst;
+
+	size = efi_serialize_load_option(&lo, (u8 **)&p);
+	if (!size) {
+		printf("EFI: Couldn't serialize load option!\n");
+		return EFI_OUT_OF_RESOURCES;
+	}
+
+	ret = efi_set_variable_int(varname, &efi_global_variable_guid,
+			EFI_VARIABLE_NON_VOLATILE |
+			EFI_VARIABLE_BOOTSERVICE_ACCESS |
+			EFI_VARIABLE_RUNTIME_ACCESS,
+			size, p, false);
+	if (ret != EFI_SUCCESS)
+		printf("EFI: Couldn't set EFI var %S: %#lx\n", varname, ret);
+	/* Free the serialized load option we allocated */
+	free(p);
+
+	return EFI_SUCCESS;
+}
+
+struct bootorder_ctx {
+	enum boot_priority priority;
+	int internal_index;
+};
+
+int bootorder_index_cmp(const void *v1, const void *v2, void *d)
+{
+	const u16 r1 = *(u16 *)v1, r2 = *(u16 *)v2;
+	struct bootorder_ctx *ctx = d;
+
+	/*
+	 * !!! FIXME: we should decode the boot entry and only adjust the
+	 * order if it doesn't have efi_guid_bootmenu_auto_generated in it's
+	 * optional data. This way we avoid re-ordering any manually added entries!
+	 */
+
+	/*
+	 * Sort boot order indexes so that the internal index
+	 * is moved to either the start or the end based on the
+	 * boot priority
+	 */
+	switch (ctx->priority) {
+	case BOOT_INTERNAL_ONLY:
+	case BOOT_INTERNAL_FIRST: {
+		if (r1 == ctx->internal_index)
+			return -1;
+		if (r2 == ctx->internal_index)
+			return 1;
+		break;
+	}
+	case BOOT_REMOVABLE_FIRST: {
+		if (r1 == ctx->internal_index)
+			return 1;
+		if (r2 == ctx->internal_index)
+			return -1;
+		break;
+	}
+	}
+
+	return 0;
+}
+
+/**
+ * deckard_efi_reset_bootorder - reset the EFI BootOrder variable to only boot from
+ * internal storage or attempt booting from usb/sdcard first.
+ *
+ * @priority: the boot priority to set (internal first/only, removable first)
+ * @internal_index: index of the internal boot entry, or -1 if unknown
+ */
+static int deckard_efi_reset_bootorder(u16 internal_index)
+{
+	u16 *bootorder;
+	efi_status_t ret;
+	efi_uintn_t last, size;
+	/* Set priority based on global variable (dictated by booting with certain buttons held). */
+	enum boot_priority priority = try_removable_boot ? BOOT_REMOVABLE_FIRST : BOOT_INTERNAL_ONLY;
+	struct bootorder_ctx ctx = {
+		.priority = priority,
+		.internal_index = internal_index,
+	};
+
+	/* append new boot option */
+	bootorder = efi_get_var(u"BootOrder", &efi_global_variable_guid, &size);
+	/* The internal boot option might not have been added yet, ensure it's in the list! */
+	if (size) {
+		bool internal_found = false;
+		for (int i = 0; i < size / sizeof(u16); i++) {
+			if (bootorder[i] == internal_index) {
+				internal_found = true;
+			}
+		}
+		if (!internal_found) {
+			printf("EFI: appending missing internal boot entry!\n");
+			efi_bootmgr_append_bootorder(internal_index);
+			/* Fetch BootOrder again since it has now changed */
+			bootorder = efi_get_var(u"BootOrder", &efi_global_variable_guid, &size);
+		}
+	}
+	/*
+	 * If BootOrder is unset or if we are only attempting internal boot then we will overwrite
+	 * BootOrder with a single entry. If we will also attempt to boot from removable boot devices
+	 * then we sort the array appropriately (for internal-first or removable-first).
+	 */
+	if (size == 0 || priority == BOOT_INTERNAL_ONLY) {
+		/* Free BootOrder if it was already set */
+		if (size != 0)
+			free(bootorder);
+		/* Set the single entry for internal boot */
+		bootorder = calloc(1, sizeof(u16));
+		size = sizeof(u16);
+		*bootorder = (u16)internal_index;
+		log_debug("EFI: forcing BootOrder to internal-only, index: %d\n", internal_index);
+	} else {
+		last = size / sizeof(u16);
+		log_debug("EFI: configuring boot order with priority %s, steamOS index %d\n",
+		priority == BOOT_INTERNAL_FIRST ? "internal-first" : (priority == BOOT_INTERNAL_ONLY ? "internal-only" : "removable-first" ),
+		internal_index);
+		log_debug("EFI: old boot order: ");
+		for (int i = 0; i < last; i++)
+			log_debug("%u%s", bootorder[i], i == last - 1 ? "\n" : ", ");
+		/* Sort boot order based on boot priority */
+		qsortd(bootorder, last, sizeof(u16), bootorder_index_cmp, &ctx);
+		log_debug("EFI: new boot order: ");
+		for (int i = 0; i < last; i++)
+			log_debug("%u%s", bootorder[i], i == last - 1 ? "\n" : ", ");
+	}
+
+	ret = efi_set_variable_int(u"BootOrder", &efi_global_variable_guid,
+				   EFI_VARIABLE_NON_VOLATILE |
+				   EFI_VARIABLE_BOOTSERVICE_ACCESS |
+				   EFI_VARIABLE_RUNTIME_ACCESS,
+				   size, bootorder, false);
+	if (ret != EFI_SUCCESS)
+		goto out;
+
+out:
+	free(bootorder);
+
+	return ret;
+
+	return 0;
 }
 
 /* FIXME: we currently don't ever return an error here so we can fall back to non-EFI booting! */
 static int deckard_efi_setup(void *ctx, struct event *event)
 {
 	u16 varname[9];
-	u32 index;
+	u32 index = EFI_INTERNAL_BOOT_INDEX;
 	efi_status_t ret;
 	int r;
 	struct efi_load_option lo = { 0 };
@@ -678,20 +852,22 @@ static int deckard_efi_setup(void *ctx, struct event *event)
 	}
 
 	snprintf(entry_label, sizeof(entry_label), "SteamOS %c", *slot);
-	/* varname is set to the entry with our label or the first available entry! */
-	ret = deckard_efi_get_bootoption_by_label_or_new((u16 *)varname, sizeof(varname), entry_label, &lo);
+	/* varname will be set to our boot index, it will be decoded if the label matches */
+	ret = deckard_efi_get_boot_entry((u16 *)varname, sizeof(varname), entry_label, &lo);
 	if (ret > EFI_ERROR_MASK) {
 		printf("EFI: Couldn't get any Boot#### variable! %#lx\n", ret);
 		return 0;
 	}
 
-	/* We already have the boot entry so we're golden, unless the magic variable is set to make us override it. */
-	if (ret < EFI_ERROR_MASK && lo.label && !env_get("efi_reset_boot_entries")) {
-		log_debug("EFI: not modifying boot entry %s\n", entry_label);
+	/*
+	 * We already have the boot entry with the right label so we're golden
+	 * unless we should forcefully rewrite the boot entry.
+	 */
+	if (lo.label && !env_get(ENV_EFI_RESET_BOOT_ENTRIES)) {
+		/* Ensure BootOrder is correct for this boot */
+		deckard_efi_reset_bootorder(index);
 		return 0;
 	}
-
-	index = ret;
 
 	/* Find the ESP where our UKI images are stored! */
 	r = deckard_find_part_by_label("esp", &esp_devnum, &esp_partnum);
@@ -702,14 +878,13 @@ static int deckard_efi_setup(void *ctx, struct event *event)
 
 	/* Find the EFI device path for the ESP + the UKI file path and set the Boot#### EFI variable */
 	{
-		efi_uintn_t count, size;
+		efi_uintn_t count;
 		int i;
 		efi_handle_t *volume_handles = NULL;
 		struct efi_handler *handler;
 		struct efi_simple_file_system_protocol *v;
-		struct efi_device_path *device_path;
+		struct efi_device_path *device_path, *dp;
 		struct disk_part *part_data;
-		void *p;
 		char *cmdline;
 		u16 *dst;
 
@@ -789,39 +964,25 @@ static int deckard_efi_setup(void *ctx, struct event *event)
 			// dst pointer is modified!
 			dst = tmp;
 			utf8_utf16_strncpy((u16 **)&dst, tmp8, strlen(tmp8));
-			// printf("File path: '%ls' %lu (%s)\n", tmp, u16_strlen(tmp), tmp8);
-			lo.file_path = eficonfig_create_device_path(device_path, tmp);
-			memset(tmp, 0, sizeof(tmp));
-			lo.file_path_length = efi_dp_size(lo.file_path) + sizeof(EFI_DP_END);
-			lo.label = dst = tmp;
-			utf8_utf16_strcpy(&dst, "SteamOS ");
-			utf8_utf16_strcpy(&dst, slot);
+			printf("File path: '%ls' %lu (%s)\n", tmp, u16_strlen(tmp), tmp8);
+			dp = eficonfig_create_device_path(device_path, tmp);
+
 			cmdline = malloc(256);
 			char *default_bootargs = env_get("default_bootargs");
 			/* Conditionally add a space if default_bootargs is set... */
 			snprintf(cmdline, 256, "%s%sroot=PARTLABEL=rootfs-%c init=/sbin/init ro rauc.slot=%c noresume rootwait earlycon",
 				 default_bootargs ?: "", default_bootargs ? " " : "", *slot, *slot);
-			lo.optional_data = cmdline;
-			lo.attributes = LOAD_OPTION_ACTIVE;
+			// lo.optional_data = cmdline;
+			// lo.attributes = LOAD_OPTION_ACTIVE;
 
-			size = efi_serialize_load_option(&lo, (u8 **)&p);
-			if (!size) {
-				printf("EFI: Couldn't serialize load option!\n");
-				return -ENOENT;
-			}
-			free(cmdline);
+			char label[32];
+			snprintf(label, 32, "SteamOS %c", *slot);
+			deckard_efi_add_boot_entry(varname,
+						   dp,
+						   label,
+						   cmdline);
+			efi_free_pool(dp);
 
-			/* Set the EFI variable! */
-			ret = efi_set_variable_int(varname, &efi_global_variable_guid,
-				   EFI_VARIABLE_NON_VOLATILE |
-				   EFI_VARIABLE_BOOTSERVICE_ACCESS |
-				   EFI_VARIABLE_RUNTIME_ACCESS,
-				   size, p, false);
-			if (ret != EFI_SUCCESS) {
-				printf("EFI: Couldn't set EFI var %S: %#lx\n", varname, ret);
-				ret = -1;
-			}
-			free(p);
 			break;
 		}
 		efi_free_pool(volume_handles);
@@ -831,18 +992,7 @@ static int deckard_efi_setup(void *ctx, struct event *event)
 		return 0; // ret
 
 	/* Set BootOrder to point to our new boot entry! */
-	{
-		u16 bootorder[1] = { index };
-		ret = efi_set_variable_int(u"BootOrder", &efi_global_variable_guid,
-					EFI_VARIABLE_NON_VOLATILE |
-					EFI_VARIABLE_BOOTSERVICE_ACCESS |
-					EFI_VARIABLE_RUNTIME_ACCESS,
-					sizeof(bootorder), bootorder, false);
-		if (ret != EFI_SUCCESS) {
-			printf("EFI: Setting BootOrder failed: %#lx\n", ret);
-			return 0;
-		}
-	}
+	deckard_efi_reset_bootorder(index);
 
 	printf("EFI: Set boot entry %ls: %s\n", varname, entry_label);
 
