@@ -1137,7 +1137,8 @@ efi_status_t efi_bootmgr_update_media_device_boot_option(void)
 	efi_handle_t *handles = NULL;
 	struct eficonfig_media_boot_option *opt = NULL;
 
-	return EFI_SUCCESS;
+	/* HACK: only add removable devices! */
+	bool removable_only = true;
 
 	ret = efi_locate_handle_buffer_int(BY_PROTOCOL,
 					   &efi_block_io_guid,
@@ -1159,12 +1160,13 @@ efi_status_t efi_bootmgr_update_media_device_boot_option(void)
 		goto out;
 
 	total = num;
-	num = count;
-	ret = efi_bootmgr_enumerate_boot_options(opt, total, handles, &num, false);
-	if (ret != EFI_SUCCESS)
-		goto out;
-
-	total = num;
+	if (!removable_only) {
+		num = count;
+		ret = efi_bootmgr_enumerate_boot_options(opt, total, handles, &num, false);
+		if (ret != EFI_SUCCESS)
+			goto out;
+		total = num;
+	}
 
 	/*
 	 * System hardware configuration may vary depending on the user setup.
