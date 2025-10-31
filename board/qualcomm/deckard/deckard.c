@@ -997,6 +997,16 @@ int misc_init_r(void)
 	env_set("UBOOTLUNIDX", deckard_get_dev_str(DECKARD_UBOOT_SLOT_A));
 	env_set("SYSTEMLUNIDX", deckard_get_dev_str(DECKARD_ROOTFS_SLOT_A));
 
+	/*
+	 * Set the magic $fdtfile variable so we load the right DTB during EFI boot. This will be used
+	 * to populate the EFI configuration table, it can be overwritten by an OS Loader.
+	 */
+	{
+		char fdtfile[32];
+		snprintf(fdtfile, 32, "qcom/sm8650-%s.dtb", env_get("EEPROM_BOARD"));
+		env_set("fdtfile", fdtfile);
+	}
+
 	// do we still need this?
 	bootedslot = env_get("booted_slot");
 	env_set("BOOT_ORDER", bootedslot);
