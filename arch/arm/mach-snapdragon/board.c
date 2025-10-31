@@ -416,7 +416,8 @@ int board_late_init(void)
 	/* Initialise SMEM if it wasn't done already */
 	qcom_smem_init();
 
-	configure_env();
+	// DECKARD: we set fdtfile already, skip this
+	//configure_env();
 	qcom_late_init();
 
 	/* Configure the dfu_string for capsule updates */
