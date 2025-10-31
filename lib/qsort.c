@@ -20,10 +20,10 @@
 #include <exports.h>
 #include <sort.h>
 
-void qsort(void  *base,
+void qsortd(void  *base,
 	   size_t nel,
 	   size_t width,
-	   int (*comp)(const void *, const void *))
+	   int (*comp)(const void *, const void *, void *), void *ctx)
 {
 	size_t wgap, i, j, k;
 	char tmp;
@@ -49,7 +49,7 @@ void qsort(void  *base,
 					j -= wgap;
 					a = j + ((char *)base);
 					b = a + wgap;
-					if ((*comp)(a, b) <= 0) {
+					if ((*comp)(a, b, ctx) <= 0) {
 						break;
 					}
 					k = width;
@@ -64,6 +64,21 @@ void qsort(void  *base,
 			wgap = (wgap - width)/3;
 		} while (wgap);
 	}
+}
+
+static int qsort_comp(const void *v1, const void *v2, void *ctx)
+{
+	int (*comp)(const void *, const void *) = ctx;
+
+	return comp(v1, v2);
+}
+
+void qsort(void  *base,
+	   size_t nel,
+	   size_t width,
+	   int (*comp)(const void *, const void *))
+{
+	qsortd(base, nel, width, qsort_comp, comp);
 }
 
 int strcmp_compar(const void *p1, const void *p2)

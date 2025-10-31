@@ -21,6 +21,14 @@ void qsort(void *base, size_t nmemb, size_t size,
 	   int (*compar)(const void *s1, const void *s2));
 
 /**
+ * qsortd() - variation of qsort with additional context pointer
+ */
+void qsortd(void  *base,
+	   size_t nmemb,
+	   size_t size,
+	   int (*comp)(const void *s1, const void *s2, void *ctx), void *ctx);
+
+/**
  * strcmp_compar() - compar function for string arrays
  *
  * This can be passed to qsort when a string array is being sorted
