@@ -537,6 +537,12 @@ config DM_REGULATOR_MPQ3367
 	help
 	The MPQ3367 provides a step-up converter with 6 channel current sources
 
+config DM_REGULATOR_MP3317
+	bool "Enable driver for MP3317 Power Regulator"
+	depends on DM_REGULATOR
+	help
+	The MP3317 provides 6-Channel, 160mA, 34V Boost WLED Driver with I2C interface
+
 config DM_REGULATOR_TPS61377
 	bool "Enable driver for TPS61377 Power Regulator"
 	depends on DM_REGULATOR

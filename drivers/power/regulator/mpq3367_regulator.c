@@ -76,6 +76,7 @@ static int mpq3367_regulator_probe(struct udevice *dev)
 {
 	struct mpq3367_regulator_pdata *pdata = dev_get_plat(dev);
 	int ret;
+	u8 regval;
 
 	ret = gpio_request_by_name(dev, "enable-gpios", 0, &pdata->en,
 				   GPIOD_IS_OUT);
@@ -87,6 +88,14 @@ static int mpq3367_regulator_probe(struct udevice *dev)
 	ret = i2c_get_chip(dev->parent, MPQ3367_I2C_CHIP, 1, &pdata->i2c);
 	if (ret) {
 		dev_err(dev, "i2c dev get failed.\n");
+		return ret;
+	}
+
+	// Check i2c by reading id
+	ret = dm_i2c_read(pdata->i2c, MPQ3367_ID_REG, &regval, 1);
+	if (ret) {
+		dev_err(dev, "i2c read id failed: %d\n", ret);
+		dm_gpio_free(dev, &pdata->en);
 		return ret;
 	}
 
