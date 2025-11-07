@@ -581,12 +581,22 @@
 		pinctrl-names = "default";
 	};
 
+	// right backlight old
 	mpq3367a: mpq3367a@38 {
 		compatible  = "monolithicpower,mpq3367";
 		reg         = <0x38>;
 		enable-gpios = <&pm8550_gpios 1 GPIO_ACTIVE_HIGH>;
 		status      = "okay";
 	};
+
+	// right backlight new
+	mp3317a: mp3317a@29{
+		compatible = "monolithicpower,mp3317";
+		reg = <0x29>;
+		enable-gpios = <&pm8550_gpios 1 GPIO_ACTIVE_HIGH>;
+        status      = "okay";
+	};
+
 };
 
 &i2c5 {
@@ -602,12 +612,22 @@
 		pinctrl-names = "default";
 	};
 
+	// right backlight old
 	mpq3367b: mpq3367b@38 {
 		compatible  = "monolithicpower,mpq3367";
 		reg         = <0x38>;
 		enable-gpios = <&pm8550_gpios 2 GPIO_ACTIVE_HIGH>;
 		status      = "okay";
 	};
+
+	// right backlight new
+	mp3317b: mp3317b@29{
+		compatible = "monolithicpower,mp3317";
+		reg = <0x29>;
+		enable-gpios = <&pm8550_gpios 2 GPIO_ACTIVE_HIGH>;
+        status      = "okay";
+	};
+
 
 	// BOOT EEPROM
 	eeprom_core: eeprom@50 {
@@ -1042,8 +1062,10 @@
 
 		left-supply = <&nex100011ub1>;
 		right-supply = <&nex100011ub0>;
-		backlight-left-supply = <&mpq3367b>;
-		backlight-right-supply = <&mpq3367a>;
+		backlight-left-supply = <&mp3317b>;
+		backlight-right-supply = <&mp3317a>;
+		backlight-left-supply-old = <&mpq3367b>;
+		backlight-right-supply-old = <&mpq3367a>;
 		preboost-supply = <&BACKLIGHT_PREBOOST>;
 		vdda-supply = <&vreg_l12b_1p8>;
 
@@ -1088,8 +1110,10 @@
 
 		left-supply = <&nex100011ub1>;
 		right-supply = <&nex100011ub0>;
-		backlight-left-supply = <&mpq3367b>;
-		backlight-right-supply = <&mpq3367a>;
+		backlight-left-supply = <&mp3317b>;
+		backlight-right-supply = <&mp3317a>;
+		backlight-left-supply-old = <&mpq3367b>;
+		backlight-right-supply-old = <&mpq3367a>;
 		preboost-supply = <&BACKLIGHT_PREBOOST>;
 		vdda-supply = <&vreg_l12b_1p8>;
 

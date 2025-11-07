@@ -71,6 +71,8 @@ enum {
 	REGULATOR_RIGHT,
 	REGULATOR_BACKLIGHT_LEFT,
 	REGULATOR_BACKLIGHT_RIGHT,
+	REGULATOR_BACKLIGHT_LEFT_OLD,
+	REGULATOR_BACKLIGHT_RIGHT_OLD,
 	REGULATOR_COUNT,
 };
 
@@ -81,6 +83,8 @@ static const char *regulator_names[REGULATOR_COUNT] = {
 	"right-supply",
 	"backlight-left-supply",
 	"backlight-right-supply",
+	"backlight-left-supply-old",
+	"backlight-right-supply-old"
 };
 
 struct udevice *panels_regs[REGULATOR_COUNT];
@@ -94,6 +98,7 @@ struct deckard_panel_priv {
 	struct mipi_dsi_device *device;
 	u8 panel_mfg_info[PANEL_MFG_INFO_NUM_BYTES];
 	u8 panel_read_data[512];
+	char panel_vendor;
 };
 
 /* 90Hz */
@@ -146,47 +151,42 @@ static u8 pps_cmd[] = {
 	0x00, 0x00, 
 };
 
-/* TOFIX: Only BOE panel for now, needs to implement autodetect */
-static void dsi_write_panel_on(struct deckard_panel_priv *priv)
+static void get_panel_info(struct deckard_panel_priv *priv)
 {
-	deckard_panel_dsi_write_seq(priv, LPM02648C_MF_CMD_ACCESS_PROTECT, 0x00);
-	deckard_panel_dsi_write_seq(priv, LPM02648C_SEQ_CTL, 0x00);
-	deckard_panel_dsi_write_seq(priv, LPM02648C_DSI_CTL,
-			0x20, 0x6b, 0x80, 0x06, 0x33, 0x9A, 0x00,
-			0x1a, 0x7a);
-	deckard_panel_dsi_write_seq(priv, LPM02648C_DISP_MODE, 0x54, 0x00, 0x00,
-			0x00);
-	deckard_panel_dsi_write_seq(priv, LPM02648C_GEN_OUTPIN_SET,
-			BE16(GPO1_TES1_120_BOE), BE16(GPO1_TEW1), 0x00, 0x00,
-			0x00, 0x00,
-			BE16(GPO1_TES1_120_BOE-CAMERA_TRIGGER_OFFSET),
-			BE16(CAMERA_TRIGGER_OFFSET * 2 + GPO1_TEW1));
-	deckard_panel_dsi_write_seq(priv, LPM02648C_DISP_SET3, 
-			0x0B, 0x70, 0x08,
-			0x48, 0x00, 0x00, 0x13, 0x01, 0xFF, 0x00, 0x01, 0x09,
-			0x16, 0x16, 0x00, 0x00, 0x00, 0x01, 0x40, 0x0C, 0x00,
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00,
-			0x70, 0x08, 0xD0, 0x02, 0x21, 0x6F, 0x08, 0x5A, 0x00,
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00);
-	deckard_panel_dsi_write_seq(priv, LPM02648C_DISP_SET1, RTN, 0x86, LE16(VBP),
-			0x08, 0x70, BE16(VFP), 0x00, 0x00, 0x08, 0x3A, 0x00, 0x00,
-			0x17, 0x00, 0x17);
-	deckard_panel_dsi_write_seq(priv, LPM02648C_DISP_SET3_2, 0x00);
-	deckard_panel_dsi_write_seq(priv, LPM02648C_DISP_SET4, 0x8b, 0x00, 0x80,
-			0x46, 0x61, 0x00, 0x8b);
-	deckard_panel_dsi_write_seq(priv, LPM02648C_DISP_SET5, BE16(VID_VS_DELAY),
-			0x00, 0x00, 0x00);
-	deckard_panel_dsi_write_seq(priv, LPM02648C_TE_GPIO_CTL, 0x00, 0x6A, 0x02);
-	/* TODO: add hard coded dsc cmd for now, use dsc helper later */
-	deckard_panel_dsi_write_buffer(priv, pps_cmd);
-	deckard_panel_dsi_write_seq(priv, MIPI_DCS_SET_TEAR_ON, 0x00);
-	deckard_panel_dsi_write_seq(priv, MIPI_DCS_EXIT_SLEEP_MODE);
-	mdelay(170);
-	deckard_panel_dsi_write_seq(priv, MIPI_DCS_SET_DISPLAY_ON);
+	u8 panel_info_regs[] = { 0xBF };
+	u8 *info = priv->panel_mfg_info;
+	int ret;
+
+	ret = mipi_dsi_generic_read(priv->device, panel_info_regs, 1,
+			info, PANEL_MFG_INFO_NUM_BYTES);
+	if (ret < 0)
+		dev_err(priv->dev, "failed to read panel info\n");
 }
 
 #if 0
+static void read_reg(struct deckard_panel_priv *priv, u8 reg, u8 len) {
+	u8 panel_info_regs[] = { reg };
+	u8 info[256];
+	int ret;
+
+	if(reg >= 0xB0) {
+		ret = mipi_dsi_generic_read(priv->device, panel_info_regs, 1,
+				info, len);
+	} else {
+		ret = mipi_dsi_dcs_read(priv->device, reg,
+				info, len);
+	}
+	if (ret < 0) {
+		dev_err(priv->dev, "failed to read panel info %x\n", reg);
+	} else {
+		printf("reg: %x: ", reg);
+		for(uint i = 0; i < len; i++) {
+			printf("%02x ", info[i]);
+		}
+		printf("\n");
+	}
+}
+
 static int panel_info_show(struct deckard_panel_priv *priv)
 {
 	unsigned int offset = 0;
@@ -227,21 +227,114 @@ static int panel_info_show(struct deckard_panel_priv *priv)
 
 	return 0;
 }
-
-static void get_panel_info(struct deckard_panel_priv *priv)
-{
-	u8 panel_info_regs[] = { 0xBF };
-	u8 *info = priv->panel_mfg_info;
-	int ret;
-
-	ret = mipi_dsi_generic_read(priv->device, panel_info_regs, 1,
-			info, PANEL_MFG_INFO_NUM_BYTES);
-	if (ret < 0)
-		dev_err(priv->dev, "failed to read panel info\n");
-
-	panel_info_show(priv);
-}
 #endif
+
+static void dsi_write_panel_on(struct deckard_panel_priv *priv)
+{
+	deckard_panel_dsi_write_seq(priv, LPM02648C_MF_CMD_ACCESS_PROTECT, 0x00);
+	deckard_panel_dsi_write_seq(priv, LPM02648C_SEQ_CTL, 0x00);
+	deckard_panel_dsi_write_seq(priv, LPM02648C_DSI_CTL,
+				0x20, 0x6b, 0x80, 0x06, 0x33, 0x9a, 0x00,
+				0x1a, 0x7a);
+	deckard_panel_dsi_write_seq(priv, LPM02648C_DISP_MODE, 0x54, 0x00, 0x00,
+				0x00);
+	// start with backlight off, will be set later
+	deckard_panel_dsi_write_seq(priv, LPM02648C_GEN_OUTPIN_SET,
+				BE16(GPO1_TES1_120_SHARP), BE16(0), 0x00, 0x00,
+				0x00, 0x00,
+				BE16(GPO1_TES1_120_SHARP-CAMERA_TRIGGER_OFFSET),
+				BE16(CAMERA_TRIGGER_OFFSET * 2 + 0));
+	if ( priv->panel_vendor == VENDOR_SHARP ) {
+		deckard_panel_dsi_write_seq(priv, LPM02648C_DISP_SET3, 0x08, 0x70, 0x28,
+					0x48, 0x00, 0x00, 0x13, 0x21, 0xff, 0x00, 0x0f, 0x01,
+					0x14, 0x17, 0x00, 0x00, 0x00, 0x02, 0x40, 0x0C, 0x00, 0x00,
+					0x00, 0x20, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x70, 0x08,
+					0xD0, 0x02, 0x21, 0x6F, 0x08, 0x5A, 0x00, 0x00, 0x00, 0x00,
+					0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+					0x00);
+		deckard_panel_dsi_write_seq(priv, LPM02648C_DISP_SET1, RTN, 0x86, LE16(VBP), 0x08, 0x70,
+					BE16(VFP), 0x00, 0x00, 0x08, 0x3B, 0x00, 0x00, 0x19, 0x01, 0x22);
+		deckard_panel_dsi_write_seq(priv, LPM02648C_DISP_SET3_2, 0x00);
+		deckard_panel_dsi_write_seq(priv, LPM02648C_DISP_SET4, 0x8b, 0x00, 0x80,
+					0x46, 0x61, 0x00, 0x8b);
+		deckard_panel_dsi_write_seq(priv, LPM02648C_DISP_SET5, BE16(VID_VS_DELAY),
+					0x00, 0x00, 0x00);
+		deckard_panel_dsi_write_seq(priv, LPM02648C_DISP_SET6, 0x00, 0x24, 0x00, 0x00,
+					0x1f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+					0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+					0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00,
+					0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0A, 0x0A,
+					0x00, 0x00, 0x00, 0x03, 0x1D, 0x01, 0x00, 0x00, 0x00, 0x01,
+					0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00,
+					0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00);
+		deckard_panel_dsi_write_seq(priv, MIPI_DCS_SET_ADDRESS_MODE, 0x40);
+	} else if ( priv->panel_vendor == VENDOR_BOE ) {
+		deckard_panel_dsi_write_seq(priv, LPM02648C_DISP_SET3, 0x0B, 0x70, 0x08,
+					  0x48, 0x00, 0x00, 0x13, 0x01, 0xFF, 0x00, 0x01, 0x09,
+					  0x16, 0x16, 0x00, 0x00, 0x00, 0x01, 0x40, 0x0C, 0x00,
+					  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00,
+					  0x70, 0x08, 0xD0, 0x02, 0x21, 0x6F, 0x08, 0x5A, 0x00,
+					  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+					  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00);
+		deckard_panel_dsi_write_seq(priv, LPM02648C_DISP_SET1, RTN, 0x86, LE16(VBP),
+					  0x08, 0x70, BE16(VFP), 0x00, 0x00, 0x08, 0x3A, 0x00, 0x00,
+					  0x17, 0x00, 0x17);
+		deckard_panel_dsi_write_seq(priv, LPM02648C_DISP_SET3_2, 0x00);
+		deckard_panel_dsi_write_seq(priv, LPM02648C_DISP_SET4, 0x8b, 0x00, 0x80,
+					  0x46, 0x61, 0x00, 0x8b);
+		deckard_panel_dsi_write_seq(priv, LPM02648C_DISP_SET5, BE16(VID_VS_DELAY),
+					  0x00, 0x00, 0x00);
+		deckard_panel_dsi_write_seq(priv, LPM02648C_TE_GPIO_CTL, 0x00, 0x6A, 0x02);
+	} else if ( priv->panel_vendor == VENDOR_JDI ) {
+		deckard_panel_dsi_write_seq(priv, LPM02648C_MF_CMD_ACCESS_PROTECT, 0x04);
+		deckard_panel_dsi_write_seq(priv, LPM02648C_DISP_SET2, 0x1e);
+		deckard_panel_dsi_write_seq(priv, LPM02648C_DISP_SET3, 0x70, 0x08, 0xd0,
+					0x02, 0x21, 0x6f, 0x08, 0x5a, 0x00, 0x00,
+					0x00, 0x00, 0x00, 0x00, 0x00, 0x00);
+		deckard_panel_dsi_write_seq(priv, LPM02648C_DISP_SET1, RTN, 0x86,
+					LE16(VBP), 0x08, 0x70, BE16(VFP));
+		deckard_panel_dsi_write_seq(priv, LPM02648C_DISP_SET3_2, 0x00);
+		deckard_panel_dsi_write_seq(priv, LPM02648C_DISP_SET4, 0x8b, 0x00, 0x80,
+					0x46, 0x61, 0x00, 0x8b);
+		deckard_panel_dsi_write_seq(priv, LPM02648C_DISP_SET5, BE16(VID_VS_DELAY),
+					0x00, 0x00, 0x00);
+		deckard_panel_dsi_write_seq(priv, MIPI_DCS_GET_COMPRESSION_MODE, 0x01);
+		deckard_panel_dsi_write_seq(priv, MIPI_DCS_SET_TEAR_SCANLINE, 0x00, 0x00);
+		deckard_panel_dsi_write_seq(priv, MIPI_DCS_SET_ADDRESS_MODE, 0x00);
+		deckard_panel_dsi_write_seq(priv, MIPI_DCS_SET_PIXEL_FORMAT, 0x77);
+	} else {
+		dev_err(priv->dev, "unrecognized panel vendor ( %c )\n", priv->panel_vendor );
+	}
+	deckard_panel_dsi_write_seq(priv, LPM02648C_TE_GPIO_CTL, 0x00, 0x6A, 0x02);
+	deckard_panel_dsi_write_buffer(priv, pps_cmd);
+	deckard_panel_dsi_write_seq(priv, MIPI_DCS_SET_TEAR_ON, 0x00);
+	deckard_panel_dsi_write_seq(priv, MIPI_DCS_EXIT_SLEEP_MODE);
+	mdelay(170);
+	deckard_panel_dsi_write_seq(priv, MIPI_DCS_SET_DISPLAY_ON);
+}
+
+static void dsi_panel_on(struct deckard_panel_priv *priv)
+{
+	// Read panel MFG info
+	get_panel_info(priv);
+
+	//panel_info_show(priv);
+
+	// need to support old format JDI displays
+	if ( priv->panel_mfg_info[VENDOR_OFFSET] == 1 ) {
+		priv->panel_vendor = priv->panel_mfg_info[VENDOR_OFFSET + 1];
+	} else {
+		priv->panel_vendor = priv->panel_mfg_info[VENDOR_OFFSET];
+	}
+	if ( priv->panel_vendor == VENDOR_SHARP || priv->panel_vendor == VENDOR_BOE || priv->panel_vendor == VENDOR_JDI ) {
+		dev_err(priv->dev, "panel vendor: %c\n", priv->panel_vendor);
+	} else {
+		dev_err(priv->dev, "unrecognized panel vendor ( %c ), defualt to sharp\n", priv->panel_mfg_info[VENDOR_OFFSET] );
+		priv->panel_vendor = VENDOR_SHARP;
+	}
+
+	dsi_write_panel_on(priv);
+}
 
 static int set_brightness(struct deckard_panel_priv *priv, u16 brightness, bool video_mode)
 {
@@ -313,8 +406,7 @@ static int deckard_panel_panel_enable_backlight(struct udevice *dev)
 	plat->device->mode_flags |= MIPI_DSI_MODE_LPM;
 	priv->device = plat->device;
 
-	dsi_write_panel_on(priv);
-	//get_panel_info(priv);
+	dsi_panel_on(priv);
 
 	//set_brightness(priv, BRIGHTNESS_DEFAULT, false);
 
@@ -378,7 +470,21 @@ static int deckard_panel_panel_of_to_plat(struct udevice *dev)
 			return ret;
 		}
 
-		for (i = 0; i < REGULATOR_COUNT; i++) {
+		// First try to get DV2+ backlight drivers
+		ret = device_get_supply_regulator(dev, "backlight-left-supply", &panels_regs[REGULATOR_BACKLIGHT_LEFT]);
+		ret |= device_get_supply_regulator(dev, "backlight-right-supply", &panels_regs[REGULATOR_BACKLIGHT_RIGHT]);
+		if ( ret ) {
+			dev_err(dev, "error getting dv backlight power supplies, try ev version: ret=%d\n", ret);
+			// look for DV1- backlight drivers
+			ret = device_get_supply_regulator(dev, "backlight-left-supply-old", &panels_regs[REGULATOR_BACKLIGHT_LEFT]);
+			ret= device_get_supply_regulator(dev, "backlight-right-supply-old", &panels_regs[REGULATOR_BACKLIGHT_RIGHT]);
+			if (ret) {
+				dev_err(dev, "error gettting backlight power supplies ret=%d\n", ret);
+				return ret;
+			}
+		}
+
+		for (i = 0; i < REGULATOR_BACKLIGHT_LEFT; i++) {
 			ret = device_get_supply_regulator(dev, regulator_names[i], &panels_regs[i]);
 			if (ret) {
 				dev_err(dev, "Cannot get power supply %s: ret=%d\n",
@@ -414,9 +520,6 @@ static int deckard_panel_panel_probe(struct udevice *dev)
 
 static int deckard_panel_panel_remove(struct udevice *dev)
 {
-	struct mipi_dsi_panel_plat *plat = dev_get_plat(dev);
-	struct deckard_panel_priv *priv = dev_get_priv(dev);
-
 	deckard_panel_panel_power_off();
 
 	return 0;
