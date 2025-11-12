@@ -4,7 +4,7 @@
  * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
-#define pr_fmt(fmt) "%s " fmt, KBUILD_MODNAME
+#define pr_fmt(fmt) "RPMH: " fmt
 
 #include <dm.h>
 #include <dm/device_compat.h>
@@ -66,6 +66,14 @@ enum {
 	RSC_DRV_CMD_DATA,
 	RSC_DRV_CMD_STATUS,
 	RSC_DRV_CMD_RESP_DATA,
+/* DRV channel Registers */
+	RSC_DRV_CHN_SEQ_BUSY,
+	RSC_DRV_CHN_SEQ_PC,
+	RSC_DRV_CHN_TCS_TRIGGER,
+	RSC_DRV_CHN_TCS_COMPLETE,
+	RSC_DRV_CHN_UPDATE,
+	RSC_DRV_CHN_BUSY,
+	RSC_DRV_CHN_EN,
 };
 
 /* DRV HW Solver Configuration Information Register */
@@ -167,6 +175,13 @@ static u32 rpmh_rsc_reg_offset_ver_2_7[] = {
 	[RSC_DRV_CMD_DATA]		= 0x38,
 	[RSC_DRV_CMD_STATUS]		= 0x3C,
 	[RSC_DRV_CMD_RESP_DATA]		= 0x40,
+	[RSC_DRV_CHN_SEQ_BUSY]		= 0x0,
+	[RSC_DRV_CHN_SEQ_PC]		= 0x0,
+	[RSC_DRV_CHN_TCS_TRIGGER]	= 0x0,
+	[RSC_DRV_CHN_TCS_COMPLETE]	= 0x0,
+	[RSC_DRV_CHN_UPDATE]		= 0x0,
+	[RSC_DRV_CHN_BUSY]		= 0x0,
+	[RSC_DRV_CHN_EN]		= 0x0,
 };
 
 static u32 rpmh_rsc_reg_offset_ver_3_0[] = {
@@ -186,6 +201,13 @@ static u32 rpmh_rsc_reg_offset_ver_3_0[] = {
 	[RSC_DRV_CMD_DATA]		= 0x3C,
 	[RSC_DRV_CMD_STATUS]		= 0x40,
 	[RSC_DRV_CMD_RESP_DATA]		= 0x44,
+	[RSC_DRV_CHN_SEQ_BUSY]		= 0x464,
+	[RSC_DRV_CHN_SEQ_PC]		= 0x468,
+	[RSC_DRV_CHN_TCS_TRIGGER]	= 0x490,
+	[RSC_DRV_CHN_TCS_COMPLETE]	= 0x494,
+	[RSC_DRV_CHN_UPDATE]		= 0x498,
+	[RSC_DRV_CHN_BUSY]		= 0x49C,
+	[RSC_DRV_CHN_EN]		= 0x4A0,
 };
 
 static inline void __iomem *
@@ -356,6 +378,72 @@ static void __tcs_set_trigger(struct rsc_drv *drv, int tcs_id, bool trigger)
 	}
 }
 
+void rpmh_rsc_debug_channel_busy(struct rsc_drv *drv)
+{
+	u32 event_sts, ctrl_sts;
+	u32 chn_update, chn_busy, chn_en;
+	u32 seq_busy, seq_pc;
+
+	log_debug("%s\n", drv->name);
+
+	event_sts = readl_relaxed(drv->base + drv->regs[RSC_DRV_CHN_TCS_COMPLETE]);
+	ctrl_sts = readl_relaxed(drv->base + drv->regs[RSC_DRV_CHN_TCS_TRIGGER]);
+	chn_update = readl_relaxed(drv->base + drv->regs[RSC_DRV_CHN_UPDATE]);
+	chn_busy = readl_relaxed(drv->base + drv->regs[RSC_DRV_CHN_BUSY]);
+	chn_en = readl_relaxed(drv->base + drv->regs[RSC_DRV_CHN_EN]);
+	seq_busy = readl_relaxed(drv->base + drv->regs[RSC_DRV_CHN_SEQ_BUSY]);
+	seq_pc = readl_relaxed(drv->base + drv->regs[RSC_DRV_CHN_SEQ_PC]);
+
+	log_debug("\tevent sts: 0x%x ctrl_sts: 0x%x\n", event_sts, ctrl_sts);
+	log_debug("\tchn_update: 0x%x chn_busy: 0x%x chn_en: 0x%x\n", chn_update, chn_busy, chn_en);
+	log_debug("\tseq_busy: 0x%x seq_pc: 0x%x\n", seq_busy, seq_pc);
+}
+
+static void print_tcs_info(struct rsc_drv *drv, int tcs_id, struct tcs_group *tcs_grp, const struct tcs_request *req)
+{
+	unsigned long cmds_enabled;
+	u32 addr, data, resp_data, msgid, sts, irq_sts;
+	bool in_use = test_bit(tcs_id, drv->tcs_in_use);
+	int i;
+
+	rpmh_rsc_debug_channel_busy(drv);
+
+	sts = read_tcs_reg(drv, drv->regs[RSC_DRV_STATUS], tcs_id);
+	cmds_enabled = read_tcs_reg(drv, drv->regs[RSC_DRV_CMD_ENABLE], tcs_id);
+	if (!tcs_grp) {
+		pr_err("%s: no tcs group\n", __func__);
+		return;
+	}
+
+	if (!req)
+		goto print_tcs_data;
+
+	data = read_tcs_reg(drv, drv->regs[RSC_DRV_CONTROL], tcs_id);
+	irq_sts = readl_relaxed(drv->tcs_base + drv->regs[RSC_DRV_IRQ_STATUS]);
+	log_debug("Request: tcs-in-use:%s active_tcs=%s(%d) state=%d wait_for_compl=%u]\n",
+		(in_use ? "YES" : "NO"),
+		((tcs_grp->type == ACTIVE_TCS) ? "YES" : "NO"),
+		tcs_grp->type, req->state, req->wait_for_compl);
+	log_debug("TCS=%d [ctrlr-sts:%s amc-mode:0x%x irq-sts:%s]\n",
+		tcs_id, sts ? "IDLE" : "BUSY", data,
+		(irq_sts & BIT(tcs_id)) ? "COMPLETED" : "PENDING");
+
+	if (!cmds_enabled)
+		return;
+print_tcs_data:
+	for_each_set_bit(i, &cmds_enabled, tcs_grp->ncpt) {
+		addr = read_tcs_cmd(drv, drv->regs[RSC_DRV_CMD_ADDR], tcs_id, i);
+		data = read_tcs_cmd(drv, drv->regs[RSC_DRV_CMD_DATA], tcs_id, i);
+		resp_data = read_tcs_cmd(drv, drv->regs[RSC_DRV_CMD_RESP_DATA], tcs_id, i);
+		msgid = read_tcs_cmd(drv, drv->regs[RSC_DRV_CMD_MSGID], tcs_id, i);
+		sts = read_tcs_cmd(drv, drv->regs[RSC_DRV_CMD_STATUS], tcs_id, i);
+		log_debug("\tCMD=%d [addr=0x%x data=0x%x resp_data=0x%x hdr=0x%x sts=0x%x enabled=1]\n",
+			i, addr, data, resp_data, msgid, sts);
+		if (!(sts & CMD_STATUS_ISSUED))
+			continue;
+	}
+}
+
 /**
  * rpmh_rsc_send_data() - Write / trigger active-only message.
  * @drv: The controller.
@@ -417,6 +505,9 @@ int rpmh_rsc_send_data(struct rsc_drv *drv, const struct tcs_request *msg)
 			break;
 		udelay(1);
 	}
+
+	if (drv->ver.major == 3)
+		print_tcs_info(drv, tcs_id, tcs, msg);
 
 	__tcs_set_trigger(drv, tcs_id, false);
 
