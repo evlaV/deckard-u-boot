@@ -565,7 +565,7 @@ static void mdss_sspp_config_rec1(void *dpu_base, const struct dpu_mdss_cfg *cat
 	writel((height << 16) | (width >> 1), base + SSPP_OUT_SIZE);
 	writel(0, base + SSPP_OUT_XY);
 	writel(0x236FF, base + SSPP_SRC_FORMAT);
-	writel(0x03010002, base + SSPP_SRC_UNPACK_PATTERN);
+	writel(0x03020001, base + SSPP_SRC_UNPACK_PATTERN);
 	writel(0x80000000, base + SSPP_SRC_OP_MODE);
 	writel(0x9, base + SSPP_CDP_CNTL);
 
@@ -575,7 +575,7 @@ static void mdss_sspp_config_rec1(void *dpu_base, const struct dpu_mdss_cfg *cat
 	writel((height << 16) | (width >> 1), base + SSPP_OUT_SIZE_REC1);
 	writel((width >> 1), base + SSPP_OUT_XY_REC1);
 	writel(0x236FF, base + SSPP_SRC_FORMAT_REC1);
-	writel(0x03010002, base + SSPP_SRC_UNPACK_PATTERN_REC1);
+	writel(0x03020001, base + SSPP_SRC_UNPACK_PATTERN_REC1);
 	writel(0x80000000, base + SSPP_SRC_OP_MODE_REC1);
 	writel(0x9, base + SSPP_CDP_CNTL_REC1);
 
