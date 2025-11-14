@@ -548,7 +548,11 @@ int led_set_color_and_state(char * led_name, enum led_state_t state)
 /* Check for vol- button - if pressed - stop autoboot */
 int misc_init_r(void)
 {
-	struct udevice     *btn, *led = NULL;
+	struct udevice     *btn = NULL;
+	struct udevice *led_red = NULL;
+	struct udevice *led_green = NULL;
+	struct udevice *led_blue = NULL;
+
 	int                 ret;
 	enum button_state_t state;
 	char * bootedslot;
@@ -687,11 +691,25 @@ int misc_init_r(void)
 	/* cleanup all reboot_mode setups if any */
 	deckard_reboot_mode_clean();
 
-	ret = led_get_by_label("blue", &led);
+	ret = led_get_by_label("red", &led_red);
+	if (ret < 0) {
+		printf("Couldn't find red led!\n");
+	} else {
+		led_set_state(led_red, LEDST_ON);
+	};
+
+	ret = led_get_by_label("green", &led_green);
+	if (ret < 0) {
+		printf("Couldn't find green led!\n");
+	} else {
+		led_set_state(led_green, LEDST_ON);
+	};
+
+	ret = led_get_by_label("blue", &led_blue);
 	if (ret < 0) {
 		printf("Couldn't find blue led!\n");
 	} else {
-		led_set_state(led, LEDST_ON);
+		led_set_state(led_blue, LEDST_ON);
 	};
 
 	// get board data from eeprom
@@ -720,9 +738,9 @@ int misc_init_r(void)
 			env_save();
 		}
 
-		led_set_color_and_state("red",LEDST_OFF);
+		led_set_color_and_state("red",LEDST_BLINK);
 		led_set_color_and_state("green",LEDST_BLINK);
-		led_set_color_and_state("blue",LEDST_OFF);
+		led_set_color_and_state("blue",LEDST_BLINK);
 		
 		run_command("fastboot -l 0x880000000 -s 0x10000000 usb 0", 0);
 	}

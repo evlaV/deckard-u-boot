@@ -89,7 +89,8 @@ void deckard_battery_prep_for_boot(struct udevice *pmk8550, struct udevice *pm85
 {
 	int             ret;
 	uint16_t        battery_mv;
-	struct udevice *led = NULL;
+	struct udevice *led_red = NULL;
+	struct udevice *led_green = NULL;
 	struct udevice *led_blue = NULL;
 
 	/* Get Battery Voltage to Check for UVLO */
@@ -110,26 +111,30 @@ void deckard_battery_prep_for_boot(struct udevice *pmk8550, struct udevice *pm85
 		return;
 	}
 
-	bool battery_was_dead;
-
-	ret = led_get_by_label("red", &led);
+	ret = led_get_by_label("red", &led_red);
 	if (ret < 0) {
 		printf("Couldn't find red led!\n");
+	}
+	else {
+		printf("Enabling Red LED\n");
+		led_set_state(led_red, LEDST_ON);
+	}
+	ret = led_get_by_label("green", &led_green);
+	if (ret < 0) {
+		printf("Couldn't find green led!\n");
+	}
+	else {
+		led_set_state(led_green, LEDST_OFF);
 	}
 	ret = led_get_by_label("blue", &led_blue);
 	if (ret < 0) {
 		printf("Couldn't find blue led!\n");
 	}
-
-	if (led_blue) {
+	else {
 		led_set_state(led_blue, LEDST_OFF);
 	}
 
-	if (led) {
-		printf("Enabling Red LED\n");
-		led_set_state(led, LEDST_ON);
-	}
-
+	bool battery_was_dead;
 	if (battery_mv < BATTERY_DEAD_VOLTAGE) {
 		// Fast Pulse Red LED
 		// TODO
@@ -191,9 +196,9 @@ void deckard_battery_prep_for_boot(struct udevice *pmk8550, struct udevice *pm85
 
 complete:
 
-	if (led) {
+	if (led_red) {
 		printf("Disabling Red LED\n");
-		led_set_state(led, LEDST_OFF);
+		led_set_state(led_red, LEDST_OFF);
 	}
 }
 

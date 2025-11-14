@@ -312,14 +312,33 @@ static enum button_state_t deckard_spl_get_button_state(const char *label)
 
 static void deckard_spl_leds_set(void)
 {
-	struct udevice *led_blue;
+	struct udevice *led_red = NULL;
+	struct udevice *led_green = NULL;
+	struct udevice *led_blue = NULL;
 	int ret;
 
+	ret = led_get_by_label("red", &led_red);
+	if (ret < 0) {
+		printf("Couldn't find red led!\n");
+	}
+	else {
+		printf("Enabling Red LED\n");
+		led_set_state(led_red, LEDST_ON);
+	}
+	ret = led_get_by_label("green", &led_green);
+	if (ret < 0) {
+		printf("Couldn't find green led!\n");
+	}
+	else {
+		led_set_state(led_green, LEDST_ON);
+	}
 	ret = led_get_by_label("blue", &led_blue);
-	if (ret < 0)
-		printf("failed to get blue led\n");
-
-	led_set_state(led_blue, LEDST_ON);
+	if (ret < 0) {
+		printf("Couldn't find blue led!\n");
+	}
+	else {
+		led_set_state(led_blue, LEDST_ON);
+	}
 }
 
 static int update_boot_state_and_boot_valid(char boot_slot)
