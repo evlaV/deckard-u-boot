@@ -1075,10 +1075,12 @@ int misc_init_r(void)
 		// env_set("bootcmd", "bootefi bootmgr");
 	}
 
-	deckard_find_efi_var_store();
+	if (env_get("enable-efi")) {
+		deckard_find_efi_var_store();
 
-	/* Trigger EFI setup just before the main loop when the EFI subsystem will actually be initialised! */
-	event_register("deckard_bootefi", EVT_MAIN_LOOP, deckard_efi_setup, NULL);
+		/* Trigger EFI setup just before the main loop when the EFI subsystem will actually be initialised! */
+		event_register("deckard_bootefi", EVT_MAIN_LOOP, deckard_efi_setup, NULL);
+	}
 
 	printf("deckard init: done\n");
 ///////
