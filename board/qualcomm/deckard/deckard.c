@@ -607,7 +607,8 @@ int misc_init_r(void)
 
 	deckard_setup();
 
-	if ( env_get_ulong("display", 10, 0) == 1) {
+	//default to display being ON if the variable is undefined
+	if ( (env_get_ulong("display", 10, 1) == 1)) {
 		g_display_enabled = true;
 		printf("DISPLAY ON\n");
 	}
