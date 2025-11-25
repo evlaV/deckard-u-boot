@@ -67,6 +67,18 @@ DECLARE_GLOBAL_DATA_PTR;
   #define DECKARD_ROOTFS_SLOT_OLD_B "system1"
 #endif
 
+//TODO: search for the partlabel with "esp" on LUN0 rather than hardcode here!
+#define DECKARD_ESP_PARTITION_NAME "esp"
+//hardcoded for now
+#define DECKARD_ESP_PARTITION "0:1"
+
+//TODO: search for "efi-A" and "efi-B"
+#define DECKARD_EFI_NAME_SLOT_A "efi-A"
+#define DECKARD_EFI_NAME_SLOT_B "efi-B"
+//hardcoded for now
+#define DECKARD_EFI_SLOT_A "0:2"
+#define DECKARD_EFI_SLOT_B "0:3"
+
 #define ENV_EFI_ENABLED "enable-efi"
 #define ENV_EFI_REMOVABLE_BOOT "efi-removable-boot"
 #define ENV_EFI_RESET_BOOT_ENTRIES "efi-reset-boot-entries"
@@ -202,29 +214,42 @@ static void deckard_disable_watchdog(void)
 
 int pon_reason = 0;
 
-static int deckard_do_load_logo(char * logo_arg)
+static int deckard_do_load_logo(char * logo_name)
 {
 	#define DEVPARTMAXLEN 16
 	#define LOADADDRMAXLEN 16
+	#define LOGO_PATHMAX 256
 
 	int  argc = 5;
 	char *argv[5];
 	char arg0[] = "do_the_dew";
-	char arg1[] = "scsi";
-	char arg2[DEVPARTMAXLEN];  //e.g. "1:d"
-	char arg3[LOADADDRMAXLEN]; //e.g. "0xa7000000"
-	//char arg4[] = "logo.bmp.gz";
+	char part_arg[DEVPARTMAXLEN] = { 0 };  //e.g. "1:d"
+	char loadaddr_arg[LOADADDRMAXLEN] = { 0 }; //e.g. "0xa7000000"
+	char logo_arg[LOGO_PATHMAX + 1] = { 0 };
 
-	strncpy(arg2, deckard_get_fw_part(), DEVPARTMAXLEN); //this returns 1:d for example
-	snprintf(arg3, LOADADDRMAXLEN, "0x%x", CONFIG_SYS_LOAD_ADDR); //this returns 1:d for example
+	argv[0] = arg0;
+	argv[1] = DECKARD_IFNAME;
+	argv[2] = part_arg;
+	argv[3] = loadaddr_arg;
+	argv[4] = logo_arg;
 
-	argv[0]=arg0;
-	argv[1]=arg1;
-	argv[2]=arg2;
-	argv[3]=arg3;
-	argv[4]=logo_arg;
+	/* Setup load address */
+	snprintf(loadaddr_arg, LOADADDRMAXLEN, "0x%x", CONFIG_SYS_LOAD_ADDR);
 
-	return do_load(NULL, 0, argc, argv, FS_TYPE_EROFS);
+	/* First try loading from the ESP */
+	snprintf(part_arg, DEVPARTMAXLEN, DECKARD_ESP_PARTITION);
+	snprintf(logo_arg, LOGO_PATHMAX, "/steamos/%s", logo_name); //not case sensitive
+	if (!do_load(NULL, 0, argc, argv, FS_TYPE_ANY)) {
+		log_debug("Deckard: loaded splash from ESP!\n");
+		return 0;
+	}
+	log_warning("Deckard: using splash image from firmware partition\n");
+
+	/* Fall back to firmware partition */
+	snprintf(part_arg, DEVPARTMAXLEN, "%s", deckard_get_fw_part()); //this returns 1:d for example
+	snprintf(logo_arg, LOGO_PATHMAX, "/%s", logo_name);
+
+	return do_load(NULL, 0, argc, argv, FS_TYPE_ANY);
 }
 
 void deckard_load_logo(enum full_screen_images_t image)
@@ -1009,7 +1034,7 @@ int scsi_do_load_helper(char * partition, char * addr, char * path)
 	int  argc = 5;
 	char *argv[5];
 	char arg0[] = "do_the_dew"; // ?
-	char arg1[] = "scsi";
+	char arg1[] = DECKARD_IFNAME;
 	int ret;
 
 	argv[0]=arg0;
