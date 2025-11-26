@@ -1362,6 +1362,7 @@ out:
 	return ret;
 }
 
+#define BOOTSLOTPARTTYPEPBLTARGET    "dea0ba2c-cbdd-4805-b4f9-f428251c3e98"
 
 /**
  * gpt_get_xbl_active_partition_slot() - check if A or B is active
@@ -1420,6 +1421,26 @@ char gpt_get_xbl_active_partition_slot(struct blk_desc *blk_dev_desc, char *foun
 
 	strcpy(foundslotname,"X");
 
+//use the actual PARTTYPE UUID that the PBL uses to determine which slot was booted rather than the PART_BOOTABLE flag
+#if 1
+	for (int i = 0; i < part_count; i++) {
+		if(!strcmp(partitions[i].type_guid, BOOTSLOTPARTTYPEPBLTARGET))
+		{
+			printf("%s is bootable\n",partitions[i].name);
+			if( strcmp(partitions[i].name,"xbl_a") == 0 )
+			{
+				strcpy(foundslotname,"A");
+				break;
+			}
+			
+			if( strcmp(partitions[i].name,"xbl_b") == 0 )
+			{
+				strcpy(foundslotname,"B");
+				break;
+			}
+		}
+	}
+#else
 	for (int i = 0; i < part_count; i++) {
 		if(partitions[i].bootable & PART_BOOTABLE)
 		{
@@ -1437,6 +1458,7 @@ char gpt_get_xbl_active_partition_slot(struct blk_desc *blk_dev_desc, char *foun
 			}
 		}
 	}
+#endif
 
 	printf("bootable slot is %s\n",foundslotname);
 
