@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0+
 
 obj-$(CONFIG_$(PHASE_)QCOM_COMMAND_DB) += cmd-db.o
+obj-$(CONFIG_$(PHASE_)QCOM_MDT_LOADER) += mdt_loader.o
 obj-$(CONFIG_$(PHASE_)QCOM_RPMH) += rpmh-rsc.o rpmh.o
 obj-$(CONFIG_QCOM_SMEM) += smem.o
