@@ -705,13 +705,6 @@ static int deckard_efi_setup(void *ctx, struct event *event)
 	* the "oneshot" removable storage boot mode.
 	*/
 
-	// Now we can release the deadmans switch, if we made it here then EFI is working and we will
-	// make it to the U-Boot console
-	if (g_deckard_efi_mode == EFI_MODE_PERMANENT) {
-		env_set(ENV_EFI_ENABLED, "1");
-		env_save();
-	}
-
 	return 0;
 }
 
@@ -958,13 +951,6 @@ int misc_init_r(void)
 
 	// If EFI is enabled (either oneshot or permanently) then bring up the EFI subsystem
 	if (g_deckard_efi_mode) {
-		if (g_deckard_efi_mode == EFI_MODE_PERMANENT) {
-			// This is a deadmans switch, the variable will be enabled again at the end of deckard_efi_setup()
-			// If we crash while initialising EFI then it will be disabled again.
-			env_set(ENV_EFI_ENABLED, NULL);
-			env_save();
-		}
-
 		if (!deckard_find_efi_var_store())
 			/* Trigger EFI setup just before the main loop */
 			event_register("deckard_bootefi", EVT_MAIN_LOOP, deckard_efi_setup, NULL);
