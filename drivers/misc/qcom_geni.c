@@ -8,6 +8,7 @@
 
 #include <blk.h>
 #include <part.h>
+#include <lmb.h>
 #include <dm/device.h>
 #include <dm/read.h>
 #include <dm/device-internal.h>
@@ -17,11 +18,14 @@
 #include <linux/delay.h>
 #include <linux/io.h>
 #include <linux/ioport.h>
+#include <linux/sizes.h>
 #include <misc.h>
 #include <linux/printk.h>
 #include <soc/qcom/geni-se.h>
 #include <soc/qcom/qup-fw-load.h>
 #include <dm/device_compat.h>
+#include <soc/qcom/mdt_loader.h>
+#include <firmware/qcom_scm.h>
 
 struct qup_se_rsc {
 	phys_addr_t base;
@@ -423,6 +427,8 @@ static int geni_se_of_to_plat(struct udevice *dev)
 	return 0;
 }
 
+#ifndef CONFIG_SPL_BUILD
+
 #define QUPFW_PART_TYPE_GUID "21d1219f-2ed1-4ab4-930a-41a16ae75f7f"
 
 static int find_qupfw_part(struct udevice **blk_dev, struct disk_partition *part_info)
@@ -447,6 +453,62 @@ static int find_qupfw_part(struct udevice **blk_dev, struct disk_partition *part
 	}
 
 	return -ENOENT;
+}
+
+#define SCM_PAS_ID_QUPFW	0x13
+
+static inline void geni_flush_cache(uintptr_t addr, int length)
+{
+	uintptr_t start_addr = (uintptr_t)addr & ~(CONFIG_SYS_CACHELINE_SIZE - 1);
+	uintptr_t end_addr = ALIGN((uintptr_t)addr + length, CONFIG_SYS_CACHELINE_SIZE);
+
+	flush_dcache_range((unsigned long)start_addr, (unsigned long)end_addr);
+}
+
+static int qcom_geni_fw_tz_load(char *fw_name, void *buf, size_t size)
+{
+	struct qcom_mdt_firmware firmware = {
+		.size = size,
+		.data = buf,
+	};
+	size_t mem_size;
+	phys_addr_t mem_phys;
+	size_t fw_size;
+	int ret;
+
+	log_info("Loading QUP setup with TZ...\n");
+
+	fw_size = qcom_mdt_get_size(&firmware);
+	if (fw_size < 0) {
+		ret = fw_size;
+		log_err("%s: out of bound fw image fw size: %ld\n",
+			__func__, fw_size);
+		return fw_size;
+	}
+
+	mem_size = ALIGN(fw_size, SZ_4K);
+	mem_phys = lmb_alloc(mem_size, SZ_4K);
+	if (!mem_phys)
+		return -ENOMEM;
+
+	ret = qcom_mdt_load(&firmware, fw_name, SCM_PAS_ID_QUPFW, (void *)mem_phys,
+			    mem_phys, mem_size, NULL);
+	if (ret) {
+		log_err("%s: error %d loading fw \"%s\"\n",
+			__func__, ret, fw_name);
+		return ret;
+	}
+
+	geni_flush_cache((void *)mem_phys, mem_size);
+
+	ret = qcom_scm_pas_auth_and_reset(SCM_PAS_ID_QUPFW);
+	if (ret) {
+		log_err("%s: error %d while auth_and_reset fw \"%s\"\n",
+			__func__, ret, fw_name);
+		return ret;
+	}
+
+	return qcom_scm_pas_shutdown(SCM_PAS_ID_QUPFW);
 }
 
 #define MAX_FW_BUF_SIZE (128 * 1024)
@@ -507,6 +569,13 @@ static int qcom_geni_fw_initialise(void)
 		return 0;
 	}
 
+	/* Try to load the QUP firmware with SCM first, then load them locally if it fails */
+	if (qcom_scm_pas_supported(SCM_PAS_ID_QUPFW)) {
+		ret = qcom_geni_fw_tz_load(part_info.name, fw_buf, fw_size);
+		if (!ret)
+			return 0;
+	}
+
 	/*
 	 * OK! Firmware is loaded, now bind and probe remaining children. They will attempt to load
 	 * firmware during probe. Do this for each GENI SE wrapper that needs firmware loading.
@@ -525,6 +594,7 @@ static int qcom_geni_fw_initialise(void)
 }
 
 EVENT_SPY_SIMPLE(EVT_SETTINGS_R, qcom_geni_fw_initialise);
+#endif
 
 static const struct udevice_id geni_ids[] = {
 	{ .compatible = "qcom,geni-se-qup" },
