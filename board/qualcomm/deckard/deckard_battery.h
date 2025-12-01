@@ -13,8 +13,9 @@
 #include <power/pmic.h>
 
 #define SPL_BATTERY_MIN_BOOT_VOLTAGE 7200
+#define BATTERY_MIN_BOOT_SOC     2
 
-void deckard_battery_prep_for_boot(struct udevice *pmk8550, struct udevice *pm8550b);
+void deckard_battery_prep_for_boot(struct udevice *pmk8550, struct udevice *pm8550b, struct udevice *max17320);
 bool deckard_battery_is_charging_enabled(struct udevice *pm8550b);
 
 int deckard_spl_battery_enable_charging(struct udevice *pm8550b);

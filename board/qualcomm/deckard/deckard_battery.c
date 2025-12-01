@@ -86,10 +86,11 @@ static int deckard_battery_run_recovery_program(void)
 	return do_go_exec((void *)CONFIG_SYS_LOAD_ADDR, argc, argv);
 }
 
-void deckard_battery_prep_for_boot(struct udevice *pmk8550, struct udevice *pm8550b)
+void deckard_battery_prep_for_boot(struct udevice *pmk8550, struct udevice *pm8550b, struct udevice *max17320)
 {
 	int             ret;
 	uint16_t        battery_mv;
+	int				soc;
 	struct udevice *led_red = NULL;
 	struct udevice *led_green = NULL;
 	struct udevice *led_blue = NULL;
@@ -104,12 +105,13 @@ void deckard_battery_prep_for_boot(struct udevice *pmk8550, struct udevice *pm85
 
 	printf("Battery: %d mV\n", battery_mv);
 
-	if (battery_mv >= BATTERY_MIN_BOOT_VOLTAGE) {
-		// OK to boot
+	soc = deckard_battery_get_capacity(max17320);
+	printf("Battery: %d %%\n", soc);
 
+	if (battery_mv >= BATTERY_MIN_BOOT_SOC) {
+		// OK to boot
 		// Enable Charging
-		deckard_battery_enable_charging(pm8550b);
-		return;
+		goto complete;
 	}
 
 	ret = led_get_by_label("red", &led_red);
@@ -135,17 +137,6 @@ void deckard_battery_prep_for_boot(struct udevice *pmk8550, struct udevice *pm85
 		led_set_state(led_blue, LEDST_OFF);
 	}
 
-	bool battery_was_dead;
-	if (battery_mv < BATTERY_DEAD_VOLTAGE) {
-		// Fast Pulse Red LED
-		// TODO
-		battery_was_dead = true;
-	} else {
-		// Slow Pulse Red LED
-		// TODO
-		battery_was_dead = false;
-	}
-
 	// Check for UVLO (or charging and (trickle or precharge))
 	ret = deckard_battery_load_recovery_program();
 	if (ret != 0) {
@@ -164,43 +155,9 @@ void deckard_battery_prep_for_boot(struct udevice *pmk8550, struct udevice *pm85
 		goto complete;
 	}
 
-	// Check for <2%
-	if (battery_was_dead == true) {
-		// Slow Pulse Red LED
-		// TODO
-	}
-
+complete:
 	// Enable Charging
 	deckard_battery_enable_charging(pm8550b);
-
-	// Charge to 2% here... (by voltage)
-	do {
-		ret = pmk8550_get_battery_voltage(pmk8550, &battery_mv);
-		if (ret < 0) {
-			printf("Failed to read battery voltage\n");
-			printf("Attempting to boot anyway!\n");
-			return;
-		}
-
-		mdelay(1000);
-		printf("Battery: %d mV\n", battery_mv);
-
-		if(deckard_shutdown_condition(pm8550b))
-		{
-			printf("Device not charging for %d seconds, Shutdown\n", DECKARD_SHUTDOWN_TIMEOUT_S);
-			ret = sysreset_walk(SYSRESET_POWER_OFF);
-			if (ret == -EINPROGRESS)
-				mdelay(1000);
-			break;
-		}
-	} while (battery_mv < BATTERY_MIN_BOOT_VOLTAGE);
-
-complete:
-
-	if (led_red) {
-		printf("Disabling Red LED\n");
-		led_set_state(led_red, LEDST_OFF);
-	}
 }
 
 static void deckard_battery_enable_charging(struct udevice *pm8550b)

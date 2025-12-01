@@ -286,6 +286,7 @@ static void deckard_setup(void)
 	struct udevice *pmk8550;
 	struct udevice *pm8550vse;
 	struct udevice *pm8550b;
+	struct udevice *max17320;
 
 #if CHECK_PMICS
 	check_pmics_comms();
@@ -312,6 +313,13 @@ static void deckard_setup(void)
 		return;
 	}
 
+	// Find the max17320
+	ret = pmic_get("pmic@36", &max17320);
+	if (ret != 0) {
+		printf("Failed to Find max17320\n");
+		return;
+	}
+
 	smb1510_check_subtype(pmk8550);
 
 	/* Fix GPIO Levels that XBL continues to not let us */
@@ -319,7 +327,7 @@ static void deckard_setup(void)
 	pm8550vs_set_gpio_vin_level(pm8550vse, PM8550VS_GPIO_4, PM8550VS_GPIO_VIN_1);
 
 	/* Ensure Battery is OK to proceed */
-	deckard_battery_prep_for_boot(pmk8550, pm8550b);
+	deckard_battery_prep_for_boot(pmk8550, pm8550b, max17320);
 
 	/* Read PON reason from pmk8550 (which is from AOP SDAM3) */
 	pon_reason = pmk8550_get_pon_reason(pmk8550);
@@ -1149,23 +1157,39 @@ int deckard_prepare_for_boot()
 	int adsp_loaded = 0;
 	int leds_avail = 0;
 	int id = 0;
-	int soc;
+	int soc, ret;;
 
-	//check pon_reason to see if we were booted by a button push or warm reset (reboot command)
-
-	printf("pon_reason: %d\n",pon_reason);
-	if(pon_reason & 0x80)
-	{
-		printf("pon_reason includes button press, continuing to boot\n");
-		return 0;
+	// Find the max17320
+	ret = pmic_get("pmic@36", &max17320);
+	if (ret != 0) {
+		printf("Failed to Find max17320\n");
+	} else {
+		// get battery capacity
+		soc = deckard_battery_get_capacity(max17320);
+		printf("Battery: %d %%\n", soc);
 	}
-	else if(pon_reason & 0x01)
+
+	// check pon_reason to see if we were booted by a button push or warm reset (reboot command)
+	printf("pon_reason: %d\n",pon_reason);
+	if(pon_reason & 0x01)
 	{
 		printf("pon_reason includes warm reset, continuing to boot\n");
 		return 0;
 	}
 
-	printf("Waiting for power button press to continue booting...\n");
+	// if we booted from a pbutton press, also check if we have sufficient SOC to boot
+	if( pon_reason & 0x80)
+	{
+		printf("pon_reason includes button press\n");
+		if ( soc > BATTERY_MIN_BOOT_SOC ) {
+			printf("continue to boot\n");
+			return 0;
+		} else {
+			printf("low battery, halt boot\n");
+		}
+	}
+
+	printf("Waiting for power button press and SOC to continue booting...\n");
 
 	int ret_r = led_get_by_label("red", &led_red);
 	int ret_g = led_get_by_label("green", &led_green);
@@ -1178,7 +1202,7 @@ int deckard_prepare_for_boot()
 		leds_avail = 1;
 	}
 	
-	int ret = button_get_by_label("Power Button", &btn);
+	ret = button_get_by_label("Power Button", &btn);
 	if (ret < 0) 
 	{
 		printf("Couldn't find power button!\n");
@@ -1188,42 +1212,41 @@ int deckard_prepare_for_boot()
 		power_button_avail = 1;
 	}
 
-	if(power_button_avail && !power_button_pushed(btn))
-	{
-		//start up adsp
-		printf("adsp: starting...\n");
-		ret = deckard_adsp_start(id);
-		if (!ret)
-			adsp_loaded = 1;
-	}
+	//start up adsp
+	printf("adsp: starting...\n");
+	ret = deckard_adsp_start(id);
+	if (!ret)
+		adsp_loaded = 1;
 	
 	// Find the PM8550B
 	ret = pmic_get("pmic@7", &pm8550b);
 	if (ret != 0)
 		printf("Failed to Find PM8550B\n");
-	
-	// Find the max17320
-	ret = pmic_get("pmic@36", &max17320);
-	if (ret != 0) {
-		printf("Failed to Find max17320\n");
-	} else {
-		// get battery capacity
-		soc = deckard_battery_get_capacity(max17320);
-		printf("Battery: %d %%\n", soc);
-	}
 
 	int deckard_shutdown_loop_counter = 1;
 
-	deckard_load_logo(BATTERY_CHARGING);	
+	if ( deckard_battery_is_charging_enabled(pm8550b) ) {
+		deckard_load_logo(BATTERY_CHARGING);
+	} else {
+		deckard_load_logo(BATTERY_DEAD);
+	}
 
 	int deckard_display_off_counter = 20; // 100ms * 20 = 2s
 	//trap in uboot while we wait for power button to be pushed
 	//we should charge and do various things here like light up the LED's etc
 	while(power_button_avail)
 	{
-		if(power_button_pushed(btn))
-			break;
-
+		if(power_button_pushed(btn)) {
+			// only proceed to boot if battery is above min boot capacity
+			soc = deckard_battery_get_capacity(max17320);
+			if ( soc >= BATTERY_MIN_BOOT_SOC ) {
+				break;
+			} else {
+				// show low battery screen
+				deckard_load_logo(BATTERY_DEAD);
+				deckard_display_off_counter = 20;
+			}
+		}
 #if 0
 		//may want to check for keyboard press for some reason or another here
 		if(deckard_check_for_key_press())
