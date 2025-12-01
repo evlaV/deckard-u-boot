@@ -1178,10 +1178,11 @@ int deckard_prepare_for_boot()
 	}
 
 	// if we booted from a pbutton press, also check if we have sufficient SOC to boot
+	// if soc read fails, continue to boot
 	if( pon_reason & 0x80)
 	{
 		printf("pon_reason includes button press\n");
-		if ( soc > BATTERY_MIN_BOOT_SOC ) {
+		if ( soc >= BATTERY_MIN_BOOT_SOC || soc < 0 ) {
 			printf("continue to boot\n");
 			return 0;
 		} else {
@@ -1238,8 +1239,9 @@ int deckard_prepare_for_boot()
 	{
 		if(power_button_pushed(btn)) {
 			// only proceed to boot if battery is above min boot capacity
+			// if soc read fails, continue to boot
 			soc = deckard_battery_get_capacity(max17320);
-			if ( soc >= BATTERY_MIN_BOOT_SOC ) {
+			if ( soc >= BATTERY_MIN_BOOT_SOC || soc < 0 ) {
 				break;
 			} else {
 				// show low battery screen

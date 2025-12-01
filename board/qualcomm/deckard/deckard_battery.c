@@ -100,18 +100,26 @@ void deckard_battery_prep_for_boot(struct udevice *pmk8550, struct udevice *pm85
 	if (ret < 0) {
 		printf("Failed to read battery voltage\n");
 		printf("Attempting to boot anyway!\n");
-		return;
+		goto complete;
 	}
 
 	printf("Battery: %d mV\n", battery_mv);
 
 	soc = deckard_battery_get_capacity(max17320);
-	printf("Battery: %d %%\n", soc);
-
-	if (battery_mv >= BATTERY_MIN_BOOT_SOC) {
-		// OK to boot
-		// Enable Charging
-		goto complete;
+	if ( soc >= 0 ) {
+		printf("Battery: %d %%\n", soc);
+		if (battery_mv >= BATTERY_MIN_BOOT_SOC) {
+			// OK to boot
+			// Enable Charging
+			goto complete;
+		}
+	} else {
+		// fall back to voltage if capacity read fails
+		if (battery_mv >= BATTERY_MIN_BOOT_VOLTAGE) {
+			// OK to boot
+			// Enable Charging
+			goto complete;
+		}
 	}
 
 	ret = led_get_by_label("red", &led_red);
