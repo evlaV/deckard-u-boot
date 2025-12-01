@@ -1142,12 +1142,14 @@ int display_turn_off_force()
 int deckard_prepare_for_boot()
 {
 	struct udevice  *led_red, *led_green, *led_blue;
-	struct udevice *pm8550b = NULL;	
+	struct udevice *pm8550b = NULL;
+	struct udevice *max17320 = NULL;
 	int power_button_avail = 0;
 	struct udevice *btn;
 	int adsp_loaded = 0;
 	int leds_avail = 0;
 	int id = 0;
+	int soc;
 
 	//check pon_reason to see if we were booted by a button push or warm reset (reboot command)
 
@@ -1200,6 +1202,16 @@ int deckard_prepare_for_boot()
 	if (ret != 0)
 		printf("Failed to Find PM8550B\n");
 	
+	// Find the max17320
+	ret = pmic_get("pmic@36", &max17320);
+	if (ret != 0) {
+		printf("Failed to Find max17320\n");
+	} else {
+		// get battery capacity
+		soc = deckard_battery_get_capacity(max17320);
+		printf("Battery: %d %%\n", soc);
+	}
+
 	int deckard_shutdown_loop_counter = 1;
 
 	deckard_load_logo(BATTERY_CHARGING);	

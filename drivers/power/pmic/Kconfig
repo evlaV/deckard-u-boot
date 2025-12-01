@@ -234,6 +234,15 @@ config PMIC_MAX8997
 	- MUIC
 	- Others
 
+config PMIC_MAX17320
+	bool "Enable support for MAX17320 fuel guage"
+    depends on DM_I2C
+	---help---
+	This config enables implementation of driver-model pmic uclass features
+	for PMIC MAX17320. The driver implements read/write operations.
+	This is a Power Management IC with Fuel Gauge.
+	- Fueal Gauge
+
 config PMIC_QCOM
 	bool "Enable Driver Model for Qualcomm generic PMIC"
 	---help---

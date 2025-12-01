@@ -9,6 +9,7 @@
 #include "smb1510.h"
 #include "deckard.h"
 #include "deckard_battery.h"
+#include "power/max17320_fg.h"
 #include <sysreset.h>
 
 #define BATTERY_MIN_BOOT_VOLTAGE 7200
@@ -311,4 +312,16 @@ int deckard_spl_battery_charging_setup(uint16_t * battery_voltage)
 	deckard_spl_battery_enable_charging(pm8550b);
 
 	return 0;
+}
+
+int deckard_battery_get_capacity(struct udevice *max17320)
+{
+	uint8_t			soc[2];
+	if ( pmic_read(max17320, REPSOC_REG, soc, 2) ) {
+		printf("failed to get battery capacity\n");
+		return -EIO;
+	}
+	// RepSOC LSB: 1/256 %
+	// return SOC >> 8;
+	return soc[1];
 }

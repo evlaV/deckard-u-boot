@@ -659,6 +659,12 @@
 		//wp-gpios = <&tlmm 139 GPIO_ACTIVE_HIGH>;
 		vcc-supply  = <&vreg_l15b_1p8>;
 	};
+
+	max17320: pmic@36 {
+		compatible  = "maxim,max17320";
+		status		= "okay";
+		reg         = <0x36>;
+	};
 };
 
 &pcie0 {
