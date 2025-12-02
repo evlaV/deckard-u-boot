@@ -5,6 +5,7 @@
  * (C) Copyright 2015 Mateusz Kulikowski <mateusz.kulikowski@gmail.com>
  */
 
+#include <bootstage.h>
 #include <cpu_func.h>
 #include <dm.h>
 #include <dm/pinctrl.h>
@@ -1138,6 +1139,17 @@ int display_turn_off_force()
 {
 	return run_command("mdss stop", 0);
 }
+
+
+#if CONFIG_IS_ENABLED(SHOW_BOOT_PROGRESS)
+void show_boot_progress(int progress)
+{
+	if (progress != BOOTSTAGE_ID_ENTER_CLI_LOOP)
+		return;
+
+	display_turn_off();
+}
+#endif
 
 int deckard_prepare_for_boot()
 {
