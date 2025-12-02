@@ -1149,7 +1149,6 @@ int display_turn_off_force()
 	return run_command("mdss stop", 0);
 }
 
-
 void show_boot_progress(int progress)
 {
 	if (progress != BOOTSTAGE_ID_ENTER_CLI_LOOP)
