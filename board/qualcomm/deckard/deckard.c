@@ -918,7 +918,10 @@ int misc_init_r(void)
 		led_set_color_and_state("red",LEDST_BLINK);
 		led_set_color_and_state("green",LEDST_BLINK);
 		led_set_color_and_state("blue",LEDST_BLINK);
-		
+
+		/* disable display (logo off) when idle in fastboot mode */
+		display_turn_off();
+
 		run_command("fastboot -l 0x880000000 -s 0x10000000 usb 0", 0);
 	}
 
