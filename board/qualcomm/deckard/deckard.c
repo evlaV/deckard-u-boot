@@ -1000,7 +1000,7 @@ int ft_board_setup(void *fdt, struct bd_info *bd)
 
 	/* add display capability */
 	//this will indicate that u-boot has the ability to driver display within u-boot
-	ret = fdt_setprop_string(fdt, nodeoffset, "u-boot,display", "0"); //set this to 1 when display works
+	ret = fdt_setprop_string(fdt, nodeoffset, "u-boot,display", g_display_enabled ? "1": "0");
 	if (ret < 0) {
 		printf("WARNING: could not set u-boot,display %s.\n",
 			   fdt_strerror(ret));
@@ -1017,6 +1017,20 @@ int ft_board_setup(void *fdt, struct bd_info *bd)
 		return ret;
 	}
 #endif
+
+	/* Enable the Kernel simple-framebuffer if display is still enabled */
+	if (g_display_enabled) {
+		int offset;
+
+		fdt_for_each_node_by_compatible(offset, fdt, -1, "simple-framebuffer") {
+			ret = fdt_setprop_string(fdt, offset, "status", "okay");
+			if (ret < 0) {
+				printf("WARNING: could not enable simple-frambuffer %s.\n",
+			   		fdt_strerror(ret));
+				return ret;
+			}
+		}
+	}
 
 	return 0;
 }
