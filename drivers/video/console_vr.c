@@ -185,8 +185,8 @@ struct vidconsole_ops consolevr_ops_1 = {
 	.select_font	= console_simple_select_font,
 };
 
-U_BOOT_DRIVER(vidconsolevr_0) = {
-	.name	= "vidconsolevr0",
+U_BOOT_DRIVER(vidconsolevr_1) = {
+	.name	= "vidconsolevr1",
 	.id	= UCLASS_VIDEO_CONSOLE,
 	.ops	= &consolevr_ops_1,
 	.probe	= consolevr_probe,
