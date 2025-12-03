@@ -111,6 +111,7 @@ struct video_priv {
 	enum video_format format;
 	const char *vidconsole_drv_name;
 	int font_size;
+	ushort vrmode;
 
 	/*
 	 * Things that are private to the uclass: don't use these in the
