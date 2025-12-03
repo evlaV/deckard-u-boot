@@ -9,6 +9,9 @@ obj-$(CONFIG_BACKLIGHT_GPIO) += backlight_gpio.o
 obj-$(CONFIG_BACKLIGHT_PWM) += pwm_backlight.o
 obj-$(CONFIG_$(PHASE_)CONSOLE_NORMAL) += console_normal.o
 obj-$(CONFIG_CONSOLE_ROTATION) += console_rotate.o
+obj-$(CONFIG_CONSOLE_VR) += console_vr.o
+obj-$(CONFIG_CONSOLE_VR) += console_vr_debug.o
+obj-$(CONFIG_CONSOLE_VR) += vrterminal.o
 ifdef CONFIG_$(PHASE_)CONSOLE_NORMAL
 obj-y += console_core.o
 else ifdef CONFIG_CONSOLE_ROTATION

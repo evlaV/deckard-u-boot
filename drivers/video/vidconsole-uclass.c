@@ -476,6 +476,7 @@ int vidconsole_put_char(struct udevice *dev, char ch)
 	case '\a':
 		/* beep */
 		break;
+#if !CONFIG_IS_ENABLED(CONSOLE_VR)
 	case '\r':
 		priv->xcur_frac = priv->xstart_frac;
 		break;
@@ -494,6 +495,7 @@ int vidconsole_put_char(struct udevice *dev, char ch)
 		vidconsole_back(dev);
 		priv->last_ch = 0;
 		break;
+#endif
 	default:
 		if (CONFIG_IS_ENABLED(CHARSET)) {
 			cp = utf8_to_utf32_stream(ch, priv->utf8_buf);
