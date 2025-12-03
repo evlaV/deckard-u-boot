@@ -20,6 +20,7 @@ static int simple_video_probe(struct udevice *dev)
 	fdt_addr_t base;
 	fdt_size_t size;
 	u32 width, height, rot;
+	u32 vrmode;
 
 	base = dev_read_addr_size(dev, &size);
 	if (base == FDT_ADDR_T_NONE) {
@@ -48,9 +49,11 @@ static int simple_video_probe(struct udevice *dev)
 		return ret ?: -EINVAL;
 	}
 	ofnode_read_u32(node, "rot", &rot);
+	ofnode_read_u32(node, "vrmode", &vrmode);
 	uc_priv->rot = rot;
 	uc_priv->xsize = width;
 	uc_priv->ysize = height;
+	uc_priv->vrmode = vrmode;
 
 	format = ofnode_read_string(node, "format");
 	debug("%s: %dx%d@%s\n", __func__, uc_priv->xsize, uc_priv->ysize, format);
