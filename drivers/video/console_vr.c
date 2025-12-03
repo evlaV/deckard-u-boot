@@ -12,12 +12,22 @@
 #include <video.h>
 #include <video_console.h>
 #include <video_font.h>		/* Get font data, width and height */
+#include <malloc.h>
+#include <scsi.h>
+#include <fs_loader.h>
+#include <fs.h>
 #include "vidconsole_internal.h"
+
+struct vrconsole_priv {
+	struct video_fontdata *fontdata; /* To be removed */
+	void *vrterminal;
+	void *vrfont;
+};
 
 static int console_set_row_1(struct udevice *dev, uint row, int clr)
 {
 	struct video_priv *vid_priv = dev_get_uclass_priv(dev->parent);
-	struct console_simple_priv *priv = dev_get_priv(dev);
+	struct vrconsole_priv *priv = dev_get_priv(dev);
 	struct video_fontdata *fontdata = priv->fontdata;
 	int pbytes = VNBYTES(vid_priv->bpix);
 	void *start, *dst, *line;
@@ -46,7 +56,7 @@ static int console_move_rows_1(struct udevice *dev, uint rowdst, uint rowsrc,
 				   uint count)
 {
 	struct video_priv *vid_priv = dev_get_uclass_priv(dev->parent);
-	struct console_simple_priv *priv = dev_get_priv(dev);
+	struct vrconsole_priv *priv = dev_get_priv(dev);
 	struct video_fontdata *fontdata = priv->fontdata;
 	int pbytes = VNBYTES(vid_priv->bpix);
 	void *dst;
@@ -78,7 +88,7 @@ static int console_putc_xy_1(struct udevice *dev, uint x_frac, uint y, int cp)
 	struct vidconsole_priv *vc_priv = dev_get_uclass_priv(dev);
 	struct udevice *vid = dev->parent;
 	struct video_priv *vid_priv = dev_get_uclass_priv(vid);
-	struct console_simple_priv *priv = dev_get_priv(dev);
+	struct vrconsole_priv *priv = dev_get_priv(dev);
 	struct video_fontdata *fontdata = priv->fontdata;
 	int pbytes = VNBYTES(vid_priv->bpix);
 	int x, linenum, ret;
@@ -108,12 +118,62 @@ static int console_putc_xy_1(struct udevice *dev, uint x_frac, uint y, int cp)
 	return VID_TO_POS(fontdata->width);
 }
 
+#define FIRMWARE_INTERFACE "scsi"
+#define FIRMWARE_MAX_SIZE (500 * 1024)
+
+static int vrconsole_load_erofs(char *name, char *buf)
+{
+	const char *dev_and_part = fs_firmware_get_partition();
+	const char *ifname = FIRMWARE_INTERFACE;
+	loff_t len_read = 0;
+	int ret;
+
+	printf("Loading firmware from partition: %s\n", dev_and_part);
+
+	scsi_scan(true);
+
+	ret = fs_set_blk_dev(ifname, dev_and_part, FS_TYPE_EROFS);
+	if (ret < 0) {
+		printf("%s: Unable to set blkdev %s %s\n", __func__, ifname,
+			dev_and_part);
+		return ret;
+	}
+
+	ret = fs_read(name, (ulong)buf, 0, FIRMWARE_MAX_SIZE,
+			&len_read);
+	if (ret < 0) {
+		printf("%s: fail to read %s %s\n", __func__, ifname,
+			dev_and_part);
+		return ret;
+	}
+
+	return len_read;
+}
+
 int consolevr_probe(struct udevice *dev)
 {
+	struct vrconsole_priv *priv = dev_get_priv(dev);
+	int ret;
+
 	printf("consolevr probe\n");
-    //todo load terminal_80x24.vrterminal into memory
-    //todo load RobotoMono-Bold.vrfont into memory
-    return 0;
+
+	priv->vrterminal = malloc(FIRMWARE_MAX_SIZE);
+	if (!priv->vrterminal)
+		return -ENOMEM;
+
+	priv->vrfont = malloc(FIRMWARE_MAX_SIZE);
+	if (!priv->vrfont)
+		return -ENOMEM;
+
+	ret = vrconsole_load_erofs("terminal_80x24.vrterminal", priv->vrterminal);
+	if (ret)
+		return ret;
+
+	ret = vrconsole_load_erofs("RobotoMono-Bold.vrfont", priv->vrterminal);
+	if (ret)
+		return ret;
+
+	return 0;
 }
 
 struct vidconsole_ops consolevr_ops_1 = {
@@ -130,5 +190,5 @@ U_BOOT_DRIVER(vidconsolevr_0) = {
 	.id	= UCLASS_VIDEO_CONSOLE,
 	.ops	= &consolevr_ops_1,
 	.probe	= consolevr_probe,
-	.priv_auto	= sizeof(struct console_simple_priv),
+	.priv_auto	= sizeof(struct vrconsole_priv),
 };
