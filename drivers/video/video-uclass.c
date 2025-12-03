@@ -693,7 +693,11 @@ static int video_post_probe(struct udevice *dev)
 	 * TrueType does not support rotation at present so fall back to the
 	 * rotated console in that case.
 	 */
-	if (!priv->rot && IS_ENABLED(CONFIG_CONSOLE_TRUETYPE)) {
+	if(CONFIG_IS_ENABLED(CONSOLE_VR) && priv->vrmode == 1) {
+		printf("VR MODE ENABLED FOR CONSOLE!!\n");
+		snprintf(name, sizeof(name), "%s.vidconsolevr%d", dev->name,priv->vrmode);
+		snprintf(drv, sizeof(drv), "vidconsolevr%d", priv->vrmode);
+	} else if (!priv->rot && IS_ENABLED(CONFIG_CONSOLE_TRUETYPE)) {
 		snprintf(name, sizeof(name), "%s.vidconsole_tt", dev->name);
 		strcpy(drv, "vidconsole_tt");
 	} else {

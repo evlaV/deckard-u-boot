@@ -202,6 +202,11 @@ config CONSOLE_ROTATION
 	  struct video_priv: 0=unrotated, 1=90 degrees clockwise, 2=180
 	  degrees, 3=270 degrees.
 
+config CONSOLE_VR
+	bool "Support vr displays"
+	help
+	  Enable in device tree for simple fb by setting 'vrmode' to 1
+
 config CONSOLE_TRUETYPE
 	bool "Support a console that uses TrueType fonts"
 	select X86_HARDFP if X86
