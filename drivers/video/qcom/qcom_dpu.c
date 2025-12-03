@@ -938,6 +938,8 @@ int qcom_dpu_probe(struct udevice *dev)
 	// Panels are rotated, vidconsole will rotate all console writes
 	uc_priv->rot = 2;
 
+	uc_priv->vrmode = 1;
+
 	mdss_vbif_setup(priv->vbif_base);
 
 	// TOFIX implement resources manager
