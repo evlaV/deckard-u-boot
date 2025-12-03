@@ -33,6 +33,7 @@
                        stride = <17280>;
                        format = "x8b8g8r8";
                        rot = <0>;
+					   vrmode = <1>;
                };
 	};
 
