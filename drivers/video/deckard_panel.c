@@ -151,7 +151,7 @@ static u8 pps_cmd[] = {
 	0x00, 0x00, 
 };
 
-static void get_panel_info(struct deckard_panel_priv *priv)
+static int get_panel_info(struct deckard_panel_priv *priv)
 {
 	u8 panel_info_regs[] = { 0xBF };
 	u8 *info = priv->panel_mfg_info;
@@ -161,6 +161,8 @@ static void get_panel_info(struct deckard_panel_priv *priv)
 			info, PANEL_MFG_INFO_NUM_BYTES);
 	if (ret < 0)
 		dev_err(priv->dev, "failed to read panel info\n");
+
+	return ret;
 }
 
 #if 0
@@ -316,7 +318,11 @@ static void dsi_write_panel_on(struct deckard_panel_priv *priv)
 static void dsi_panel_on(struct deckard_panel_priv *priv)
 {
 	// Read panel MFG info
-	get_panel_info(priv);
+	// if we can't read info from the panels, don't continue to try initialization
+	// we mainly hit this when bringing up new boards or on testers, where panels
+	// are not connected, resulting in long boot times as each init command times out
+	if ( get_panel_info(priv) )
+		return;
 
 	//panel_info_show(priv);
 
