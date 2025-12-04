@@ -32,7 +32,7 @@ struct vrconsole_priv {
 #define NULL 0
 #endif
 
-//#USE_NON_VR_MODE
+//#define USE_NON_VR_MODE
 
 //#define DEBUG_RENDER
 
@@ -424,7 +424,7 @@ static int consolevr_putc_xy(struct udevice *dev, uint x_frac, uint y, int cp)
 	int nFrame = 0;
 
 	H = vid_priv->xsize;
-	W = vid_priv->ysize;
+	W = vid_priv->ysize * 4;
 	pb.w=W; 
 	pb.h=H; 
 	pb.stride=17280; //is this right??
@@ -461,8 +461,8 @@ static int consolevr_putc_xy(struct udevice *dev, uint x_frac, uint y, int cp)
 */
 
 //todo can we use damage?
-	
-    video_damage(vid, 0, 0, 4320,2160);
+
+//    video_damage(vid, 0, 0, 4320*4, 2160);
 
 	return VID_TO_POS(fontdata->width);
 	
@@ -714,6 +714,10 @@ int consolevr_probe(struct udevice *dev)
 		vc_priv->rows = vid_priv->ysize / fontdata->height;
 	}
 	
+	printf("vid_priv->xsize = %d\n", vid_priv->xsize );
+	printf("vid_priv->ysize = %d\n", vid_priv->ysize );
+	
+
 	// Load the font from disk/memory
 	priv->vrfont.pData = load_data_fromdisk( vrfontfilename, &priv->vrfont.size, FIRMWARE_MAX_SIZE );
 	if ( !priv->vrfont.pData )
