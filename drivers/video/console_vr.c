@@ -32,6 +32,8 @@ struct vrconsole_priv {
 #define NULL 0
 #endif
 
+//#USE_NON_VR_MODE
+
 //#define DEBUG_RENDER
 
 /*to enable in console
@@ -403,12 +405,6 @@ static int consolevr_set_row(struct udevice *dev, uint row, int clr)
 	return 0;
 }
 
-static int consolevr_move_rows(struct udevice *dev, uint rowdst, uint rowsrc,
-			       uint count)
-{
-	return 0;
-}
-
 static int needs_pixbuf_clear = 1;
 
 static int consolevr_putc_xy(struct udevice *dev, uint x_frac, uint y, int cp)
@@ -433,6 +429,7 @@ static int consolevr_putc_xy(struct udevice *dev, uint x_frac, uint y, int cp)
 	pb.h=H; 
 	pb.stride=17280; //is this right??
 	pb.px=vid_priv->fb;
+
 
 	n = 1;
 	buf[0] = console_utf_to_cp437(cp);
@@ -464,14 +461,23 @@ static int consolevr_putc_xy(struct udevice *dev, uint x_frac, uint y, int cp)
 */
 
 //todo can we use damage?
-	//video_damage(vid, 0, 0, 4320,2160);
+	
+    video_damage(vid, 0, 0, 4320,2160);
 
 	return VID_TO_POS(fontdata->width);
+	
+}
+
+static int consolevr_move_rows(struct udevice *dev, uint rowdst, uint rowsrc, uint count)
+{
+	//TODO: see if this actually works (basically this is a line feed)
+	consolevr_putc_xy(dev,0,0,(int)'\n');
+	return 0;
 }
 
 const char *consolevr_simple_get_font_size(struct udevice *dev, uint *sizep)
 {
-	struct console_simple_priv *priv = dev_get_priv(dev);
+	struct vrconsole_priv *priv = dev_get_priv(dev);
 
 	*sizep = priv->fontdata->width;
 
@@ -489,6 +495,118 @@ int consolevr_simple_select_font(struct udevice *dev, const char *name, uint siz
 {
 	return 0;
 }
+
+///////////////////////////////////////////////////////////////////////////////////
+/// FOR DEBUGGING
+///////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////
+static int console_set_row_2(struct udevice *dev, uint row, int clr)
+{
+	struct video_priv *vid_priv = dev_get_uclass_priv(dev->parent);
+	struct vrconsole_priv *priv = dev_get_priv(dev);
+	struct video_fontdata *fontdata = priv->fontdata;
+	void *start, *line, *dst, *end;
+	int pixels = fontdata->height * vid_priv->xsize;
+	int i;
+	int pbytes = VNBYTES(vid_priv->bpix);
+
+	start = vid_priv->fb + vid_priv->ysize * vid_priv->line_length -
+		(row + 1) * fontdata->height * vid_priv->line_length;
+	line = start;
+	dst = line;
+	for (i = 0; i < pixels; i++)
+		fill_pixel_and_goto_next(&dst, clr, pbytes, pbytes);
+	end = dst;
+
+	video_damage(dev->parent,
+		     0,
+		     vid_priv->ysize - (row + 1) * fontdata->height,
+		     vid_priv->xsize,
+		     fontdata->height);
+
+	return 0;
+}
+
+static int console_move_rows_2(struct udevice *dev, uint rowdst, uint rowsrc,
+			       uint count)
+{
+	struct video_priv *vid_priv = dev_get_uclass_priv(dev->parent);
+	struct vrconsole_priv *priv = dev_get_priv(dev);
+	struct video_fontdata *fontdata = priv->fontdata;
+	void *dst;
+	void *src;
+	void *end;
+
+	end = vid_priv->fb + vid_priv->ysize * vid_priv->line_length;
+	dst = end - (rowdst + count) * fontdata->height *
+		vid_priv->line_length;
+	src = end - (rowsrc + count) * fontdata->height *
+		vid_priv->line_length;
+	memmove(dst, src, fontdata->height * vid_priv->line_length * count);
+
+	video_damage(dev->parent,
+		     0,
+		     vid_priv->ysize - (rowdst + count) * fontdata->height,
+		     vid_priv->xsize,
+		     count * fontdata->height);
+
+	return 0;
+}
+
+static int console_putc_xy_2(struct udevice *dev, uint x_frac, uint y, int cp)
+{
+	struct vidconsole_priv *vc_priv = dev_get_uclass_priv(dev);
+	struct udevice *vid = dev->parent;
+	struct video_priv *vid_priv = dev_get_uclass_priv(vid);
+	struct vrconsole_priv *priv = dev_get_priv(dev);
+	struct video_fontdata *fontdata = priv->fontdata;
+	int pbytes = VNBYTES(vid_priv->bpix);
+	int linenum, x, ret;
+	void *start, *line;
+	u8 ch = console_utf_to_cp437(cp);
+	uchar *pfont = fontdata->video_fontdata +
+			ch * fontdata->char_pixel_bytes;
+	
+	int x_frac_gutter = 540;
+	x_frac = x_frac + VID_TO_POS(x_frac_gutter) ;
+
+	if (x_frac + VID_TO_POS(vc_priv->x_charsize) > (vc_priv->xsize_frac / 2 - VID_TO_POS(x_frac_gutter)))
+		return -EAGAIN;
+	linenum = vid_priv->ysize - y - 1;
+	x = vid_priv->xsize - VID_TO_PIXEL(x_frac) - 1;
+	start = vid_priv->fb + linenum * vid_priv->line_length + x * pbytes;
+	line = start;
+
+	ret = fill_char_vertically(pfont, &line, vid_priv, fontdata, FLIPPED_DIRECTION);
+	if (ret)
+		return ret;
+
+	video_damage(dev->parent,
+		     x - fontdata->width + 1,
+		     linenum - fontdata->height + 1,
+		     fontdata->width,
+		     fontdata->height);
+
+	//draw console a second time on other display
+	line = vid_priv->fb + linenum * vid_priv->line_length + (x + 2160) * pbytes;
+	ret = fill_char_vertically(pfont, &line, vid_priv, fontdata, FLIPPED_DIRECTION);
+	if (ret)
+		return ret;
+
+	video_damage(dev->parent,
+		     (x + 2160) - fontdata->width + 1,
+		     linenum - fontdata->height + 1,
+		     fontdata->width,
+		     fontdata->height);
+
+	return VID_TO_POS(fontdata->width);
+}
+///////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////
+
+
 
 
 #define FIRMWARE_INTERFACE "scsi"
@@ -630,6 +748,17 @@ int consolevr_probe(struct udevice *dev)
 out_close:
 	return 0;
 }
+
+#ifdef USE_NON_VR_MODE
+struct vidconsole_ops consolevr_ops_1 = {
+	.putc_xy	= console_putc_xy_2,
+	.move_rows	= console_move_rows_2,
+	.set_row	= console_set_row_2,
+	.get_font_size	= consolevr_simple_get_font_size,
+	.get_font	= consolevr_simple_get_font,
+	.select_font	= consolevr_simple_select_font,
+};
+#else
 struct vidconsole_ops consolevr_ops_1 = {
 	.putc_xy	= consolevr_putc_xy,
 	.move_rows	= consolevr_move_rows,
@@ -638,6 +767,7 @@ struct vidconsole_ops consolevr_ops_1 = {
 	.get_font	= consolevr_simple_get_font,
 	.select_font	= consolevr_simple_select_font,
 };
+#endif
 
 U_BOOT_DRIVER(vidconsolevr_1) = {
 	.name	= "vidconsolevr1",
