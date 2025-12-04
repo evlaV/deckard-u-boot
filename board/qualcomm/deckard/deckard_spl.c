@@ -739,6 +739,8 @@ enum combined_button_state_t button_state_handler(void)
 			//trigger_xblramdump_fault();
 			break;
 		case POWER_OFF__VOLUP_ON__VOLDN_OFF__SELECT_ON:
+			printf("Forcing USB boot\n");
+			env_set_ulong("BOOT_FORCE_USB", 1);
 			break;
 		case POWER_OFF__VOLUP_ON__VOLDN_ON__SELECT_OFF:
 			break;
