@@ -19,218 +19,452 @@
 #include "vidconsole_internal.h"
 #include <env.h>
 #include <mapmem.h>
+#include "console_vr.h"
 
 struct vrconsole_priv {
 	struct video_fontdata *fontdata; /* To be removed */
-	void *vrterminal;
-	void *vrfont;
+	VRFont_t vrfont;
+	VRTerminal_t vrterminal;
 };
 
-//#define DEBUG_TEST_NON_VR_MODE
 
-#ifdef DEBUG_TEST_NON_VR_MODE
-static int console_set_row_2(struct udevice *dev, uint row, int clr)
-{
-	struct video_priv *vid_priv = dev_get_uclass_priv(dev->parent);
-	struct vrconsole_priv *priv = dev_get_priv(dev);
-	struct video_fontdata *fontdata = priv->fontdata;
-	void *start, *line, *dst, *end;
-	int pixels = fontdata->height * vid_priv->xsize;
-	int i;
-	int pbytes = VNBYTES(vid_priv->bpix);
+#ifndef NULL
+#define NULL 0
+#endif
 
-	start = vid_priv->fb + vid_priv->ysize * vid_priv->line_length -
-		(row + 1) * fontdata->height * vid_priv->line_length;
-	line = start;
-	dst = line;
-	for (i = 0; i < pixels; i++)
-		fill_pixel_and_goto_next(&dst, clr, pbytes, pbytes);
-	end = dst;
+//#define DEBUG_RENDER
 
-	video_damage(dev->parent,
-		     0,
-		     vid_priv->ysize - (row + 1) * fontdata->height,
-		     vid_priv->xsize,
-		     fontdata->height);
+/*to enable in console
+setenv keep_display 1
+env save
+reset
 
-	return 0;
+#now on each boot:
+
+#old console:
+setenv stdout serial,vidconsole
+
+*/
+
+/* -------- framebuffer pixbuf -------- */
+typedef struct {
+	uint8_t *px;   // RGBA8888
+	int w, h, stride;
+} Pixbuf;
+
+static inline void pset_v( Pixbuf *pb, int x, int y, uint8_t value, int channel ) {
+	if ((unsigned)x >= (unsigned)pb->w || (unsigned)y >= (unsigned)pb->h || x<0 || y < 0 ) return;
+	uint8_t *p = pb->px + (size_t)y * pb->stride + (size_t)x*4;
+	p[channel]=value;
 }
 
-static int console_move_rows_2(struct udevice *dev, uint rowdst, uint rowsrc,
-			       uint count)
+
+void clear_pixbuf(Pixbuf *pb, int width, int height)
 {
-	struct video_priv *vid_priv = dev_get_uclass_priv(dev->parent);
-	struct vrconsole_priv *priv = dev_get_priv(dev);
-	struct video_fontdata *fontdata = priv->fontdata;
-	void *dst;
-	void *src;
-	void *end;
-
-	end = vid_priv->fb + vid_priv->ysize * vid_priv->line_length;
-	dst = end - (rowdst + count) * fontdata->height *
-		vid_priv->line_length;
-	src = end - (rowsrc + count) * fontdata->height *
-		vid_priv->line_length;
-	memmove(dst, src, fontdata->height * vid_priv->line_length * count);
-
-	video_damage(dev->parent,
-		     0,
-		     vid_priv->ysize - (rowdst + count) * fontdata->height,
-		     vid_priv->xsize,
-		     count * fontdata->height);
-
-	return 0;
+	for(int y=0; y < height; y++)
+	{
+		uint8_t *row = pb->px + y * pb->stride;
+		for(int x=0;x < width;x++)
+		{
+			row[x*4+0]=0x00;
+			row[x*4+1]=0x00;
+			row[x*4+2]=0x00;
+			row[x*4+3]=0xFF;
+		}
+	}
 }
 
-static int console_putc_xy_2(struct udevice *dev, uint x_frac, uint y, int cp)
+#ifdef DEBUG_RENDER
+	//static const int k_nCrosshairsGain = 32;
+	static const int k_nDotGain = 128;
+#endif
+
+static const uint8_t k_nMinValueToBlit = 1;
+
+void draw_glyph( Pixbuf *pb, VRTerminalPoint_t * pTerminalPoint, VRFont_t * pFont, char codepoint, int nFrame )
 {
-	struct vidconsole_priv *vc_priv = dev_get_uclass_priv(dev);
-	struct udevice *vid = dev->parent;
-	struct video_priv *vid_priv = dev_get_uclass_priv(vid);
-	struct vrconsole_priv *priv = dev_get_priv(dev);
-	struct video_fontdata *fontdata = priv->fontdata;
-	int pbytes = VNBYTES(vid_priv->bpix);
-	int linenum, x, ret;
-	void *start, *line;
-	u8 ch = console_utf_to_cp437(cp);
-	uchar *pfont = fontdata->video_fontdata +
-			ch * fontdata->char_pixel_bytes;
+	if ( !pTerminalPoint || !pFont )
+		return;
+
+	bool bDrawDot = false; //  nFrame % 10 < 3;
+	bool bDrawChar = true; // nFrame % 10 >= 3;
+
+	for ( int neye = 0; neye < 2; ++neye )
+	{
+		VRGlyph_t * pGlyph = find_vrglyph( pFont, codepoint, neye );
+		if ( pGlyph == NULL )
+			continue;
+
+		// blit glyph
+		if ( bDrawChar )
+		{
+			const unsigned char * pData = find_vrglyph_pixeldata( pFont, pGlyph );
+			for ( int y=0; y<pGlyph->nHeight; ++y )
+			{
+				for ( int x=0; x<pGlyph->nWidth; ++x )
+				{
+					unsigned char nValue = pData[y*pGlyph->nWidth + x];
+					if ( nValue > k_nMinValueToBlit )
+					{
+						int xPos[3] = { pTerminalPoint->red_x[neye], pTerminalPoint->green_x[neye], pTerminalPoint->blue_x[neye] };
+						int yPos[3] = { pTerminalPoint->red_y[neye], pTerminalPoint->green_y[neye], pTerminalPoint->blue_y[neye] };
+						for ( int nChannel = 0; nChannel<3; ++nChannel )
+						{
+							pset_v( pb,
+								(xPos[nChannel]+5)/10 + x - pGlyph->nOriginX,
+								(yPos[nChannel]+5)/10 + y - pGlyph->nOriginY,
+								nValue, nChannel );
+						}
+					}
+				}
+			}
+		}
 	
-	int x_frac_gutter = 540;
-	x_frac = x_frac + VID_TO_POS(x_frac_gutter) ;
+#ifdef DEBUG_RENDER
+		int nCx = (pTerminalPoint->green_x[neye]+5)/10;
+		int nCy = (pTerminalPoint->green_y[neye]+5)/10;
 
-	if (x_frac + VID_TO_POS(vc_priv->x_charsize) > (vc_priv->xsize_frac / 2 - VID_TO_POS(x_frac_gutter)))
-		return -EAGAIN;
-	linenum = vid_priv->ysize - y - 1;
-	x = vid_priv->xsize - VID_TO_PIXEL(x_frac) - 1;
-	start = vid_priv->fb + linenum * vid_priv->line_length + x * pbytes;
-	line = start;
+		// cross-hairs
+		/*
+		for ( int y=0; y<pGlyph->nHeight; ++y )
+		{
+			pset_v( pb, nCx, nCy+ y - pGlyph->nHeight/2, k_nCrosshairsGain, 1 );
+		}
+		for ( int x=0; x<pGlyph->nWidth; ++x )
+		{
+			pset_v( pb, nCx + x - pGlyph->nWidth/2, nCy, k_nCrosshairsGain, 1 );
+		}*/
 
-	ret = fill_char_vertically(pfont, &line, vid_priv, fontdata, FLIPPED_DIRECTION);
-	if (ret)
-		return ret;
+		// center dot
+		if ( bDrawDot )
+		{
+			for ( int dy = -1; dy<=1; ++dy)
+			{
+				for ( int dx = -1; dx<=1; ++dx)
+				{
+					pset_v(pb, nCx+dx, nCy+dy, 0, 1 );
+				}
+			}
 
-	video_damage(dev->parent,
-		     x - fontdata->width + 1,
-		     linenum - fontdata->height + 1,
-		     fontdata->width,
-		     fontdata->height);
+			pset_v(pb, nCx, nCy, k_nDotGain, 1 );
+		}
+#endif
+	}
 
-	//draw console a second time on other display
-	line = vid_priv->fb + linenum * vid_priv->line_length + (x + 2160) * pbytes;
-	ret = fill_char_vertically(pfont, &line, vid_priv, fontdata, FLIPPED_DIRECTION);
-	if (ret)
-		return ret;
-
-	video_damage(dev->parent,
-		     (x + 2160) - fontdata->width + 1,
-		     linenum - fontdata->height + 1,
-		     fontdata->width,
-		     fontdata->height);
-
-	return VID_TO_POS(fontdata->width);
+	// TODO: handle offset
 }
 
-#else
+int sanity_check_vrfont( VRFont_t * pFont )
+{
+	if ( !pFont )
+		return 1;
+
+	if ( pFont->size < sizeof( VRFontHeader_t ) )
+	{
+		return 2;
+	}
+
+	VRFontHeader_t *pHeader = (VRFontHeader_t *) pFont->pData;
+	if (pHeader->nMagic != 0x56525458 )
+	{
+		return 3;
+	}
+	if (pHeader->nVersion != 1 )
+	{
+		return 4;
+	}
+
+	// confirm all w/h are sane.  confirm all origins are contained in size
+	int nMinSpace = 2 * pHeader->nNumCodePoints * sizeof( VRGlyph_t ) + sizeof( VRFontHeader_t );
+	if ( pFont->size < nMinSpace )
+	{
+		return 5;
+	}
+
+	int nglyphs = 0;
+	// int nlastoffset = 0;
+	int nStartCodePoint = pHeader->nStartCodePoint;
+	int nEndCodePoint = pHeader->nStartCodePoint + pHeader->nNumCodePoints;
+	for ( int codepoint = nStartCodePoint; codepoint<=nEndCodePoint; ++codepoint )
+	{
+		for (int eye = 0; eye <2; ++eye )
+		{
+			VRGlyph_t * pGlyph = find_vrglyph( pFont, codepoint, eye );
+			if (!pGlyph)
+				continue;
+
+			if ( pGlyph->nWidth > 64 || pGlyph->nHeight > 64 || 
+				pGlyph->nOriginX >= pGlyph->nWidth || pGlyph->nOriginY >= pGlyph->nHeight )
+			{
+				return 6;
+			}
+
+			if ( pGlyph->nDataOffsetFromFileStart )
+			{
+				int nPixelDataEnd = pGlyph->nDataOffsetFromFileStart + pGlyph->nWidth * pGlyph->nHeight;
+				if ( nPixelDataEnd > pFont->size )
+					return 7;
+			}
+
+			nglyphs++;
+		}
+	}
+
+	return 0;
+}
+
+VRGlyph_t * find_vrglyph( const VRFont_t * pFont, unsigned char codepoint, int neye )
+{
+	VRFontHeader_t *pHeader = (VRFontHeader_t *) pFont->pData;
+
+	if ( codepoint < pHeader->nStartCodePoint || codepoint > ( pHeader->nStartCodePoint + pHeader->nNumCodePoints ) )
+		return NULL;
+	int nHeaderIndex = ( codepoint - pHeader->nStartCodePoint ) * 2 + neye;
+
+	VRGlyph_t * pGlyph = (VRGlyph_t *) ( pFont->pData + sizeof( VRFontHeader_t ) + nHeaderIndex * sizeof( VRGlyph_t ) );
+	if ( pGlyph->nDataOffsetFromFileStart == 0 )
+	{
+		return NULL;
+	}
+
+	return pGlyph;
+}
+
+const unsigned char * find_vrglyph_pixeldata( const VRFont_t * pFont, const VRGlyph_t * pGlyph )
+{
+	if ( !pFont || !pGlyph || !pGlyph->nDataOffsetFromFileStart )
+		return NULL;
+
+	int nPixelDataEnd = pGlyph->nDataOffsetFromFileStart + pGlyph->nWidth * pGlyph->nHeight;
+	if ( nPixelDataEnd > pFont->size )
+		return NULL;
+
+	return pFont->pData + pGlyph->nDataOffsetFromFileStart;
+}
+
+int init_vrterminal( VRTerminal_t * pTerminal )
+{
+	if ( !pTerminal )
+		return 1;
+
+	if ( pTerminal->size < sizeof( VRTerminalHeader_t ) )
+	{
+		return 2;
+	}
+
+	VRTerminalHeader_t *pHeader = (VRTerminalHeader_t *) pTerminal->pData;
+	if (pHeader->nMagic != 0x56525459 )
+	{
+		return 3;
+	}
+	if (pHeader->nVersion != 1 )
+	{
+		return 4;
+	}
+
+	int nCells = pHeader->nTerminalSizeX * pHeader->nTerminalSizeY;
+	int nMinSpace = nCells * sizeof( VRTerminalPoint_t ) + sizeof( VRTerminalHeader_t );
+	if ( pTerminal->size < nMinSpace )
+	{
+		return 5;
+	}
+
+	pTerminal->width = pHeader->nTerminalSizeX;
+	pTerminal->height = pHeader->nTerminalSizeY;
+	if ( pTerminal->width * pTerminal->height > MAX_CELLS )
+		return 6;
+
+	pTerminal->cursor_x = 0;
+	pTerminal->cursor_y = 0;
+	memset( pTerminal->vCells, 0,
+       pTerminal->width * pTerminal->height * sizeof(VRCell_t) );
+	return 0;
+}
+
+VRTerminalPoint_t * get_vrterminal_point( VRTerminal_t * pTerminal, int idx, int idy )
+{
+	if ( !pTerminal || pTerminal->size < sizeof( VRTerminalHeader_t ) )
+		return NULL;
+	VRTerminalHeader_t *pHeader = (VRTerminalHeader_t *) pTerminal->pData;
+	if ( idx < 0 || idx >= pHeader->nTerminalSizeX || idy < 0 || idy >= pHeader->nTerminalSizeY )
+		return NULL;
+	const int nTerminalPointIndex = pHeader->nTerminalSizeX * idy + idx;
+	VRTerminalPoint_t * pTerminalPoint = ( VRTerminalPoint_t * ) &pTerminal->pData[ sizeof( VRTerminalHeader_t ) + nTerminalPointIndex * sizeof( VRTerminalPoint_t ) ];
+	if ( !pTerminalPoint->nValid )
+		return NULL;
+	return pTerminalPoint;
+}
+
+static const VRCell_t s_empty_cell = { 0 };
+
+static void vrterminal_scroll_up( VRTerminal_t *pTerminal )
+{
+	// cells[0] is top left cell
+	// Move all rows up by 1
+	memmove( &pTerminal->vCells[0], &pTerminal->vCells[pTerminal->width],
+			(pTerminal->height - 1) * pTerminal->width * sizeof(VRCell_t) );
+
+	// clear the bottom row
+	for ( int x = 0; x < pTerminal->width; ++x )
+	{
+		pTerminal->vCells[(pTerminal->height - 1) * pTerminal->width + x] = s_empty_cell;
+	}
+}
+
+static void vrterminal_put_char( VRTerminal_t * pTerminal, unsigned char c, int *needs_clear )
+{
+	// Wrap before writing
+	if ( pTerminal->cursor_x >= pTerminal->width )
+	{
+		pTerminal->cursor_x = 0;
+		pTerminal->cursor_y++;
+
+		if ( pTerminal->cursor_y >= pTerminal->height )
+		{
+			vrterminal_scroll_up( pTerminal );
+			pTerminal->cursor_y = pTerminal->height - 1;
+			*needs_clear = 1;
+		}
+	}
+
+	// Write into cell
+	pTerminal->vCells[pTerminal->cursor_y * pTerminal->width + pTerminal->cursor_x].ch = c;
+
+	// Advance cursor
+	pTerminal->cursor_x++;
+
+	if (pTerminal->cursor_x >= pTerminal->width)
+	{
+		pTerminal->cursor_x = 0;
+		pTerminal->cursor_y++;
+		if (pTerminal->cursor_y >= pTerminal->height) {
+			vrterminal_scroll_up(pTerminal);
+			pTerminal->cursor_y = pTerminal->height - 1;
+			if (needs_clear) *needs_clear = 1;
+		}
+	}
+}
+
+int vrterminal_feed( VRTerminal_t * pTerminal, const char * buf, int nSize )
+{
+	int needs_clear = 0;
+
+	for ( int i = 0; i < nSize; ++i ) {
+		unsigned char c = (unsigned char) buf[i];
+
+		switch (c) {
+		case '\n': // newline
+			pTerminal->cursor_x = 0;
+			pTerminal->cursor_y++;
+			if (pTerminal->cursor_y >= pTerminal->height )
+			{
+				vrterminal_scroll_up( pTerminal );
+				pTerminal->cursor_y = pTerminal->height - 1;
+				needs_clear = 1;
+			}
+			break;
+
+		case '\r': // return to beginning of line
+			pTerminal->cursor_x = 0;
+			break;
+
+		case '\b': // backspace
+			if ( pTerminal->cursor_x > 0 ) {
+				pTerminal->cursor_x--;
+				pTerminal->vCells[pTerminal->cursor_y * pTerminal->width + pTerminal->cursor_x].ch = ' ';
+			}
+			break;
+		case '\t': // tab
+		{
+			static const int k_nTabWidth = 4;
+			int col  = pTerminal->cursor_x;
+			int next_tab = ( ( col / k_nTabWidth ) + 1 ) * k_nTabWidth;
+			int spaces = next_tab - col;
+
+			while (spaces-- > 0) {
+				vrterminal_put_char( pTerminal, ' ', &needs_clear );
+			}
+			break;
+		}
+		default:
+			if ( c >= 32 ) // printable
+			{
+				vrterminal_put_char( pTerminal, c, &needs_clear );
+			}
+			break;
+		}
+	}
+
+	return needs_clear;
+}
 
 static int consolevr_set_row(struct udevice *dev, uint row, int clr)
 {
-	struct video_priv *vid_priv = dev_get_uclass_priv(dev->parent);
-	struct vrconsole_priv *priv = dev_get_priv(dev);
-	struct video_fontdata *fontdata = priv->fontdata;
-	void *start, *line, *dst, *end;
-	int pixels = fontdata->height * vid_priv->xsize;
-	int i;
-	int pbytes = VNBYTES(vid_priv->bpix);
-
-	start = vid_priv->fb + vid_priv->ysize * vid_priv->line_length -
-		(row + 1) * fontdata->height * vid_priv->line_length;
-	line = start;
-	dst = line;
-	for (i = 0; i < pixels; i++)
-		fill_pixel_and_goto_next(&dst, clr, pbytes, pbytes);
-	end = dst;
-
-	video_damage(dev->parent,
-		     0,
-		     vid_priv->ysize - (row + 1) * fontdata->height,
-		     vid_priv->xsize,
-		     fontdata->height);
-
 	return 0;
 }
 
 static int consolevr_move_rows(struct udevice *dev, uint rowdst, uint rowsrc,
 			       uint count)
 {
-	struct video_priv *vid_priv = dev_get_uclass_priv(dev->parent);
-	struct vrconsole_priv *priv = dev_get_priv(dev);
-	struct video_fontdata *fontdata = priv->fontdata;
-	void *dst;
-	void *src;
-	void *end;
-
-	end = vid_priv->fb + vid_priv->ysize * vid_priv->line_length;
-	dst = end - (rowdst + count) * fontdata->height *
-		vid_priv->line_length;
-	src = end - (rowsrc + count) * fontdata->height *
-		vid_priv->line_length;
-	memmove(dst, src, fontdata->height * vid_priv->line_length * count);
-
-	video_damage(dev->parent,
-		     0,
-		     vid_priv->ysize - (rowdst + count) * fontdata->height,
-		     vid_priv->xsize,
-		     count * fontdata->height);
-
 	return 0;
 }
 
+static int needs_pixbuf_clear = 1;
+
 static int consolevr_putc_xy(struct udevice *dev, uint x_frac, uint y, int cp)
 {
-	struct vidconsole_priv *vc_priv = dev_get_uclass_priv(dev);
+	struct vrconsole_priv *priv = dev_get_priv(dev);
 	struct udevice *vid = dev->parent;
 	struct video_priv *vid_priv = dev_get_uclass_priv(vid);
-	struct vrconsole_priv *priv = dev_get_priv(dev);
 	struct video_fontdata *fontdata = priv->fontdata;
+	VRFont_t * pFont = &priv->vrfont;
+	VRTerminal_t * pTerminal = &priv->vrterminal;
+	int nTerminalSizeX = pTerminal->width;
+	int nTerminalSizeY = pTerminal->height;
+	char buf[2]={0};
 	int pbytes = VNBYTES(vid_priv->bpix);
-	int linenum, x, ret;
-	void *start, *line;
-	u8 ch = console_utf_to_cp437(cp);
-	uchar *pfont = fontdata->video_fontdata +
-			ch * fontdata->char_pixel_bytes;
-	
-	int x_frac_gutter = 540;
-	x_frac = x_frac + VID_TO_POS(x_frac_gutter) ;
+	int n, H, W;
+	Pixbuf pb; 
+	int nFrame = 0;
 
-	if (x_frac + VID_TO_POS(vc_priv->x_charsize) > (vc_priv->xsize_frac / 2 - VID_TO_POS(x_frac_gutter)))
-		return -EAGAIN;
-	linenum = vid_priv->ysize - y - 1;
-	x = vid_priv->xsize - VID_TO_PIXEL(x_frac) - 1;
-	start = vid_priv->fb + linenum * vid_priv->line_length + x * pbytes;
-	line = start;
+	H = vid_priv->xsize;
+	W = vid_priv->ysize;
+	pb.w=W; 
+	pb.h=H; 
+	pb.stride=17280; //is this right??
+	pb.px=vid_priv->fb;
 
-	ret = fill_char_vertically(pfont, &line, vid_priv, fontdata, FLIPPED_DIRECTION);
-	if (ret)
-		return ret;
+	n = 1;
+	buf[0] = console_utf_to_cp437(cp);
 
-	video_damage(dev->parent,
-		     x - fontdata->width + 1,
-		     linenum - fontdata->height + 1,
-		     fontdata->width,
-		     fontdata->height);
+	if ( vrterminal_feed( pTerminal, buf, (size_t) n  ) || needs_pixbuf_clear)
+	{
+		clear_pixbuf( &pb, W, H );
+		needs_pixbuf_clear = 0;
+	}
 
-	//draw console a second time on other display
-	line = vid_priv->fb + linenum * vid_priv->line_length + (x + 2160) * pbytes;
-	ret = fill_char_vertically(pfont, &line, vid_priv, fontdata, FLIPPED_DIRECTION);
-	if (ret)
-		return ret;
+	for ( int row = 0; row < nTerminalSizeY ; ++row )
+	{
+		for ( int col = 0; col < nTerminalSizeX; ++col )
+		{
+			const VRCell_t *cell = &pTerminal->vCells[ row * nTerminalSizeX + col ];
+			if (cell->ch == 0 || cell->ch == ' ')
+				continue;
+			VRTerminalPoint_t * pTerminalPoint = get_vrterminal_point( pTerminal, col, row );
+			draw_glyph( &pb, pTerminalPoint, pFont, cell->ch, nFrame );
+		}
+	}
 
-	video_damage(dev->parent,
-		     (x + 2160) - fontdata->width + 1,
-		     linenum - fontdata->height + 1,
-		     fontdata->width,
-		     fontdata->height);
+/*
+ * @x:	        Upper left X coordinate of the damaged rectangle
+ * @y:	        Upper left Y coordinate of the damaged rectangle
+ * @width:	Width of the damaged rectangle
+ * @height:	Height of the damaged rectangle
+	video_damage
+*/
+
+//todo can we use damage?
+	//video_damage(vid, 0, 0, 4320,2160);
 
 	return VID_TO_POS(fontdata->width);
 }
@@ -255,70 +489,14 @@ int consolevr_simple_select_font(struct udevice *dev, const char *name, uint siz
 {
 	return 0;
 }
-#endif
 
 
 #define FIRMWARE_INTERFACE "scsi"
 #define FIRMWARE_MAX_SIZE (1024 * 1024)
-#define MAGIC_MAX_LEN 4
 
 const char *deckard_get_fw_part(void);
 
-int init_buffer(ulong addr, char *buf, const char *magic)
-{
-	char *data = (void*) map_sysmem(addr, 0);
-	int filesize = env_get_hex("filesize", -1);
-	int fileaddr = env_get_hex("fileaddr", -1);
-
-	if(data)
-	{
-		printf("vrconsole: filesize = %d, fileaddr = 0x%0x\n",filesize,fileaddr);
-
-		if(filesize >= 8)
-		{
-			printf("vrconsole: file contents \n");
-			for(int i=0; i<8; i++)
-			{
-				printf("0x%0x ",data[i]);
-			}
-			printf("\n");
-		}
-
-		
-		//assume magic is 4 bytes max
-		if(filesize > MAGIC_MAX_LEN && magic)
-		{
-			if( strncmp(data, magic, MAGIC_MAX_LEN) == 0 )
-			{
-				printf("vrconsole: magic found!\n");
-			}
-			else
-			{
-				printf("vrconsole: magic not found!\n");
-				return -1;
-			}
-		}
-
-		printf("vrconsole: init buffer...");
-		if(buf && filesize < FIRMWARE_MAX_SIZE)
-		{
-			memcpy(buf,data,filesize);
-			printf("done\n");
-		}
-		else
-		{
-			printf("fail\n");
-		}
-	}
-	else
-	{
-		return -1;
-	}
-
-	return 0;
-}
-
-static int vrconsole_load_erofs(char *filename, char *buf, const char *magic)
+static int vrconsole_load_erofs(const char *filename)
 {
 	#define DEVPARTMAXLEN 16
 	#define LOADADDRMAXLEN 16
@@ -351,42 +529,46 @@ static int vrconsole_load_erofs(char *filename, char *buf, const char *magic)
 				env_get_hex("fileaddr", -1) );
 
 
-    ret = init_buffer(CONFIG_SYS_LOAD_ADDR,buf,magic);
 	if (ret) return ret;
 
 	return ret;
 }
 
-#if 0
-static int vrconsole_load_erofs2(char *name, char *buf)
+uint8_t * load_data_fromdisk( const char * pchFilename, uint32_t *pBytes, uint32_t n_max_size )
 {
-	const char *dev_and_part = fs_firmware_get_partition();
-	const char *ifname = FIRMWARE_INTERFACE;
-	loff_t len_read = 0;
-	int ret;
+	int ret = 0;
+	int filesize = -1;
+	int fileaddr = -1;
+	char *datamap;
+	uint8_t * pData;
 
-	printf("Loading firmware from partition: %s\n", dev_and_part);
+	/////////////////////////////////////////////
+	ret = vrconsole_load_erofs(pchFilename);
+	//side effect of this vrconsole_load_erofs() is to set these env vars
+	filesize = env_get_hex("filesize", -1);
+	fileaddr = env_get_hex("fileaddr", -1);
+	datamap = (void*) map_sysmem(CONFIG_SYS_LOAD_ADDR, 0);
+	printf("vrconsole: filesize = %d, fileaddr = 0x%0x\n",filesize,fileaddr);
+	/////////////////////////////////////////////
 
-	scsi_scan(true);
+	if ( filesize < 0 || filesize > n_max_size )
+    {
+		return NULL;
+    }
 
-	ret = fs_set_blk_dev(ifname, dev_and_part, FS_TYPE_EROFS);
-	if (ret < 0) {
-		printf("%s: Unable to set blkdev %s %s\n", __func__, ifname,
-			dev_and_part);
-		return ret;
+	pData = (unsigned char *) malloc( filesize ); //for consistency, maybe we should always malloc the same max size?
+	if ( !pData ) 
+	{
+		return NULL;
 	}
 
-	ret = fs_read(name, (ulong)buf, 0, FIRMWARE_MAX_SIZE,
-			&len_read);
-	if (ret < 0) {
-		printf("%s: fail to read %s %s\n", __func__, ifname,
-			dev_and_part);
-		return ret;
-	}
+	memset( pData, 0, filesize ); //not sure we need to do this?
+	memcpy( pData, datamap, filesize );
+    *pBytes = filesize;
 
-	return len_read;
+	return pData;
 }
-#endif
+
 
 int consolevr_probe(struct udevice *dev)
 {
@@ -396,18 +578,12 @@ int consolevr_probe(struct udevice *dev)
 	struct video_priv *vid_priv = dev_get_uclass_priv(dev->parent);
 	struct video_fontdata *fontdata = fonts; //delete when we no longer need this
 	int ret;
-	const char vrterminal_metadata_file_magic[] = "YTRV";
-	const char vrterminal_font_file_magic[]     = "XTRV";
+	
+	char vrfontfilename[] = "RobotoMono-Bold.vrfont";
+	char vrterminalfilename[] = "terminal_80x24.vrterminal";
 
 	printf("consolevr probe\n");
 
-#ifdef DEBUG_TEST_NON_VR_MODE
-	//stuff to make console rot=2 mode work for debugging
-	debug("console_simple: setting %s font\n", fontdata->name);
-	debug("width: %d\n", fontdata->width);
-	debug("byte width: %d\n", fontdata->byte_width);
-	debug("height: %d\n", fontdata->height);
-
 	priv->fontdata = fontdata;
 	vc_priv->x_charsize = fontdata->width;
 	vc_priv->y_charsize = fontdata->height;
@@ -419,45 +595,41 @@ int consolevr_probe(struct udevice *dev)
 		vc_priv->cols = vid_priv->xsize / fontdata->width;
 		vc_priv->rows = vid_priv->ysize / fontdata->height;
 	}
-#else
-	priv->fontdata = fontdata;
-	vc_priv->x_charsize = fontdata->width;
-	vc_priv->y_charsize = fontdata->height;
-	if (vid_priv->rot % 2) {
-		vc_priv->cols = vid_priv->ysize / fontdata->width;
-		vc_priv->rows = vid_priv->xsize / fontdata->height;
-		vc_priv->xsize_frac = VID_TO_POS(vid_priv->ysize);
-	} else {
-		vc_priv->cols = vid_priv->xsize / fontdata->width;
-		vc_priv->rows = vid_priv->ysize / fontdata->height;
+	
+	// Load the font from disk/memory
+	priv->vrfont.pData = load_data_fromdisk( vrfontfilename, &priv->vrfont.size, FIRMWARE_MAX_SIZE );
+	if ( !priv->vrfont.pData )
+	{
+		printf("Cannot load font %s\n", vrfontfilename );
+		goto out_close;
 	}
-#endif
 
-	priv->vrterminal = malloc(FIRMWARE_MAX_SIZE);
-	if (!priv->vrterminal) return -ENOMEM;
+	// Load the terminal from disk/memory
+	priv->vrterminal.pData = load_data_fromdisk( vrterminalfilename, &priv->vrterminal.size, FIRMWARE_MAX_SIZE );
+	if ( !priv->vrterminal.pData )
+	{
+		printf("Cannot load terminal %s\n", vrterminalfilename );
+		goto out_close;
+	}
 
-	priv->vrfont = malloc(FIRMWARE_MAX_SIZE);
-	if (!priv->vrfont) return -ENOMEM;
+	// Dont forget to validate it!
+	int nerr = sanity_check_vrfont( &priv->vrfont );
+	if ( nerr != 0 )
+	{
+		printf("Font %s failed sanity check (%d) \n", vrfontfilename, nerr );
+		goto out_close;
+	}
 
-	ret = vrconsole_load_erofs("terminal_80x24.vrterminal", priv->vrterminal, vrterminal_metadata_file_magic);
-	if (ret) return ret;
+	nerr = init_vrterminal( &priv->vrterminal );
+	if ( nerr != 0 )
+	{
+		printf("Terminal %s failed init (%d) \n", vrterminalfilename, nerr );
+		goto out_close;
+	}
 
-	ret = vrconsole_load_erofs("RobotoMono-Bold.vrfont", priv->vrfont, vrterminal_font_file_magic);
-	if (ret) return ret;
-
+out_close:
 	return 0;
 }
-
-#ifdef DEBUG_TEST_NON_VR_MODE
-struct vidconsole_ops consolevr_ops_1 = {
-	.putc_xy	= console_putc_xy_2,
-	.move_rows	= console_move_rows_2,
-	.set_row	= console_set_row_2,
-	.get_font_size	= console_simple_get_font_size,
-	.get_font	= console_simple_get_font,
-	.select_font	= console_simple_select_font,
-};
-#else
 struct vidconsole_ops consolevr_ops_1 = {
 	.putc_xy	= consolevr_putc_xy,
 	.move_rows	= consolevr_move_rows,
@@ -466,7 +638,6 @@ struct vidconsole_ops consolevr_ops_1 = {
 	.get_font	= consolevr_simple_get_font,
 	.select_font	= consolevr_simple_select_font,
 };
-#endif
 
 U_BOOT_DRIVER(vidconsolevr_1) = {
 	.name	= "vidconsolevr1",
