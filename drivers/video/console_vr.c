@@ -26,16 +26,9 @@ struct vrconsole_priv {
 	void *vrfont;
 };
 
-#if 0
-struct console_simple_priv {
-	struct video_fontdata *fontdata;
-};
-#endif
-//static int console_set_row_1(struct udevice *dev, uint row, int clr)
-//{
-//	struct video_priv *vid_priv = dev_get_uclass_priv(dev->parent);
-	//struct vrconsole_priv *priv = dev_get_priv(dev);
+//#define DEBUG_TEST_NON_VR_MODE
 
+#ifdef DEBUG_TEST_NON_VR_MODE
 static int console_set_row_2(struct udevice *dev, uint row, int clr)
 {
 	struct video_priv *vid_priv = dev_get_uclass_priv(dev->parent);
@@ -137,6 +130,132 @@ static int console_putc_xy_2(struct udevice *dev, uint x_frac, uint y, int cp)
 
 	return VID_TO_POS(fontdata->width);
 }
+
+#else
+
+static int consolevr_set_row(struct udevice *dev, uint row, int clr)
+{
+	struct video_priv *vid_priv = dev_get_uclass_priv(dev->parent);
+	struct vrconsole_priv *priv = dev_get_priv(dev);
+	struct video_fontdata *fontdata = priv->fontdata;
+	void *start, *line, *dst, *end;
+	int pixels = fontdata->height * vid_priv->xsize;
+	int i;
+	int pbytes = VNBYTES(vid_priv->bpix);
+
+	start = vid_priv->fb + vid_priv->ysize * vid_priv->line_length -
+		(row + 1) * fontdata->height * vid_priv->line_length;
+	line = start;
+	dst = line;
+	for (i = 0; i < pixels; i++)
+		fill_pixel_and_goto_next(&dst, clr, pbytes, pbytes);
+	end = dst;
+
+	video_damage(dev->parent,
+		     0,
+		     vid_priv->ysize - (row + 1) * fontdata->height,
+		     vid_priv->xsize,
+		     fontdata->height);
+
+	return 0;
+}
+
+static int consolevr_move_rows(struct udevice *dev, uint rowdst, uint rowsrc,
+			       uint count)
+{
+	struct video_priv *vid_priv = dev_get_uclass_priv(dev->parent);
+	struct vrconsole_priv *priv = dev_get_priv(dev);
+	struct video_fontdata *fontdata = priv->fontdata;
+	void *dst;
+	void *src;
+	void *end;
+
+	end = vid_priv->fb + vid_priv->ysize * vid_priv->line_length;
+	dst = end - (rowdst + count) * fontdata->height *
+		vid_priv->line_length;
+	src = end - (rowsrc + count) * fontdata->height *
+		vid_priv->line_length;
+	memmove(dst, src, fontdata->height * vid_priv->line_length * count);
+
+	video_damage(dev->parent,
+		     0,
+		     vid_priv->ysize - (rowdst + count) * fontdata->height,
+		     vid_priv->xsize,
+		     count * fontdata->height);
+
+	return 0;
+}
+
+static int consolevr_putc_xy(struct udevice *dev, uint x_frac, uint y, int cp)
+{
+	struct vidconsole_priv *vc_priv = dev_get_uclass_priv(dev);
+	struct udevice *vid = dev->parent;
+	struct video_priv *vid_priv = dev_get_uclass_priv(vid);
+	struct vrconsole_priv *priv = dev_get_priv(dev);
+	struct video_fontdata *fontdata = priv->fontdata;
+	int pbytes = VNBYTES(vid_priv->bpix);
+	int linenum, x, ret;
+	void *start, *line;
+	u8 ch = console_utf_to_cp437(cp);
+	uchar *pfont = fontdata->video_fontdata +
+			ch * fontdata->char_pixel_bytes;
+	
+	int x_frac_gutter = 540;
+	x_frac = x_frac + VID_TO_POS(x_frac_gutter) ;
+
+	if (x_frac + VID_TO_POS(vc_priv->x_charsize) > (vc_priv->xsize_frac / 2 - VID_TO_POS(x_frac_gutter)))
+		return -EAGAIN;
+	linenum = vid_priv->ysize - y - 1;
+	x = vid_priv->xsize - VID_TO_PIXEL(x_frac) - 1;
+	start = vid_priv->fb + linenum * vid_priv->line_length + x * pbytes;
+	line = start;
+
+	ret = fill_char_vertically(pfont, &line, vid_priv, fontdata, FLIPPED_DIRECTION);
+	if (ret)
+		return ret;
+
+	video_damage(dev->parent,
+		     x - fontdata->width + 1,
+		     linenum - fontdata->height + 1,
+		     fontdata->width,
+		     fontdata->height);
+
+	//draw console a second time on other display
+	line = vid_priv->fb + linenum * vid_priv->line_length + (x + 2160) * pbytes;
+	ret = fill_char_vertically(pfont, &line, vid_priv, fontdata, FLIPPED_DIRECTION);
+	if (ret)
+		return ret;
+
+	video_damage(dev->parent,
+		     (x + 2160) - fontdata->width + 1,
+		     linenum - fontdata->height + 1,
+		     fontdata->width,
+		     fontdata->height);
+
+	return VID_TO_POS(fontdata->width);
+}
+
+const char *consolevr_simple_get_font_size(struct udevice *dev, uint *sizep)
+{
+	struct console_simple_priv *priv = dev_get_priv(dev);
+
+	*sizep = priv->fontdata->width;
+
+	return priv->fontdata->name;
+}
+
+int consolevr_simple_get_font(struct udevice *dev, int seq, struct vidfont_info *info)
+{
+	info->name = fonts[seq].name;
+
+	return info->name ? 0 : -ENOENT;
+}
+
+int consolevr_simple_select_font(struct udevice *dev, const char *name, uint size)
+{
+	return 0;
+}
+#endif
 
 
 #define FIRMWARE_INTERFACE "scsi"
@@ -269,13 +388,21 @@ static int vrconsole_load_erofs2(char *name, char *buf)
 }
 #endif
 
-#if 0
-static int console_set_font(struct udevice *dev, struct video_fontdata *fontdata)
+int consolevr_probe(struct udevice *dev)
 {
+	//console_set_font(dev, fonts);
 	struct vrconsole_priv *priv = dev_get_priv(dev);
 	struct vidconsole_priv *vc_priv = dev_get_uclass_priv(dev);
 	struct video_priv *vid_priv = dev_get_uclass_priv(dev->parent);
+	struct video_fontdata *fontdata = fonts; //delete when we no longer need this
+	int ret;
+	const char vrterminal_metadata_file_magic[] = "YTRV";
+	const char vrterminal_font_file_magic[]     = "XTRV";
 
+	printf("consolevr probe\n");
+
+#ifdef DEBUG_TEST_NON_VR_MODE
+	//stuff to make console rot=2 mode work for debugging
 	debug("console_simple: setting %s font\n", fontdata->name);
 	debug("width: %d\n", fontdata->width);
 	debug("byte width: %d\n", fontdata->byte_width);
@@ -292,31 +419,7 @@ static int console_set_font(struct udevice *dev, struct video_fontdata *fontdata
 		vc_priv->cols = vid_priv->xsize / fontdata->width;
 		vc_priv->rows = vid_priv->ysize / fontdata->height;
 	}
-
-	return 0;
-}
-#endif
-
-int consolevr_probe(struct udevice *dev)
-{
-	//console_set_font(dev, fonts);
-	struct vrconsole_priv *priv = dev_get_priv(dev);
-	struct vidconsole_priv *vc_priv = dev_get_uclass_priv(dev);
-	struct video_priv *vid_priv = dev_get_uclass_priv(dev->parent);
-	struct video_fontdata *fontdata = fonts; //delete when we no longer need this
-	int ret;
-	const char vrterminal_metadata_file_magic[] = "YTRV";
-	const char vrterminal_font_file_magic[]     = "XTRV";
-
-	printf("consolevr probe\n");
-
-#if 1
-	//stuff to make console rot=2 mode work for debugging
-	debug("console_simple: setting %s font\n", fontdata->name);
-	debug("width: %d\n", fontdata->width);
-	debug("byte width: %d\n", fontdata->byte_width);
-	debug("height: %d\n", fontdata->height);
-
+#else
 	priv->fontdata = fontdata;
 	vc_priv->x_charsize = fontdata->width;
 	vc_priv->y_charsize = fontdata->height;
@@ -345,6 +448,7 @@ int consolevr_probe(struct udevice *dev)
 	return 0;
 }
 
+#ifdef DEBUG_TEST_NON_VR_MODE
 struct vidconsole_ops consolevr_ops_1 = {
 	.putc_xy	= console_putc_xy_2,
 	.move_rows	= console_move_rows_2,
@@ -353,6 +457,16 @@ struct vidconsole_ops consolevr_ops_1 = {
 	.get_font	= console_simple_get_font,
 	.select_font	= console_simple_select_font,
 };
+#else
+struct vidconsole_ops consolevr_ops_1 = {
+	.putc_xy	= consolevr_putc_xy,
+	.move_rows	= consolevr_move_rows,
+	.set_row	= consolevr_set_row,
+	.get_font_size	= consolevr_simple_get_font_size,
+	.get_font	= consolevr_simple_get_font,
+	.select_font	= consolevr_simple_select_font,
+};
+#endif
 
 U_BOOT_DRIVER(vidconsolevr_1) = {
 	.name	= "vidconsolevr1",
