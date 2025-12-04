@@ -773,19 +773,16 @@ int misc_init_r(void)
 	deckard_setup();
 
 	//default to display being ON if the variable is undefined
-	if ( (env_get_ulong("display", 10, 1) == 1)) {
+	if ( (env_get_ulong("display", 10, 1) == 1) && !env_get("factory-mode")) {
 		g_display_enabled = true;
 		printf("DISPLAY ON\n");
+		deckard_load_logo(BOOT_LOGO);
 	}
 	else
 	{
 		g_display_enabled = false;
 		printf("DISPLAY OFF\n");
 		display_turn_off_force(); //force just means dont check if g_display_enabled is true
-	}
-
-	if ( !env_get("factory-mode") ) {
-		deckard_load_logo(BOOT_LOGO);
 	}
 
 	ret = button_get_by_label("Volume Down", &btn);
