@@ -1423,14 +1423,8 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 #endif
 
 	// Do not run adsp charging if we are in factory mode or coming out of ship mode
-	if ( !env_get("factory-mode") && !env_get("ship-mode") ) {
+	if ( !env_get("factory-mode") ) {
 		deckard_prepare_for_boot();
-	}
-
-	if ( env_get("ship-mode") ) {
-		// clear ship-mode ( used to boot straight to OS if coming out of ship mode )
-		env_set("ship-mode", "");
-		env_save();
 	}
 
 	// FIXME: eventually invert this so we try EFI first, maybe find a less hacky way to do this?
