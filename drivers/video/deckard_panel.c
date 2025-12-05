@@ -327,10 +327,10 @@ static void dsi_panel_on(struct deckard_panel_priv *priv)
 		priv->panel_vendor = priv->panel_mfg_info[VENDOR_OFFSET];
 	}
 	if ( priv->panel_vendor == VENDOR_SHARP || priv->panel_vendor == VENDOR_BOE || priv->panel_vendor == VENDOR_JDI ) {
-		dev_err(priv->dev, "panel vendor: %c\n", priv->panel_vendor);
+		printf("panel vendor: %c\n", priv->panel_vendor);
 	} else {
-		dev_err(priv->dev, "unrecognized panel vendor ( %c ), defualt to sharp\n", priv->panel_mfg_info[VENDOR_OFFSET] );
 		priv->panel_vendor = VENDOR_SHARP;
+		printf("unrecognized panel vendor ( %c ), default to %c\n", priv->panel_mfg_info[VENDOR_OFFSET], priv->panel_vendor );
 	}
 
 	dsi_write_panel_on(priv);
