@@ -772,15 +772,23 @@ int misc_init_r(void)
 
 	deckard_setup();
 
-	//default to display being ON if the variable is undefined
-	if ( (env_get_ulong("display", 10, 1) == 1) && !env_get("factory-mode")) {
+	
+	if (env_get_ulong("factory-mode", 10, 0) == 1) //skip display enabling if factory-mode is defined and set to 1
+	{
+		printf("Factory mode: not enabling display...\n");
+	}
+	else if (env_get_ulong("display", 10, 1) == 1) //if display env var undefined, display defaults to ON
+	{
 		g_display_enabled = true;
+	}
+
+	if ( g_display_enabled )
+	{
 		printf("DISPLAY ON\n");
 		deckard_load_logo(BOOT_LOGO);
 	}
 	else
 	{
-		g_display_enabled = false;
 		printf("DISPLAY OFF\n");
 		display_turn_off_force(); //force just means dont check if g_display_enabled is true
 	}
@@ -1423,7 +1431,12 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 #endif
 
 	// Do not run adsp charging if we are in factory mode or coming out of ship mode
-	if ( !env_get("factory-mode") ) {
+	if (env_get_ulong("factory-mode", 10, 0) == 1)
+	{
+		printf("Factory mode, skipping prepare for boot functionality\n");
+	}
+	else
+	{
 		deckard_prepare_for_boot();
 	}
 
