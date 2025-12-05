@@ -838,6 +838,16 @@ void qcom_spl_board_init(void)
 		printf("Power button release RTC time = %d\n",pon_poff_reason.power_button_release_rtc_time);
 		power_button_release_rtc_time_since_pon = pon_poff_reason.power_button_release_rtc_time - pon_poff_reason.pon_rtc_time;
 
+		printf("--------------------------------------------------------------------------\n");
+		printf("pon_reset_type: %s [0x%0x] trigger: %s  [0x%0x] reason: 0x%0x\n",
+				pmk8550_get_pon_type_str(pon_poff_reason.type),
+				pon_poff_reason.type,
+				pmk8550_get_pon_trigger_str(pon_poff_reason.trigger),
+				pon_poff_reason.trigger,
+				pon_poff_reason.pon_reason);
+		printf("--------------------------------------------------------------------------\n");
+
+
 		if(power_button_release_rtc_time_since_pon <= 0)
 		{
 			printf("Power button not released since boot\n");

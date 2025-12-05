@@ -213,8 +213,6 @@ static void deckard_disable_watchdog(void)
 	write32(HWIO_APSS_WDT_TMR2_WDOG_CTL_ADDR, 0);
 }
 
-int pon_reason = 0;
-
 static int deckard_do_load_logo(char * logo_name)
 {
 	#define DEVPARTMAXLEN 16
@@ -321,9 +319,6 @@ static void deckard_setup(void)
 
 	/* Ensure Battery is OK to proceed */
 	deckard_battery_prep_for_boot(pmk8550, pm8550b);
-
-	/* Read PON reason from pmk8550 (which is from AOP SDAM3) */
-	pon_reason = pmk8550_get_pon_reason(pmk8550);
 
 	printf("smb1510: enable fixed frequency at 500khz mode\n");
 	smb1510_set_switching_frequency(pmk8550, 0x0F);
@@ -1176,22 +1171,42 @@ int deckard_prepare_for_boot()
 	struct udevice  *led_red, *led_green, *led_blue;
 	struct udevice *pm8550b = NULL;
 	struct udevice *max17320 = NULL;
+	struct pon_on_off_reason pon_poff_reason = { 0 };
 	int power_button_avail = 0;
 	struct udevice *btn;
 	int adsp_loaded = 0;
 	int leds_avail = 0;
 	int id = 0;
 	int soc;
+	int ret;
 
+
+	/*
+	 * check on/off reasons to see if we were booted by a button
+	 * push or warm reset (reboot command), in case of unknown reason
+	 * (insert of battery and then plug charger) boot also.
+	 */
+	ret = pmk8550_get_on_off_reason(&pon_poff_reason);
+	if (ret < 0) {
+		printf("failed to get on off reason\n");
+		return 0;
+	}
+	
 	//check pon_reason to see if we were booted by a button push or warm reset (reboot command)
 
-	printf("pon_reason: %d\n",pon_reason);
-	if(pon_reason & 0x80)
+	printf("pon_reset_type: %s [0x%x] trigger: %s  [0x%x] reason: 0x%x\n",
+		pmk8550_get_pon_type_str(pon_poff_reason.type),
+		pon_poff_reason.type,
+		pmk8550_get_pon_trigger_str(pon_poff_reason.trigger),
+		pon_poff_reason.trigger,
+		pon_poff_reason.pon_reason);
+		
+	if(pon_poff_reason.pon_reason & 0x80)
 	{
 		printf("pon_reason includes button press, continuing to boot\n");
 		return 0;
 	}
-	else if(pon_reason & 0x01)
+	else if(pon_poff_reason.pon_reason & 0x01)
 	{
 		printf("pon_reason includes warm reset, continuing to boot\n");
 		return 0;
@@ -1210,7 +1225,7 @@ int deckard_prepare_for_boot()
 		leds_avail = 1;
 	}
 	
-	int ret = button_get_by_label("Power Button", &btn);
+	ret = button_get_by_label("Power Button", &btn);
 	if (ret < 0) 
 	{
 		printf("Couldn't find power button!\n");
