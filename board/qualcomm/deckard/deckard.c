@@ -1330,6 +1330,8 @@ int deckard_prepare_for_boot()
 		led_set_state(led_blue, LEDST_ON);
 	}
 
+	deckard_load_logo(BOOT_LOGO); //switch to booting logo before we boot up
+
 	return 0;
 }
 
