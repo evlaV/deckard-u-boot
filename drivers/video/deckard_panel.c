@@ -321,7 +321,7 @@ static void dsi_panel_on(struct deckard_panel_priv *priv)
 	// if we can't read info from the panels, don't continue to try initialization
 	// we mainly hit this when bringing up new boards or on testers, where panels
 	// are not connected, resulting in long boot times as each init command times out
-	if ( get_panel_info(priv) )
+	if ( get_panel_info(priv) < 0 )
 		return;
 
 	//panel_info_show(priv);
