@@ -1208,6 +1208,11 @@ int deckard_prepare_for_boot()
 	}
 	else if(pon_poff_reason.pon_reason & 0x01)
 	{
+		printf("pon_reason includes reset, continuing to boot\n");
+		return 0;
+	}
+	else if(pon_poff_reason.type == PON_RESET_TYPE_WARM )
+	{
 		printf("pon_reason includes warm reset, continuing to boot\n");
 		return 0;
 	}
