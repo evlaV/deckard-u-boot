@@ -18,6 +18,7 @@
 #include <mapmem.h>
 #include "vrterminal.h"
 #include "console_vr_debug.h"
+#include <console.h>
 
 struct vrconsole_priv {
 	struct video_fontdata *fontdata; /* To be removed */
@@ -49,8 +50,12 @@ typedef struct {
 	int w, h, stride;
 } Pixbuf;
 
+//#define VRCONSOLE_GLYPH_BOUNDS_CHECKING
+
 static inline void pset_v( Pixbuf *pb, int x, int y, uint8_t value, int channel ) {
+#ifdef VRCONSOLE_GLYPH_BOUNDS_CHECKING	
 	if ((unsigned)x >= (unsigned)pb->w || (unsigned)y >= (unsigned)pb->h || x<0 || y < 0 ) return;
+#endif	
 	uint8_t *p = pb->px + (size_t)y * pb->stride + (size_t)x*4;
 	p[channel]=value;
 }
@@ -105,10 +110,14 @@ void draw_glyph( Pixbuf *pb, VRTerminalPoint_t * pTerminalPoint, VRFont_t * pFon
 					unsigned char nValue = pData[y*pGlyph->nWidth + x];
 					if ( nValue > k_nMinValueToBlit )
 					{
-						int xPos[3] = { pTerminalPoint->red_x[neye], pTerminalPoint->green_x[neye], pTerminalPoint->blue_x[neye] };
-						int yPos[3] = { pTerminalPoint->red_y[neye], pTerminalPoint->green_y[neye], pTerminalPoint->blue_y[neye] };
+						//BGR ordering
+						int xPos[3] = { pTerminalPoint->blue_x[neye], pTerminalPoint->green_x[neye],  pTerminalPoint->red_x[neye] };
+						int yPos[3] = { pTerminalPoint->blue_y[neye], pTerminalPoint->green_y[neye],  pTerminalPoint->red_y[neye] };
+
 						for ( int nChannel = 0; nChannel<3; ++nChannel )
 						{
+							// TODO: bounds check character
+
 							pset_v( pb,
 								(xPos[nChannel]+5)/10 + x - pGlyph->nOriginX,
 								(yPos[nChannel]+5)/10 + y - pGlyph->nOriginY,
@@ -158,9 +167,9 @@ static int consolevr_set_row(struct udevice *dev, uint row, int clr)
 	return 0;
 }
 
-static int needs_pixbuf_clear = 1;
+static TerminalUpdate_t terminalUpdate;
 
-static int consolevr_putc_xy(struct udevice *dev, uint x_frac, uint y, int cp)
+static int consolevr_puts(struct udevice *dev, const char * str)
 {
 	struct vrconsole_priv *priv = dev_get_priv(dev);
 	struct udevice *vid = dev->parent;
@@ -174,7 +183,84 @@ static int consolevr_putc_xy(struct udevice *dev, uint x_frac, uint y, int cp)
 	int W = vid_priv->ysize * 4;
 	Pixbuf pb; pb.w=W; pb.h=H; pb.stride=17280;
 	pb.px = vid_priv->fb;
-	//clear_pixbuf( &pb, W, H );
+	
+	int nTerminalSizeX = pTerminal->width;
+	int nTerminalSizeY = pTerminal->height;
+	
+	int n = strlen(str);
+
+	int nFrame = 0;
+
+	vrterminal_update_reset( &terminalUpdate );
+
+	static int first_draw = 1;
+	if ( first_draw )
+	{
+		first_draw = 0;
+		terminalUpdate.full_update = 1;
+	}
+
+	vrterminal_feed( &terminalUpdate, pTerminal, str, (size_t)n );
+
+	int glyph_draws=0;
+	int clears=0;
+	if ( terminalUpdate.full_update )
+	{
+		clear_pixbuf( &pb, W, H );
+		clears = 1;
+
+		for ( int row = 0; row < nTerminalSizeY ; ++row )
+		{
+			for ( int col = 0; col < nTerminalSizeX; ++col )
+			{
+				const VRCell_t *cell = &pTerminal->vCells[ row * nTerminalSizeX + col ];
+				if (cell->ch == 0 || cell->ch == ' ')
+					continue;
+				VRTerminalPoint_t * pTerminalPoint = get_vrterminal_point( pTerminal, col, row );
+				draw_glyph( &pb, pTerminalPoint, pFont, cell->ch, nFrame );
+				glyph_draws++;
+			}
+		}
+	}
+	else
+	{
+		// Otherwise add only the new characters
+		for ( int nUpdate = 0; nUpdate < (int) terminalUpdate.update_count; ++nUpdate )
+		{
+			int row = terminalUpdate.vUpdates[nUpdate].y;
+			int col = terminalUpdate.vUpdates[nUpdate].x;
+			const VRCell_t *cell = &pTerminal->vCells[ row * nTerminalSizeX + col ];
+			if (cell->ch == 0 || cell->ch == ' ')
+				continue;
+			VRTerminalPoint_t * pTerminalPoint = get_vrterminal_point( pTerminal, col, row );
+			draw_glyph( &pb, pTerminalPoint, pFont, cell->ch, nFrame );
+			glyph_draws++;
+		}
+	}
+
+	//console_printf_select_stderr(true,"g=%d,c=%d\n",glyph_draws,clears);
+
+    video_damage(vid, 0, 0, 4320, 2160);
+
+	return VID_TO_POS(fontdata->width);
+	
+}
+
+static int consolevr_putc_xy(struct udevice *dev, uint x_frac, uint y, int cp)
+{
+	struct vrconsole_priv *priv = dev_get_priv(dev);
+	struct udevice *vid = dev->parent;
+	struct video_priv *vid_priv = dev_get_uclass_priv(vid);
+	struct video_fontdata *fontdata = priv->fontdata;
+#if 0	
+	VRFont_t * pFont = &priv->vrfont;
+	VRTerminal_t * pTerminal = &priv->vrterminal;
+	int pbytes = VNBYTES(vid_priv->bpix);
+
+	int H = vid_priv->xsize;
+	int W = vid_priv->ysize * 4;
+	Pixbuf pb; pb.w=W; pb.h=H; pb.stride=17280;
+	pb.px = vid_priv->fb;
 	
 	int nTerminalSizeX = pTerminal->width;
 	int nTerminalSizeY = pTerminal->height;
@@ -183,27 +269,57 @@ static int consolevr_putc_xy(struct udevice *dev, uint x_frac, uint y, int cp)
 	int n;
 	int nFrame = 0;
 
+	vrterminal_update_reset( &terminalUpdate );
+
+	static int first_draw = 1;
+	if ( first_draw )
+	{
+		first_draw = 0;
+		terminalUpdate.full_update = 1;
+	}
+
 	n = 1;
 	buf[0] = console_utf_to_cp437(cp);
 
-	if ( vrterminal_feed( pTerminal, buf, (size_t) n  ) || needs_pixbuf_clear)
+	vrterminal_feed( &terminalUpdate, pTerminal, buf, (size_t)n );
+
+	int glyph_draws=0;
+	int clears=0;
+	if ( terminalUpdate.full_update )
 	{
 		clear_pixbuf( &pb, W, H );
-		needs_pixbuf_clear = 0;
-	}
+		clears = 1;
 
-	for ( int row = 0; row < nTerminalSizeY ; ++row )
-	{
-		for ( int col = 0; col < nTerminalSizeX; ++col )
+		for ( int row = 0; row < nTerminalSizeY ; ++row )
 		{
+			for ( int col = 0; col < nTerminalSizeX; ++col )
+			{
+				const VRCell_t *cell = &pTerminal->vCells[ row * nTerminalSizeX + col ];
+				if (cell->ch == 0 || cell->ch == ' ')
+					continue;
+				VRTerminalPoint_t * pTerminalPoint = get_vrterminal_point( pTerminal, col, row );
+				draw_glyph( &pb, pTerminalPoint, pFont, cell->ch, nFrame );
+				glyph_draws++;
+			}
+		}
+	}
+	else
+	{
+		// Otherwise add only the new characters
+		for ( int nUpdate = 0; nUpdate < (int) terminalUpdate.update_count; ++nUpdate )
+		{
+			int row = terminalUpdate.vUpdates[nUpdate].y;
+			int col = terminalUpdate.vUpdates[nUpdate].x;
 			const VRCell_t *cell = &pTerminal->vCells[ row * nTerminalSizeX + col ];
 			if (cell->ch == 0 || cell->ch == ' ')
 				continue;
 			VRTerminalPoint_t * pTerminalPoint = get_vrterminal_point( pTerminal, col, row );
 			draw_glyph( &pb, pTerminalPoint, pFont, cell->ch, nFrame );
+			glyph_draws++;
 		}
 	}
 
+	console_printf_select_stderr(true,"g=%d,c=%d\n",glyph_draws,clears);
 /*
  * @x:	        Upper left X coordinate of the damaged rectangle
  * @y:	        Upper left Y coordinate of the damaged rectangle
@@ -215,9 +331,9 @@ static int consolevr_putc_xy(struct udevice *dev, uint x_frac, uint y, int cp)
 //todo can we use damage?
 
     //video_damage(vid, 0, 0, 4320, 2160);
-
+#endif	
 	return VID_TO_POS(fontdata->width);
-	
+
 }
 
 static int consolevr_move_rows(struct udevice *dev, uint rowdst, uint rowsrc, uint count)
@@ -402,6 +518,7 @@ struct vidconsole_ops consolevr_ops_1 = {
 };
 #else
 struct vidconsole_ops consolevr_ops_1 = {
+	.put_string = consolevr_puts,
 	.putc_xy	= consolevr_putc_xy,
 	.move_rows	= consolevr_move_rows,
 	.set_row	= consolevr_set_row,

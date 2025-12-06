@@ -20,15 +20,6 @@ int sanity_check_vrfont( VRFont_t * pFont );
 
 #pragma pack( push, 1 )
 
-typedef struct VRFontHeader_t
-{
-	uint32_t nMagic;
-	uint8_t nVersion;
-	uint8_t nStartCodePoint;
-	uint8_t nNumCodePoints;
-	uint8_t reserved;
-} VRFontHeader_t;
-
 typedef struct VRGlyph_t
 {
 	uint32_t nDataOffsetFromFileStart;
@@ -37,16 +28,6 @@ typedef struct VRGlyph_t
 	uint8_t nOriginX;
 	uint8_t nOriginY;
 } VRGlyph_t;
-
-typedef struct VRTerminalHeader_t
-{
-	uint32_t nMagic;
-	uint8_t nVersion;
-	uint8_t reserved[3];
-	uint16_t nTerminalSizeX;
-	uint16_t nTerminalSizeY;
-} VRTerminalHeader_t;
-
 
 typedef struct VRTerminalPoint_t
 {
@@ -62,7 +43,9 @@ typedef struct VRTerminalPoint_t
 
 // TerminalView -- a view into loaded memory for the terminal
 // Does not imply data ownership
-#define MAX_CELLS (128 * 128)
+#define TERMINAL_MAX_HEIGHT 64
+#define TERMINAL_MAX_WIDTH 128
+#define TERMINAL_MAX_CELLS (TERMINAL_MAX_HEIGHT * TERMINAL_MAX_WIDTH)
 
 typedef struct VRCell_t {
 	uint8_t ch;  // UTF-8. todo: unicode?
@@ -79,8 +62,24 @@ typedef struct VRTerminal_t
 	int height;
     int cursor_x;
     int cursor_y;
-	VRCell_t vCells[MAX_CELLS]; // visible cells
+	VRCell_t vCells[TERMINAL_MAX_CELLS]; // visible cells
 } VRTerminal_t;
+
+typedef struct VRCellUpdate_t {
+	uint8_t x, y;
+} VRCellUpdate_t;
+
+
+#define TERMINAL_UPDATE_COUNT_MAX TERMINAL_MAX_WIDTH
+
+typedef struct TerminalUpdate_t
+{
+	uint8_t full_update;
+	uint8_t update_count;
+	uint8_t unused[2];
+	VRCellUpdate_t vUpdates[TERMINAL_UPDATE_COUNT_MAX];
+} TerminalUpdate_t;
+
 
 #pragma pack( pop )
 
@@ -92,7 +91,8 @@ VRTerminalPoint_t * get_vrterminal_point( VRTerminal_t * pTerminal, int idx, int
 
 int init_vrterminal( VRTerminal_t * pTerminal );
 
-// return non-zero if clear is needed
-int vrterminal_feed( VRTerminal_t * pTerminal, const char * buf, int nSize );
+void vrterminal_update_reset( TerminalUpdate_t * pUpdate );
+
+void vrterminal_feed( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, const char * buf, int nSize );
 
 #endif

@@ -531,7 +531,15 @@ int vidconsole_put_stringn(struct udevice *dev, const char *str, int maxlen)
 
 int vidconsole_put_string(struct udevice *dev, const char *str)
 {
+#if CONFIG_IS_ENABLED(CONSOLE_VR)
+	struct vidconsole_ops *ops = vidconsole_get_ops(dev);
+	if (ops->put_string)
+	{
+		return ops->put_string(dev, str);
+	}
+#else
 	return vidconsole_put_stringn(dev, str, -1);
+#endif	
 }
 
 static void vidconsole_putc(struct stdio_dev *sdev, const char ch)

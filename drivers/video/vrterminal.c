@@ -3,6 +3,29 @@
 #include "vrterminal.h"
 #include <string.h>
 
+
+#pragma pack( push, 1 )
+
+typedef struct VRFontHeader_t
+{
+	uint32_t nMagic;
+	uint8_t nVersion;
+	uint8_t nStartCodePoint;
+	uint8_t nNumCodePoints;
+	uint8_t reserved;
+} VRFontHeader_t;
+
+typedef struct VRTerminalHeader_t
+{
+	uint32_t nMagic;
+	uint8_t nVersion;
+	uint8_t reserved[3];
+	uint16_t nTerminalSizeX;
+	uint16_t nTerminalSizeY;
+} VRTerminalHeader_t;
+
+#pragma pack( pop )
+
 #ifndef NULL
 #define NULL 0
 #endif
@@ -124,7 +147,7 @@ int init_vrterminal( VRTerminal_t * pTerminal )
 
 	pTerminal->width = pHeader->nTerminalSizeX;
 	pTerminal->height = pHeader->nTerminalSizeY;
-	if ( pTerminal->width * pTerminal->height > MAX_CELLS )
+	if ( pTerminal->width * pTerminal->height > TERMINAL_MAX_CELLS )
 		return 6;
 
 	pTerminal->cursor_x = 0;
@@ -150,7 +173,7 @@ VRTerminalPoint_t * get_vrterminal_point( VRTerminal_t * pTerminal, int idx, int
 
 static const VRCell_t s_empty_cell = { 0 };
 
-static void vrterminal_scroll_up( VRTerminal_t *pTerminal )
+static void vrterminal_scroll_up( TerminalUpdate_t * pUpdate, VRTerminal_t *pTerminal )
 {
 	// cells[0] is top left cell
 	// Move all rows up by 1
@@ -162,9 +185,31 @@ static void vrterminal_scroll_up( VRTerminal_t *pTerminal )
 	{
 		pTerminal->vCells[(pTerminal->height - 1) * pTerminal->width + x] = s_empty_cell;
 	}
+
+	if ( pUpdate )
+	{
+		pUpdate->full_update = 1;
+	}
 }
 
-static void vrterminal_put_char( VRTerminal_t * pTerminal, unsigned char c, int *needs_clear )
+static void vrterminal_record_update( TerminalUpdate_t * pUpdate, uint8_t x, uint8_t y )
+{
+	if ( !pUpdate || pUpdate->full_update )
+		return;
+
+	if ( pUpdate->update_count >= ( TERMINAL_UPDATE_COUNT_MAX - 1 ) )
+	{
+		pUpdate->full_update = 1;
+		return;
+	}
+
+	pUpdate->vUpdates[pUpdate->update_count].x = x;
+	pUpdate->vUpdates[pUpdate->update_count].y = y;
+	pUpdate->update_count++;
+}
+
+
+static void vrterminal_put_char( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, unsigned char c )
 {
 	// Wrap before writing
 	if ( pTerminal->cursor_x >= pTerminal->width )
@@ -174,14 +219,14 @@ static void vrterminal_put_char( VRTerminal_t * pTerminal, unsigned char c, int 
 
 		if ( pTerminal->cursor_y >= pTerminal->height )
 		{
-			vrterminal_scroll_up( pTerminal );
+			vrterminal_scroll_up( pUpdate, pTerminal );
 			pTerminal->cursor_y = pTerminal->height - 1;
-			*needs_clear = 1;
 		}
 	}
 
 	// Write into cell
 	pTerminal->vCells[pTerminal->cursor_y * pTerminal->width + pTerminal->cursor_x].ch = c;
+	vrterminal_record_update( pUpdate, pTerminal->cursor_x, pTerminal->cursor_y );
 
 	// Advance cursor
 	pTerminal->cursor_x++;
@@ -190,18 +235,24 @@ static void vrterminal_put_char( VRTerminal_t * pTerminal, unsigned char c, int 
 	{
 		pTerminal->cursor_x = 0;
 		pTerminal->cursor_y++;
+
 		if (pTerminal->cursor_y >= pTerminal->height) {
-			vrterminal_scroll_up(pTerminal);
+
+			vrterminal_scroll_up( pUpdate, pTerminal );
 			pTerminal->cursor_y = pTerminal->height - 1;
-			if (needs_clear) *needs_clear = 1;
 		}
 	}
 }
 
-int vrterminal_feed( VRTerminal_t * pTerminal, const char * buf, int nSize )
-{
-	int needs_clear = 0;
 
+void vrterminal_update_reset( TerminalUpdate_t * pUpdate )
+{
+	pUpdate->full_update = 0;
+	pUpdate->update_count = 0;
+}
+
+void vrterminal_feed( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, const char * buf, int nSize )
+{
 	for ( int i = 0; i < nSize; ++i ) {
 		unsigned char c = (unsigned char) buf[i];
 
@@ -211,9 +262,12 @@ int vrterminal_feed( VRTerminal_t * pTerminal, const char * buf, int nSize )
 			pTerminal->cursor_y++;
 			if (pTerminal->cursor_y >= pTerminal->height )
 			{
-				vrterminal_scroll_up( pTerminal );
+				vrterminal_scroll_up( pUpdate, pTerminal );
 				pTerminal->cursor_y = pTerminal->height - 1;
-				needs_clear = 1;
+				if ( pUpdate )
+				{
+					pUpdate->full_update = 1;
+				}
 			}
 			break;
 
@@ -225,6 +279,8 @@ int vrterminal_feed( VRTerminal_t * pTerminal, const char * buf, int nSize )
 			if ( pTerminal->cursor_x > 0 ) {
 				pTerminal->cursor_x--;
 				pTerminal->vCells[pTerminal->cursor_y * pTerminal->width + pTerminal->cursor_x].ch = ' ';
+				// TODO: should this mark an override in a different flag?
+				vrterminal_record_update( pUpdate, pTerminal->cursor_x, pTerminal->cursor_y );
 			}
 			break;
 		case '\t': // tab
@@ -235,18 +291,16 @@ int vrterminal_feed( VRTerminal_t * pTerminal, const char * buf, int nSize )
 			int spaces = next_tab - col;
 
 			while (spaces-- > 0) {
-				vrterminal_put_char( pTerminal, ' ', &needs_clear );
+				vrterminal_put_char( pUpdate, pTerminal, ' ' );
 			}
 			break;
 		}
 		default:
 			if ( c >= 32 ) // printable
 			{
-				vrterminal_put_char( pTerminal, c, &needs_clear );
+				vrterminal_put_char( pUpdate, pTerminal, c );
 			}
 			break;
 		}
 	}
-
-	return needs_clear;
 }

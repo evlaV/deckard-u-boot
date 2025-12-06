@@ -143,6 +143,20 @@ struct vidconsole_mline {
  * of an entire line of text - typically 16 pixels).
  */
 struct vidconsole_ops {
+	
+#if CONFIG_IS_ENABLED(CONSOLE_VR)	
+	/**
+	 * put_string() - write a string to vidconsole
+	 *
+	 * @dev:	Device to write to
+	 * @str:	character string to write
+	 * @return  0
+	 * if all is OK, -EAGAIN if we ran out of space on this line, other -ve
+	 * on error
+	 */
+	int (*put_string)(struct udevice *dev, const char * str);
+#endif
+
 	/**
 	 * putc_xy() - write a single character to a position
 	 *
