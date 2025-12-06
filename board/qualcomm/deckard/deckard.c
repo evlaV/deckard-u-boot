@@ -1237,7 +1237,7 @@ int deckard_prepare_for_boot()
 		boot_up_desired = true;
 	}
 
-	battery_low_condition = ( soc >= BATTERY_MIN_BOOT_SOC || soc < 0 );
+	battery_low_condition = ( soc <= BATTERY_MIN_BOOT_SOC || soc < 0 );
 	
 	if( battery_low_condition )
 	{
@@ -1282,16 +1282,6 @@ int deckard_prepare_for_boot()
 	ret = pmic_get("pmic@7", &pm8550b);
 	if (ret != 0)
 		printf("Failed to Find PM8550B\n");
-	
-	// Find the max17320
-	ret = pmic_get("pmic@36", &max17320);
-	if (ret != 0) {
-		printf("Failed to Find max17320\n");
-	} else {
-		// get battery capacity
-		soc = deckard_battery_get_capacity(max17320);
-		printf("Battery: %d %%\n", soc);
-	}
 
 	int deckard_shutdown_loop_counter = 1;
 
