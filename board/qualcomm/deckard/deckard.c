@@ -126,6 +126,21 @@ void deckard_load_logo(enum full_screen_images_t image);
 int deckard_check_for_key_press(void);
 int deckard_prepare_for_boot(void);
 
+#define SERIAL_CONSOLE_MASK 0b100
+#define USB_CONSOLE_MASK 0b010
+#define VIDEO_CONSOLE_MASK 0b001
+enum combined_serial_console_state_t {
+	SERIAL_OFF__USB_OFF__VID_OFF = 0,
+	SERIAL_OFF__USB_OFF__VID_ON  = 1,
+	SERIAL_OFF__USB_ON__VID_OFF  = 2,
+	SERIAL_OFF__USB_ON__VID_ON   = 3,
+	SERIAL_ON__USB_OFF__VID_OFF  = 4,
+	SERIAL_ON__USB_OFF__VID_ON   = 5,
+	SERIAL_ON__USB_ON__VID_OFF   = 6,
+	SERIAL_ON__USB_ON__VID_ON    = 7,
+};
+enum combined_serial_console_state_t total_console_state = 0;
+
 struct deckard_esp_info {
 	bool valid;
 	int devnum;
@@ -332,11 +347,58 @@ static void deckard_setup(void)
 	smb1510_set_switching_frequency(pmk8550, 0x0F);
 }
 
-int enable_usb_serial_console(void) 
+int console_state_handler(void) 
 {
-	env_set("stdin","usbacm");
-	env_set("stderr","usbacm");
-	env_set("stdout","usbacm");
+	fflush(stdout); //needed to make things not explode
+	fflush(stderr); //needed to make things not explode
+
+	//note: we need to have some console, so no console on at all is not valid, so we handle that below
+	switch(total_console_state)
+	{
+		case SERIAL_OFF__USB_OFF__VID_OFF:
+			env_set("stdin", "serial");
+			env_set("stderr","serial");
+			env_set("stdout","serial");
+			break;
+		case SERIAL_OFF__USB_OFF__VID_ON:
+			env_set("stdin", "serial");
+			env_set("stderr","serial");
+			env_set("stdout","serial,vidconsole");
+			break;
+		case SERIAL_OFF__USB_ON__VID_OFF:
+			env_set("stdin", "usbacm");
+			env_set("stderr","usbacm");
+			env_set("stdout","usbacm");
+			break;
+		case SERIAL_OFF__USB_ON__VID_ON:
+			env_set("stdin", "usbacm");
+			env_set("stderr","usbacm");
+			env_set("stdout","usbacm,vidconsole");
+			break;
+		case SERIAL_ON__USB_OFF__VID_OFF:
+			env_set("stdin", "serial");
+			env_set("stderr","serial");
+			env_set("stdout","serial");
+			break;
+		case SERIAL_ON__USB_OFF__VID_ON:
+			env_set("stdin", "serial");
+			env_set("stderr","serial");
+			env_set("stdout","serial,vidconsole");
+			break;
+		case SERIAL_ON__USB_ON__VID_OFF:
+			env_set("stdin", "serial,usbacm");
+			env_set("stderr","serial,usbacm");
+			env_set("stdout","serial,usbacm");
+			break;
+		case SERIAL_ON__USB_ON__VID_ON:
+			env_set("stdin", "serial,usbacm");
+			env_set("stderr","serial,usbacm");
+			env_set("stdout","serial,usbacm,vidconsole");
+			break;
+		default:
+			break;
+	}
+
 	return 0;
 }
 
@@ -361,6 +423,8 @@ int button_state_handler(enum combined_button_state_t total_button_state, int po
 		case VOLUP_OFF__VOLDN_OFF__SELECT_OFF:
 			break;
 		case VOLUP_OFF__VOLDN_OFF__SELECT_ON:
+			total_console_state |= VIDEO_CONSOLE_MASK;
+			env_set("bootdelay","20");
 			break;
 		case VOLUP_OFF__VOLDN_ON__SELECT_OFF:
 			env_set("reboot_mode", "f");
@@ -371,10 +435,12 @@ int button_state_handler(enum combined_button_state_t total_button_state, int po
 			usb_init();
 			break;
 		case VOLUP_ON__VOLDN_OFF__SELECT_OFF:
+			total_console_state |= USB_CONSOLE_MASK;
+			total_console_state |= VIDEO_CONSOLE_MASK;
+			env_set("bootdelay","20");
 			break;
 		case VOLUP_ON__VOLDN_OFF__SELECT_ON:
-			enable_usb_serial_console();
-			env_set("bootdelay","20");
+
 			break;
 		case VOLUP_ON__VOLDN_ON__SELECT_OFF:
 			break;
@@ -796,6 +862,11 @@ int misc_init_r(void)
 		display_turn_off_force(); //force just means dont check if g_display_enabled is true
 	}
 
+	if (env_get_ulong("vidconsole_enable", 10, 0) == 1)
+	{
+		total_console_state |= VIDEO_CONSOLE_MASK;
+	}
+
 	ret = button_get_by_label("Volume Down", &btn);
 	if (ret < 0) {
 		printf("Couldn't find Vol- button!\n");
@@ -815,10 +886,6 @@ int misc_init_r(void)
 		if (state == BUTTON_ON) {
 			printf("Vol+ button pressed\n");
 			total_button_state |= VOLUP_BUTTON_MASK;
-		}
-		else
-		{
-			env_set("bootdelay","2");
 		}
 	}
 	
@@ -845,6 +912,8 @@ int misc_init_r(void)
 	}
 
 	button_state_handler(total_button_state,power_button_state);
+
+	console_state_handler();
 
 	/*
 	 * Check if we have a special boot command
@@ -1362,8 +1431,6 @@ int deckard_prepare_for_boot()
 		led_set_state(led_blue, LEDST_ON);
 	}
 
-	deckard_load_logo(BOOT_LOGO); //switch to booting logo before we boot up
-
 	return 0;
 }
 
@@ -1556,6 +1623,12 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	env_set("ramdisk_addr_r", INITRD_ADDR);
 	env_set("fdtcontroladdr", DTB_ADDR);
 
+	//even though we are about to turn the display off, we fill the framebuffer with the boot logo
+	//then the kernel will copy that image to it's framebuffer so we see the boot logo
+	printf("disabling vidconsole\n");
+	total_console_state &= ~VIDEO_CONSOLE_MASK;
+	console_state_handler();
+	deckard_load_logo(BOOT_LOGO); //switch to booting logo before we boot up
 	display_turn_off();
 	run_command("booti ${kernel_addr_r} ${ramdisk_addr_r} ${fdtcontroladdr}", 0);
 
