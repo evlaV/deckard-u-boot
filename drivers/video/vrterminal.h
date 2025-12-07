@@ -76,6 +76,9 @@ typedef struct VRTerminal_t
     int cursor_y;
 	VRCell_t vCells[TERMINAL_MAX_CELLS]; // visible cells
 	VRStereoBounds_t terminalBounds;
+	int escape_len;
+	int escape;
+	char escape_buf[32];
 } VRTerminal_t;
 
 typedef struct VRCellUpdate_t {

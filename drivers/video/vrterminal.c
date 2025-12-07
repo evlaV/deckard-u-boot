@@ -2,6 +2,9 @@
 
 #include "vrterminal.h"
 #include <string.h>
+#include <ansi.h>
+#include <linux/ctype.h>
+#include <linux/kconfig.h>
 
 #ifndef INT32_MAX
 #define INT32_MAX 0x7FFFFFFF
@@ -236,6 +239,9 @@ int init_vrterminal( VRTerminal_t * pTerminal )
 		}
 	}
 
+	pTerminal->escape_len = 0;
+	pTerminal->escape = 0;
+
 	return 0;
 }
 
@@ -331,12 +337,296 @@ void vrterminal_update_reset( TerminalUpdate_t * pUpdate )
 	pUpdate->update_count = 0;
 }
 
+void handle_escape_char( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, char ch)
+{
+	if (!IS_ENABLED(CONFIG_VIDEO_ANSI))
+		goto error;
+
+	/* Sanity checking for bogus ESC sequences: */
+	if (pTerminal->escape_len >= sizeof(pTerminal->escape_buf))
+		goto error;
+	if (pTerminal->escape_len == 0) {
+		switch (ch) {
+		case '7':
+			/* Save cursor position */
+			//TODO implement
+#if 0			
+			get_cursor_position(pTerminal, &pTerminal->row_saved, &pTerminal->col_saved);
+#endif			
+			pTerminal->escape = 0;
+
+			return;
+		case '8': {
+			/* Restore cursor position */
+			//TODO implement
+#if 0
+			int row = pTerminal->row_saved;
+			int col = pTerminal->col_saved;
+
+			set_cursor_position(pTerminal, row, col);
+#endif			
+			pTerminal->escape = 0;
+			return;
+		}
+		case '[':
+			break;
+		default:
+			goto error;
+		}
+	}
+
+	pTerminal->escape_buf[pTerminal->escape_len++] = ch;
+
+	/*
+	 * Escape sequences are terminated by a letter, so keep
+	 * accumulating until we get one:
+	 */
+	if (!isalpha(ch))
+		return;
+
+	/*
+	 * clear escape mode first, otherwise things will get highly
+	 * surprising if you hit any debug prints that come back to
+	 * this console.
+	 */
+	pTerminal->escape = 0;
+
+	switch (ch) {
+	case 'A':
+	case 'B':
+	case 'C':
+	case 'D':
+	case 'E':
+	case 'F': {
+		int row, col, num;
+		char *s = pTerminal->escape_buf;
+//TODO implement		
+#if 0
+		/*
+		 * Cursor up/down: [%dA, [%dB, [%dE, [%dF
+		 * Cursor left/right: [%dD, [%dC
+		 */
+		s++;    /* [ */
+		s = parsenum(s, &num);
+		if (num == 0)			/* No digit in sequence ... */
+			num = 1;		/* ... means "move by 1". */
+
+		get_cursor_position(priv, &row, &col);
+		if (ch == 'A' || ch == 'F')
+			row -= num;
+		if (ch == 'C')
+			col += num;
+		if (ch == 'D')
+			col -= num;
+		if (ch == 'B' || ch == 'E')
+			row += num;
+		if (ch == 'E' || ch == 'F')
+			col = 0;
+		if (col < 0)
+			col = 0;
+		if (row < 0)
+			row = 0;
+		/* Right and bottom overflows are handled in the callee. */
+		set_cursor_position(dev, row, col);
+#endif		
+		break;
+	}
+	case 'H':
+	case 'f': {
+		int row, col;
+		char *s = pTerminal->escape_buf;
+
+//TODO implement
+#if 0
+		/*
+		 * Set cursor position: [%d;%df or [%d;%dH
+		 */
+		s++;    /* [ */
+		s = parsenum(s, &row);
+		s++;    /* ; */
+		s = parsenum(s, &col);
+
+		/*
+		 * Video origin is [0, 0], terminal origin is [1, 1].
+		 */
+		if (row)
+			--row;
+		if (col)
+			--col;
+
+		set_cursor_position(dev, row, col);
+#endif
+		break;
+	}
+	case 'J': {
+		int mode;
+//TODO implement
+#if 0
+		/*
+		 * Clear part/all screen:
+		 *   [J or [0J - clear screen from cursor down
+		 *   [1J       - clear screen from cursor up
+		 *   [2J       - clear entire screen
+		 *
+		 * TODO we really only handle entire-screen case, others
+		 * probably require some additions to video-uclass (and
+		 * are not really needed yet by efi_console)
+		 */
+		parsenum(pTerminal->escape_buf + 1, &mode);
+
+		if (mode == 2) {
+			int ret;
+
+			video_clear(dev->parent);
+			ret = video_sync(dev->parent, false);
+			if (ret) {
+#ifdef DEBUG
+				console_puts_select_stderr(true, "[vc err: video_sync]");
+#endif
+			}
+			priv->ycur = 0;
+			priv->xcur_frac = priv->xstart_frac;
+		
+		} else {
+			debug("unsupported clear mode: %d\n", mode);
+		}
+#endif				
+		break;
+	}
+	case 'K': {
+//TODO implement
+#if 0		
+		struct video_priv *vid_priv = dev_get_uclass_priv(dev->parent);
+		int mode;
+
+		/*
+		 * Clear (parts of) current line
+		 *   [0K       - clear line to end
+		 *   [2K       - clear entire line
+		 */
+		parsenum(priv->escape_buf + 1, &mode);
+
+		if (mode == 2) {
+			int row, col;
+
+			get_cursor_position(priv, &row, &col);
+			vidconsole_set_row(dev, row, vid_priv->colour_bg);
+		}
+#endif			
+		break;
+	}
+	case 'm': {
+//TODO implement
+#if 0		
+		struct video_priv *vid_priv = dev_get_uclass_priv(dev->parent);
+		char *s = priv->escape_buf;
+		char *end = &priv->escape_buf[priv->escape_len];
+
+		/*
+		 * Set graphics mode: [%d;...;%dm
+		 *
+		 * Currently only supports the color attributes:
+		 *
+		 * Foreground Colors:
+		 *
+		 *   30	Black
+		 *   31	Red
+		 *   32	Green
+		 *   33	Yellow
+		 *   34	Blue
+		 *   35	Magenta
+		 *   36	Cyan
+		 *   37	White
+		 *
+		 * Background Colors:
+		 *
+		 *   40	Black
+		 *   41	Red
+		 *   42	Green
+		 *   43	Yellow
+		 *   44	Blue
+		 *   45	Magenta
+		 *   46	Cyan
+		 *   47	White
+		 */
+
+		s++;    /* [ */
+		while (s < end) {
+			int val;
+
+			s = parsenum(s, &val);
+			s++;
+
+			switch (val) {
+			case 0:
+				/* all attributes off */
+				video_set_default_colors(dev->parent, false);
+				break;
+			case 1:
+				/* bold */
+				vid_priv->fg_col_idx |= 8;
+				vid_priv->colour_fg = video_index_to_colour(
+						vid_priv, vid_priv->fg_col_idx);
+				break;
+			case 7:
+				/* reverse video */
+				vid_priv->colour_fg = video_index_to_colour(
+						vid_priv, vid_priv->bg_col_idx);
+				vid_priv->colour_bg = video_index_to_colour(
+						vid_priv, vid_priv->fg_col_idx);
+				break;
+			case 30 ... 37:
+				/* foreground color */
+				vid_priv->fg_col_idx &= ~7;
+				vid_priv->fg_col_idx |= val - 30;
+				vid_priv->colour_fg = video_index_to_colour(
+						vid_priv, vid_priv->fg_col_idx);
+				break;
+			case 40 ... 47:
+				/* background color, also mask the bold bit */
+				vid_priv->bg_col_idx &= ~0xf;
+				vid_priv->bg_col_idx |= val - 40;
+				vid_priv->colour_bg = video_index_to_colour(
+						vid_priv, vid_priv->bg_col_idx);
+				break;
+			default:
+				/* ignore unsupported SGR parameter */
+				break;
+			}
+		}
+#endif
+		break;
+	}
+	default:
+		debug("unrecognized escape sequence: %*s\n",
+		      pTerminal->escape_len, pTerminal->escape_buf);
+	}
+
+	return;
+
+error:
+	/* something went wrong, just revert to normal mode: */
+	pTerminal->escape = 0;
+}
+
 void vrterminal_feed( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, const char * buf, int nSize )
 {
+
+
 	for ( int i = 0; i < nSize; ++i ) {
 		unsigned char c = (unsigned char) buf[i];
 
+		if (pTerminal->escape) {
+			handle_escape_char(pUpdate,pTerminal,c);
+			return;
+		}
+
 		switch (c) {
+		case '\x1b':
+			pTerminal->escape_len = 0;
+			pTerminal->escape = 1;
+			break;
+
 		case '\n': // newline
 			pTerminal->cursor_x = 0;
 			pTerminal->cursor_y++;
