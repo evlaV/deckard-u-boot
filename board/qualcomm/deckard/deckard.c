@@ -867,6 +867,12 @@ int misc_init_r(void)
 		total_console_state |= VIDEO_CONSOLE_MASK;
 	}
 
+	if (env_get_ulong("usbconsole_enable", 10, 0) == 1)
+	{
+		total_console_state |= USB_CONSOLE_MASK;
+		env_set("bootdelay","20");
+	}
+
 	ret = button_get_by_label("Volume Down", &btn);
 	if (ret < 0) {
 		printf("Couldn't find Vol- button!\n");
@@ -913,6 +919,7 @@ int misc_init_r(void)
 
 	button_state_handler(total_button_state,power_button_state);
 
+	total_console_state |= SERIAL_CONSOLE_MASK; //seems likely we always need this on otherwise will get crashes / sync abort handler loops?
 	console_state_handler();
 
 	/*
