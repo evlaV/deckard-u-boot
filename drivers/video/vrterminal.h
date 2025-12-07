@@ -11,15 +11,18 @@
 
 typedef struct VRFont_t
 {
-	uint8_t *pData;
-	uint32_t size;
+	uint8_t *pData; // ptr to the file data
+	uint32_t size;  // size of pData in bytes
+	uint8_t maxGlyphWidth; // max width in pixels
+	uint8_t maxGlyphHeight; // max height in pixels
 } VRFont_t;
 
-int sanity_check_vrfont( VRFont_t * pFont );
+int init_vrfont( VRFont_t * pFont );
 
 
 #pragma pack( push, 1 )
 
+// This is in the file format v1.  do not change
 typedef struct VRGlyph_t
 {
 	uint32_t nDataOffsetFromFileStart;
@@ -29,6 +32,7 @@ typedef struct VRGlyph_t
 	uint8_t nOriginY;
 } VRGlyph_t;
 
+// This is in the file format v1.  do not change
 typedef struct VRTerminalPoint_t
 {
 	uint16_t red_x[2];  // L,R. in pixel TENTHS
@@ -52,6 +56,14 @@ typedef struct VRCell_t {
 	// uint8_t attrs; // bold, underline, etc
 } VRCell_t;
 
+typedef struct VRStereoBounds_t
+{
+	int min_x[2];  // L,R. in pixel TENTHS
+	int max_x[2];  // L,R. in pixel TENTHS
+	int min_y[2];  // L,R. in pixel TENTHS
+	int max_y[2];  // L,R. in pixel TENTHS
+} VRStereoBounds_t;
+
 typedef struct VRTerminal_t
 {
 	// no ownership over data
@@ -63,6 +75,7 @@ typedef struct VRTerminal_t
     int cursor_x;
     int cursor_y;
 	VRCell_t vCells[TERMINAL_MAX_CELLS]; // visible cells
+	VRStereoBounds_t terminalBounds;
 } VRTerminal_t;
 
 typedef struct VRCellUpdate_t {

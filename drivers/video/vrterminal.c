@@ -3,8 +3,49 @@
 #include "vrterminal.h"
 #include <string.h>
 
+#ifndef INT32_MAX
+#define INT32_MAX 0x7FFFFFFF
+#endif
+
+#ifndef INT32_MIN
+#define INT32_MIN 0x80000000
+#endif
+
+static inline int32_t s32_min(int32_t a, int32_t b)
+{
+    return (a < b) ? a : b;
+}
+
+static inline int32_t s32_max(int32_t a, int32_t b)
+{
+    return (a > b) ? a : b;
+}
+
+static inline uint16_t u16_min(uint16_t a, uint16_t b)
+{
+    return (a < b) ? a : b;
+}
+
+static inline uint16_t u16_max(uint16_t a, uint16_t b)
+{
+    return (a > b) ? a : b;
+}
+
+static inline uint8_t u8_min(uint8_t a, uint8_t b)
+{
+    return (a < b) ? a : b;
+}
+
+static inline uint8_t u8_max(uint8_t a, uint8_t b)
+{
+    return (a > b) ? a : b;
+}
 
 #pragma pack( push, 1 )
+
+// These structs must match the filesystem on disk representation
+// for format version "1"
+// Do not change without compat considerations
 
 typedef struct VRFontHeader_t
 {
@@ -30,7 +71,7 @@ typedef struct VRTerminalHeader_t
 #define NULL 0
 #endif
 
-int sanity_check_vrfont( VRFont_t * pFont )
+int init_vrfont( VRFont_t * pFont )
 {
 	if ( !pFont )
 		return 1;
@@ -57,6 +98,9 @@ int sanity_check_vrfont( VRFont_t * pFont )
 		return 5;
 	}
 
+	pFont->maxGlyphWidth = 0;
+	pFont->maxGlyphHeight = 0;
+
 	int nglyphs = 0;
 	// int nlastoffset = 0;
 	int nStartCodePoint = pHeader->nStartCodePoint;
@@ -81,6 +125,9 @@ int sanity_check_vrfont( VRFont_t * pFont )
 				if ( nPixelDataEnd > pFont->size )
 					return 7;
 			}
+			
+			pFont->maxGlyphWidth = u8_max( pFont->maxGlyphWidth, pGlyph->nWidth );
+			pFont->maxGlyphHeight = u8_max( pFont->maxGlyphHeight, pGlyph->nHeight );
 
 			nglyphs++;
 		}
@@ -150,10 +197,45 @@ int init_vrterminal( VRTerminal_t * pTerminal )
 	if ( pTerminal->width * pTerminal->height > TERMINAL_MAX_CELLS )
 		return 6;
 
+	if ( pTerminal->width == 0 || pTerminal->height == 0 )
+		return 7;
+
 	pTerminal->cursor_x = 0;
 	pTerminal->cursor_y = 0;
 	memset( pTerminal->vCells, 0,
        pTerminal->width * pTerminal->height * sizeof(VRCell_t) );
+
+	// Calc the bounds for all points
+	for ( int neye=0; neye<2; ++neye)
+	{
+		pTerminal->terminalBounds.min_x[neye] = INT32_MAX;
+		pTerminal->terminalBounds.min_y[neye] = INT32_MAX;
+		pTerminal->terminalBounds.max_x[neye] = INT32_MIN;
+		pTerminal->terminalBounds.max_y[neye] = INT32_MIN;
+	}
+
+	for (int ny=0; ny<pTerminal->height; ++ny )
+	{
+		for ( int nx=0; nx<pTerminal->width; ++nx )
+		{
+			VRTerminalPoint_t * pPt = get_vrterminal_point( pTerminal, nx, ny );
+			if ( !pPt )
+				continue;
+			for ( int neye =0; neye < 2; ++neye )
+			{
+				pTerminal->terminalBounds.min_x[neye] = s32_min( pTerminal->terminalBounds.min_x[neye],
+					s32_min( s32_min( pPt->blue_x[neye], pPt->red_x[neye] ), pPt->green_x[neye] ) );
+				pTerminal->terminalBounds.min_y[neye] = s32_min( pTerminal->terminalBounds.min_y[neye],
+					s32_min( s32_min( pPt->blue_y[neye], pPt->red_y[neye] ), pPt->green_y[neye] ) );
+
+				pTerminal->terminalBounds.max_x[neye] = s32_max( pTerminal->terminalBounds.max_x[neye],
+					s32_max( s32_max( pPt->blue_x[neye], pPt->red_x[neye] ), pPt->green_x[neye] ) );
+				pTerminal->terminalBounds.max_y[neye] = s32_max( pTerminal->terminalBounds.max_y[neye],
+					s32_max( s32_max( pPt->blue_y[neye], pPt->red_y[neye] ), pPt->green_y[neye] ) );
+			}
+		}
+	}
+
 	return 0;
 }
 
