@@ -38,6 +38,7 @@
 #include <sysreset.h>
 #include <splash.h>
 #include <video.h>
+#include <ansi.h>
 
 #include "deckard_eeprom.h"
 #include "deckard_battery.h"
@@ -1048,6 +1049,9 @@ int misc_init_r(void)
 
 
 	printf("deckard init: done\n");
+
+	
+	//puts(ANSI_CLEAR_CONSOLE);
 ///////
 
 	return 0;
