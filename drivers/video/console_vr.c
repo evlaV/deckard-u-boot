@@ -103,13 +103,10 @@ void clear_stereo_bounds( Pixbuf *pb, VRStereoBounds_t *bounds )
 //#define DEBUG_RENDER
 
 #ifdef DEBUG_RENDER
-	//static const int k_nCrosshairsGain = 32;
-	static const int k_nDotGain = 128;
-#endif
 
-static const uint8_t k_nMinValueToBlit = 1;
+static const int k_nDotGain = 128;
 
-void draw_glyph( Pixbuf *pb, VRTerminalPoint_t * pTerminalPoint, VRFont_t * pFont, char codepoint, int nFrame )
+void draw_glyph_debug( Pixbuf *pb, VRTerminalPoint_t * pTerminalPoint, VRFont_t * pFont, char codepoint, int nFrame )
 {
 	if ( !pTerminalPoint || !pFont )
 		return;
@@ -119,40 +116,6 @@ void draw_glyph( Pixbuf *pb, VRTerminalPoint_t * pTerminalPoint, VRFont_t * pFon
 
 	for ( int neye = 0; neye < 2; ++neye )
 	{
-		VRGlyph_t * pGlyph = find_vrglyph( pFont, codepoint, neye );
-		if ( pGlyph == NULL )
-			continue;
-
-		//BGR ordering
-		int xPos[3] = { pTerminalPoint->blue_x[neye], pTerminalPoint->green_x[neye],  pTerminalPoint->red_x[neye] };
-		int yPos[3] = { pTerminalPoint->blue_y[neye], pTerminalPoint->green_y[neye],  pTerminalPoint->red_y[neye] };
-
-		// blit glyph
-		if ( bDrawChar )
-		{
-			const unsigned char * pData = find_vrglyph_pixeldata( pFont, pGlyph );
-			for ( int y=0; y<pGlyph->nHeight; ++y )
-			{
-				for ( int x=0; x<pGlyph->nWidth; ++x )
-				{
-					unsigned char nValue = pData[y*pGlyph->nWidth + x];
-					if ( nValue > k_nMinValueToBlit )
-					{
-						for ( int nChannel = 0; nChannel<3; ++nChannel )
-						{
-							// TODO: bounds check character
-
-							pset_v( pb,
-								(xPos[nChannel]+5)/10 + x - pGlyph->nOriginX,
-								(yPos[nChannel]+5)/10 + y - pGlyph->nOriginY,
-								nValue, nChannel );
-						}
-					}
-				}
-			}
-		}
-	
-#ifdef DEBUG_RENDER
 		int nCx = (pTerminalPoint->green_x[neye]+5)/10;
 		int nCy = (pTerminalPoint->green_y[neye]+5)/10;
 
@@ -180,10 +143,50 @@ void draw_glyph( Pixbuf *pb, VRTerminalPoint_t * pTerminalPoint, VRFont_t * pFon
 
 			pset_v(pb, nCx, nCy, k_nDotGain, 1 );
 		}
-#endif
 	}
+}
+#endif
 
-	// TODO: handle offset
+void draw_glyph( Pixbuf *pb, VRTerminalPoint_t * pTerminalPoint, VRFont_t * pFont, char codepoint )
+{
+	if ( !pTerminalPoint || !pFont )
+		return;
+
+	for ( int neye = 0; neye < 2; ++neye )
+	{
+		VRGlyph_t * pGlyph = find_vrglyph( pFont, codepoint, neye );
+		if ( pGlyph == NULL )
+			continue;
+
+		//BGR ordering
+		int xPos[3] = { (pTerminalPoint->blue_x[neye]+5)/10, (pTerminalPoint->green_x[neye]+5)/10, (pTerminalPoint->red_x[neye]+5)/10 };
+		int yPos[3] = { (pTerminalPoint->blue_y[neye]+5)/10, (pTerminalPoint->green_y[neye]+5)/10, (pTerminalPoint->red_y[neye]+5)/10 };
+		
+		// TODO: bounds check character
+		const unsigned char * pData = find_vrglyph_pixeldata( pFont, pGlyph );
+		for ( int y=0; y<pGlyph->nHeight; ++y )
+		{
+			const unsigned char * pGlyphRowPtr = pData + y*pGlyph->nWidth;
+
+			for ( int x=0; x<pGlyph->nWidth; ++x )
+			{
+				unsigned char nValue = *pGlyphRowPtr;
+				static const uint8_t k_nMinValueToBlit = 1;
+				if ( nValue > k_nMinValueToBlit )
+				{
+					for ( int nChannel = 0; nChannel<3; ++nChannel )
+					{
+						pset_v( pb,
+							xPos[nChannel] + x - pGlyph->nOriginX,
+							yPos[nChannel] + y - pGlyph->nOriginY,
+							nValue, nChannel );
+					}
+				}
+				
+				++pGlyphRowPtr;
+			}
+		}
+	}
 }
 
 static int consolevr_set_row(struct udevice *dev, uint row, int clr)
@@ -208,10 +211,6 @@ static int consolevr_puts(struct udevice *dev, const char * str)
 	
 	int nTerminalSizeX = pTerminal->width;
 	int nTerminalSizeY = pTerminal->height;
-	
-	int n = strlen(str);
-
-	int nFrame = 0;
 
 	static TerminalUpdate_t terminalUpdate;
 	static VRStereoBounds_t terminalBounds;
@@ -241,7 +240,7 @@ static int consolevr_puts(struct udevice *dev, const char * str)
 		clear_pixbuf( &pb, W, H );
 	}
 
-	vrterminal_feed( &terminalUpdate, pTerminal, str, (size_t)n );
+	vrterminal_feed( &terminalUpdate, pTerminal, str, strlen( str ) );
 
 	if ( terminalUpdate.full_update )
 	{
@@ -254,7 +253,7 @@ static int consolevr_puts(struct udevice *dev, const char * str)
 				if (cell->ch == 0 || cell->ch == ' ')
 					continue;
 				VRTerminalPoint_t * pTerminalPoint = get_vrterminal_point( pTerminal, col, row );
-				draw_glyph( &pb, pTerminalPoint, pFont, cell->ch, nFrame );
+				draw_glyph( &pb, pTerminalPoint, pFont, cell->ch );
 			}
 		}
 	}
@@ -269,106 +268,25 @@ static int consolevr_puts(struct udevice *dev, const char * str)
 			if (cell->ch == 0 || cell->ch == ' ')
 				continue;
 			VRTerminalPoint_t * pTerminalPoint = get_vrterminal_point( pTerminal, col, row );
-			draw_glyph( &pb, pTerminalPoint, pFont, cell->ch, nFrame );
+			draw_glyph( &pb, pTerminalPoint, pFont, cell->ch );
 		}
 	}
 
-	//console_printf_select_stderr(true,"g=%d,c=%d\n",glyph_draws,clears);
-
-    video_damage(vid, 0, 0, 4320, 2160);
+	// TODO: only damage the actual region changed
+	// (though this isnt used right now on steam frame)
+	for ( int neye = 0; neye<2; ++neye )
+	{
+    	video_damage(vid, terminalBounds.min_x[neye]/10, terminalBounds.min_y[neye]/10,
+			terminalBounds.max_x[neye]/10 - terminalBounds.min_x[neye]/10,
+			terminalBounds.max_y[neye]/10 - terminalBounds.min_y[neye]/10);
+	}
 
 	return VID_TO_POS(fontdata->width);
-	
 }
 
 static int consolevr_putc_xy(struct udevice *dev, uint x_frac, uint y, int cp)
 {
-	struct vrconsole_priv *priv = dev_get_priv(dev);
-	//struct udevice *vid = dev->parent;
-	//struct video_priv *vid_priv = dev_get_uclass_priv(vid);
-	struct video_fontdata *fontdata = priv->fontdata;
-#if 0	
-	VRFont_t * pFont = &priv->vrfont;
-	VRTerminal_t * pTerminal = &priv->vrterminal;
-	int pbytes = VNBYTES(vid_priv->bpix);
-
-	int H = vid_priv->xsize;
-	int W = vid_priv->ysize * 4;
-	Pixbuf pb; pb.w=W; pb.h=H; pb.stride=17280;
-	pb.px = vid_priv->fb;
-	
-	int nTerminalSizeX = pTerminal->width;
-	int nTerminalSizeY = pTerminal->height;
-	
-	char buf[2]={0};
-	int n;
-	int nFrame = 0;
-
-	vrterminal_update_reset( &terminalUpdate );
-
-	static int first_draw = 1;
-	if ( first_draw )
-	{
-		first_draw = 0;
-		terminalUpdate.full_update = 1;
-	}
-
-	n = 1;
-	buf[0] = console_utf_to_cp437(cp);
-
-	vrterminal_feed( &terminalUpdate, pTerminal, buf, (size_t)n );
-
-	int glyph_draws=0;
-	int clears=0;
-	if ( terminalUpdate.full_update )
-	{
-		clear_pixbuf( &pb, W, H );
-		clears = 1;
-
-		for ( int row = 0; row < nTerminalSizeY ; ++row )
-		{
-			for ( int col = 0; col < nTerminalSizeX; ++col )
-			{
-				const VRCell_t *cell = &pTerminal->vCells[ row * nTerminalSizeX + col ];
-				if (cell->ch == 0 || cell->ch == ' ')
-					continue;
-				VRTerminalPoint_t * pTerminalPoint = get_vrterminal_point( pTerminal, col, row );
-				draw_glyph( &pb, pTerminalPoint, pFont, cell->ch, nFrame );
-				glyph_draws++;
-			}
-		}
-	}
-	else
-	{
-		// Otherwise add only the new characters
-		for ( int nUpdate = 0; nUpdate < (int) terminalUpdate.update_count; ++nUpdate )
-		{
-			int row = terminalUpdate.vUpdates[nUpdate].y;
-			int col = terminalUpdate.vUpdates[nUpdate].x;
-			const VRCell_t *cell = &pTerminal->vCells[ row * nTerminalSizeX + col ];
-			if (cell->ch == 0 || cell->ch == ' ')
-				continue;
-			VRTerminalPoint_t * pTerminalPoint = get_vrterminal_point( pTerminal, col, row );
-			draw_glyph( &pb, pTerminalPoint, pFont, cell->ch, nFrame );
-			glyph_draws++;
-		}
-	}
-
-	console_printf_select_stderr(true,"g=%d,c=%d\n",glyph_draws,clears);
-/*
- * @x:	        Upper left X coordinate of the damaged rectangle
- * @y:	        Upper left Y coordinate of the damaged rectangle
- * @width:	Width of the damaged rectangle
- * @height:	Height of the damaged rectangle
-	video_damage
-*/
-
-//todo can we use damage?
-
-    //video_damage(vid, 0, 0, 4320, 2160);
-#endif	
-	return VID_TO_POS(fontdata->width);
-
+	return 0;
 }
 
 static int consolevr_move_rows(struct udevice *dev, uint rowdst, uint rowsrc, uint count)
@@ -379,16 +297,13 @@ static int consolevr_move_rows(struct udevice *dev, uint rowdst, uint rowsrc, ui
 const char *consolevr_simple_get_font_size(struct udevice *dev, uint *sizep)
 {
 	struct vrconsole_priv *priv = dev_get_priv(dev);
-
 	*sizep = priv->fontdata->width;
-
 	return priv->fontdata->name;
 }
 
 int consolevr_simple_get_font(struct udevice *dev, int seq, struct vidfont_info *info)
 {
 	info->name = fonts[seq].name;
-
 	return info->name ? 0 : -ENOENT;
 }
 

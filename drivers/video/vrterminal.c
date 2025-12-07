@@ -263,10 +263,8 @@ static void vrterminal_scroll_up( TerminalUpdate_t * pUpdate, VRTerminal_t *pTer
 			(pTerminal->height - 1) * pTerminal->width * sizeof(VRCell_t) );
 
 	// clear the bottom row
-	for ( int x = 0; x < pTerminal->width; ++x )
-	{
-		pTerminal->vCells[(pTerminal->height - 1) * pTerminal->width + x] = s_empty_cell;
-	}
+	VRCell_t * pCellPtr = pTerminal->vCells + (pTerminal->height - 1) * pTerminal->width;
+	memset( pCellPtr, 0, sizeof( VRCell_t ) * pTerminal->width );
 
 	if ( pUpdate )
 	{
