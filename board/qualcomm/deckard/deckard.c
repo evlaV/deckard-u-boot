@@ -1251,6 +1251,14 @@ int display_turn_on(void)
 	return run_command("mdss start", 0); 
 }
 
+int deckard_video_sync(void)
+{
+	struct udevice *dev;
+	int ret = uclass_first_device_err(UCLASS_VIDEO, &dev);
+	struct video_priv *priv = dev_get_uclass_priv(dev);
+	video_damage(dev, 0, 0, 4320, 2160);
+	return video_sync(dev, true);
+}
 
 int display_turn_off()
 {
@@ -1529,6 +1537,22 @@ int deckard_load_dtb(char * partition, char * addr)
 	return scsi_do_load_helper(partition, addr, DTB_TARGET);
 }
 
+int deckard_boot_menu(void) 
+{
+	fprintf(stderr,"showing boot menu!!!\n");
+	//total_console_state &= ~VIDEO_CONSOLE_MASK;
+	//console_state_handler();
+	//display may have timed out, so try to turn display back on to show menu
+	display_turn_on();
+	deckard_video_sync(); //not sure if this works / is a good idea?
+	total_console_state |= VIDEO_CONSOLE_MASK;
+	console_state_handler();
+	mdelay(500);
+	run_command("bootmenu",0);
+	
+	return 0;
+}
+
 // Deckard boot command.  Executes sequence that would normally be in the boot.scr
 int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
@@ -1661,13 +1685,7 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	
 	if (env_get_ulong("showbootmenu", 10, 0) == 1)
 	{
-		fprintf(stderr,"showing boot menu!!!\n");
-
-		//display may have timed out, so try to turn display back on to show menu
-		display_turn_on();
-		total_console_state |= VIDEO_CONSOLE_MASK;
-		console_state_handler();
-		run_command("bootmenu",0);
+		deckard_boot_menu();
 	}
 	else
 	{
@@ -1707,6 +1725,12 @@ int do_deckard_logo(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	return 0;
 }
 
+int do_deckard_bootmenu(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
+{
+	deckard_boot_menu();
+	return 0;
+}
+
 U_BOOT_LONGHELP(deckard_logo,
     "Show Deckard logo\n"
 );
@@ -1714,5 +1738,14 @@ U_BOOT_LONGHELP(deckard_logo,
 U_BOOT_CMD(
 	deckard_logo, CONFIG_SYS_MAXARGS,     1,      do_deckard_logo,
     "Deckard display logo", deckard_logo_help_text
+);
+
+U_BOOT_LONGHELP(deckard_bootmenu,
+    "Show Deckard bootmenu\n"
+);
+
+U_BOOT_CMD(
+	deckard_bootmenu, CONFIG_SYS_MAXARGS,     1,      do_deckard_bootmenu,
+    "Deckard display logo", deckard_bootmenu_help_text
 );
 
