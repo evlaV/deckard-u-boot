@@ -17,37 +17,37 @@
 
 static inline int32_t s32_min(int32_t a, int32_t b)
 {
-    return (a < b) ? a : b;
+	return (a < b) ? a : b;
 }
 
 static inline int32_t s32_max(int32_t a, int32_t b)
 {
-    return (a > b) ? a : b;
+	return (a > b) ? a : b;
 }
 
 static inline uint16_t u16_min(uint16_t a, uint16_t b)
 {
-    return (a < b) ? a : b;
+	return (a < b) ? a : b;
 }
 
 static inline uint16_t u16_max(uint16_t a, uint16_t b)
 {
-    return (a > b) ? a : b;
+	return (a > b) ? a : b;
 }
 
 static inline uint8_t u8_min(uint8_t a, uint8_t b)
 {
-    return (a < b) ? a : b;
+	return (a < b) ? a : b;
 }
 
 static inline uint8_t u8_max(uint8_t a, uint8_t b)
 {
-    return (a > b) ? a : b;
+	return (a > b) ? a : b;
 }
 
 static inline int is_visible_ascii( unsigned char c )
 {
-    return (c >= 0x21 && c <= 0x7E);  // '!' .. '~', excludes space
+	return (c >= 0x21 && c <= 0x7E);  // '!' .. '~', excludes space
 }
 
 static char *parsenum(char *s, int *num)
@@ -181,10 +181,15 @@ const unsigned char * vrfont_find_vrglyph_pixeldata( const VRFont_t * pFont, con
 	return pFont->pData + pGlyph->nDataOffsetFromFileStart;
 }
 
-int vrterminal_init( VRTerminal_t * pTerminal )
+int vrterminal_init( VRTerminal_t * pTerminal, uint8_t *pData, uint32_t size )
 {
 	if ( !pTerminal )
 		return 1;
+
+	// memset the struct to 0, and then set the members
+	memset( pTerminal, 0, sizeof( VRTerminal_t ) );
+	pTerminal->pData = pData;
+	pTerminal->size = size;
 
 	if ( pTerminal->size < sizeof( VRTerminalHeader_t ) )
 	{
@@ -216,11 +221,6 @@ int vrterminal_init( VRTerminal_t * pTerminal )
 	if ( pTerminal->width == 0 || pTerminal->height == 0 )
 		return 7;
 
-	pTerminal->cursor_x = 0;
-	pTerminal->cursor_y = 0;
-	memset( pTerminal->vCells, 0,
-       pTerminal->width * pTerminal->height * sizeof(VRCell_t) );
-
 	// Calc the bounds for all points
 	for ( int neye=0; neye<2; ++neye)
 	{
@@ -251,12 +251,6 @@ int vrterminal_init( VRTerminal_t * pTerminal )
 			}
 		}
 	}
-
-	pTerminal->escape_len = 0;
-	pTerminal->in_escape = 0;
-	memset( pTerminal->escape_buf, 0, sizeof( pTerminal->escape_buf ) );
-	pTerminal->escape_cursor_x_saved = 0;
-	pTerminal->escape_cursor_y_saved = 0;
 
 	return 0;
 }
@@ -307,7 +301,7 @@ static void vrterminal_record_update( TerminalUpdate_t * pUpdate, uint8_t x, uin
 	pUpdate->update_count++;
 }
 
-static void vrterminal_put_char( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, unsigned char c, int advance_cursor )
+static void vrterminal_put_char( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, unsigned char c, uint16_t flags, int advance_cursor )
 {
 	// Wrap before writing
 	if ( pTerminal->cursor_x >= pTerminal->width )
@@ -323,7 +317,7 @@ static void vrterminal_put_char( TerminalUpdate_t * pUpdate, VRTerminal_t * pTer
 	}
 
 	int nCellIndex = pTerminal->cursor_y * pTerminal->width + pTerminal->cursor_x;
-	if ( pTerminal->vCells[nCellIndex].ch != c )
+	if ( pTerminal->vCells[nCellIndex].ch != c /*|| pTerminal->vCells[nCellIndex].flags != flags*/ )
 	{
 		// are we overwriting a visible character at the current cursor position?
 		if ( is_visible_ascii( pTerminal->vCells[nCellIndex].ch ) )
@@ -340,6 +334,7 @@ static void vrterminal_put_char( TerminalUpdate_t * pUpdate, VRTerminal_t * pTer
 
 		// Update cell
 		pTerminal->vCells[nCellIndex].ch = c;
+		//pTerminal->vCells[nCellIndex].flags = flags;
 	}
 
 	// Advance cursor
@@ -385,7 +380,7 @@ void vrterminal_clear_console( TerminalUpdate_t * pUpdate, VRTerminal_t * pTermi
 		pUpdate->full_update = 1;
 	}
 	memset( pTerminal->vCells, 0,
-       pTerminal->width * pTerminal->height * sizeof(VRCell_t) );
+	   pTerminal->width * pTerminal->height * sizeof(VRCell_t) );
 }
 
 void vrterminal_update_reset( TerminalUpdate_t * pUpdate )
@@ -514,22 +509,17 @@ void handle_escape_char( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, c
 		int nCharsToWrite = pTerminal->width - pTerminal->cursor_x;
 		for ( int nchar = 0; nchar<nCharsToWrite; ++nchar )
 		{
-			vrterminal_put_char( pUpdate, pTerminal, ' ', 1 );
+			vrterminal_put_char( pUpdate, pTerminal, ' ', 0, 1 );
 		}
 		
 		break;
 	}
 	case 'm': {
-//TODO implement
-#if 0		
-		struct video_priv *vid_priv = dev_get_uclass_priv(dev->parent);
-		char *s = priv->escape_buf;
-		char *end = &priv->escape_buf[priv->escape_len];
+		char *s = pTerminal->escape_buf;
+		char *end = &pTerminal->escape_buf[pTerminal->escape_len];
 
 		/*
 		 * Set graphics mode: [%d;...;%dm
-		 *
-		 * Currently only supports the color attributes:
 		 *
 		 * Foreground Colors:
 		 *
@@ -541,6 +531,15 @@ void handle_escape_char( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, c
 		 *   35	Magenta
 		 *   36	Cyan
 		 *   37	White
+		 *
+		 * 	 90  bright black   (often a gray)
+		 *   91  bright red
+		 *   92  bright green
+		 *   93  bright yellow
+		 *   94  bright blue
+		 *   95  bright magenta
+		 *   96  bright cyan
+		 *   97  bright white
 		 *
 		 * Background Colors:
 		 *
@@ -562,48 +561,45 @@ void handle_escape_char( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, c
 			s++;
 
 			switch (val) {
-			case 0:
-				/* all attributes off */
-				video_set_default_colors(dev->parent, false);
+			case 0: // reset all flags
+				// pTerminal->cursor_flags = 0; // reset
 				break;
-			case 1:
-				/* bold */
-				vid_priv->fg_col_idx |= 8;
-				vid_priv->colour_fg = video_index_to_colour(
-						vid_priv, vid_priv->fg_col_idx);
+			case 1: // set bold / bright
 				break;
-			case 7:
-				/* reverse video */
-				vid_priv->colour_fg = video_index_to_colour(
-						vid_priv, vid_priv->bg_col_idx);
-				vid_priv->colour_bg = video_index_to_colour(
-						vid_priv, vid_priv->fg_col_idx);
+			case 2: // set faint
 				break;
-			case 30 ... 37:
-				/* foreground color */
-				vid_priv->fg_col_idx &= ~7;
-				vid_priv->fg_col_idx |= val - 30;
-				vid_priv->colour_fg = video_index_to_colour(
-						vid_priv, vid_priv->fg_col_idx);
+			case 3: // set italics
 				break;
-			case 40 ... 47:
-				/* background color, also mask the bold bit */
-				vid_priv->bg_col_idx &= ~0xf;
-				vid_priv->bg_col_idx |= val - 40;
-				vid_priv->colour_bg = video_index_to_colour(
-						vid_priv, vid_priv->bg_col_idx);
+			case 4: // set underline
+				break;
+			case 7: // set inverse (swap bg/fg)
+				break;
+			case 22: // clear bold/faint
+				break;
+			case 23: // clear italics
+				break;
+			case 24: // clear underline
+				break;
+			case 27: // clear inverse
+				break;
+			case 30 ... 37: // set fg color
+				break;
+			case 39: // clear fg color (reset to default)
+				break;
+			case 40 ... 47: // set bg color
+				break;
+			case 49: // clear bg color
 				break;
 			default:
 				/* ignore unsupported SGR parameter */
 				break;
 			}
 		}
-#endif
 		break;
 	}
 	default:
 		debug("unrecognized escape sequence: %*s\n",
-		      pTerminal->escape_len, pTerminal->escape_buf);
+			  pTerminal->escape_len, pTerminal->escape_buf);
 	}
 
 	// Clear the escape_buf for easier debugging
@@ -620,7 +616,8 @@ void vrterminal_feed( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, cons
 	for ( int i = 0; i < nSize; ++i ) {
 		unsigned char c = (unsigned char) buf[i];
 
-		if ( pTerminal->in_escape ) {
+		if ( pTerminal->in_escape )
+		{
 			handle_escape_char( pUpdate, pTerminal, c );
 		}
 		else
@@ -654,7 +651,7 @@ void vrterminal_feed( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, cons
 				if ( pTerminal->cursor_x > 0 )
 				{
 					pTerminal->cursor_x--;
-					vrterminal_put_char( pUpdate, pTerminal, ' ', 0 );
+					vrterminal_put_char( pUpdate, pTerminal, ' ', 0, 0 );
 				}
 				break;
 			case '\t': // tab
@@ -665,14 +662,14 @@ void vrterminal_feed( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, cons
 				int spaces = next_tab - col;
 
 				while (spaces-- > 0) {
-					vrterminal_put_char( pUpdate, pTerminal, ' ', 1 );
+					vrterminal_put_char( pUpdate, pTerminal, ' ', 0, 1 );
 				}
 				break;
 			}
 			default:
 				if ( c >= 32 ) // printable
 				{
-					vrterminal_put_char( pUpdate, pTerminal, c, 1 );
+					vrterminal_put_char( pUpdate, pTerminal, c, pTerminal->cursor_flags, 1 );
 				}
 				break;
 			}

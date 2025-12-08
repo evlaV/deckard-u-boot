@@ -52,8 +52,8 @@ typedef struct VRTerminalPoint_t
 #define TERMINAL_MAX_CELLS (TERMINAL_MAX_HEIGHT * TERMINAL_MAX_WIDTH)
 
 typedef struct VRCell_t {
-	uint8_t ch;  // UTF-8. todo: unicode?
-	// uint8_t attrs; // bold, underline, etc
+	uint8_t ch;  // ascii (not utf8)
+	// uint16_t flags; // color, etc
 } VRCell_t;
 
 typedef struct VRStereoBounds_t
@@ -75,6 +75,7 @@ typedef struct VRTerminal_t
 	int height;
     int cursor_x;
     int cursor_y;
+	uint16_t cursor_flags;
 	VRCell_t vCells[TERMINAL_MAX_CELLS]; // visible cells
 	VRStereoBounds_t terminalBounds;
 
@@ -110,7 +111,7 @@ const unsigned char * vrfont_find_vrglyph_pixeldata( const VRFont_t * pFont, con
 
 VRTerminalPoint_t * vrterminal_get_point( VRTerminal_t * pTerminal, int idx, int idy );
 
-int vrterminal_init( VRTerminal_t * pTerminal );
+int vrterminal_init( VRTerminal_t * pTerminal, uint8_t *pData, uint32_t size );
 
 void vrterminal_update_reset( TerminalUpdate_t * pUpdate );
 

@@ -442,7 +442,7 @@ int consolevr_probe(struct udevice *dev)
 		goto out_close;
 	}
 
-	nerr = vrterminal_init( &priv->vrterminal );
+	nerr = vrterminal_init( &priv->vrterminal, priv->vrterminal.pData, priv->vrterminal.size );
 	if ( nerr != 0 )
 	{
 		printf("Terminal %s failed init (%d) \n", vrterminalfilename, nerr );
