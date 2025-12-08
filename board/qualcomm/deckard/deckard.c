@@ -108,6 +108,9 @@ enum combined_button_state_t {
 	VOLUP_ON__VOLDN_ON__SELECT_ON    = 7,
 };
 
+enum combined_button_state_t g_total_button_state = 0;
+int g_power_button_state = 0;
+
 #define DECKARD_DUMMY_SERIAL_NUMB "123456789"
 #define TCSR_BOOT_MISC_DETECT 0x01fd9000
 
@@ -411,6 +414,59 @@ int enable_ramoops_serial_console(void)
 	return 0;
 }
 
+int check_button_states(void)
+{
+	int ret;
+	struct udevice     *btn = NULL;
+	enum button_state_t button_state;
+
+	ret = button_get_by_label("Volume Down", &btn);
+	if (ret < 0) {
+		printf("Couldn't find Vol- button!\n");
+	} else {
+		button_state = button_get_state(btn);
+		if (button_state == BUTTON_ON) {
+			printf("Vol- button pressed\n");
+			g_total_button_state |= VOLDN_BUTTON_MASK;
+		}
+	}
+
+	ret = button_get_by_label("Volume Up", &btn);
+	if (ret < 0) {
+		printf("Couldn't find Vol+ button!\n");
+	} else {
+		button_state = button_get_state(btn);
+		if (button_state == BUTTON_ON) {
+			printf("Vol+ button pressed\n");
+			g_total_button_state |= VOLUP_BUTTON_MASK;
+		}
+	}
+	
+	ret = button_get_by_label("Power Button", &btn);
+	if (ret < 0) {
+		printf("Couldn't find power button!\n");
+	} else {
+		button_state = button_get_state(btn);
+		if (button_state == BUTTON_ON) {
+			printf("PWR button pressed\n");
+			g_power_button_state = 1;
+		}
+	}
+
+	ret = button_get_by_label("Select", &btn);
+	if (ret < 0) {
+		printf("Couldn't find select button!\n");
+	} else {
+		button_state = button_get_state(btn);
+		if (button_state == BUTTON_ON) {
+			printf("Select button pressed\n");
+			g_total_button_state |= SELECT_BUTTON_MASK;
+		}
+	}
+
+	return 0;
+}
+
 int button_state_handler(enum combined_button_state_t total_button_state, int power_button_state) 
 {
 	printf("total button state = %d, power button = %d\n", total_button_state, power_button_state);
@@ -424,8 +480,9 @@ int button_state_handler(enum combined_button_state_t total_button_state, int po
 		case VOLUP_OFF__VOLDN_OFF__SELECT_OFF:
 			break;
 		case VOLUP_OFF__VOLDN_OFF__SELECT_ON:
-			total_console_state |= VIDEO_CONSOLE_MASK;
-			env_set("bootdelay","20");
+			//total_console_state |= VIDEO_CONSOLE_MASK;
+			//env_set("bootdelay","20");
+			env_set_ulong("showbootmenu", 1);
 			break;
 		case VOLUP_OFF__VOLDN_ON__SELECT_OFF:
 			env_set("reboot_mode", "f");
@@ -782,13 +839,11 @@ static int deckard_efi_setup(void *ctx, struct event *event)
 /* Check for vol- button - if pressed - stop autoboot */
 int misc_init_r(void)
 {
-	struct udevice     *btn = NULL;
 	struct udevice *led_red = NULL;
 	struct udevice *led_green = NULL;
 	struct udevice *led_blue = NULL;
 
 	int                 ret;
-	enum button_state_t state;
 	char * bootedslot;
 	char *reboot_mode;
 	char *eeprom_board;
@@ -798,8 +853,6 @@ int misc_init_r(void)
 	int usbmode = 0;
 
 	ofnode node;
-	enum combined_button_state_t total_button_state = 0;
-	int power_button_state = 0;
 	
 	node = ofnode_path("/chosen");
 	if (ofnode_valid(node)) {
@@ -874,51 +927,8 @@ int misc_init_r(void)
 		env_set("bootdelay","20");
 	}
 
-	ret = button_get_by_label("Volume Down", &btn);
-	if (ret < 0) {
-		printf("Couldn't find Vol- button!\n");
-	} else {
-		state = button_get_state(btn);
-		if (state == BUTTON_ON) {
-			printf("Vol- button pressed\n");
-			total_button_state |= VOLDN_BUTTON_MASK;
-		}
-	}
-
-	ret = button_get_by_label("Volume Up", &btn);
-	if (ret < 0) {
-		printf("Couldn't find Vol+ button!\n");
-	} else {
-		state = button_get_state(btn);
-		if (state == BUTTON_ON) {
-			printf("Vol+ button pressed\n");
-			total_button_state |= VOLUP_BUTTON_MASK;
-		}
-	}
-	
-	ret = button_get_by_label("Power Button", &btn);
-	if (ret < 0) {
-		printf("Couldn't find power button!\n");
-	} else {
-		state = button_get_state(btn);
-		if (state == BUTTON_ON) {
-			printf("PWR button pressed\n");
-			power_button_state = 1;
-		}
-	}
-
-	ret = button_get_by_label("Select", &btn);
-	if (ret < 0) {
-		printf("Couldn't find select button!\n");
-	} else {
-		state = button_get_state(btn);
-		if (state == BUTTON_ON) {
-			printf("Select button pressed\n");
-			total_button_state |= SELECT_BUTTON_MASK;
-		}
-	}
-
-	button_state_handler(total_button_state,power_button_state);
+	check_button_states();
+	button_state_handler(g_total_button_state, g_power_button_state);
 
 	total_console_state |= SERIAL_CONSOLE_MASK; //seems likely we always need this on otherwise will get crashes / sync abort handler loops?
 	console_state_handler();
@@ -1047,12 +1057,16 @@ int misc_init_r(void)
 			printf("EFI: Couldn't find EFI variable store partition!\n");
 	}
 
+	env_set("factoryreset", "1");
+
+	//bootmenu
+	env_set("bootmenu_0", "Current  SteamOS-A-3.8.0-20251008.1000=setenv slottarget current");
+	env_set("bootmenu_1", "Previous SteamOS-B-3.8.0-20251008.1000=setenv slottarget previous");
+	env_set("bootmenu_2", "  -- ERASE USER DATA FROM FRAME --=setenv slottarget current && setenv factoryreset 1");
+	env_set("bootmenu_delay", "15");
+	env_set("bootdefault", "0");
 
 	printf("deckard init: done\n");
-
-	
-	//puts(ANSI_CLEAR_CONSOLE);
-///////
 
 	return 0;
 }
@@ -1634,9 +1648,23 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	env_set("ramdisk_addr_r", INITRD_ADDR);
 	env_set("fdtcontroladdr", DTB_ADDR);
 
+	check_button_states();
+	button_state_handler(g_total_button_state, g_power_button_state);
+	
+	if (env_get_ulong("showbootmenu", 10, 0) == 1)
+	{
+		fprintf(stderr,"showing boot menu!!!\n");
+		total_console_state |= VIDEO_CONSOLE_MASK;
+		console_state_handler();
+		run_command("bootmenu",0);
+	}
+	else
+	{
+		fprintf(stderr,"NOT showing boot menu!!!\n");
+	}
+
 	//even though we are about to turn the display off, we fill the framebuffer with the boot logo
 	//then the kernel will copy that image to it's framebuffer so we see the boot logo
-	printf("disabling vidconsole\n");
 	total_console_state &= ~VIDEO_CONSOLE_MASK;
 	console_state_handler();
 	deckard_load_logo(BOOT_LOGO); //switch to booting logo before we boot up
