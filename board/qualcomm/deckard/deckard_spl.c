@@ -74,6 +74,7 @@ static char *ifname = "scsi";
 
 static struct pon_on_off_reason pon_poff_reason;
 static int go_to_usb;
+static char force_boot_slot;
 
 int g_boot_wrapper_version;
 /**
@@ -802,6 +803,7 @@ void qcom_spl_board_init(void)
 	int power_button_released_since_boot = 0;
 	int power_button_release_rtc_time_since_pon  = 0;
 	uint16_t battery_voltage;
+	int skip_iterate_boot_count = 0;
 
 	printf("Hello from deckard_spl\n");
 	printf("spl: boot wrapper version %ld\n", boot_wrapper_version);
@@ -959,9 +961,10 @@ void qcom_spl_board_init(void)
 	printf("- BOOT_VALID_A = '%s'\n", env_get("BOOT_VALID_A"));
 	printf("- BOOT_VALID_B = '%s'\n", env_get("BOOT_VALID_B"));
 	printf("- BOOT_FORCE_USB = '%s'\n", env_get("BOOT_FORCE_USB"));
+	printf("- BOOT_FORCE_SLOT = '%s'\n", env_get("BOOT_FORCE_SLOT"));
 	printf("- BOOTED_FW_SLOT = '%s'\n", env_get("BOOTED_FW_SLOT"));
 
-	determine_boot_target();
+	determine_boot_target(); //sets BOOT_TARGET env var
 
 	if (env_get("BOOT_FORCE_USB")) {
 		printf("BOOT_FORCE_USB set in environment, going to try to boot from USB\n");
@@ -969,14 +972,31 @@ void qcom_spl_board_init(void)
 		env_set("BOOT_FORCE_USB",NULL);
 	}
 
+	char *boot_force_slot = env_get("BOOT_FORCE_SLOT");
+	if (boot_force_slot) {
+		printf("BOOT_FORCE_SLOT=%s\n",boot_force_slot);
+		if( strcmp(boot_force_slot,"A") == 0 )
+		{
+			printf("Overriding BOOT_TARGET to A\n");
+			env_set("BOOT_TARGET", "A");
+			skip_iterate_boot_count = 1;
+		} else if( strcmp(boot_force_slot,"B") == 0  )
+		{
+			printf("Overriding BOOT_TARGET to B\n");
+			env_set("BOOT_TARGET", "B");
+			skip_iterate_boot_count = 1;
+		}
+		env_set("BOOT_FORCE_SLOT",NULL); //clear var -- this is meant to only give us one chance to try a forced slot
+	}
+
 	// Only iterate boot count if we believe this should be a successful boot based on battery level
-	if ( battery_voltage >= SPL_BATTERY_MIN_BOOT_VOLTAGE ) 
+	if ( battery_voltage >= SPL_BATTERY_MIN_BOOT_VOLTAGE && !skip_iterate_boot_count) 
 	{
 		boot_count = iterate_boot_count();
 	}
 	else
 	{
-		printf("boot count not iterated due to low battery voltage\n");
+		printf("boot count not iterated\n");
 	}
 	printf("Boot count on target slot is %d\n",boot_count);
 

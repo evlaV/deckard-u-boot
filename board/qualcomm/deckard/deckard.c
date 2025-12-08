@@ -168,6 +168,8 @@ bool deckard_efi_enabled(void) {
 	return g_deckard_efi_mode != EFI_MODE_DISABLED;
 }
 
+int deckard_setup_bootmenu(void);
+int enable_factory_reset_if_needed(void);
 
 // #define CHECK_PMICS
 #ifdef CHECK_PMICS
@@ -1057,15 +1059,7 @@ int misc_init_r(void)
 			printf("EFI: Couldn't find EFI variable store partition!\n");
 	}
 
-	env_set("factoryreset", "");
-
-	//bootmenu
-	env_set("bootmenu_0", "Current  SteamOS-A-3.8.0-20251008.1000=setenv slottarget current");
-	env_set("bootmenu_1", "Previous SteamOS-B-3.8.0-20251008.1000=setenv slottarget previous");
-	env_set("bootmenu_2", "Boot from USB=splctl force-usb && reset");
-	env_set("bootmenu_3", "  -- ERASE USER DATA FROM FRAME --=setenv slottarget current && setenv factoryreset 1");
-	env_set("bootmenu_delay", "15");
-	env_set("bootdefault", "0");
+	deckard_setup_bootmenu();
 
 	printf("deckard init: done\n");
 
@@ -1545,7 +1539,86 @@ int deckard_boot_menu(void)
 	return 0;
 }
 
-int enable_factory_reset_if_needed()
+int deckard_setup_bootmenu(void)
+{
+	env_set("factoryreset", "");
+
+	//bootmenu
+	env_set("bootmenu_0", "Current  SteamOS-A-3.8.0-20251008.1000=setenv slottarget current");
+	env_set("bootmenu_1", "Previous SteamOS-B-3.8.0-20251008.1000=setenv slottarget previous");
+	env_set("bootmenu_2", "Boot from USB=setenv slottarget usb");
+	env_set("bootmenu_3", "  -- ERASE USER DATA FROM FRAME --=setenv slottarget current && setenv factoryreset 1");
+	env_set("bootmenu_delay", "15");
+	env_set("bootdefault", "0");
+	
+	return 0;
+}
+
+int deckard_boot_menu_handle_actions(void)
+{
+	char * bootedslot;
+	char bootedslot_char='X';
+	bootedslot = env_get("booted_slot");
+	int bootother=0;
+	int bootusb=0;
+	int reset_needed = 0;
+
+	if(bootedslot) bootedslot_char = bootedslot[0];
+		
+	enable_factory_reset_if_needed();
+
+	if (env_get("slottarget") && !strcmp(env_get("slottarget"), "current"))
+	{
+		bootother=0;
+	}
+
+	if (env_get("slottarget") && !strcmp(env_get("slottarget"), "previous"))
+	{
+		bootother=1;
+	}
+
+	if (env_get("slottarget") && !strcmp(env_get("slottarget"), "usb"))
+	{
+		bootusb=1;
+	}
+
+	if(bootother)
+	{
+		if(bootedslot_char == 'A')
+		{
+			run_command("splctl force-slot B",0);
+			reset_needed = 1;
+		}
+		
+		if(bootedslot_char == 'B')
+		{
+			run_command("splctl force-slot A",0);
+			reset_needed = 1;
+		}
+	}
+
+	if(bootusb)
+	{
+		run_command("splctl force-usb",0);
+		reset_needed = 1;
+	}
+	
+	//printf("----------------\n");
+	//printf("bootedslot=%c bootedslot=%s\n",bootedslot_char,bootedslot);
+	//printf("bootother=%d\n",bootother);
+	//printf("bootusb=%d\n",bootusb);
+	//printf("----------------\n");
+
+	if(reset_needed)
+	{
+		printf("resetting...\n");
+		run_command("reset",0);
+	}
+
+	return 0;
+}
+
+int enable_factory_reset_if_needed(void)
 {
 	char cfg_file_contents[]="factorreset\n";
 	char cmdstr[256];
@@ -1713,7 +1786,7 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 		fprintf(stderr,"NOT showing boot menu!!!\n");
 	}
 
-	enable_factory_reset_if_needed();
+	deckard_boot_menu_handle_actions();
 
 	//even though we are about to turn the display off, we fill the framebuffer with the boot logo
 	//then the kernel will copy that image to it's framebuffer so we see the boot logo
