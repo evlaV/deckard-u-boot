@@ -87,10 +87,15 @@ typedef struct VRTerminalHeader_t
 #define NULL 0
 #endif
 
-int vrfont_init( VRFont_t * pFont )
+int vrfont_init( VRFont_t * pFont, uint8_t *pData, uint32_t size )
 {
 	if ( !pFont )
 		return 1;
+
+	// memset the struct to 0, and then set the members
+	memset( pFont, 0, sizeof( VRFont_t ) );
+	pFont->pData = pData;
+	pFont->size = size;
 
 	if ( pFont->size < sizeof( VRFontHeader_t ) )
 	{

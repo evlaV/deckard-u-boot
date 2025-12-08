@@ -435,7 +435,7 @@ int consolevr_probe(struct udevice *dev)
 	}
 
 	// Init the font and the terminal
-	int nerr = vrfont_init( &priv->vrfont );
+	int nerr = vrfont_init( &priv->vrfont, priv->vrfont.pData, priv->vrfont.size );
 	if ( nerr != 0 )
 	{
 		printf("Font %s failed init (%d) \n", vrfontfilename, nerr );

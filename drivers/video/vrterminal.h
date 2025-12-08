@@ -17,7 +17,7 @@ typedef struct VRFont_t
 	uint8_t maxGlyphHeight; // max height in pixels
 } VRFont_t;
 
-int vrfont_init( VRFont_t * pFont );
+int vrfont_init( VRFont_t * pFont, uint8_t *pData, uint32_t size );
 
 
 #pragma pack( push, 1 )
