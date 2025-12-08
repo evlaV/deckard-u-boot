@@ -70,6 +70,7 @@ struct video_uc_priv {
 	ulong video_ptr;
 	bool cyc_active;
 	struct cyclic_info cyc;
+	struct udevice *cons;
 };
 
 /** struct vid_rgb - Describes a video colour */
@@ -722,6 +723,7 @@ static int video_post_probe(struct udevice *dev)
 		debug("%s: Cannot probe console driver\n", __func__);
 		return ret;
 	}
+	uc_priv->cons = cons;
 
 	if (CONFIG_IS_ENABLED(VIDEO_LOGO) &&
 	    !CONFIG_IS_ENABLED(SPLASH_SCREEN) && !plat->hide_logo) {
@@ -744,6 +746,26 @@ static int video_post_probe(struct udevice *dev)
 
 	return 0;
 };
+
+static int video_pre_remove(struct udevice *dev)
+{
+	struct video_uc_priv *uc_priv = uclass_get_priv(dev->uclass);
+	int ret;
+
+	if (uc_priv->cons) {
+		ret = device_remove(uc_priv->cons, DM_REMOVE_NORMAL);
+		if (ret)
+			return ret;
+
+		ret = device_unbind(uc_priv->cons);
+		if (ret)
+			return ret;
+
+		uc_priv->cons = NULL;
+	}
+
+	return 0;
+}
 
 /* Post-relocation, allocate memory for the frame buffer */
 static int video_post_bind(struct udevice *dev)
@@ -799,6 +821,7 @@ UCLASS_DRIVER(video) = {
 	.flags		= DM_UC_FLAG_SEQ_ALIAS,
 	.post_bind	= video_post_bind,
 	.post_probe	= video_post_probe,
+	.pre_remove	= video_pre_remove,
 	.priv_auto	= sizeof(struct video_uc_priv),
 	.per_device_auto	= sizeof(struct video_priv),
 	.per_device_plat_auto	= sizeof(struct video_uc_plat),
