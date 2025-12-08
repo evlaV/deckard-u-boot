@@ -966,7 +966,7 @@ void qcom_spl_board_init(void)
 	if (env_get("BOOT_FORCE_USB")) {
 		printf("BOOT_FORCE_USB set in environment, going to try to boot from USB\n");
 		go_to_usb = 1;
-		env_set("FORCE_USB",NULL);
+		env_set("BOOT_FORCE_USB",NULL);
 	}
 
 	// Only iterate boot count if we believe this should be a successful boot based on battery level
