@@ -1246,18 +1246,11 @@ int overwrite_console(void)
 
 int display_turn_on(void)
 {
+	struct udevice *dev;
+
 	if(!g_display_enabled) return 0;
 
-	return run_command("mdss start", 0); 
-}
-
-int deckard_video_sync(void)
-{
-	struct udevice *dev;
-	int ret = uclass_first_device_err(UCLASS_VIDEO, &dev);
-	struct video_priv *priv = dev_get_uclass_priv(dev);
-	video_damage(dev, 0, 0, 4320, 2160);
-	return video_sync(dev, true);
+	return uclass_first_device_err(UCLASS_VIDEO, &dev);
 }
 
 int display_turn_off()
@@ -1272,6 +1265,8 @@ int display_turn_off()
 
 int display_turn_off_force()
 {
+	total_console_state &= ~VIDEO_CONSOLE_MASK;
+	console_state_handler();
 	return run_command("mdss stop", 0);
 }
 
@@ -1540,11 +1535,7 @@ int deckard_load_dtb(char * partition, char * addr)
 int deckard_boot_menu(void) 
 {
 	fprintf(stderr,"showing boot menu!!!\n");
-	//total_console_state &= ~VIDEO_CONSOLE_MASK;
-	//console_state_handler();
-	//display may have timed out, so try to turn display back on to show menu
 	display_turn_on();
-	deckard_video_sync(); //not sure if this works / is a good idea?
 	total_console_state |= VIDEO_CONSOLE_MASK;
 	console_state_handler();
 	mdelay(500);
