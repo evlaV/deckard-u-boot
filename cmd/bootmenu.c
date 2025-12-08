@@ -465,7 +465,9 @@ static void menu_display_statusline(struct menu *m)
 	printf(ANSI_CURSOR_POSITION, menu->rowoffset + menu->count + 5, 1);
 	puts(ANSI_CLEAR_LINE);
 	printf(ANSI_CURSOR_POSITION, menu->rowoffset + menu->count + 6, 3);
-	puts("               Booted @ 2025-12-08 02:01 <todo>");
+#ifdef DECKARD_BOOTEMENU_DATA_TIMESTAMP_PRINT	
+	//puts("               Booted @ 2025-12-08 02:01 <todo>");
+#endif	
 	puts(ANSI_CLEAR_LINE_TO_END);
 	printf(ANSI_CURSOR_POSITION, menu->rowoffset + menu->count + 7, 1);
 	puts(ANSI_CLEAR_LINE);
