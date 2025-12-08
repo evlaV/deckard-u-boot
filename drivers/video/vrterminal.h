@@ -17,7 +17,7 @@ typedef struct VRFont_t
 	uint8_t maxGlyphHeight; // max height in pixels
 } VRFont_t;
 
-int init_vrfont( VRFont_t * pFont );
+int vrfont_init( VRFont_t * pFont );
 
 
 #pragma pack( push, 1 )
@@ -79,9 +79,11 @@ typedef struct VRTerminal_t
 	VRStereoBounds_t terminalBounds;
 
 	// Escape sequence handling
-	int escape_len;
 	int in_escape;
+	int escape_len;
 	char escape_buf[32];
+    int escape_cursor_x_saved;
+    int escape_cursor_y_saved;
 } VRTerminal_t;
 
 typedef struct VRCellUpdate_t {
@@ -102,13 +104,13 @@ typedef struct TerminalUpdate_t
 
 #pragma pack( pop )
 
-VRGlyph_t * find_vrglyph( const VRFont_t * pFont, unsigned char codepoint, int neye );
+VRGlyph_t * vrfont_find_vrglyph( const VRFont_t * pFont, unsigned char codepoint, int neye );
 
-const unsigned char * find_vrglyph_pixeldata( const VRFont_t * pFont, const VRGlyph_t * pGlyph );
+const unsigned char * vrfont_find_vrglyph_pixeldata( const VRFont_t * pFont, const VRGlyph_t * pGlyph );
 
-VRTerminalPoint_t * get_vrterminal_point( VRTerminal_t * pTerminal, int idx, int idy );
+VRTerminalPoint_t * vrterminal_get_point( VRTerminal_t * pTerminal, int idx, int idy );
 
-int init_vrterminal( VRTerminal_t * pTerminal );
+int vrterminal_init( VRTerminal_t * pTerminal );
 
 void vrterminal_update_reset( TerminalUpdate_t * pUpdate );
 

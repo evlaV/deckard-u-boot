@@ -87,7 +87,7 @@ typedef struct VRTerminalHeader_t
 #define NULL 0
 #endif
 
-int init_vrfont( VRFont_t * pFont )
+int vrfont_init( VRFont_t * pFont )
 {
 	if ( !pFont )
 		return 1;
@@ -125,7 +125,7 @@ int init_vrfont( VRFont_t * pFont )
 	{
 		for (int eye = 0; eye <2; ++eye )
 		{
-			VRGlyph_t * pGlyph = find_vrglyph( pFont, codepoint, eye );
+			VRGlyph_t * pGlyph = vrfont_find_vrglyph( pFont, codepoint, eye );
 			if (!pGlyph)
 				continue;
 
@@ -152,7 +152,7 @@ int init_vrfont( VRFont_t * pFont )
 	return 0;
 }
 
-VRGlyph_t * find_vrglyph( const VRFont_t * pFont, unsigned char codepoint, int neye )
+VRGlyph_t * vrfont_find_vrglyph( const VRFont_t * pFont, unsigned char codepoint, int neye )
 {
 	VRFontHeader_t *pHeader = (VRFontHeader_t *) pFont->pData;
 
@@ -169,7 +169,7 @@ VRGlyph_t * find_vrglyph( const VRFont_t * pFont, unsigned char codepoint, int n
 	return pGlyph;
 }
 
-const unsigned char * find_vrglyph_pixeldata( const VRFont_t * pFont, const VRGlyph_t * pGlyph )
+const unsigned char * vrfont_find_vrglyph_pixeldata( const VRFont_t * pFont, const VRGlyph_t * pGlyph )
 {
 	if ( !pFont || !pGlyph || !pGlyph->nDataOffsetFromFileStart )
 		return NULL;
@@ -181,7 +181,7 @@ const unsigned char * find_vrglyph_pixeldata( const VRFont_t * pFont, const VRGl
 	return pFont->pData + pGlyph->nDataOffsetFromFileStart;
 }
 
-int init_vrterminal( VRTerminal_t * pTerminal )
+int vrterminal_init( VRTerminal_t * pTerminal )
 {
 	if ( !pTerminal )
 		return 1;
@@ -234,7 +234,7 @@ int init_vrterminal( VRTerminal_t * pTerminal )
 	{
 		for ( int nx=0; nx<pTerminal->width; ++nx )
 		{
-			VRTerminalPoint_t * pPt = get_vrterminal_point( pTerminal, nx, ny );
+			VRTerminalPoint_t * pPt = vrterminal_get_point( pTerminal, nx, ny );
 			if ( !pPt )
 				continue;
 			for ( int neye =0; neye < 2; ++neye )
@@ -255,11 +255,13 @@ int init_vrterminal( VRTerminal_t * pTerminal )
 	pTerminal->escape_len = 0;
 	pTerminal->in_escape = 0;
 	memset( pTerminal->escape_buf, 0, sizeof( pTerminal->escape_buf ) );
+	pTerminal->escape_cursor_x_saved = 0;
+	pTerminal->escape_cursor_y_saved = 0;
 
 	return 0;
 }
 
-VRTerminalPoint_t * get_vrterminal_point( VRTerminal_t * pTerminal, int idx, int idy )
+VRTerminalPoint_t * vrterminal_get_point( VRTerminal_t * pTerminal, int idx, int idy )
 {
 	if ( !pTerminal || pTerminal->size < sizeof( VRTerminalHeader_t ) )
 		return NULL;
@@ -400,26 +402,19 @@ void handle_escape_char( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, c
 	/* Sanity checking for bogus ESC sequences: */
 	if (pTerminal->escape_len >= sizeof(pTerminal->escape_buf))
 		goto error;
-	if (pTerminal->escape_len == 0) {
+
+	// Save / restore cursor position
+	if (pTerminal->escape_len == 0)
+	{
 		switch (ch) {
 		case '7':
-			/* Save cursor position */
-			//TODO implement
-#if 0			
-			get_cursor_position(pTerminal, &pTerminal->row_saved, &pTerminal->col_saved);
-#endif			
+			pTerminal->escape_cursor_x_saved = pTerminal->cursor_x;
+			pTerminal->escape_cursor_y_saved = pTerminal->cursor_y;
 			pTerminal->in_escape = 0;
-
 			return;
 		case '8': {
-			/* Restore cursor position */
-			//TODO implement
-#if 0
-			int row = pTerminal->row_saved;
-			int col = pTerminal->col_saved;
-
-			set_cursor_position(pTerminal, row, col);
-#endif			
+			pTerminal->cursor_x = pTerminal->escape_cursor_x_saved;
+			pTerminal->cursor_y = pTerminal->escape_cursor_y_saved;
 			pTerminal->in_escape = 0;
 			return;
 		}

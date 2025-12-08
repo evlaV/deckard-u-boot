@@ -154,7 +154,7 @@ void draw_glyph( Pixbuf *pb, VRTerminalPoint_t * pTerminalPoint, VRFont_t * pFon
 
 	for ( int neye = 0; neye < 2; ++neye )
 	{
-		VRGlyph_t * pGlyph = find_vrglyph( pFont, codepoint, neye );
+		VRGlyph_t * pGlyph = vrfont_find_vrglyph( pFont, codepoint, neye );
 		if ( pGlyph == NULL )
 			continue;
 
@@ -163,7 +163,7 @@ void draw_glyph( Pixbuf *pb, VRTerminalPoint_t * pTerminalPoint, VRFont_t * pFon
 		int yPos[3] = { (pTerminalPoint->blue_y[neye]+5)/10, (pTerminalPoint->green_y[neye]+5)/10, (pTerminalPoint->red_y[neye]+5)/10 };
 		
 		// TODO: bounds check character
-		const unsigned char * pData = find_vrglyph_pixeldata( pFont, pGlyph );
+		const unsigned char * pData = vrfont_find_vrglyph_pixeldata( pFont, pGlyph );
 		for ( int y=0; y<pGlyph->nHeight; ++y )
 		{
 			const unsigned char * pGlyphRowPtr = pData + y*pGlyph->nWidth;
@@ -252,7 +252,7 @@ static int consolevr_puts(struct udevice *dev, const char * str)
 				const VRCell_t *cell = &pTerminal->vCells[ row * nTerminalSizeX + col ];
 				if (cell->ch == 0 || cell->ch == ' ')
 					continue;
-				VRTerminalPoint_t * pTerminalPoint = get_vrterminal_point( pTerminal, col, row );
+				VRTerminalPoint_t * pTerminalPoint = vrterminal_get_point( pTerminal, col, row );
 				draw_glyph( &pb, pTerminalPoint, pFont, cell->ch );
 			}
 		}
@@ -267,7 +267,7 @@ static int consolevr_puts(struct udevice *dev, const char * str)
 			const VRCell_t *cell = &pTerminal->vCells[ row * nTerminalSizeX + col ];
 			if (cell->ch == 0 || cell->ch == ' ')
 				continue;
-			VRTerminalPoint_t * pTerminalPoint = get_vrterminal_point( pTerminal, col, row );
+			VRTerminalPoint_t * pTerminalPoint = vrterminal_get_point( pTerminal, col, row );
 			draw_glyph( &pb, pTerminalPoint, pFont, cell->ch );
 		}
 	}
@@ -435,14 +435,14 @@ int consolevr_probe(struct udevice *dev)
 	}
 
 	// Init the font and the terminal
-	int nerr = init_vrfont( &priv->vrfont );
+	int nerr = vrfont_init( &priv->vrfont );
 	if ( nerr != 0 )
 	{
 		printf("Font %s failed init (%d) \n", vrfontfilename, nerr );
 		goto out_close;
 	}
 
-	nerr = init_vrterminal( &priv->vrterminal );
+	nerr = vrterminal_init( &priv->vrterminal );
 	if ( nerr != 0 )
 	{
 		printf("Terminal %s failed init (%d) \n", vrterminalfilename, nerr );
