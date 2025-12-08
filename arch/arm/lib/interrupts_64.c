@@ -69,7 +69,7 @@ static void dump_far(unsigned long esr)
 		return;
 	}
 
-	printf(", far 0x%lx", far);
+	fprintf(stderr,", far 0x%lx", far);
 }
 
 static void dump_instr(struct pt_regs *regs)
@@ -77,10 +77,10 @@ static void dump_instr(struct pt_regs *regs)
 	u32 *addr = (u32 *)(regs->elr & ~3UL);
 	int i;
 
-	printf("Code: ");
+	fprintf(stderr,"Code: ");
 	for (i = -4; i < 1; i++)
-		printf(i == 0 ? "(%08x) " : "%08x ", addr[i]);
-	printf("\n");
+		fprintf(stderr,i == 0 ? "(%08x) " : "%08x ", addr[i]);
+	fprintf(stderr,"\n");
 }
 
 void show_regs(struct pt_regs *regs)
@@ -88,15 +88,15 @@ void show_regs(struct pt_regs *regs)
 	int i;
 
 	if (gd->flags & GD_FLG_RELOC)
-		printf("elr: %016lx lr : %016lx (reloc)\n",
+		fprintf(stderr,"elr: %016lx lr : %016lx (reloc)\n",
 		       regs->elr - gd->reloc_off,
 		       regs->regs[30] - gd->reloc_off);
-	printf("elr: %016lx lr : %016lx\n", regs->elr, regs->regs[30]);
+	fprintf(stderr,"elr: %016lx lr : %016lx\n", regs->elr, regs->regs[30]);
 
 	for (i = 0; i < 29; i += 2)
-		printf("x%-2d: %016lx x%-2d: %016lx\n",
+		fprintf(stderr,"x%-2d: %016lx x%-2d: %016lx\n",
 		       i, regs->regs[i], i+1, regs->regs[i+1]);
-	printf("\n");
+	fprintf(stderr,"\n");
 	dump_instr(regs);
 }
 
@@ -110,7 +110,7 @@ struct stack_frame {
 static void print_sym(unsigned long lr)
 {
 	/* Print the symbol address and the offset to the LR */
-	printf("\t<%#016lx> %pS\n", lr - (gd->flags & GD_FLG_RELOC ? gd->reloc_off : 0),
+	fprintf(stderr,"\t<%#016lx> %pS\n", lr - (gd->flags & GD_FLG_RELOC ? gd->reloc_off : 0),
 	       (void *)lr);
 }
 
@@ -126,13 +126,13 @@ static void show_backtrace(unsigned long elr, unsigned long lr, unsigned long x2
 
 	/* If we're pre-relocation then _start and text base might be the same */
 	if (CONFIG_TEXT_BASE && CONFIG_TEXT_BASE != (unsigned long)_start)
-		printf("\nCONFIG_TEXT_BASE   : %#lx\n", (unsigned long)CONFIG_TEXT_BASE);
-	printf("Relocated base addr: %#lx\n", (unsigned long)_start);
-	printf("Backtrace:\n");
+		fprintf(stderr,"\nCONFIG_TEXT_BASE   : %#lx\n", (unsigned long)CONFIG_TEXT_BASE);
+	fprintf(stderr,"Relocated base addr: %#lx\n", (unsigned long)_start);
+	fprintf(stderr,"Backtrace:\n");
 
 	/* ELR tells us where the exception occurred */
 	if (elr) {
-		printf("elr:");
+		fprintf(stderr,"elr:");
 		print_sym(elr);
 	}
 
@@ -141,7 +141,7 @@ static void show_backtrace(unsigned long elr, unsigned long lr, unsigned long x2
 	 * the function where the exception occurred. For unwind_stack() case this is the caller
 	 * of unwind_stack().
 	 */
-	printf("lr:");
+	fprintf(stderr,"lr:");
 	print_sym(lr);
 
 	/* Now we get the rest of the backtrace from the frame pointers */
@@ -149,7 +149,7 @@ static void show_backtrace(unsigned long elr, unsigned long lr, unsigned long x2
 		print_sym(fp->lr);
 		fp = fp->prev;
 	}
-	printf("\n");
+	fprintf(stderr,"\n");
 }
 
 /**
@@ -224,7 +224,7 @@ static bool smh_emulate_trap(struct pt_regs *regs)
 static void except_msg(const char *msg, struct pt_regs *pt_regs)
 {
 	efi_restore_gd();
-	printf("%s handler, esr 0x%016lx\n", msg, pt_regs->esr);
+	fprintf(stderr,"%s handler, esr 0x%016lx\n", msg, pt_regs->esr);
 	show_regs(pt_regs);
 	if (CONFIG_IS_ENABLED(FRAMEPOINTER))
 		show_backtrace(pt_regs->elr, pt_regs->regs[30], pt_regs->regs[29]);
@@ -273,9 +273,9 @@ void do_sync(struct pt_regs *pt_regs)
 	    smh_emulate_trap(pt_regs))
 		return;
 	efi_restore_gd();
-	printf("\"Synchronous Abort\" handler, esr 0x%016lx", pt_regs->esr);
+	fprintf(stderr,"\"Synchronous Abort\" handler, esr 0x%016lx", pt_regs->esr);
 	dump_far(pt_regs->esr);
-	printf("\n");
+	fprintf(stderr,"\n");
 	show_regs(pt_regs);
 	if (CONFIG_IS_ENABLED(FRAMEPOINTER))
 		show_backtrace(pt_regs->elr, pt_regs->regs[30], pt_regs->regs[29]);
