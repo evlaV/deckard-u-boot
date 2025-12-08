@@ -39,7 +39,7 @@
 #include <splash.h>
 #include <video.h>
 #include <ansi.h>
-
+#include <memalign.h>
 #include "deckard_eeprom.h"
 #include "deckard_battery.h"
 #include "pm8550vs.h"
@@ -1058,7 +1058,7 @@ int misc_init_r(void)
 			printf("EFI: Couldn't find EFI variable store partition!\n");
 	}
 
-	env_set("factoryreset", "1");
+	env_set("factoryreset", "");
 
 	//bootmenu
 	env_set("bootmenu_0", "Current  SteamOS-A-3.8.0-20251008.1000=setenv slottarget current");
@@ -1546,6 +1546,35 @@ int deckard_boot_menu(void)
 	return 0;
 }
 
+int enable_factory_reset_if_needed()
+{
+	char cfg_file_contents[]="factorreset\n";
+	char cmdstr[256];
+	char addr[19];
+	char *buffer;
+
+	if (env_get("factoryreset") && !strcmp(env_get("factoryreset"), "1"))
+	{
+		printf("factory reset: creating file in /efi/steamos/factory-reset/factoryreset.cfg\n");
+		run_command("mkdir scsi " DECKARD_ESP_PARTITION " /efi", 0);
+		run_command("mkdir scsi " DECKARD_ESP_PARTITION " /efi/steamos", 0);
+		run_command("mkdir scsi " DECKARD_ESP_PARTITION " /efi/steamos/factory-reset", 0);
+		
+		buffer = malloc_cache_aligned(strlen(cfg_file_contents));
+		if(!buffer) return -1;
+		sprintf(addr, "0x%08lx", (ulong)map_to_sysmem(buffer));
+		memcpy(buffer,cfg_file_contents,strlen(cfg_file_contents));
+		snprintf(cmdstr,256,"save scsi %s %s /efi/steamos/factory-reset/factoryreset.cfg %d", 
+								DECKARD_ESP_PARTITION, addr, (int)strlen(cfg_file_contents));
+		printf("cmdstr=[%s]\n",cmdstr);
+		run_command(cmdstr,0);
+		printf("factory reset: file create done\n");
+		free(buffer);
+	}
+
+	return 0;
+}
+
 // Deckard boot command.  Executes sequence that would normally be in the boot.scr
 int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
@@ -1684,6 +1713,8 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	{
 		fprintf(stderr,"NOT showing boot menu!!!\n");
 	}
+
+	enable_factory_reset_if_needed();
 
 	//even though we are about to turn the display off, we fill the framebuffer with the boot logo
 	//then the kernel will copy that image to it's framebuffer so we see the boot logo
