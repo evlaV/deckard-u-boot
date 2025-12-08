@@ -485,8 +485,7 @@ int button_state_handler(enum combined_button_state_t total_button_state, int po
 			env_set_ulong("showbootmenu", 1);
 			break;
 		case VOLUP_OFF__VOLDN_ON__SELECT_OFF:
-			env_set_ulong("showbootmenu", 1);
-			//env_set("reboot_mode", "f");
+			env_set("reboot_mode", "f");
 			break;
 		case VOLUP_OFF__VOLDN_ON__SELECT_ON:
 			g_deckard_efi_mode = EFI_MODE_ONESHOT;
