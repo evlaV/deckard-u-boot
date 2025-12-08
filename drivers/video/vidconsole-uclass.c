@@ -795,11 +795,25 @@ static int vidconsole_post_probe(struct udevice *dev)
 	return stdio_register(sdev);
 }
 
+static int vidconsole_pre_remove(struct udevice *dev)
+{
+	struct vidconsole_priv *priv = dev_get_uclass_priv(dev);
+	struct stdio_dev *sdev;
+
+	/* Cannot use the priv->sdev since it was duplicated */
+	sdev = stdio_get_by_name(priv->sdev.name);
+	if (sdev)
+		return stdio_deregister_dev(sdev, false);
+
+	return 0;
+}
+
 UCLASS_DRIVER(vidconsole) = {
 	.id		= UCLASS_VIDEO_CONSOLE,
 	.name		= "vidconsole0",
 	.pre_probe	= vidconsole_pre_probe,
 	.post_probe	= vidconsole_post_probe,
+	.pre_remove	= vidconsole_pre_remove,
 	.per_device_auto	= sizeof(struct vidconsole_priv),
 };
 
