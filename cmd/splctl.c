@@ -412,6 +412,51 @@ fail:
 	return ret;
 }
 
+static int do_force_slot(struct cmd_tbl *cmdtp, int flag, int argc,
+			      char *const argv[])
+{
+	int ret = 0;
+	char * target = NULL;
+
+	if (argc < 2) /* no subcommand */
+		return cmd_usage(cmdtp);
+
+	target = argv[1]; // A or B
+
+	ret = env_spl_scsi_load();
+
+	if(ret)	goto fail;
+
+	if(!strcmp(target,"A"))
+	{
+		if(ret)	goto fail;
+		ret = env_spl_set("BOOT_FORCE_SLOT","A");
+		if(ret)	goto fail;
+		ret = env_scsi_save();
+		if(ret)	goto fail;
+	}
+	else if(!strcmp(target,"B"))
+	{
+		if(ret)	goto fail;
+		ret = env_spl_set("BOOT_FORCE_SLOT","B");
+		if(ret)	goto fail;
+		ret = env_scsi_save();
+		if(ret)	goto fail;
+	}
+	else
+	{
+		printf("invalid target\n");
+		return 0;
+	} 
+
+	//no error, don't print anything
+	return ret;
+
+fail:
+	printf("err %d\n",ret);
+	return ret;
+}
+
 static int do_print_spl_env(struct cmd_tbl *cmdtp, int flag, int argc,
 			      char *const argv[])
 {
@@ -430,6 +475,7 @@ static struct cmd_tbl cmd_splctl_sub[] = {
 	U_BOOT_CMD_MKENT(env, 1, 1, do_print_spl_env, "", ""),
 	U_BOOT_CMD_MKENT(force-usb, 1, 1, do_force_usb, "", ""),
 	U_BOOT_CMD_MKENT(set-uboot-poweroff-reason, 2, 1, do_set_uboot_poweroff_reason, "", ""),
+	U_BOOT_CMD_MKENT(force-slot, 2, 1, do_force_slot, "", ""),
 };
 
 static int do_splctl(struct cmd_tbl *cmdtp, int flag, int argc,
