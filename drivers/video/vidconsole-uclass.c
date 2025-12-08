@@ -533,10 +533,11 @@ int vidconsole_put_string(struct udevice *dev, const char *str)
 {
 #if CONFIG_IS_ENABLED(CONSOLE_VR)
 	struct vidconsole_ops *ops = vidconsole_get_ops(dev);
-	if (ops->put_string)
+	if (ops && ops->put_string)
 	{
 		return ops->put_string(dev, str);
 	}
+	return 0;
 #else
 	return vidconsole_put_stringn(dev, str, -1);
 #endif	
@@ -544,9 +545,15 @@ int vidconsole_put_string(struct udevice *dev, const char *str)
 
 static void vidconsole_putc(struct stdio_dev *sdev, const char ch)
 {
-	struct udevice *dev = sdev->priv;
-	struct vidconsole_priv *priv = dev_get_uclass_priv(dev);
+	struct udevice *dev;
+	struct vidconsole_priv *priv;
 	int ret;
+
+	if(!sdev) return;
+	dev = sdev->priv;
+	if(!dev) return;
+	priv = dev_get_uclass_priv(dev);
+	if(!priv) return;
 
 	if (priv->quiet)
 		return;
@@ -566,9 +573,15 @@ static void vidconsole_putc(struct stdio_dev *sdev, const char ch)
 
 static void vidconsole_puts(struct stdio_dev *sdev, const char *s)
 {
-	struct udevice *dev = sdev->priv;
-	struct vidconsole_priv *priv = dev_get_uclass_priv(dev);
+	struct udevice *dev;
+	struct vidconsole_priv *priv;
 	int ret;
+
+	if(!sdev) return;
+	dev = sdev->priv;
+	if(!dev) return;
+	priv = dev_get_uclass_priv(dev);
+	if(!priv) return;
 
 	if (priv->quiet)
 		return;
