@@ -66,18 +66,21 @@ typedef struct VRStereoBounds_t
 
 typedef struct VRTerminal_t
 {
-	// no ownership over data
+	// loaded .vrterminal file view (no ownership over data )
 	uint8_t *pData;
 	uint32_t size;
 
+	// Local state
 	int width;
 	int height;
     int cursor_x;
     int cursor_y;
 	VRCell_t vCells[TERMINAL_MAX_CELLS]; // visible cells
 	VRStereoBounds_t terminalBounds;
+
+	// Escape sequence handling
 	int escape_len;
-	int escape;
+	int in_escape;
 	char escape_buf[32];
 } VRTerminal_t;
 

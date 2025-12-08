@@ -3,6 +3,7 @@
 #include "vrterminal.h"
 #include <string.h>
 #include <ansi.h>
+#include <exports.h>
 #include <linux/ctype.h>
 #include <linux/kconfig.h>
 
@@ -42,6 +43,18 @@ static inline uint8_t u8_min(uint8_t a, uint8_t b)
 static inline uint8_t u8_max(uint8_t a, uint8_t b)
 {
     return (a > b) ? a : b;
+}
+
+static inline int is_visible_ascii( unsigned char c )
+{
+    return (c >= 0x21 && c <= 0x7E);  // '!' .. '~', excludes space
+}
+
+static char *parsenum(char *s, int *num)
+{
+	char *end;
+	*num = simple_strtol(s, &end, 10);
+	return end;
 }
 
 #pragma pack( push, 1 )
@@ -240,7 +253,8 @@ int init_vrterminal( VRTerminal_t * pTerminal )
 	}
 
 	pTerminal->escape_len = 0;
-	pTerminal->escape = 0;
+	pTerminal->in_escape = 0;
+	memset( pTerminal->escape_buf, 0, sizeof( pTerminal->escape_buf ) );
 
 	return 0;
 }
@@ -258,9 +272,6 @@ VRTerminalPoint_t * get_vrterminal_point( VRTerminal_t * pTerminal, int idx, int
 		return NULL;
 	return pTerminalPoint;
 }
-
-static const VRCell_t s_empty_cell = { 0 };
-
 static void vrterminal_scroll_up( TerminalUpdate_t * pUpdate, VRTerminal_t *pTerminal )
 {
 	// cells[0] is top left cell
@@ -294,8 +305,7 @@ static void vrterminal_record_update( TerminalUpdate_t * pUpdate, uint8_t x, uin
 	pUpdate->update_count++;
 }
 
-
-static void vrterminal_put_char( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, unsigned char c )
+static void vrterminal_put_char( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, unsigned char c, int advance_cursor )
 {
 	// Wrap before writing
 	if ( pTerminal->cursor_x >= pTerminal->width )
@@ -310,26 +320,71 @@ static void vrterminal_put_char( TerminalUpdate_t * pUpdate, VRTerminal_t * pTer
 		}
 	}
 
-	// Write into cell
-	pTerminal->vCells[pTerminal->cursor_y * pTerminal->width + pTerminal->cursor_x].ch = c;
-	vrterminal_record_update( pUpdate, pTerminal->cursor_x, pTerminal->cursor_y );
+	int nCellIndex = pTerminal->cursor_y * pTerminal->width + pTerminal->cursor_x;
+	if ( pTerminal->vCells[nCellIndex].ch != c )
+	{
+		// are we overwriting a visible character at the current cursor position?
+		if ( is_visible_ascii( pTerminal->vCells[nCellIndex].ch ) )
+		{
+			// if so flag a full update
+			// TODO: have a real record for this position update
+			pUpdate->full_update = 1;
+		}
+		else if ( is_visible_ascii( c ) )
+		{
+			// otherwise it's a non-visible to visible update
+			vrterminal_record_update( pUpdate, pTerminal->cursor_x, pTerminal->cursor_y );
+		}
+
+		// Update cell
+		pTerminal->vCells[nCellIndex].ch = c;
+	}
 
 	// Advance cursor
-	pTerminal->cursor_x++;
-
-	if (pTerminal->cursor_x >= pTerminal->width)
+	if ( advance_cursor )
 	{
-		pTerminal->cursor_x = 0;
-		pTerminal->cursor_y++;
+		pTerminal->cursor_x++;
 
-		if (pTerminal->cursor_y >= pTerminal->height) {
+		if (pTerminal->cursor_x >= pTerminal->width)
+		{
+			pTerminal->cursor_x = 0;
+			pTerminal->cursor_y++;
 
-			vrterminal_scroll_up( pUpdate, pTerminal );
-			pTerminal->cursor_y = pTerminal->height - 1;
+			if (pTerminal->cursor_y >= pTerminal->height) {
+
+				vrterminal_scroll_up( pUpdate, pTerminal );
+				pTerminal->cursor_y = pTerminal->height - 1;
+			}
 		}
 	}
 }
 
+int vrterminal_is_visually_clear( VRTerminal_t * pTerminal )
+{
+	int nNumCells = pTerminal->width * pTerminal->height;
+	for ( int nCellIndex = 0; nCellIndex < nNumCells; ++nCellIndex )
+	{
+		if ( is_visible_ascii( pTerminal->vCells[nCellIndex].ch ) )
+		{
+			return 0;
+		}
+	}
+
+	return 1;
+}
+
+void vrterminal_clear_console( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal )
+{
+	if ( vrterminal_is_visually_clear( pTerminal ) )
+		return;
+
+	if ( pUpdate )
+	{
+		pUpdate->full_update = 1;
+	}
+	memset( pTerminal->vCells, 0,
+       pTerminal->width * pTerminal->height * sizeof(VRCell_t) );
+}
 
 void vrterminal_update_reset( TerminalUpdate_t * pUpdate )
 {
@@ -337,7 +392,7 @@ void vrterminal_update_reset( TerminalUpdate_t * pUpdate )
 	pUpdate->update_count = 0;
 }
 
-void handle_escape_char( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, char ch)
+void handle_escape_char( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, char ch )
 {
 	if (!IS_ENABLED(CONFIG_VIDEO_ANSI))
 		goto error;
@@ -353,7 +408,7 @@ void handle_escape_char( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, c
 #if 0			
 			get_cursor_position(pTerminal, &pTerminal->row_saved, &pTerminal->col_saved);
 #endif			
-			pTerminal->escape = 0;
+			pTerminal->in_escape = 0;
 
 			return;
 		case '8': {
@@ -365,7 +420,7 @@ void handle_escape_char( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, c
 
 			set_cursor_position(pTerminal, row, col);
 #endif			
-			pTerminal->escape = 0;
+			pTerminal->in_escape = 0;
 			return;
 		}
 		case '[':
@@ -389,7 +444,7 @@ void handle_escape_char( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, c
 	 * surprising if you hit any debug prints that come back to
 	 * this console.
 	 */
-	pTerminal->escape = 0;
+	pTerminal->in_escape = 0;
 
 	switch (ch) {
 	case 'A':
@@ -398,8 +453,8 @@ void handle_escape_char( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, c
 	case 'D':
 	case 'E':
 	case 'F': {
-		int row, col, num;
-		char *s = pTerminal->escape_buf;
+		//int row, col, num;
+		//char *s = pTerminal->escape_buf;
 //TODO implement		
 #if 0
 		/*
@@ -432,87 +487,41 @@ void handle_escape_char( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, c
 		break;
 	}
 	case 'H':
-	case 'f': {
+	case 'f':
+	{
+		// Set cursor position: [%d;%df or [%d;%dH
 		int row, col;
 		char *s = pTerminal->escape_buf;
-
-//TODO implement
-#if 0
-		/*
-		 * Set cursor position: [%d;%df or [%d;%dH
-		 */
 		s++;    /* [ */
-		s = parsenum(s, &row);
+		s = parsenum( s, &row );
 		s++;    /* ; */
-		s = parsenum(s, &col);
-
-		/*
-		 * Video origin is [0, 0], terminal origin is [1, 1].
-		 */
-		if (row)
-			--row;
-		if (col)
-			--col;
-
-		set_cursor_position(dev, row, col);
-#endif
+		s = parsenum( s, &col );
+		pTerminal->cursor_x = col;
+		pTerminal->cursor_y = row;
 		break;
 	}
-	case 'J': {
-		int mode;
-//TODO implement
-#if 0
-		/*
-		 * Clear part/all screen:
-		 *   [J or [0J - clear screen from cursor down
-		 *   [1J       - clear screen from cursor up
-		 *   [2J       - clear entire screen
-		 *
-		 * TODO we really only handle entire-screen case, others
-		 * probably require some additions to video-uclass (and
-		 * are not really needed yet by efi_console)
-		 */
-		parsenum(pTerminal->escape_buf + 1, &mode);
-
-		if (mode == 2) {
-			int ret;
-
-			video_clear(dev->parent);
-			ret = video_sync(dev->parent, false);
-			if (ret) {
-#ifdef DEBUG
-				console_puts_select_stderr(true, "[vc err: video_sync]");
-#endif
-			}
-			priv->ycur = 0;
-			priv->xcur_frac = priv->xstart_frac;
-		
-		} else {
-			debug("unsupported clear mode: %d\n", mode);
-		}
-#endif				
+	case 'J':
+		vrterminal_clear_console( pUpdate, pTerminal ); // TODO: handle clear mode
 		break;
-	}
 	case 'K': {
-//TODO implement
-#if 0		
-		struct video_priv *vid_priv = dev_get_uclass_priv(dev->parent);
-		int mode;
+		int mode = 0;
+		parsenum( pTerminal->escape_buf + 1, &mode ); // +1 to skip '['
 
 		/*
 		 * Clear (parts of) current line
 		 *   [0K       - clear line to end
 		 *   [2K       - clear entire line
 		 */
-		parsenum(priv->escape_buf + 1, &mode);
-
-		if (mode == 2) {
-			int row, col;
-
-			get_cursor_position(priv, &row, &col);
-			vidconsole_set_row(dev, row, vid_priv->colour_bg);
+		if (mode == 2)
+		{
+			pTerminal->cursor_x = 0;
 		}
-#endif			
+		int nCharsToWrite = pTerminal->width - pTerminal->cursor_x;
+		for ( int nchar = 0; nchar<nCharsToWrite; ++nchar )
+		{
+			vrterminal_put_char( pUpdate, pTerminal, ' ', 1 );
+		}
+		
 		break;
 	}
 	case 'm': {
@@ -602,75 +611,76 @@ void handle_escape_char( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, c
 		      pTerminal->escape_len, pTerminal->escape_buf);
 	}
 
+	// Clear the escape_buf for easier debugging
+	memset( pTerminal->escape_buf, 0, sizeof( pTerminal->escape_buf ) );
 	return;
 
 error:
 	/* something went wrong, just revert to normal mode: */
-	pTerminal->escape = 0;
+	pTerminal->in_escape = 0;
 }
 
 void vrterminal_feed( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, const char * buf, int nSize )
 {
-
-
 	for ( int i = 0; i < nSize; ++i ) {
 		unsigned char c = (unsigned char) buf[i];
 
-		if (pTerminal->escape) {
-			handle_escape_char(pUpdate,pTerminal,c);
-			return;
+		if ( pTerminal->in_escape ) {
+			handle_escape_char( pUpdate, pTerminal, c );
 		}
-
-		switch (c) {
-		case '\x1b':
-			pTerminal->escape_len = 0;
-			pTerminal->escape = 1;
-			break;
-
-		case '\n': // newline
-			pTerminal->cursor_x = 0;
-			pTerminal->cursor_y++;
-			if (pTerminal->cursor_y >= pTerminal->height )
-			{
-				vrterminal_scroll_up( pUpdate, pTerminal );
-				pTerminal->cursor_y = pTerminal->height - 1;
-				if ( pUpdate )
-				{
-					pUpdate->full_update = 1;
-				}
-			}
-			break;
-
-		case '\r': // return to beginning of line
-			pTerminal->cursor_x = 0;
-			break;
-
-		case '\b': // backspace
-			if ( pTerminal->cursor_x > 0 ) {
-				pTerminal->cursor_x--;
-				pTerminal->vCells[pTerminal->cursor_y * pTerminal->width + pTerminal->cursor_x].ch = ' ';
-				// TODO: should this mark an override in a different flag?
-				vrterminal_record_update( pUpdate, pTerminal->cursor_x, pTerminal->cursor_y );
-			}
-			break;
-		case '\t': // tab
+		else
 		{
-			static const int k_nTabWidth = 4;
-			int col  = pTerminal->cursor_x;
-			int next_tab = ( ( col / k_nTabWidth ) + 1 ) * k_nTabWidth;
-			int spaces = next_tab - col;
-
-			while (spaces-- > 0) {
-				vrterminal_put_char( pUpdate, pTerminal, ' ' );
-			}
-			break;
-		}
-		default:
-			if ( c >= 32 ) // printable
+			switch (c)
 			{
-				vrterminal_put_char( pUpdate, pTerminal, c );
+			case '\x1b': // escape character
+				pTerminal->escape_len = 0;
+				pTerminal->in_escape = 1;
+				break;
+
+			case '\n': // newline
+				pTerminal->cursor_x = 0;
+				pTerminal->cursor_y++;
+				if (pTerminal->cursor_y >= pTerminal->height )
+				{
+					vrterminal_scroll_up( pUpdate, pTerminal );
+					pTerminal->cursor_y = pTerminal->height - 1;
+					if ( pUpdate )
+					{
+						pUpdate->full_update = 1;
+					}
+				}
+				break;
+
+			case '\r': // return to beginning of line
+				pTerminal->cursor_x = 0;
+				break;
+
+			case '\b': // backspace
+				if ( pTerminal->cursor_x > 0 )
+				{
+					pTerminal->cursor_x--;
+					vrterminal_put_char( pUpdate, pTerminal, ' ', 0 );
+				}
+				break;
+			case '\t': // tab
+			{
+				static const int k_nTabWidth = 4;
+				int col  = pTerminal->cursor_x;
+				int next_tab = ( ( col / k_nTabWidth ) + 1 ) * k_nTabWidth;
+				int spaces = next_tab - col;
+
+				while (spaces-- > 0) {
+					vrterminal_put_char( pUpdate, pTerminal, ' ', 1 );
+				}
+				break;
 			}
-			break;
+			default:
+				if ( c >= 32 ) // printable
+				{
+					vrterminal_put_char( pUpdate, pTerminal, c, 1 );
+				}
+				break;
+			}
 		}
 	}
 }
