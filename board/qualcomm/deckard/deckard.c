@@ -1244,6 +1244,14 @@ int overwrite_console(void)
 }
 #endif
 
+int display_turn_on(void)
+{
+	if(!g_display_enabled) return 0;
+
+	return run_command("mdss start", 0); 
+}
+
+
 int display_turn_off()
 {
 	if(!g_display_enabled) return 0;
@@ -1654,6 +1662,9 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	if (env_get_ulong("showbootmenu", 10, 0) == 1)
 	{
 		fprintf(stderr,"showing boot menu!!!\n");
+
+		//display may have timed out, so try to turn display back on to show menu
+		display_turn_on();
 		total_console_state |= VIDEO_CONSOLE_MASK;
 		console_state_handler();
 		run_command("bootmenu",0);
