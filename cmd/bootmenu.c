@@ -19,7 +19,6 @@
 
 /* maximum bootmenu entries */
 #define MAX_COUNT	99
-
 /* maximal size of bootmenu env
  *  9 = strlen("bootmenu_")
  *  2 = strlen(MAX_COUNT)
@@ -71,12 +70,19 @@ static void bootmenu_print_entry(void *data)
 	 * Move cursor to line where the entry will be drown (entry->num)
 	 * First 3 lines contain bootmenu header + 1 empty line
 	 */
-	printf(ANSI_CURSOR_POSITION, entry->num + 4, 7);
+	printf(ANSI_CURSOR_POSITION, entry->menu->rowoffset + entry->num + 4, 7);
 
 	if (reverse)
 		puts(ANSI_COLOR_REVERSE);
 
-	printf("%s", entry->title);
+	if((entry->menu->active == entry->num))
+	{
+		printf("             [X] %s", entry->title);
+	}
+	else
+	{
+		printf("             [ ] %s", entry->title);
+	}
 
 	if (reverse)
 		puts(ANSI_COLOR_RESET);
@@ -353,6 +359,7 @@ static struct bootmenu_data *bootmenu_create(int uefi, int delay)
 	menu->active = 0;
 	menu->last_active = -1;
 	menu->first = NULL;
+	menu->rowoffset = 8; //gives space for SteamOS header
 
 	default_str = env_get("bootmenu_default");
 	if (default_str)
@@ -380,6 +387,7 @@ static struct bootmenu_data *bootmenu_create(int uefi, int delay)
 	}
 #endif
 
+#if 0
 	/* Add Exit entry at the end */
 	if (i <= MAX_COUNT - 1) {
 		entry = malloc(sizeof(struct bootmenu_entry));
@@ -419,6 +427,7 @@ static struct bootmenu_data *bootmenu_create(int uefi, int delay)
 		iter = entry;
 		++i;
 	}
+#endif
 
 	menu->count = i;
 
@@ -444,21 +453,21 @@ static void menu_display_statusline(struct menu *m)
 
 	menu = entry->menu;
 
-	printf(ANSI_CURSOR_POSITION, 1, 1);
+	printf(ANSI_CURSOR_POSITION, menu->rowoffset + 1, 1);
 	puts(ANSI_CLEAR_LINE);
-	printf(ANSI_CURSOR_POSITION, 2, 3);
-	puts("*** U-Boot Boot Menu ***");
+	printf(ANSI_CURSOR_POSITION, menu->rowoffset + 2, 3);
+	puts("                                Steamos     ");
 	puts(ANSI_CLEAR_LINE_TO_END);
-	printf(ANSI_CURSOR_POSITION, 3, 1);
+	printf(ANSI_CURSOR_POSITION, menu->rowoffset + 3, 1);
 	puts(ANSI_CLEAR_LINE);
 
 	/* First 3 lines are bootmenu header + 2 empty lines between entries */
-	printf(ANSI_CURSOR_POSITION, menu->count + 5, 1);
+	printf(ANSI_CURSOR_POSITION, menu->rowoffset + menu->count + 5, 1);
 	puts(ANSI_CLEAR_LINE);
-	printf(ANSI_CURSOR_POSITION, menu->count + 6, 3);
-	puts("Press UP/DOWN to move, ENTER to select, ESC to quit");
+	printf(ANSI_CURSOR_POSITION, menu->rowoffset + menu->count + 6, 3);
+	puts("               Booted @ 2025-12-08 02:01 <todo>");
 	puts(ANSI_CLEAR_LINE_TO_END);
-	printf(ANSI_CURSOR_POSITION, menu->count + 7, 1);
+	printf(ANSI_CURSOR_POSITION, menu->rowoffset + menu->count + 7, 1);
 	puts(ANSI_CLEAR_LINE);
 }
 
@@ -548,7 +557,7 @@ static enum bootmenu_ret bootmenu_show(int uefi, int delay)
 
 	puts(ANSI_CURSOR_HIDE);
 	puts(ANSI_CLEAR_CONSOLE);
-	printf(ANSI_CURSOR_POSITION, 1, 1);
+	printf(ANSI_CURSOR_POSITION, bootmenu->rowoffset + 1, 1);
 
 	init = 1;
 

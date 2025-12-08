@@ -11,6 +11,7 @@
 #include <linux/delay.h>
 #include <linux/list.h>
 #include <watchdog.h>
+#include <button.h>
 
 #include "menu.h"
 
@@ -436,6 +437,16 @@ int menu_destroy(struct menu *m)
 	return 1;
 }
 
+int check_button_state(char * buttonname)
+{
+	struct udevice *btn = NULL;
+	if (button_get_by_label(buttonname, &btn) >= 0 && button_get_state(btn) == BUTTON_ON) return 1;
+	return 0;
+}
+
+int voldown = 0;
+int volup = 0;
+
 enum bootmenu_key bootmenu_autoboot_loop(struct bootmenu_data *menu,
 					 struct cli_ch_state *cch)
 {
@@ -444,19 +455,39 @@ enum bootmenu_key bootmenu_autoboot_loop(struct bootmenu_data *menu,
 
 	while (menu->delay > 0) {
 		if (ansi)
-			printf(ANSI_CURSOR_POSITION, menu->count + 5, 3);
-		printf("Hit any key to stop autoboot: %d ", menu->delay);
+			printf(ANSI_CURSOR_POSITION, menu->rowoffset + menu->count + 5 + 3, 3);
+		
+		printf("               Booting in: %d", menu->delay);
+
+		puts(ANSI_CLEAR_LINE_TO_END);
 		for (i = 0; i < 100; ++i) {
 			int ichar;
 
-			if (!tstc()) {
-				schedule();
-				mdelay(10);
-				continue;
+			if(check_button_state("Volume Down"))
+			{
+				voldown = 1;
 			}
 
-			menu->delay = -1;
-			c = getchar();
+			if(check_button_state("Volume Up"))
+			{
+				volup = 1;
+			}
+
+			if(volup || voldown)
+			{
+				menu->delay = -1;
+				c = '\0';
+			}
+			else
+			{
+				if (!tstc()) {
+					schedule();
+					mdelay(10);
+					continue;
+				}
+				menu->delay = -1;
+				c = getchar();
+			}
 
 			ichar = cli_ch_process(cch, c);
 
@@ -484,7 +515,7 @@ enum bootmenu_key bootmenu_autoboot_loop(struct bootmenu_data *menu,
 	}
 
 	if (ansi)
-		printf(ANSI_CURSOR_POSITION ANSI_CLEAR_LINE, menu->count + 5, 1);
+		printf(ANSI_CURSOR_POSITION ANSI_CLEAR_LINE, menu->rowoffset + menu->count + 5 + 3, 1);
 
 	if (menu->delay == 0)
 		key = BKEY_SELECT;
@@ -532,6 +563,10 @@ enum bootmenu_key bootmenu_conv_key(int ichar)
 	return key;
 }
 
+int volup_prev = 0;
+int voldn_prev = 0;
+int select_prev = 0;
+
 enum bootmenu_key bootmenu_loop(struct bootmenu_data *menu,
 				struct cli_ch_state *cch)
 {
@@ -545,6 +580,30 @@ enum bootmenu_key bootmenu_loop(struct bootmenu_data *menu,
 			mdelay(10);
 			c = cli_ch_process(cch, errchar);
 			errchar = -ETIMEDOUT;
+
+			int volup_curr = check_button_state("Volume Up");
+			if(volup_prev == 0 && volup_curr )
+			{
+				//rising edge detected
+				c = CTL_CH('p');
+			}
+			volup_prev = volup_curr;
+
+			int voldn_curr = check_button_state("Volume Down");
+			if(voldn_prev == 0 && voldn_curr )
+			{
+				//rising edge detected
+				c = CTL_CH('n');
+			}
+			voldn_prev = voldn_curr;
+
+			int select_curr = check_button_state("Select");
+			if(select_prev == 0 && select_curr )
+			{
+				//rising edge detected
+				c = '\n';
+			}
+			select_prev = select_curr;
 		}
 		if (!c) {
 			c = getchar();

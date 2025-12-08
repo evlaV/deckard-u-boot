@@ -42,6 +42,7 @@ struct bootmenu_data {
 	int active;			/* active menu entry */
 	int last_active;		/* last active menu entry */
 	int count;			/* total count of menu entries */
+	int rowoffset;
 	struct bootmenu_entry *first;	/* first menu entry */
 };
 
