@@ -46,6 +46,8 @@
 #include "smb1510.h"
 #include "pmk8550.h"
 #include <part.h>
+#include <string.h>
+#include <membuf.h>
 #include "deckard.h"
 
 DECLARE_GLOBAL_DATA_PTR;
@@ -1539,13 +1541,132 @@ int deckard_boot_menu(void)
 	return 0;
 }
 
+char get_booted_slot(void)
+{
+	char * bootedslot;
+	char bootedslot_char='X';
+	bootedslot = env_get("booted_slot");
+	if(bootedslot) bootedslot_char = bootedslot[0];
+
+	return bootedslot_char;
+}
+
+static void trim_quotes(char *s)
+{
+    size_t len = strlen(s);
+    if (len >= 2 && s[0] == '"' && s[len - 1] == '"') {
+        s[len - 1] = '\0';
+        memmove(s, s + 1, len - 1);
+    }
+}
+
+static int parse_os_info(char *buf, size_t bufsz,
+                   char *name, size_t name_sz,
+                   char *version_id, size_t version_id_sz,
+                   char *build_id, size_t build_id_sz)
+{
+	struct membuf mb;
+	char line[200];
+	char *data;
+	int len;
+
+	//init to some sane values
+	strncpy(name,"SteamOS",name_sz); 
+	strncpy(version_id,"0.0.0",version_id_sz);
+	strncpy(build_id,"20000101.000000",build_id_sz);
+
+	membuf_init(&mb, buf, bufsz);
+	membuf_putraw(&mb, bufsz, true, &data);
+
+	while (len = membuf_readline(&mb, line, sizeof(line) - 1, ' ', false), len) {
+		char *tok, *p = line;
+
+		tok = strsep(&p, "=");
+
+		printf("[%s] [%s]\n",tok,p);
+
+		if (p) {
+			if (!strcmp("NAME", tok))       strncpy(name,p,name_sz);
+			if (!strcmp("VERSION_ID", tok)) strncpy(version_id,p,version_id_sz);
+			if (!strcmp("BUILD_ID", tok))   strncpy(build_id,p,build_id_sz);
+		}
+	}
+
+	trim_quotes(name);
+
+	//printf("name=%s\n",name);
+	//printf("version_id=%s\n",version_id);
+	//printf("build_id=%s\n",build_id);
+
+	return 0;
+}
+
+
+int deckard_load_slot_info(char * current_slot_menu_str, int current_slot_menu_str_sz, char * previous_slot_menu_str, int previous_slot_menu_str_sz)
+{
+	char cmdstr[256];
+	char * partition_a;
+	char * partition_b;
+	char * filecontents;
+	size_t filesize;
+	char curr_slot='X';
+	char prev_slot='X';
+    char name[128] = {0};
+    char version_id[128] = {0};
+    char build_id[128] = {0};
+
+//gabe
+	partition_a = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_A);
+	partition_b = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_B);
+
+	if( get_booted_slot() == 'A' ) 
+	{
+		curr_slot='A';
+		prev_slot='B';
+	}
+	else if( get_booted_slot() == 'B' ) 
+	{
+		curr_slot='B';
+		prev_slot='A';
+	}
+
+///////////////////////////////////
+	snprintf(cmdstr,256,"load scsi %s 0x%x /etc/os-release -1",partition_a,CONFIG_SYS_LOAD_ADDR);
+	run_command(cmdstr,0);
+	filecontents = (char *)map_sysmem(CONFIG_SYS_LOAD_ADDR, 0);
+	filesize = (size_t) hextoul(env_get("filesize"), NULL);
+	parse_os_info(filecontents, filesize, name, sizeof(name),version_id, sizeof(version_id), build_id, sizeof(build_id));
+
+	snprintf(current_slot_menu_str,current_slot_menu_str_sz, 
+				"Current   %s-%c-%s-%s=setenv slottarget current", name,curr_slot,version_id,build_id);
+///////////////////////////////////
+
+///////////////////////////////////
+	snprintf(cmdstr,256,"load scsi %s 0x%x /etc/os-release -1",partition_b,CONFIG_SYS_LOAD_ADDR);
+	run_command(cmdstr,0);
+	filecontents = (char *)map_sysmem(CONFIG_SYS_LOAD_ADDR, 0);
+	filesize = hextoul(env_get("filesize"), NULL);
+	parse_os_info(filecontents, filesize, name, sizeof(name),version_id, sizeof(version_id), build_id, sizeof(build_id));
+
+	snprintf(previous_slot_menu_str,previous_slot_menu_str_sz, 
+				"Previous  %s-%c-%s-%s=setenv slottarget previous", name,prev_slot,version_id,build_id);
+///////////////////////////////////
+
+	return 0;
+}
+		
 int deckard_setup_bootmenu(void)
 {
+	char current_slot_menu_str[256];
+	char previous_slot_menu_str[256];
+
 	env_set("factoryreset", "");
 
+	deckard_load_slot_info(current_slot_menu_str,256,previous_slot_menu_str,256);
+
 	//bootmenu
-	env_set("bootmenu_0", "Current  SteamOS-A-3.8.0-20251008.1000=setenv slottarget current");
-	env_set("bootmenu_1", "Previous SteamOS-B-3.8.0-20251008.1000=setenv slottarget previous");
+	env_set("bootmenu_0", current_slot_menu_str);
+	env_set("bootmenu_1", previous_slot_menu_str);
 	env_set("bootmenu_2", "Boot from USB=setenv slottarget usb");
 	env_set("bootmenu_3", "  -- ERASE USER DATA FROM FRAME --=setenv slottarget current && setenv factoryreset 1");
 	env_set("bootmenu_delay", "15");
@@ -1556,15 +1677,10 @@ int deckard_setup_bootmenu(void)
 
 int deckard_boot_menu_handle_actions(void)
 {
-	char * bootedslot;
-	char bootedslot_char='X';
-	bootedslot = env_get("booted_slot");
 	int bootother=0;
 	int bootusb=0;
 	int reset_needed = 0;
 
-	if(bootedslot) bootedslot_char = bootedslot[0];
-		
 	enable_factory_reset_if_needed();
 
 	if (env_get("slottarget") && !strcmp(env_get("slottarget"), "current"))
@@ -1584,13 +1700,13 @@ int deckard_boot_menu_handle_actions(void)
 
 	if(bootother)
 	{
-		if(bootedslot_char == 'A')
+		if(get_booted_slot() == 'A')
 		{
 			run_command("splctl force-slot B",0);
 			reset_needed = 1;
 		}
 		
-		if(bootedslot_char == 'B')
+		if(get_booted_slot() == 'B')
 		{
 			run_command("splctl force-slot A",0);
 			reset_needed = 1;
