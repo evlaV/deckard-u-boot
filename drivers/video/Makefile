@@ -12,6 +12,7 @@ obj-$(CONFIG_CONSOLE_ROTATION) += console_rotate.o
 obj-$(CONFIG_CONSOLE_VR) += console_vr.o
 obj-$(CONFIG_CONSOLE_VR) += console_vr_debug.o
 obj-$(CONFIG_CONSOLE_VR) += vrterminal.o
+obj-$(CONFIG_CONSOLE_VR) += vrterminal_drawing.o
 ifdef CONFIG_$(PHASE_)CONSOLE_NORMAL
 obj-y += console_core.o
 else ifdef CONFIG_CONSOLE_ROTATION

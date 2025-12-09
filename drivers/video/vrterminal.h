@@ -3,7 +3,10 @@
 #ifndef VRTERMINAL
 #define VRTERMINAL
 
+#ifdef VRTERMINAL_UBOOT
 #include <charset.h>
+#endif
+
 #include <stdint.h>
 
 // FontView -- a view into loaded memory for the font
@@ -63,6 +66,8 @@ typedef struct VRStereoBounds_t
 	int min_y[2];  // L,R. in pixel TENTHS
 	int max_y[2];  // L,R. in pixel TENTHS
 } VRStereoBounds_t;
+
+void vrbounds_pad( VRStereoBounds_t * pbounds, int nLeft, int nRight, int nTop, int nBottom ); // positive values pad out
 
 typedef struct VRTerminal_t
 {

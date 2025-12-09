@@ -2,10 +2,17 @@
 
 #include "vrterminal.h"
 #include <string.h>
+
+
+#ifdef VRTERMINAL_UBOOT
 #include <ansi.h>
 #include <exports.h>
 #include <linux/ctype.h>
 #include <linux/kconfig.h>
+#else
+#include <stdlib.h>
+#include <ctype.h>
+#endif
 
 #ifndef INT32_MAX
 #define INT32_MAX 0x7FFFFFFF
@@ -53,7 +60,11 @@ static inline int is_visible_ascii( unsigned char c )
 static char *parsenum(char *s, int *num)
 {
 	char *end;
+#ifdef VRTERMINAL_UBOOT
 	*num = simple_strtol(s, &end, 10);
+#else
+	*num = strtol(s, &end, 10);
+#endif
 	return end;
 }
 
@@ -86,6 +97,22 @@ typedef struct VRTerminalHeader_t
 #ifndef NULL
 #define NULL 0
 #endif
+
+
+void vrbounds_pad( VRStereoBounds_t * pbounds, int nLeft, int nRight, int nTop, int nBottom )
+{
+	if ( !pbounds )
+		return;
+
+	for ( int neye=0; neye<2; ++neye )
+	{
+		pbounds->min_x[neye] -= nLeft;
+		pbounds->max_x[neye] += nRight;
+		pbounds->min_y[neye] -= nTop;
+		pbounds->max_y[neye] += nBottom;
+	}
+}
+
 
 int vrfont_init( VRFont_t * pFont, uint8_t *pData, uint32_t size )
 {
@@ -396,9 +423,10 @@ void vrterminal_update_reset( TerminalUpdate_t * pUpdate )
 
 void handle_escape_char( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, char ch )
 {
+#ifdef VRTERMINAL_UBOOT
 	if (!IS_ENABLED(CONFIG_VIDEO_ANSI))
 		goto error;
-
+#endif
 	/* Sanity checking for bogus ESC sequences: */
 	if (pTerminal->escape_len >= sizeof(pTerminal->escape_buf))
 		goto error;
@@ -603,8 +631,10 @@ void handle_escape_char( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, c
 		break;
 	}
 	default:
+#ifdef VRTERMINAL_UBOOT
 		debug("unrecognized escape sequence: %*s\n",
 			  pTerminal->escape_len, pTerminal->escape_buf);
+#endif
 	}
 
 	// Clear the escape_buf for easier debugging
