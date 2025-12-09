@@ -456,7 +456,7 @@ static void menu_display_statusline(struct menu *m)
 	printf(ANSI_CURSOR_POSITION, menu->rowoffset + 1, 1);
 	puts(ANSI_CLEAR_LINE);
 	printf(ANSI_CURSOR_POSITION, menu->rowoffset + 2, 3);
-	puts("                                Steamos     ");
+	puts("                                SteamOS     ");
 	puts(ANSI_CLEAR_LINE_TO_END);
 	printf(ANSI_CURSOR_POSITION, menu->rowoffset + 3, 1);
 	puts(ANSI_CLEAR_LINE);
