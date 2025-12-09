@@ -27,6 +27,7 @@
 #define FIRMWARE_PATH_PREFIX "/lib/firmware/"
 
 #define QDSP6SS_RST_EVB 0x10
+#define QDSP6SS_BOOT_PARAMS0 0x60
 
 #define QDSP6SS_BOOT_CORE_START 0x400
 #define QDSP6SS_BOOT_CMD 0x404
@@ -52,7 +53,7 @@ struct qcom_dsp {
 	enum qcom_dsp_state state;
 };
 
-static int qcom_dsp_start(struct udevice *dev)
+static int qcom_dsp_start_with_param(struct udevice *dev, uint32_t param)
 {
 	struct qcom_dsp *dsp = dev_get_priv(dev);
 
@@ -70,6 +71,10 @@ static int qcom_dsp_start(struct udevice *dev)
 		writel(0, dsp->evb_sel);
 
 	writel(dsp->boot_addr >> 4, dsp->base + QDSP6SS_RST_EVB);
+
+	/* write boot parameter */
+	writel(param, dsp->base + QDSP6SS_BOOT_PARAMS0);
+
 	writel(1, dsp->base + QDSP6SS_BOOT_CORE_START);
 	udelay(10000);
 	writel(1, dsp->base + QDSP6SS_BOOT_CMD);
@@ -226,7 +231,7 @@ static const struct dm_rproc_ops qcom_dsp_ops = {
 	.init = qcom_dsp_init,
 	.stop = qcom_dsp_stop,
 	.load = qcom_dsp_load,
-	.start = qcom_dsp_start,
+	.start_with_param = qcom_dsp_start_with_param,
 };
 
 static int qcom_dsp_clk_init(struct udevice *dev)
