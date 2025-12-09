@@ -133,8 +133,4 @@ void deckard_eeprom_init(void)
 	if (ret) {
 		printf("%s: Could not read EEPROM\n", __func__);
 	}
-
-	if ( !_eeprom_verify(&eeprom_strap_data) ) {
-		return;
-	}
 }
