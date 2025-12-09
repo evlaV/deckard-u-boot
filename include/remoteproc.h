@@ -455,6 +455,16 @@ struct dm_rproc_ops {
 	int (*start)(struct udevice *dev);
 
 	/**
+	 * start_with_param() - Start the remoteproc device passing parameter
+	 * (mandatory)
+	 *
+	 * @dev:	Remote proc device
+	 * @param:	Parameter to pass on boot
+	 * @return 0 if all ok, else appropriate error value.
+	 */
+	int (*start_with_param)(struct udevice *dev, uint32_t param);
+
+	/**
 	 * stop() - Stop the remoteproc device (optional)
 	 *
 	 * @dev:	Remote proc device
@@ -544,6 +554,14 @@ int rproc_load(int id, ulong addr, ulong size);
  * Return: 0 if all ok, else appropriate error value.
  */
 int rproc_start(int id);
+
+/**
+ * rproc_start_with_param() - Start a remote processor
+ * @id:		id of the remote processor
+ * @param:	parameter for boot
+ * Return: 0 if all ok, else appropriate error value.
+ */
+int rproc_start_with_param(int id, uint32_t param);
 
 /**
  * rproc_stop() - Stop a remote processor

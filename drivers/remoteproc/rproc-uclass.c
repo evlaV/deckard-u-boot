@@ -187,7 +187,7 @@ static int rproc_pre_probe(struct udevice *dev)
 		return -EINVAL;
 	}
 
-	if (!ops->load || !ops->start) {
+	if (!ops->load || (!ops->start && !ops->start_with_param)) {
 		debug("%s driver has missing mandatory ops?\n", dev->name);
 		return -EINVAL;
 	}
@@ -424,6 +424,7 @@ int rproc_load(int id, ulong addr, ulong size)
  */
 enum rproc_ops {
 	RPROC_START,
+	RPROC_START_WITH_PARAM,
 	RPROC_STOP,
 	RPROC_RESET,
 	RPROC_PING,
@@ -441,12 +442,13 @@ enum rproc_ops {
  *
  * Return: 0 if all ok, else appropriate error value.
  */
-static int _rproc_ops_wrapper(int id, enum rproc_ops op)
+static int _rproc_ops_wrapper(int id, enum rproc_ops op, uint32_t param)
 {
 	struct udevice *dev = NULL;
 	struct dm_rproc_uclass_pdata *uc_pdata;
 	const struct dm_rproc_ops *ops;
-	int (*fn)(struct udevice *dev);
+	int (*fn)(struct udevice *dev) = NULL;
+	int (*fn_with_param)(struct udevice *dev, uint32_t param) = NULL;
 	bool mandatory = false;
 	char *op_str;
 	int ret;
@@ -470,6 +472,11 @@ static int _rproc_ops_wrapper(int id, enum rproc_ops op)
 		fn = ops->start;
 		mandatory = true;
 		op_str = "Starting";
+		break;
+	case RPROC_START_WITH_PARAM:
+		fn_with_param = ops->start_with_param;
+		mandatory = true;
+		op_str = "Starting with parameter";
 		break;
 	case RPROC_STOP:
 		fn = ops->stop;
@@ -495,6 +502,8 @@ static int _rproc_ops_wrapper(int id, enum rproc_ops op)
 	debug("%s %s...\n", op_str, uc_pdata->name);
 	if (fn)
 		return fn(dev);
+	else if (fn_with_param)
+		return fn_with_param(dev, param);
 
 	if (mandatory)
 		debug("%s: data corruption?? mandatory function is missing!\n",
@@ -505,27 +514,32 @@ static int _rproc_ops_wrapper(int id, enum rproc_ops op)
 
 int rproc_start(int id)
 {
-	return _rproc_ops_wrapper(id, RPROC_START);
+	return _rproc_ops_wrapper(id, RPROC_START, 0);
+};
+
+int rproc_start_with_param(int id, uint32_t param)
+{
+	return _rproc_ops_wrapper(id, RPROC_START_WITH_PARAM, param);
 };
 
 int rproc_stop(int id)
 {
-	return _rproc_ops_wrapper(id, RPROC_STOP);
+	return _rproc_ops_wrapper(id, RPROC_STOP, 0);
 };
 
 int rproc_reset(int id)
 {
-	return _rproc_ops_wrapper(id, RPROC_RESET);
+	return _rproc_ops_wrapper(id, RPROC_RESET, 0);
 };
 
 int rproc_ping(int id)
 {
-	return _rproc_ops_wrapper(id, RPROC_PING);
+	return _rproc_ops_wrapper(id, RPROC_PING, 0);
 };
 
 int rproc_is_running(int id)
 {
-	return _rproc_ops_wrapper(id, RPROC_RUNNING);
+	return _rproc_ops_wrapper(id, RPROC_RUNNING, 0);
 };
 
 static int handle_trace(struct udevice *dev, struct fw_rsc_trace *rsc,
