@@ -1382,7 +1382,7 @@ void show_boot_progress(int progress)
 	display_turn_off();
 }
 
-int check_power_state(int soc, int ocv, int showimage)
+int check_power_state(int soc, int ocv)
 {
 	int ret = 1;
 	// only proceed to boot if battery is above min boot capacity
@@ -1392,12 +1392,6 @@ int check_power_state(int soc, int ocv, int showimage)
 	// Two Checks to exit
 	if ((soc >= BATTERY_MIN_BOOT_SOC && ocv > OCV_BOOT_VOLTAGE) || soc < 0 || ocv < 0) {
 		ret = 0;
-	}
-
-	if(showimage)
-	{
-		display_turn_on();
-		deckard_load_logo(BATTERY_CHARGING);
 	}
 
 	return ret;
@@ -1535,7 +1529,7 @@ int deckard_prepare_for_boot()
 		}
 
 		if(power_button_pushed(btn)) {
-			ret = check_power_state( deckard_battery_get_capacity(max17320), deckard_battery_get_vfocv(max17320), 0);
+			ret = check_power_state( deckard_battery_get_capacity(max17320), deckard_battery_get_vfocv(max17320));
 			if(ret == 0) 
 			{
 				printf("ok to boot!\n");
@@ -1554,27 +1548,6 @@ int deckard_prepare_for_boot()
 #endif
 
 		check_button_states(VERBOSITY_QUIET);
-		
-		if(g_total_button_state & VOLUP_BUTTON_MASK)
-		{
-			printf("[vol+]\n");
-			check_power_state( deckard_battery_get_capacity(max17320), deckard_battery_get_vfocv(max17320), 1);
-			deckard_display_off_counter = 20;
-		}
-
-		if(g_total_button_state & VOLDN_BUTTON_MASK)
-		{
-			printf("[vol-]\n");
-			check_power_state( deckard_battery_get_capacity(max17320), deckard_battery_get_vfocv(max17320), 1);
-			deckard_display_off_counter = 20;
-		}
-		
-		if(g_total_button_state & SELECT_BUTTON_MASK)
-		{
-			printf("[select]\n");
-			check_power_state( deckard_battery_get_capacity(max17320), deckard_battery_get_vfocv(max17320), 1);
-			deckard_display_off_counter = 20;
-	 	}
 		
 		//check every 10 loops to avoid spamming the SPMI bus
 		if ( deckard_shutdown_loop_counter-- == 0 )
