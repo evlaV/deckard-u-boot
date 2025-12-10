@@ -1635,16 +1635,16 @@ static int parse_os_info(char *buf, size_t bufsz,
 
 int deckard_load_slot_info(char * current_slot_menu_str, int current_slot_menu_str_sz, char * previous_slot_menu_str, int previous_slot_menu_str_sz)
 {
-	char cmdstr[256];
+	char cmdstr[256] = {0};
 	char * partition_a;
 	char * partition_b;
 	char * filecontents;
 	size_t filesize;
 	char curr_slot='X';
 	char prev_slot='X';
-    char name[128] = {0};
-    char version_id[128] = {0};
-    char build_id[128] = {0};
+	char name[128] = {0};
+	char version_id[128] = {0};
+	char build_id[128] = {0};
 
 	partition_a = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_A);
 	partition_b = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_B);
@@ -1668,38 +1668,41 @@ int deckard_load_slot_info(char * current_slot_menu_str, int current_slot_menu_s
 ///////////////////////////////////
 	snprintf(cmdstr,256,"load scsi %s 0x%x /etc/os-release -1",partition_a,CONFIG_SYS_LOAD_ADDR);
 	if ( run_command(cmdstr,0) == 0 ) {
-        filecontents = (char *)map_sysmem(CONFIG_SYS_LOAD_ADDR, 0);
-        filesize = (size_t) hextoul(env_get("filesize"), NULL);
-        parse_os_info(filecontents, filesize, name, sizeof(name),version_id, sizeof(version_id), build_id, sizeof(build_id));
+		filecontents = (char *)map_sysmem(CONFIG_SYS_LOAD_ADDR, 0);
+		filesize = (size_t) hextoul(env_get("filesize"), NULL);
+		parse_os_info(filecontents, filesize, name, sizeof(name), version_id,
+				sizeof(version_id), build_id, sizeof(build_id));
 
-        snprintf(current_slot_menu_str,current_slot_menu_str_sz, 
-                    "Current   %s-%c-%s-%s=setenv slottarget current", name,curr_slot,version_id,build_id);
-    } else {
-        printf("No os-release file found in a\n");
-    }
+		snprintf(current_slot_menu_str,current_slot_menu_str_sz,
+			"Current   %s-%c-%s-%s=setenv slottarget current", name,curr_slot,version_id,build_id);
+	} else {
+		printf("No os-release file found in a\n");
+	}
 ///////////////////////////////////
 
 ///////////////////////////////////
+	memset(cmdstr, '\0', sizeof(cmdstr));
 	snprintf(cmdstr,256,"load scsi %s 0x%x /etc/os-release -1",partition_b,CONFIG_SYS_LOAD_ADDR);
 	if ( run_command(cmdstr,0) == 0 ) {
-        filecontents = (char *)map_sysmem(CONFIG_SYS_LOAD_ADDR, 0);
-        filesize = hextoul(env_get("filesize"), NULL);
-        parse_os_info(filecontents, filesize, name, sizeof(name),version_id, sizeof(version_id), build_id, sizeof(build_id));
+		filecontents = (char *)map_sysmem(CONFIG_SYS_LOAD_ADDR, 0);
+		filesize = hextoul(env_get("filesize"), NULL);
+		parse_os_info(filecontents, filesize, name, sizeof(name), version_id,
+				sizeof(version_id), build_id, sizeof(build_id));
 
-        snprintf(previous_slot_menu_str,previous_slot_menu_str_sz, 
-                    "Previous  %s-%c-%s-%s=setenv slottarget previous", name,prev_slot,version_id,build_id);
-    } else {
-        printf("No os-release file found in b\n");
-    }
+		snprintf(previous_slot_menu_str,previous_slot_menu_str_sz,
+			"Previous  %s-%c-%s-%s=setenv slottarget previous", name,prev_slot,version_id,build_id);
+	} else {
+		printf("No os-release file found in b\n");
+	}
 ///////////////////////////////////
 
 	return 0;
 }
-		
+
 int deckard_setup_bootmenu(void)
 {
-	char current_slot_menu_str[256];
-	char previous_slot_menu_str[256];
+	char current_slot_menu_str[256] = {0};
+	char previous_slot_menu_str[256] = {0};
 	int usb_boot_mode = 0;
 
 	env_set("factoryreset", "");
@@ -1785,23 +1788,26 @@ int deckard_boot_menu_handle_actions(void)
 int enable_factory_reset_if_needed(void)
 {
 	char cfg_file_contents[]="factorreset\n";
-	char cmdstr[256];
-	char addr[19];
+	char cmdstr[256] = {0};
+	char addr[19] = {0};
 	char *buffer;
 
 	if (env_get("factoryreset") && !strcmp(env_get("factoryreset"), "1"))
 	{
 		printf("factory reset: creating file in /efi/steamos/factory-reset/factoryreset.cfg\n");
 		snprintf(cmdstr,256,"mkdir scsi %s /efi", DECKARD_ESP_PARTITION); run_command(cmdstr,0);
+		memset(cmdstr, '\0', sizeof(cmdstr));
 		snprintf(cmdstr,256,"mkdir scsi %s /efi/steamos", DECKARD_ESP_PARTITION); run_command(cmdstr,0);
+		memset(cmdstr, '\0', sizeof(cmdstr));
 		snprintf(cmdstr,256,"mkdir scsi %s /efi/steamos/factory-reset", DECKARD_ESP_PARTITION); run_command(cmdstr,0);
 		
 		buffer = malloc_cache_aligned(strlen(cfg_file_contents));
 		if(!buffer) return -1;
 		sprintf(addr, "0x%08lx", (ulong)map_to_sysmem(buffer));
 		memcpy(buffer,cfg_file_contents,strlen(cfg_file_contents));
-		snprintf(cmdstr,256,"save scsi %s %s /efi/steamos/factory-reset/factoryreset.cfg %d", 
-								DECKARD_ESP_PARTITION, addr, (int)strlen(cfg_file_contents));
+		memset(cmdstr, '\0', sizeof(cmdstr));
+		snprintf(cmdstr,256,"save scsi %s %s /efi/steamos/factory-reset/factoryreset.cfg %d",
+			DECKARD_ESP_PARTITION, addr, (int)strlen(cfg_file_contents));
 		printf("cmdstr=[%s]\n",cmdstr);
 		run_command(cmdstr,0);
 		printf("factory reset: file create done\n");
