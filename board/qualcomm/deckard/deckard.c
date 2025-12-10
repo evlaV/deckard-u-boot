@@ -642,7 +642,7 @@ const char *env_scsi_get_dev_part(void)
 				return deckard_get_dev_part_str(DECKARD_UBOOT_ENV_SLOT_B);
 				break;
 			case 'U':
-				return deckard_get_dev_part_str(DECKARD_UBOOT_ENV_SLOT_U);
+				return NULL; //todo, figure out if we want to load an env for USB boot?
 				break;				
 			default:
 				printf("%s: Invalid booted_slot, defaulting to A env\n", __func__);
@@ -1148,6 +1148,7 @@ int misc_init_r(void)
 	}
 
 	if (usbmode) {
+		//TODO: gaber this is likely interfering with USB boot
 		printf("Starting usb mode...\n");
 		ret = deckard_reboot_mode_usb();
 		if (!ret) {
@@ -1800,8 +1801,6 @@ int deckard_setup_bootmenu(void)
 
 	env_set("factoryreset", "");
 
-	deckard_load_slot_info(current_slot_menu_str,256,previous_slot_menu_str,256);
-
 	usb_boot_mode = booted_from_usb();
 
 	//bootmenu
@@ -1813,6 +1812,7 @@ int deckard_setup_bootmenu(void)
 	}
 	else
 	{
+		deckard_load_slot_info(current_slot_menu_str,256,previous_slot_menu_str,256);
 		//normal boot
 		env_set("bootmenu_title", "SteamOS");
 		env_set("bootmenu_0", current_slot_menu_str);
