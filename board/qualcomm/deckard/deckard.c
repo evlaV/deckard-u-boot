@@ -1921,7 +1921,6 @@ int enable_factory_reset_if_needed(void)
 // Deckard boot command.  Executes sequence that would normally be in the boot.scr
 int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
-	char * bootedslot;
 	char * KERNEL_TARGET = "/boot/Image";
 	char * INITRD_TARGET = "/boot/initrd.uImage";
 	char *partition;
@@ -2038,8 +2037,8 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	// prep bootargs
 	default_bootargs = env_get("default_bootargs");
 	temp_bootargs = env_get("temp_bootargs");
-	snprintf(bootargs, PATHMAXLEN, "%s %s root=PARTLABEL=%s init=/sbin/init rauc.slot=%s noresume rootwait earlycon",
-									default_bootargs ? default_bootargs : "", temp_bootargs ? temp_bootargs : "", label, bootedslot );
+	snprintf(bootargs, PATHMAXLEN, "%s %s root=PARTLABEL=%s init=/sbin/init rauc.slot=%c noresume rootwait earlycon",
+									default_bootargs ? default_bootargs : "", temp_bootargs ? temp_bootargs : "", label, get_booted_slot() );
 	env_set("bootargs", bootargs);
 
 	// erase temp bootargs which is used for Testing
