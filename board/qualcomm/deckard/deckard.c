@@ -1583,7 +1583,7 @@ static int parse_os_info(char *buf, size_t bufsz,
 
 		tok = strsep(&p, "=");
 
-		printf("[%s] [%s]\n",tok,p);
+		//printf("[%s] [%s]\n",tok,p);
 
 		if (p) {
 			if (!strcmp("NAME", tok))       strncpy(name,p,name_sz);
