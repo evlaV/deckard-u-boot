@@ -136,6 +136,22 @@ int g_power_button_state = 0;
 #define DECKARD_DUMMY_SERIAL_NUMB "123456789"
 #define TCSR_BOOT_MISC_DETECT 0x01fd9000
 
+// Deckard uses MAX17320 Smart Empty
+// UOCVP - Undervoltage Open Circuit Voltage Protection
+// This is a value from the MAX17320 Fuel Gauge Model.
+// It is set at 3280 * 2 = 6560 mV to maintain shelf life of the pack.
+// Deckard in practice only reaches this modeled voltage after the SOC is < 0%
+// and operation during usage is still controlled by UVP at 2.8 * 2 = 5.6 Volts
+// When leaving DBR, this model is slow and seems to have
+// a fixed time constant of 3.46 mV/sec. The implication of this time constant
+// is that we must allow for the model to drop while PD negotiation is happening
+// and/or the charger is toggled. This has been seen to take up to 10 seconds.
+// A safety factor of 15 mV is also warranted from testing.
+// aDSP (and Kernel) boot voltage is therefore UOCVP + 3.46 * 10 + 15 = 6610 mV
+#define UOCVP (3280 * 2)
+#define OCV_MARGIN 50
+#define OCV_BOOT_VOLTAGE (UOCVP + OCV_MARGIN)
+
 enum full_screen_images_t 
 {
 	BOOT_LOGO = 0,
@@ -1421,12 +1437,6 @@ int deckard_prepare_for_boot()
 		power_button_avail = 1;
 	}
 
-	//start up adsp
-	printf("adsp: starting...\n");
-	ret = deckard_adsp_start(id);
-	if (!ret)
-		adsp_loaded = 1;
-	
 	// Find the PM8550B
 	ret = pmic_get("pmic@7", &pm8550b);
 	if (ret != 0)
@@ -1445,11 +1455,28 @@ int deckard_prepare_for_boot()
 	//we should charge and do various things here like light up the LED's etc
 	while(power_button_avail)
 	{
+		// ADSP Start Check
+		if (adsp_loaded == 0) {
+			const int ocv = deckard_battery_get_vfocv(max17320);
+			// VF OCV must be above boot voltage to survive charging pause and PD Negotiation.
+			if (ocv > OCV_BOOT_VOLTAGE || ocv < 0) {
+				//start up adsp
+				printf("adsp: starting...\n");
+				ret = deckard_adsp_start(id);
+				if (!ret) {
+					adsp_loaded = 1;
+				}
+			}
+		}
+
 		if(power_button_pushed(btn)) {
 			// only proceed to boot if battery is above min boot capacity
 			// if soc read fails, continue to boot
 			soc = deckard_battery_get_capacity(max17320);
-			if ( soc >= BATTERY_MIN_BOOT_SOC || soc < 0 ) {
+			const int ocv = deckard_battery_get_vfocv(max17320);
+			// TODO Fix this until VOCV is above UOCVP
+			// Two Checks to exit
+			if ((soc >= BATTERY_MIN_BOOT_SOC && ocv > OCV_BOOT_VOLTAGE) || soc < 0 || ocv < 0) {
 				break;
 			} else {
 				// show low battery screen
@@ -1457,6 +1484,7 @@ int deckard_prepare_for_boot()
 				deckard_display_off_counter = 20;
 			}
 		}
+
 #if 0
 		//may want to check for keyboard press for some reason or another here
 		if(deckard_check_for_key_press())
