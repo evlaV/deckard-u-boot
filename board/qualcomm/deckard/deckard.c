@@ -1632,24 +1632,30 @@ int deckard_load_slot_info(char * current_slot_menu_str, int current_slot_menu_s
 
 ///////////////////////////////////
 	snprintf(cmdstr,256,"load scsi %s 0x%x /etc/os-release -1",partition_a,CONFIG_SYS_LOAD_ADDR);
-	run_command(cmdstr,0);
-	filecontents = (char *)map_sysmem(CONFIG_SYS_LOAD_ADDR, 0);
-	filesize = (size_t) hextoul(env_get("filesize"), NULL);
-	parse_os_info(filecontents, filesize, name, sizeof(name),version_id, sizeof(version_id), build_id, sizeof(build_id));
+	if ( run_command(cmdstr,0) == 0 ) {
+        filecontents = (char *)map_sysmem(CONFIG_SYS_LOAD_ADDR, 0);
+        filesize = (size_t) hextoul(env_get("filesize"), NULL);
+        parse_os_info(filecontents, filesize, name, sizeof(name),version_id, sizeof(version_id), build_id, sizeof(build_id));
 
-	snprintf(current_slot_menu_str,current_slot_menu_str_sz, 
-				"Current   %s-%c-%s-%s=setenv slottarget current", name,curr_slot,version_id,build_id);
+        snprintf(current_slot_menu_str,current_slot_menu_str_sz, 
+                    "Current   %s-%c-%s-%s=setenv slottarget current", name,curr_slot,version_id,build_id);
+    } else {
+        printf("No os-release file found in a\n");
+    }
 ///////////////////////////////////
 
 ///////////////////////////////////
 	snprintf(cmdstr,256,"load scsi %s 0x%x /etc/os-release -1",partition_b,CONFIG_SYS_LOAD_ADDR);
-	run_command(cmdstr,0);
-	filecontents = (char *)map_sysmem(CONFIG_SYS_LOAD_ADDR, 0);
-	filesize = hextoul(env_get("filesize"), NULL);
-	parse_os_info(filecontents, filesize, name, sizeof(name),version_id, sizeof(version_id), build_id, sizeof(build_id));
+	if ( run_command(cmdstr,0) == 0 ) {
+        filecontents = (char *)map_sysmem(CONFIG_SYS_LOAD_ADDR, 0);
+        filesize = hextoul(env_get("filesize"), NULL);
+        parse_os_info(filecontents, filesize, name, sizeof(name),version_id, sizeof(version_id), build_id, sizeof(build_id));
 
-	snprintf(previous_slot_menu_str,previous_slot_menu_str_sz, 
-				"Previous  %s-%c-%s-%s=setenv slottarget previous", name,prev_slot,version_id,build_id);
+        snprintf(previous_slot_menu_str,previous_slot_menu_str_sz, 
+                    "Previous  %s-%c-%s-%s=setenv slottarget previous", name,prev_slot,version_id,build_id);
+    } else {
+        printf("No os-release file found in b\n");
+    }
 ///////////////////////////////////
 
 	return 0;
