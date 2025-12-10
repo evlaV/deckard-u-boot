@@ -17,6 +17,7 @@
 
 static void deckard_battery_enable_charging(struct udevice *pm8550b);
 
+#if 0
 typedef int (*printf_func_t)(const char *, ...);
 typedef void (*udelay_func_t)(unsigned long);
 typedef int (*pmic_write_t)(struct udevice *, uint reg, uint value);
@@ -85,15 +86,16 @@ static int deckard_battery_run_recovery_program(void)
 
 	return do_go_exec((void *)CONFIG_SYS_LOAD_ADDR, argc, argv);
 }
+#endif
 
 void deckard_battery_prep_for_boot(struct udevice *pmk8550, struct udevice *pm8550b, struct udevice *max17320)
 {
 	int             ret;
 	uint16_t        battery_mv;
-	int				soc;
-	struct udevice *led_red = NULL;
-	struct udevice *led_green = NULL;
-	struct udevice *led_blue = NULL;
+	// int				soc;
+	// struct udevice *led_red = NULL;
+	// struct udevice *led_green = NULL;
+	// struct udevice *led_blue = NULL;
 
 	/* Get Battery Voltage to Check for UVLO */
 	ret = pmk8550_get_battery_voltage(pmk8550, &battery_mv);
@@ -104,11 +106,11 @@ void deckard_battery_prep_for_boot(struct udevice *pmk8550, struct udevice *pm85
 	}
 
 	printf("Battery: %d mV\n", battery_mv);
-
+#if 0
 	soc = deckard_battery_get_capacity(max17320);
 	if ( soc >= 0 ) {
 		printf("Battery: %d %%\n", soc);
-		if (battery_mv >= BATTERY_MIN_BOOT_SOC) {
+		if (soc >= BATTERY_MIN_BOOT_SOC) {
 			// OK to boot
 			// Enable Charging
 			goto complete;
@@ -162,6 +164,7 @@ void deckard_battery_prep_for_boot(struct udevice *pmk8550, struct udevice *pm85
 		printf("Attempting to boot anyway!\n");
 		goto complete;
 	}
+#endif
 
 complete:
 	// Enable Charging
@@ -173,10 +176,10 @@ static void deckard_battery_enable_charging(struct udevice *pm8550b)
 	int ret = 0;
 
 	/* Set Fast Charge Current to 1,200 mA (QPH1 path limit - exp. tested) */
-	ret |= pm8550b_set_fast_charge_current(pm8550b, 1200);
+	ret |= pm8550b_set_fast_charge_current(pm8550b, 1000);
 
 	/* Set Max Fast Charge Current to 1,200 mA (QPH1 path limit - exp. tested)) */
-	ret |= pm8550b_set_max_fast_charge_current(pm8550b, 1200);
+	ret |= pm8550b_set_max_fast_charge_current(pm8550b, 1000);
 
 	/* Set Float Voltage to 8,900 mV */
 	ret |= pm8550b_set_float_voltage(pm8550b, 8900);
@@ -203,10 +206,10 @@ int deckard_spl_battery_enable_charging(struct udevice *pm8550b)
 	int ret = 0;
 
 	/* Set Fast Charge Current to 1,200 mA (QPH1 path limit - exp. tested) */
-	ret |= pm8550b_set_fast_charge_current(pm8550b, 1200);
+	ret |= pm8550b_set_fast_charge_current(pm8550b, 1000);
 
 	/* Set Max Fast Charge Current to 1,200 mA (QPH1 path limit - exp. tested)) */
-	ret |= pm8550b_set_max_fast_charge_current(pm8550b, 1200);
+	ret |= pm8550b_set_max_fast_charge_current(pm8550b, 1000);
 
 	/* Set Float Voltage to 8,900 mV */
 	ret |= pm8550b_set_float_voltage(pm8550b, 8900);
@@ -281,12 +284,48 @@ int deckard_spl_battery_charging_setup(uint16_t * battery_voltage)
 
 int deckard_battery_get_capacity(struct udevice *max17320)
 {
-	uint8_t			soc[2];
-	if ( pmic_read(max17320, REPSOC_REG, soc, 2) ) {
+	uint8_t reg[2];
+	if ( pmic_read(max17320, REPSOC_REG, reg, 2) ) {
 		printf("failed to get battery capacity\n");
 		return -EIO;
 	}
+
 	// RepSOC LSB: 1/256 %
 	// return SOC >> 8;
-	return soc[1];
+	const int soc = reg[1];
+	// const int soc_frac = (int)reg[0] * 10 / 256;
+	// printf("SOC: %02d.%1d\n", soc, soc_frac);
+
+	return soc;
 }
+
+int deckard_battery_get_vfocv(struct udevice *max17320)
+{
+	uint8_t reg[2];
+	if ( pmic_read(max17320, VFOCV_REG, reg, 2) ) {
+		printf("failed to get battery OCV\n");
+		return -EIO;
+	}
+
+	// Scale to 2S, 0.078125 mV/lsb
+	const int ocv = (int32_t)((((uint32_t)reg[1]) << 8) + reg[0])*2*7813/1000/100;
+	// printf("OCV: %d mV\n", ocv);
+
+	return ocv;
+}
+
+int deckard_battery_get_avg_vcell(struct udevice *max17320)
+{
+	uint8_t reg[2];
+	if ( pmic_read(max17320, AVGVCELL_REG, reg, 2) ) {
+		printf("failed to get battery Average Cell Voltage\n");
+		return -EIO;
+	}
+
+	// Scale to 2S, 0.078125 mV/lsb
+	const int avg_vcell = (int32_t)((((uint32_t)reg[1]) << 8) + reg[0])*2*7813/1000/100;
+	// printf("Avg. VCell: %d mV\n", avg_vcell);
+
+	return avg_vcell;
+}
+

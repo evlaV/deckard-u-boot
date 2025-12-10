@@ -22,5 +22,7 @@ int deckard_spl_battery_enable_charging(struct udevice *pm8550b);
 int deckard_spl_battery_charging_setup(uint16_t * battery_voltage);
 
 int deckard_battery_get_capacity(struct udevice *max17320);
+int deckard_battery_get_vfocv(struct udevice *max17320);
+int deckard_battery_get_avg_vcell(struct udevice *max17320);
 
 #endif /* __DECKARD_BATTERY_H */
