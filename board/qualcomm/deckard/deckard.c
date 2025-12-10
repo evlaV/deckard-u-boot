@@ -1712,12 +1712,19 @@ int deckard_setup_bootmenu(void)
 	if( get_booted_slot() == 'U' ) usb_boot_mode = 1;
 
 	//bootmenu
-	env_set("bootmenu_title", usb_boot_mode ? "SteamOS : USB Boot" : "SteamOS");
-	env_set("bootmenu_0", current_slot_menu_str);
-	env_set("bootmenu_1", previous_slot_menu_str);
-	env_set("bootmenu_2", "Boot from USB=setenv slottarget usb");
-	if( ! usb_boot_mode )
+	if( usb_boot_mode )
 	{
+		//usb boot mode
+		env_set("bootmenu_title", "SteamOS : USB Boot");
+		env_set("bootmenu_0", "USB Disk=setenv slottarget current"); //this means just continue booting
+	}
+	else
+	{
+		//normal boot
+		env_set("bootmenu_title", "SteamOS");
+		env_set("bootmenu_0", current_slot_menu_str);
+		env_set("bootmenu_1", previous_slot_menu_str);
+		env_set("bootmenu_2", "Boot from USB=setenv slottarget usb");
 		env_set("bootmenu_3", "  -- ERASE USER DATA FROM FRAME --=setenv slottarget current && setenv factoryreset 1");
 	}
 	env_set("bootmenu_delay", "15");
