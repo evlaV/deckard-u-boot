@@ -1,4 +1,3 @@
-
 #include "smb1510.h"
 
 #include <errno.h>

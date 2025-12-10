@@ -62,7 +62,7 @@ static int do_fastboot_tcp(int argc, char *const argv[],
 }
 #endif
 
-static int fastboot_done_command()
+static int fastboot_done_command(void)
 {
 	udelay(500000); //add delay to avoid usb being used too quickly after fastboot stops using it
 	env_set("bootdelay","60");

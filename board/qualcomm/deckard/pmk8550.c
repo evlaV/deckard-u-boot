@@ -148,17 +148,24 @@ int pmk8550_get_on_off_reason(struct pon_on_off_reason *reason)
 
 	memset(reason, 0, sizeof(*reason));
 
-	for (i = 0; i < read_size; ++i)
+	// PARSE LOG
+	for (i = 0; i < (int) read_size; ++i)
+	{
 		pon_events_raw[i] = pmic_reg_read(pmic, PON_PBS_PON_LOGGING_AREA_START + i);
+	}
 
 	sdam_count = pmic_reg_read(pmic, PON_LOG_SDAM_COUNT_ADDR);
 	// 0: Only use 1 SDAM
 	// 1: Use 2 SDAM
 	// Currently only extend to 2 continuous SDAM.
 	if(sdam_count)
-		for (i = 0; i < read_size; ++i)
+	{
+		for (i = 0; i < (int) read_size; ++i)
+		{
 			pon_events_raw[read_size + i] =
 				pmic_reg_read(pmic, PON_PBS_PON_LOGGING_AREA_START + 0x100 + i);
+		}
+	}
 
 	push_ptr = pmic_reg_read(pmic, PON_LOG_ENQUEUE_ADDR);
 	enqueue_sdam_num = pmic_reg_read(pmic, PON_LOG_ENQUEUE_SDAM_NUM);
@@ -239,6 +246,8 @@ int pmk8550_get_on_off_reason(struct pon_on_off_reason *reason)
 			break;
 	}
 
+	// READ REGISTERS
+	// These should be consistent with the data parsed from the logs above
 	reason->pon_reason = pmk8550_get_pon_reason(pmic);
 
 	reason->pon_boot1_poff_reason = pmk8550_get_boot1_poff_reason1(pmic);
