@@ -53,8 +53,6 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
-#define DECKARD_IFNAME "scsi"
-
 #define DECKARD_UBOOT_ENV_SLOT_A "ubootenv_a"
 #define DECKARD_UBOOT_FW_SLOT_A "ubootfw_a"
 #define DECKARD_ROOTFS_SLOT_A "rootfs-A"
@@ -128,6 +126,11 @@ enum combined_button_state_t {
 enum verbosity_level_t {
 	VERBOSITY_QUIET = 0,
 	VERBOSITY_ON  = 1,
+};
+
+enum disk_interface_t {
+	DISK_INTERFACE_SCSI = 0,
+	DISK_INTERFACE_USB = 1,
 };
 
 enum combined_button_state_t g_total_button_state = 0;
@@ -286,6 +289,35 @@ static void deckard_disable_watchdog(void)
 	write32(HWIO_APSS_WDT_TMR2_WDOG_CTL_ADDR, 0);
 }
 
+static char * disk_interface_to_str(enum disk_interface_t disk_interface)
+{
+	switch(disk_interface)
+	{
+		case DISK_INTERFACE_SCSI:
+			return "scsi";
+		case DISK_INTERFACE_USB:
+			return "usb";
+		default:
+			return "unknown";
+	}
+	return "unknown";
+}
+
+int booted_from_usb(void)
+{
+	if(get_booted_slot() == 'U')
+		return 1;
+	else
+		return 0;
+}
+
+int usb_setup(void)
+{
+	run_command("usb start", 0);
+
+	return 0;
+}
+
 static int deckard_do_load_logo(char * logo_name)
 {
 	int  argc = 5;
@@ -296,10 +328,13 @@ static int deckard_do_load_logo(char * logo_name)
 	char logo_arg[LOGO_PATHMAX + 1] = { 0 };
 
 	argv[0] = arg0;
-	argv[1] = DECKARD_IFNAME;
+	//argv[1] = disk_interface_to_str(disk_interface);
 	argv[2] = part_arg;
 	argv[3] = loadaddr_arg;
 	argv[4] = logo_arg;
+
+	if( booted_from_usb() ) argv[1] = disk_interface_to_str(DISK_INTERFACE_USB);
+	else  argv[1] = disk_interface_to_str(DISK_INTERFACE_SCSI);
 
 	/* Setup load address */
 	snprintf(loadaddr_arg, LOADADDRMAXLEN, "0x%x", CONFIG_SYS_LOAD_ADDR);
@@ -397,6 +432,8 @@ static void deckard_setup(void)
 
 	printf("smb1510: enable fixed frequency at 500khz mode\n");
 	smb1510_set_switching_frequency(pmk8550, 0x0F);
+
+	if( booted_from_usb() ) usb_setup();
 }
 
 int console_state_handler(void) 
@@ -565,19 +602,23 @@ static char *deckard_get_dev_part_str(const char *part_name)
 {
 	char dev_part_str[MAX_DEV_PART_STR];
 	int ret;
+	enum disk_interface_t disk_interface = DISK_INTERFACE_SCSI;
 
-	ret = part_get_dev_part_str_by_name(DECKARD_IFNAME, part_name,
-					    dev_part_str);
+	if(booted_from_usb()) disk_interface = DISK_INTERFACE_USB;
+
+	ret = part_get_dev_part_str_by_name( disk_interface_to_str(disk_interface), part_name, dev_part_str);
 	if (ret < 0)
 		return NULL;
 
 	return strdup(dev_part_str);
 }
 
+#if 0
 static char *deckard_get_dev_str(const char *part_name)
 {
 	return strtok(deckard_get_dev_part_str(part_name), ":");
 }
+#endif
 
 const char *env_scsi_get_dev_part(void)
 {
@@ -631,7 +672,7 @@ const char *deckard_get_fw_part(void)
 
 const char *deckard_get_esp_part(void)
 {
-	if( get_booted_slot() == 'U' )
+	if( booted_from_usb() )
 	{
 		return DECKARD_ESP_SLOT_U;
 	}
@@ -814,15 +855,17 @@ int led_set_color_and_state(char * led_name, enum led_state_t state)
 }
 
 /* Get the devnum/partnum for a partition from its GPT partlabel */
-static int deckard_find_part_by_label(const char *partname, int *devnum, int *partnum)
+static int deckard_find_part_by_label(enum disk_interface_t disk_interface, const char *partname, int *devnum, int *partnum)
 {
 	int r;
 	struct udevice *blkdev;
 	struct blk_desc *desc;
 	struct uclass *blk_class;
 	struct disk_partition part;
-
+	enum uclass_id target_uclass_id = UCLASS_SCSI;
 	uclass_get(UCLASS_BLK, &blk_class);
+
+	if(disk_interface == DISK_INTERFACE_USB) target_uclass_id = UCLASS_USB;
 
 	/* Devices are already probed! */
 	uclass_foreach_dev(blkdev, blk_class) {
@@ -834,7 +877,7 @@ static int deckard_find_part_by_label(const char *partname, int *devnum, int *pa
 			continue;
 		/* Only look for non-removable SCSI devices (internal storage) */
 		// FIXME: we might need a more reliable way to identify internal storage!
-		if (desc->uclass_id != UCLASS_SCSI || desc->removable)
+		if (desc->uclass_id != target_uclass_id || desc->removable)
 			continue;
 
 		for (*partnum = 1;; (*partnum)++) {
@@ -859,16 +902,19 @@ static int deckard_find_efi_var_store(void)
 {
 	char partname[16] = { 0 };
 	char *slot;
-
+	enum disk_interface_t disk_interface = DISK_INTERFACE_SCSI;
+	
 	if (efivar_store.valid)
 		return 0;
+
+	if( booted_from_usb() ) disk_interface = DISK_INTERFACE_USB;
 
 	slot = env_get("booted_slot");
 	/* Build the partition name (efi-A/efi-B) */
 	strlcat(partname, "efi-", 16);
 	strlcat(partname, slot, 16);
 
-	if (!deckard_find_part_by_label(partname, &efivar_store.devnum, &efivar_store.partnum)) {
+	if (!deckard_find_part_by_label(disk_interface, partname, &efivar_store.devnum, &efivar_store.partnum)) {
 		efivar_store.valid = true;
 		return 0;
 	}
@@ -957,7 +1003,7 @@ int misc_init_r(void)
 		panic("No chosen node !\n");
 	}
 
-	if(get_booted_slot() == 'U')
+	if( booted_from_usb() )
 	{
 		snprintf(g_esp_part, DEVPARTMAXLEN, DECKARD_ESP_SLOT_U);
 	}
@@ -970,7 +1016,6 @@ int misc_init_r(void)
 
 	deckard_setup();
 
-	
 	if (env_get_ulong("factory-mode", 10, 0) == 1) //skip display enabling if factory-mode is defined and set to 1
 	{
 		printf("Factory mode: not enabling display...\n");
@@ -1050,9 +1095,6 @@ int misc_init_r(void)
 
 	// get board data from eeprom
 	deckard_eeprom_init();
-
-	env_set("UBOOTLUNIDX", deckard_get_dev_str(DECKARD_UBOOT_SLOT_A));
-	env_set("SYSTEMLUNIDX", deckard_get_dev_str(DECKARD_ROOTFS_SLOT_A));
 
 	/*
 	 * Set the magic $fdtfile variable so we load the right DTB during EFI boot. This will be used
@@ -1205,16 +1247,15 @@ int ft_board_setup(void *fdt, struct bd_info *bd)
 	return 0;
 }
 
-int scsi_do_load_helper(char * partition, char * addr, char * path)
+int do_load_helper(enum disk_interface_t disk_interface, char * partition, char * addr, char * path)
 {
 	int  argc = 5;
 	char *argv[5];
 	char arg0[] = "do_the_dew"; // ?
-	char arg1[] = DECKARD_IFNAME;
 	int ret;
 
 	argv[0]=arg0;
-	argv[1]=arg1;
+	argv[1]=disk_interface_to_str(disk_interface);
 	argv[2]=partition; //e.g. "1:d"
 	argv[3]=addr; //e.g. "0xa7000000"
 	argv[4]=path; // e.g. "/boot/maindtb.dtb"
@@ -1615,7 +1656,7 @@ efi_status_t efi_set_blk_dev_to_system_partition(void)
 // find dtb path based on env and eeprom settings, load dtb from flash to memory
 // returns 0 on success
 // returns -1 on failure
-int deckard_load_dtb(char * partition, char * addr)
+int deckard_load_dtb(enum disk_interface_t disk_interface, char * partition, char * addr)
 {
 	char * dtb_qcom;
 	char * eeprom_board;
@@ -1629,7 +1670,7 @@ int deckard_load_dtb(char * partition, char * addr)
 	if (dtb_qcom) {
 		snprintf(DTB_TARGET, PATHMAXLEN, "/boot/dtbqcom/%s", dtb_qcom);
 		// load dtb
-		if ( scsi_do_load_helper(partition, addr, DTB_TARGET) == 0 ) {
+		if ( do_load_helper(disk_interface, partition, addr, DTB_TARGET) == 0 ) {
 			return 0;
 		}
 	}
@@ -1638,14 +1679,14 @@ int deckard_load_dtb(char * partition, char * addr)
 	if (eeprom_board) {
 		snprintf(DTB_TARGET, PATHMAXLEN, "/boot/dtbqcom/sm8650-%s.dtb", eeprom_board);
 		// load dtb
-		if ( scsi_do_load_helper(partition, addr, DTB_TARGET) == 0 ) {
+		if ( do_load_helper(disk_interface, partition, addr, DTB_TARGET) == 0 ) {
 			return 0;
 		}
 	}
 
 	// try defualt dtb
 	snprintf(DTB_TARGET, PATHMAXLEN, "/boot/maindtb.dtb");
-	return scsi_do_load_helper(partition, addr, DTB_TARGET);
+	return do_load_helper(disk_interface, partition, addr, DTB_TARGET);
 }
 
 int deckard_boot_menu(void) 
@@ -1723,6 +1764,7 @@ int deckard_load_slot_info(char * current_slot_menu_str, int current_slot_menu_s
 	char name[128] = {0};
 	char version_id[128] = {0};
 	char build_id[128] = {0};
+	enum disk_interface_t disk_interface = DISK_INTERFACE_SCSI;
 
 	partition_a = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_A);
 	partition_b = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_B);
@@ -1744,7 +1786,7 @@ int deckard_load_slot_info(char * current_slot_menu_str, int current_slot_menu_s
 	}
 
 ///////////////////////////////////
-	snprintf(cmdstr,256,"load scsi %s 0x%x /etc/os-release -1",partition_a,CONFIG_SYS_LOAD_ADDR);
+	snprintf(cmdstr,256,"load %s %s 0x%x /etc/os-release -1",disk_interface_to_str(disk_interface),partition_a,CONFIG_SYS_LOAD_ADDR);
 	if ( run_command(cmdstr,0) == 0 ) {
 		filecontents = (char *)map_sysmem(CONFIG_SYS_LOAD_ADDR, 0);
 		filesize = (size_t) hextoul(env_get("filesize"), NULL);
@@ -1760,7 +1802,7 @@ int deckard_load_slot_info(char * current_slot_menu_str, int current_slot_menu_s
 
 ///////////////////////////////////
 	memset(cmdstr, '\0', sizeof(cmdstr));
-	snprintf(cmdstr,256,"load scsi %s 0x%x /etc/os-release -1",partition_b,CONFIG_SYS_LOAD_ADDR);
+	snprintf(cmdstr,256,"load %s %s 0x%x /etc/os-release -1",disk_interface_to_str(disk_interface),partition_b,CONFIG_SYS_LOAD_ADDR);
 	if ( run_command(cmdstr,0) == 0 ) {
 		filecontents = (char *)map_sysmem(CONFIG_SYS_LOAD_ADDR, 0);
 		filesize = hextoul(env_get("filesize"), NULL);
@@ -1787,7 +1829,7 @@ int deckard_setup_bootmenu(void)
 
 	deckard_load_slot_info(current_slot_menu_str,256,previous_slot_menu_str,256);
 
-	if( get_booted_slot() == 'U' ) usb_boot_mode = 1;
+	usb_boot_mode = booted_from_usb();
 
 	//bootmenu
 	if( usb_boot_mode )
@@ -1876,23 +1918,24 @@ int enable_factory_reset_if_needed(void)
 	char cmdstr[256] = {0};
 	char addr[19] = {0};
 	char *buffer;
+	enum disk_interface_t disk_interface = DISK_INTERFACE_SCSI;
 
 	if (env_get("factoryreset") && !strcmp(env_get("factoryreset"), "1"))
 	{
 		printf("factory reset: creating file in /efi/steamos/factory-reset/factoryreset.cfg\n");
-		snprintf(cmdstr,256,"mkdir scsi %s /efi", DECKARD_ESP_PARTITION); run_command(cmdstr,0);
+		snprintf(cmdstr,256,"mkdir %s %s /efi", disk_interface_to_str(disk_interface), DECKARD_ESP_PARTITION); run_command(cmdstr,0);
 		memset(cmdstr, '\0', sizeof(cmdstr));
-		snprintf(cmdstr,256,"mkdir scsi %s /efi/steamos", DECKARD_ESP_PARTITION); run_command(cmdstr,0);
+		snprintf(cmdstr,256,"mkdir %s %s /efi/steamos", disk_interface_to_str(disk_interface), DECKARD_ESP_PARTITION); run_command(cmdstr,0);
 		memset(cmdstr, '\0', sizeof(cmdstr));
-		snprintf(cmdstr,256,"mkdir scsi %s /efi/steamos/factory-reset", DECKARD_ESP_PARTITION); run_command(cmdstr,0);
+		snprintf(cmdstr,256,"mkdir %s %s /efi/steamos/factory-reset", disk_interface_to_str(disk_interface), DECKARD_ESP_PARTITION); run_command(cmdstr,0);
 		
 		buffer = malloc_cache_aligned(strlen(cfg_file_contents));
 		if(!buffer) return -1;
 		sprintf(addr, "0x%08lx", (ulong)map_to_sysmem(buffer));
 		memcpy(buffer,cfg_file_contents,strlen(cfg_file_contents));
 		memset(cmdstr, '\0', sizeof(cmdstr));
-		snprintf(cmdstr,256,"save scsi %s %s /efi/steamos/factory-reset/factoryreset.cfg %d",
-			DECKARD_ESP_PARTITION, addr, (int)strlen(cfg_file_contents));
+		snprintf(cmdstr,256,"save %s %s %s /efi/steamos/factory-reset/factoryreset.cfg %d",
+							disk_interface_to_str(disk_interface), DECKARD_ESP_PARTITION, addr, (int)strlen(cfg_file_contents));
 		printf("cmdstr=[%s]\n",cmdstr);
 		run_command(cmdstr,0);
 		printf("factory reset: file create done\n");
@@ -1917,6 +1960,7 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	char bootargs[PATHMAXLEN]; // how long can this be?
 	char * default_bootargs;
 	char * temp_bootargs;
+	enum disk_interface_t disk_interface = DISK_INTERFACE_SCSI;
 
 	printf("Deckard custom boot function\n");
 
@@ -1958,6 +2002,8 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	}
 #endif
 
+	if( booted_from_usb() ) disk_interface = DISK_INTERFACE_USB;
+
 	// Do not run adsp charging if we are in factory mode or coming out of ship mode
 	if (env_get_ulong("factory-mode", 10, 0) == 1)
 	{
@@ -1977,7 +2023,7 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	printf("Attempting to load kernel from %s [ %s ]\n", label, partition);
 
 	// Load kernel
-	if ( scsi_do_load_helper(partition, ADDR_KERNEL, KERNEL_TARGET) ) {
+	if ( do_load_helper(disk_interface, partition, ADDR_KERNEL, KERNEL_TARGET) ) {
 		printf("Failed to load kernel from %s [ %s ]\n", label, partition);
 		goto fail;
 	}
@@ -1994,7 +2040,7 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	sprintf(DTB_ADDR, "0x%lX", addr_dtb);
 	printf("DTB_ADDR %s\n", DTB_ADDR); // debug
 	// load dtb
-	if ( deckard_load_dtb(partition, DTB_ADDR) ) {
+	if ( deckard_load_dtb(disk_interface, partition, DTB_ADDR) ) {
 		printf("Failed to load dtb from %s [ %s ]\n", label, partition);
 		goto fail;
 	}
@@ -2005,7 +2051,7 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	sprintf(INITRD_ADDR, "0x%lX", addr_initrd);
 	printf("INITRD_ADDR %s\n", INITRD_ADDR); // debug
 	// load inird
-	if ( scsi_do_load_helper(partition, INITRD_ADDR, INITRD_TARGET) ) {
+	if ( do_load_helper(disk_interface, partition, INITRD_ADDR, INITRD_TARGET) ) {
 		printf("Failed to load initrd from %s [ %s ]\n", label, partition);
 		goto fail;
 	}
