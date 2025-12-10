@@ -1256,7 +1256,7 @@ bool deckard_shutdown_condition(struct udevice *pmic)
 
 	if (deckard_battery_is_charging_enabled(pmic)) {
 		if(timeout > 0)
-			printf("charging enabled\n");
+			printf("[charging enabled]\n");
 
 		timeout = 0;
 		return false;
@@ -1264,7 +1264,7 @@ bool deckard_shutdown_condition(struct udevice *pmic)
 
 	if (!timeout)
 	{
-		printf("charging disabled\n");
+		printf("[charging disabled]\n");
 		timeout = timer_get_us() + DECKARD_SHUTDOWN_TIMEOUT_US;
 	}
 
@@ -1463,6 +1463,8 @@ int deckard_prepare_for_boot()
 		//check every 10 loops to avoid spamming the SPMI bus
 		if ( deckard_shutdown_loop_counter-- == 0 )
 		{
+			soc = deckard_battery_get_capacity(max17320);
+			printf("\r" ANSI_CLEAR_LINE "Battery: %d%% ", soc); fflush(stdout);
 			deckard_shutdown_loop_counter = 10;
 			if(deckard_shutdown_condition(pm8550b)) 
 			{
