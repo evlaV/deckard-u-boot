@@ -1539,7 +1539,8 @@ int deckard_prepare_for_boot()
 		if ( deckard_shutdown_loop_counter-- == 0 )
 		{
 			soc = deckard_battery_get_capacity(max17320);
-			printf("\r" ANSI_CLEAR_LINE "Battery: %d%% ", soc); fflush(stdout);
+			int avg_vcell = deckard_battery_get_avg_vcell(max17320);
+			printf("\r" ANSI_CLEAR_LINE "Battery: %d%%, %dmV ", soc,avg_vcell); fflush(stdout);
 			deckard_shutdown_loop_counter = 10;
 			if(deckard_shutdown_condition(pm8550b)) 
 			{
