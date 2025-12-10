@@ -48,6 +48,7 @@
 #include <part.h>
 #include <string.h>
 #include <membuf.h>
+#include <spl.h>
 #include "deckard.h"
 
 DECLARE_GLOBAL_DATA_PTR;
@@ -63,6 +64,20 @@ DECLARE_GLOBAL_DATA_PTR;
 #define DECKARD_UBOOT_FW_SLOT_B "ubootfw_b"
 #define DECKARD_ROOTFS_SLOT_B "rootfs-B"
 #define DECKARD_UBOOT_SLOT_B "uboot_b"
+
+//USB boot disk has its own names in order to disambiguate
+#define DECKARD_ESP_NAME_SLOT_U "usbesp"
+#define DECKARD_ESP_SLOT_U "0:1"
+#define DECKARD_EFI_NAME_SLOT_U "usbefi"
+#define DECKARD_EFI_SLOT_U "0:2"
+#define DECKARD_ROOTFS_SLOT_U "usbrootfs"
+#define DECKARD_UBOOT_FW_SLOT_U "usbubootfw"
+#define DECKARD_UBOOT_ENV_SLOT_U "usbubootenv"
+
+#define DEVPARTMAXLEN 16
+#define LOADADDRMAXLEN 16
+#define PATHMAXLEN 256
+#define LOGO_PATHMAX 256
 
 //add these names as alternatives for supporting old ev2 layouts -- delete once we stop using ev2's
 #define ALLOW_OLD_ROOTFS_NAME_FALLBACK
@@ -131,6 +146,8 @@ int display_turn_off_force(void);
 void deckard_load_logo(enum full_screen_images_t image);
 int deckard_check_for_key_press(void);
 int deckard_prepare_for_boot(void);
+const char *deckard_get_esp_part(void);
+const char *deckard_get_fw_part(void);
 
 #define SERIAL_CONSOLE_MASK 0b100
 #define USB_CONSOLE_MASK 0b010
@@ -146,6 +163,8 @@ enum combined_serial_console_state_t {
 	SERIAL_ON__USB_ON__VID_ON    = 7,
 };
 enum combined_serial_console_state_t total_console_state = 0;
+
+char g_esp_part[DEVPARTMAXLEN] = { 0 };  //e.g. "1:d"
 
 struct deckard_esp_info {
 	bool valid;
@@ -172,6 +191,16 @@ bool deckard_efi_enabled(void) {
 
 int deckard_setup_bootmenu(void);
 int enable_factory_reset_if_needed(void);
+
+char get_booted_slot(void)
+{
+	char * bootedslot;
+	char bootedslot_char='X';
+	bootedslot = env_get("booted_slot");
+	if(bootedslot) bootedslot_char = bootedslot[0];
+
+	return bootedslot_char;
+}
 
 // #define CHECK_PMICS
 #ifdef CHECK_PMICS
@@ -238,13 +267,9 @@ static void deckard_disable_watchdog(void)
 
 static int deckard_do_load_logo(char * logo_name)
 {
-	#define DEVPARTMAXLEN 16
-	#define LOADADDRMAXLEN 16
-	#define LOGO_PATHMAX 256
-
 	int  argc = 5;
 	char *argv[5];
-	char arg0[] = "do_the_dew";
+	char arg0[] = "";
 	char part_arg[DEVPARTMAXLEN] = { 0 };  //e.g. "1:d"
 	char loadaddr_arg[LOADADDRMAXLEN] = { 0 }; //e.g. "0xa7000000"
 	char logo_arg[LOGO_PATHMAX + 1] = { 0 };
@@ -257,9 +282,7 @@ static int deckard_do_load_logo(char * logo_name)
 
 	/* Setup load address */
 	snprintf(loadaddr_arg, LOADADDRMAXLEN, "0x%x", CONFIG_SYS_LOAD_ADDR);
-
-	/* First try loading from the ESP */
-	snprintf(part_arg, DEVPARTMAXLEN, DECKARD_ESP_PARTITION);
+	snprintf(part_arg, DEVPARTMAXLEN, "%s", deckard_get_esp_part()); //this returns 1:d for example
 	snprintf(logo_arg, LOGO_PATHMAX, "/steamos/%s", logo_name); //not case sensitive
 	if (!do_load(NULL, 0, argc, argv, FS_TYPE_ANY)) {
 		log_debug("Deckard: loaded splash from ESP!\n");
@@ -553,6 +576,9 @@ const char *env_scsi_get_dev_part(void)
 			case 'B':
 				return deckard_get_dev_part_str(DECKARD_UBOOT_ENV_SLOT_B);
 				break;
+			case 'U':
+				return deckard_get_dev_part_str(DECKARD_UBOOT_ENV_SLOT_U);
+				break;				
 			default:
 				printf("%s: Invalid booted_slot, defaulting to A env\n", __func__);
 				return deckard_get_dev_part_str(DECKARD_UBOOT_ENV_SLOT_A);
@@ -567,17 +593,26 @@ const char *env_scsi_get_dev_part(void)
 
 const char *deckard_get_fw_part(void)
 {
-	char * bootedslot;
-	// Get partition and label from booted slot
-	// booted_slot set after parsing DTS modified by SPL
-	bootedslot = env_get("booted_slot");
-	switch(bootedslot[0]){
+	switch( get_booted_slot() )
+	{
 		case 'A':
 		default:
 			return deckard_get_dev_part_str(DECKARD_UBOOT_FW_SLOT_A);
 		case 'B':
 			return deckard_get_dev_part_str(DECKARD_UBOOT_FW_SLOT_B);
+		case 'U':
+			return deckard_get_dev_part_str(DECKARD_UBOOT_FW_SLOT_U);
 	}
+}
+
+const char *deckard_get_esp_part(void)
+{
+	if( get_booted_slot() == 'U' )
+	{
+		return DECKARD_ESP_SLOT_U;
+	}
+
+	return DECKARD_ESP_PARTITION;
 }
 
 const char *fs_firmware_get_partition(void)
@@ -877,6 +912,9 @@ int misc_init_r(void)
 			case 'B':
 				env_set("booted_slot","B");
 				break;
+			case 'U':
+				env_set("booted_slot","U");
+				break;
 			default:
 				env_set("booted_slot","A");
 				break;
@@ -893,6 +931,15 @@ int misc_init_r(void)
 
 	} else {
 		panic("No chosen node !\n");
+	}
+
+	if(get_booted_slot() == 'U')
+	{
+		snprintf(g_esp_part, DEVPARTMAXLEN, DECKARD_ESP_SLOT_U);
+	}
+	else
+	{
+		snprintf(g_esp_part, DEVPARTMAXLEN, DECKARD_ESP_PARTITION);
 	}
 
 	deckard_disable_watchdog();
@@ -1133,12 +1180,6 @@ int ft_board_setup(void *fdt, struct bd_info *bd)
 
 	return 0;
 }
-
-
-
-#define DEVPARTMAXLEN 16
-#define LOADADDRMAXLEN 16
-#define PATHMAXLEN 256
 
 int scsi_do_load_helper(char * partition, char * addr, char * path)
 {
@@ -1541,16 +1582,6 @@ int deckard_boot_menu(void)
 	return 0;
 }
 
-char get_booted_slot(void)
-{
-	char * bootedslot;
-	char bootedslot_char='X';
-	bootedslot = env_get("booted_slot");
-	if(bootedslot) bootedslot_char = bootedslot[0];
-
-	return bootedslot_char;
-}
-
 static void trim_quotes(char *s)
 {
     size_t len = strlen(s);
@@ -1615,7 +1646,6 @@ int deckard_load_slot_info(char * current_slot_menu_str, int current_slot_menu_s
     char version_id[128] = {0};
     char build_id[128] = {0};
 
-//gabe
 	partition_a = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_A);
 	partition_b = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_B);
 
@@ -1628,6 +1658,11 @@ int deckard_load_slot_info(char * current_slot_menu_str, int current_slot_menu_s
 	{
 		curr_slot='B';
 		prev_slot='A';
+	}
+	else if( get_booted_slot() == 'U' )
+	{
+		curr_slot='A';
+		prev_slot='B';
 	}
 
 ///////////////////////////////////
@@ -1750,9 +1785,9 @@ int enable_factory_reset_if_needed(void)
 	if (env_get("factoryreset") && !strcmp(env_get("factoryreset"), "1"))
 	{
 		printf("factory reset: creating file in /efi/steamos/factory-reset/factoryreset.cfg\n");
-		run_command("mkdir scsi " DECKARD_ESP_PARTITION " /efi", 0);
-		run_command("mkdir scsi " DECKARD_ESP_PARTITION " /efi/steamos", 0);
-		run_command("mkdir scsi " DECKARD_ESP_PARTITION " /efi/steamos/factory-reset", 0);
+		snprintf(cmdstr,256,"mkdir scsi %s /efi", DECKARD_ESP_PARTITION); run_command(cmdstr,0);
+		snprintf(cmdstr,256,"mkdir scsi %s /efi/steamos", DECKARD_ESP_PARTITION); run_command(cmdstr,0);
+		snprintf(cmdstr,256,"mkdir scsi %s /efi/steamos/factory-reset", DECKARD_ESP_PARTITION); run_command(cmdstr,0);
 		
 		buffer = malloc_cache_aligned(strlen(cfg_file_contents));
 		if(!buffer) return -1;
@@ -1791,10 +1826,7 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	// If we haven't already scanned the SCSI devices we need to do it here
 	//scsi_scan(true);
 
-	// Get partition and label from booted slot
-	// booted_slot set after parsing DTS modified by SPL
-	bootedslot = env_get("booted_slot");
-	switch(bootedslot[0]){
+	switch( get_booted_slot() ){
 		case 'A':
 		default:
 			partition = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_A);
@@ -1804,13 +1836,17 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 			partition = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_B);
 			strncpy(label, DECKARD_ROOTFS_SLOT_B, DEVPARTMAXLEN);
 			break;
+		case 'U':
+			partition = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_U);
+			strncpy(label, DECKARD_ROOTFS_SLOT_U, DEVPARTMAXLEN);
+			break;			
 	}
 
 #ifdef ALLOW_OLD_ROOTFS_NAME_FALLBACK
 	if(!partition)
 	{
 		printf("Trying old rootfs partition names...\n");
-		switch(bootedslot[0]){
+		switch( get_booted_slot() ){
 			case 'A':
 			default:
 				partition = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_OLD_A);
