@@ -469,6 +469,8 @@ int check_button_states(enum verbosity_level_t verbosity)
 	struct udevice     *btn = NULL;
 	enum button_state_t button_state;
 
+	g_total_button_state = 0; //always clear previous state
+
 	ret = button_get_by_label("Volume Down", &btn);
 	if (ret < 0) {
 		if(verbosity>VERBOSITY_QUIET) { printf("Couldn't find Vol- button!\n"); }
@@ -1339,6 +1341,28 @@ void show_boot_progress(int progress)
 	display_turn_off();
 }
 
+int check_power_state(int soc, int ocv, int showimage)
+{
+	int ret = 1;
+	// only proceed to boot if battery is above min boot capacity
+	// if soc read fails, continue to boot
+
+	// TODO Fix this until VOCV is above UOCVP
+	// Two Checks to exit
+	if ((soc >= BATTERY_MIN_BOOT_SOC && ocv > OCV_BOOT_VOLTAGE) || soc < 0 || ocv < 0) {
+		ret = 0;
+	}
+
+	if(showimage)
+	{
+		display_turn_on();
+		deckard_load_logo(BATTERY_CHARGING);
+	}
+
+	return ret;
+	
+}
+
 int deckard_prepare_for_boot()
 {
 	struct udevice  *led_red, *led_green, *led_blue;
@@ -1470,19 +1494,13 @@ int deckard_prepare_for_boot()
 		}
 
 		if(power_button_pushed(btn)) {
-			// only proceed to boot if battery is above min boot capacity
-			// if soc read fails, continue to boot
-			soc = deckard_battery_get_capacity(max17320);
-			const int ocv = deckard_battery_get_vfocv(max17320);
-			// TODO Fix this until VOCV is above UOCVP
-			// Two Checks to exit
-			if ((soc >= BATTERY_MIN_BOOT_SOC && ocv > OCV_BOOT_VOLTAGE) || soc < 0 || ocv < 0) {
+			ret = check_power_state( deckard_battery_get_capacity(max17320), deckard_battery_get_vfocv(max17320), 0);
+			if(ret == 0) 
+			{
+				printf("ok to boot!\n");
 				break;
-			} else {
-				// show low battery screen
-				deckard_load_logo(BATTERY_DEAD);
-				deckard_display_off_counter = 20;
 			}
+			deckard_display_off_counter = 20;
 		}
 
 #if 0
@@ -1495,24 +1513,25 @@ int deckard_prepare_for_boot()
 #endif
 
 		check_button_states(VERBOSITY_QUIET);
+		
 		if(g_total_button_state & VOLUP_BUTTON_MASK)
 		{
 			printf("[vol+]\n");
-			display_turn_on();
+			check_power_state( deckard_battery_get_capacity(max17320), deckard_battery_get_vfocv(max17320), 1);
 			deckard_display_off_counter = 20;
 		}
 
 		if(g_total_button_state & VOLDN_BUTTON_MASK)
 		{
 			printf("[vol-]\n");
-			display_turn_on();
+			check_power_state( deckard_battery_get_capacity(max17320), deckard_battery_get_vfocv(max17320), 1);
 			deckard_display_off_counter = 20;
 		}
 		
 		if(g_total_button_state & SELECT_BUTTON_MASK)
 		{
 			printf("[select]\n");
-			display_turn_on();
+			check_power_state( deckard_battery_get_capacity(max17320), deckard_battery_get_vfocv(max17320), 1);
 			deckard_display_off_counter = 20;
 	 	}
 		
