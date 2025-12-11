@@ -183,7 +183,7 @@ enum combined_serial_console_state_t {
 	SERIAL_ON__USB_ON__VID_OFF   = 6,
 	SERIAL_ON__USB_ON__VID_ON    = 7,
 };
-enum combined_serial_console_state_t total_console_state = 0;
+enum combined_serial_console_state_t g_total_console_state = 0;
 
 char g_esp_part[DEVPARTMAXLEN] = { 0 };  //e.g. "1:d"
 
@@ -204,7 +204,7 @@ static enum deckard_efi_mode {
 	EFI_MODE_PERMANENT,
 } g_deckard_efi_mode = EFI_MODE_DISABLED;
 
-static struct deckard_esp_info efivar_store = { 0 };
+static struct deckard_esp_info g_efivar_store = { 0 };
 
 bool deckard_efi_enabled(void) {
 	return g_deckard_efi_mode != EFI_MODE_DISABLED;
@@ -440,7 +440,7 @@ int console_state_handler(void)
 	fflush(stderr); //needed to make things not explode
 
 	//note: we need to have some console, so no console on at all is not valid, so we handle that below
-	switch(total_console_state)
+	switch(g_total_console_state)
 	{
 		case SERIAL_OFF__USB_OFF__VID_OFF:
 			env_set("stdin", "serial");
@@ -566,7 +566,7 @@ int button_state_handler(enum combined_button_state_t total_button_state, int po
 		case VOLUP_OFF__VOLDN_OFF__SELECT_OFF:
 			break;
 		case VOLUP_OFF__VOLDN_OFF__SELECT_ON:
-			//total_console_state |= VIDEO_CONSOLE_MASK;
+			//g_total_console_state |= VIDEO_CONSOLE_MASK;
 			//env_set("bootdelay","20");
 			env_set_ulong("showbootmenu", 1);
 			break;
@@ -579,8 +579,8 @@ int button_state_handler(enum combined_button_state_t total_button_state, int po
 			usb_init();
 			break;
 		case VOLUP_ON__VOLDN_OFF__SELECT_OFF:
-			total_console_state |= USB_CONSOLE_MASK;
-			total_console_state |= VIDEO_CONSOLE_MASK;
+			g_total_console_state |= USB_CONSOLE_MASK;
+			g_total_console_state |= VIDEO_CONSOLE_MASK;
 			env_set("bootdelay","20");
 			break;
 		case VOLUP_ON__VOLDN_OFF__SELECT_ON:
@@ -902,7 +902,7 @@ static int deckard_find_efi_var_store(void)
 	char *slot;
 	enum disk_interface_t disk_interface = DISK_INTERFACE_SCSI;
 	
-	if (efivar_store.valid)
+	if (g_efivar_store.valid)
 		return 0;
 
 	if( booted_from_usb() ) disk_interface = DISK_INTERFACE_USB;
@@ -912,8 +912,8 @@ static int deckard_find_efi_var_store(void)
 	strlcat(partname, "efi-", 16);
 	strlcat(partname, slot, 16);
 
-	if (!deckard_find_part_by_label(disk_interface, partname, &efivar_store.devnum, &efivar_store.partnum)) {
-		efivar_store.valid = true;
+	if (!deckard_find_part_by_label(disk_interface, partname, &g_efivar_store.devnum, &g_efivar_store.partnum)) {
+		g_efivar_store.valid = true;
 		return 0;
 	}
 
@@ -1037,24 +1037,24 @@ int misc_init_r(void)
 		// TODO: also see if the select button is pressed, and if so
 		// show the console instead
 		// TODO: change 2s delay to only do that if serial console is connected
-		deckard_load_and_display_image(BOOT_LOGO);
+		deckard_load_and_display_image(IMAGE_BOOT_LOGO);
 	}
 
 	if (env_get_ulong("vidconsole_enable", 10, 0) == 1)
 	{
-		total_console_state |= VIDEO_CONSOLE_MASK;
+		g_total_console_state |= VIDEO_CONSOLE_MASK;
 	}
 
 	if (env_get_ulong("usbconsole_enable", 10, 0) == 1)
 	{
-		total_console_state |= USB_CONSOLE_MASK;
+		g_total_console_state |= USB_CONSOLE_MASK;
 		env_set("bootdelay","20");
 	}
 
 	check_button_states(VERBOSITY_QUIET);
 	button_state_handler(g_total_button_state, g_power_button_state);
 
-	total_console_state |= SERIAL_CONSOLE_MASK; //seems likely we always need this on otherwise will get crashes / sync abort handler loops?
+	g_total_console_state |= SERIAL_CONSOLE_MASK; //seems likely we always need this on otherwise will get crashes / sync abort handler loops?
 	console_state_handler();
 
 	/*
@@ -1373,7 +1373,7 @@ int display_turn_off()
 
 int display_turn_off_force()
 {
-	total_console_state &= ~VIDEO_CONSOLE_MASK;
+	g_total_console_state &= ~VIDEO_CONSOLE_MASK;
 	console_state_handler();
 	return run_command("mdss stop", 0);
 }
@@ -1626,7 +1626,7 @@ efi_status_t efi_set_blk_dev_to_system_partition(void)
 		return EFI_DEVICE_ERROR;
 	// It would be nice to use fs_set_blk_dev_with_part() but it doesn't seem to behave quite right
 	snprintf(part_str, sizeof(part_str), "%x:%x",
-		 efivar_store.devnum, efivar_store.partnum);
+		 g_efivar_store.devnum, g_efivar_store.partnum);
 	// printf("%s: %s\n", __func__, part_str);
 	r = fs_set_blk_dev(blk_get_uclass_name(efi_system_partition.uclass_id),
 			   part_str, FS_TYPE_ANY);
@@ -1681,7 +1681,7 @@ int deckard_boot_menu(void)
 {
 	fprintf(stderr,"showing boot menu!!!\n");
 	display_turn_on();
-	total_console_state |= VIDEO_CONSOLE_MASK;
+	g_total_console_state |= VIDEO_CONSOLE_MASK;
 	console_state_handler();
 	mdelay(500);
 	run_command("bootmenu",0);
@@ -2068,24 +2068,31 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	if (env_get_ulong("showbootmenu", 10, 0) == 1)
 	{
 		deckard_boot_menu();
+		deckard_boot_menu_handle_actions();
 	}
 	else
 	{
 		fprintf(stderr,"NOT showing boot menu!!!\n");
 	}
 
-	deckard_boot_menu_handle_actions();
-
 	//even though we are about to turn the display off, we fill the framebuffer with the boot logo
 	//then the kernel will copy that image to it's framebuffer so we see the boot logo
-	total_console_state &= ~VIDEO_CONSOLE_MASK;
+	g_total_console_state &= ~VIDEO_CONSOLE_MASK;
 	console_state_handler();
+
+	// TODO: would be really nice to be able to load image without turning display on/off
 	deckard_load_and_display_image(IMAGE_BOOT_LOGO); //switch to booting logo before we boot up
+
+	// This is to workaround an incomplete hand-off implementation, where we (as of 12/11/25)
+	// need to allow the kernel to turn the display on itself (vs a 'hot transfer')
 	display_turn_off();
+
+    // Attempt to launch the kernel.  If this succeeds, we now leave uboot and enter kernel code
 	run_command("booti ${kernel_addr_r} ${ramdisk_addr_r} ${fdtcontroladdr}", 0);
 
 	printf("!!Boot Failed, Reset!!");
 
+	// intentional fall through
 fail:
 	// should not get here, if we do, we should reset
 	run_command("reset", 0);
@@ -2132,4 +2139,3 @@ U_BOOT_CMD(
 	deckard_bootmenu, CONFIG_SYS_MAXARGS,     1,      do_deckard_bootmenu,
     "Deckard display logo", deckard_bootmenu_help_text
 );
-
