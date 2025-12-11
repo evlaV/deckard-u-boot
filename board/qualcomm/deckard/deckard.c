@@ -167,7 +167,14 @@ int display_turn_off_force(void);
 static void deckard_load_and_display_image(enum full_screen_images_t image);
 int deckard_check_for_key_press(void);
 
-struct deckard_devices_t
+typedef enum
+{
+	BOOT_INTENTION_START_USERSPACE,
+	BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY,
+	BOOT_INTENTION_CHARGE_AND_WAIT
+} boot_intention_t;
+
+typedef struct
 {
 	struct udevice *pmk8550;
 	struct udevice *pm8550vse;
@@ -175,11 +182,12 @@ struct deckard_devices_t
 	struct udevice *max17320;
 	struct udevice *vleds[3];
 	// TODO: move buttons here?
-};
+} deckard_devices_t;
 
-static struct deckard_devices_t g_deckard_devices = { 0 };
-static int deckard_setup_devices( struct deckard_devices_t * pdevices );
-static void deckard_wait_to_boot( struct deckard_devices_t * pdevices );
+static deckard_devices_t g_deckard_devices = { 0 };
+static int deckard_setup_devices( deckard_devices_t * pdevices );
+static void deckard_wait_to_boot( deckard_devices_t * pdevices );
+static boot_intention_t calc_boot_intention( deckard_devices_t * pdevices );
 
 const char *deckard_get_esp_part(void);
 const char *deckard_get_fw_part(void);
@@ -394,7 +402,7 @@ static void deckard_load_and_display_image(enum full_screen_images_t image)
 }
 
 // TODO: return richer error codes / bitmask for display, including fatal/non-fatal
-static int deckard_setup_devices( struct deckard_devices_t * pdevices )
+static int deckard_setup_devices( deckard_devices_t * pdevices )
 {
 	memset( pdevices, 0, sizeof( *pdevices ) );
 
@@ -1075,13 +1083,19 @@ int misc_init_r(void)
 	}
 	else
 	{
-		// TODO: it's not ideal to show the boot logo blindly,
-		// as we'd rather check battery state and show the appropraite
-		// image here.  Move that calculation / init here.
 		// TODO: also see if the select button is pressed, and if so
 		// show the console instead
+		boot_intention_t boot_intention = calc_boot_intention( &g_deckard_devices );
+		if ( boot_intention == BOOT_INTENTION_START_USERSPACE )
+		{
+			deckard_load_and_display_image( IMAGE_BOOT_LOGO );
+		}
+		else if ( boot_intention == BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY )
+		{
+			deckard_load_and_display_image( IMAGE_BATTERY_DEAD );
+		}
+
 		// TODO: change 2s delay to only do that if serial console is connected
-		deckard_load_and_display_image(IMAGE_BOOT_LOGO);
 	}
 
 	if (env_get_ulong("vidconsole_enable", 10, 0) == 1)
@@ -1456,7 +1470,7 @@ void show_boot_progress(int progress)
 
 // TODO: add is battery_ready_to_show_image. needs new criterial
 
-static int is_battery_ready_to_boot_to_userspace( struct deckard_devices_t * pdevices )
+static int is_battery_ready_to_boot_to_userspace( deckard_devices_t * pdevices )
 {
 	if ( !pdevices->max17320 )
 		return true; // error should fail in direction of allow booting
@@ -1475,13 +1489,7 @@ static int is_battery_ready_to_boot_to_userspace( struct deckard_devices_t * pde
 	return ( soc >= BATTERY_MIN_BOOT_SOC && ocv > OCV_BOOT_VOLTAGE );
 }
 
-enum boot_intention_t {
-	BOOT_INTENTION_START_USERSPACE,
-	BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY,
-	BOOT_INTENTION_CHARGE_AND_WAIT,
-};
-
-static enum boot_intention_t calc_boot_intention( struct deckard_devices_t * pdevices )
+static boot_intention_t calc_boot_intention( deckard_devices_t * pdevices )
 {
 	/*
 	 * check on/off reasons to see if we were booted by a button
@@ -1539,7 +1547,7 @@ static enum boot_intention_t calc_boot_intention( struct deckard_devices_t * pde
 // trap in uboot while we wait for power button to be pushed
 // we should charge and do various things here like light up the LED's etc
 
-static void deckard_wait_to_boot( struct deckard_devices_t * pdevices )
+static void deckard_wait_to_boot( deckard_devices_t * pdevices )
 {
 	printf("Waiting for power button press and battery state of charge threshold to continue booting...\n");
 
@@ -2037,7 +2045,7 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 	if( booted_from_usb() ) disk_interface = DISK_INTERFACE_USB;
 
 	int in_factory_mode = ( env_get_ulong("factory-mode", 10, 0) == 1 );
-	enum boot_intention_t boot_intention = in_factory_mode ? BOOT_INTENTION_START_USERSPACE : calc_boot_intention( &g_deckard_devices );
+	boot_intention_t boot_intention = in_factory_mode ? BOOT_INTENTION_START_USERSPACE : calc_boot_intention( &g_deckard_devices );
 
 	if ( boot_intention == BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY ||
 		boot_intention == BOOT_INTENTION_CHARGE_AND_WAIT )
