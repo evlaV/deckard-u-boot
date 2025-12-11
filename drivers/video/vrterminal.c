@@ -4,7 +4,8 @@
 #include <string.h>
 
 
-#ifdef VRTERMINAL_UBOOT
+#if defined(CONFIG_CONSOLE_VR)
+//CONFIG_CONSOLE_VR is used currently by uboot
 #include <ansi.h>
 #include <exports.h>
 #include <linux/ctype.h>
@@ -60,7 +61,7 @@ static inline int is_visible_ascii( unsigned char c )
 static char *parsenum(char *s, int *num)
 {
 	char *end;
-#ifdef VRTERMINAL_UBOOT
+#if defined(CONFIG_CONSOLE_VR)
 	*num = simple_strtol(s, &end, 10);
 #else
 	*num = strtol(s, &end, 10);
@@ -423,7 +424,7 @@ void vrterminal_update_reset( TerminalUpdate_t * pUpdate )
 
 void handle_escape_char( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, char ch )
 {
-#ifdef VRTERMINAL_UBOOT
+#if defined(CONFIG_CONSOLE_VR)
 	if (!IS_ENABLED(CONFIG_VIDEO_ANSI))
 		goto error;
 #endif
@@ -631,7 +632,7 @@ void handle_escape_char( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, c
 		break;
 	}
 	default:
-#ifdef VRTERMINAL_UBOOT
+#if defined(CONFIG_CONSOLE_VR)
 		debug("unrecognized escape sequence: %*s\n",
 			  pTerminal->escape_len, pTerminal->escape_buf);
 #endif

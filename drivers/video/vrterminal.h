@@ -3,7 +3,7 @@
 #ifndef VRTERMINAL
 #define VRTERMINAL
 
-#ifdef VRTERMINAL_UBOOT
+#if defined(CONFIG_CONSOLE_VR)
 #include <charset.h>
 #endif
 
