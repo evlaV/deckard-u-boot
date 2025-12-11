@@ -165,6 +165,7 @@ enum full_screen_images_t
 };
 
 bool g_display_enabled = false;
+
 int display_turn_off(void);
 int display_turn_off_force(void);
 static void deckard_load_and_display_image(enum full_screen_images_t image);
