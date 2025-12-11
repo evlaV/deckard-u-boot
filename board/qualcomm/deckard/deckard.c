@@ -167,7 +167,7 @@ enum full_screen_images_t
 bool g_display_enabled = false;
 int display_turn_off(void);
 int display_turn_off_force(void);
-void deckard_load_logo(enum full_screen_images_t image);
+static void deckard_load_and_display_image(enum full_screen_images_t image);
 int deckard_check_for_key_press(void);
 int deckard_prepare_for_boot(void);
 const char *deckard_get_esp_part(void);
@@ -318,7 +318,7 @@ int usb_setup(void)
 	return 0;
 }
 
-static int deckard_do_load_logo(char * logo_name)
+static int deckard_load_image(char * logo_name)
 {
 	int  argc = 5;
 	char *argv[5];
@@ -353,7 +353,7 @@ static int deckard_do_load_logo(char * logo_name)
 	return do_load(NULL, 0, argc, argv, FS_TYPE_ANY);
 }
 
-void deckard_load_logo(enum full_screen_images_t image)
+static void deckard_load_and_display_image(enum full_screen_images_t image)
 {
 	int ret = 0;
 	
@@ -362,11 +362,11 @@ void deckard_load_logo(enum full_screen_images_t image)
 	switch(image)
 	{
 		case BOOT_LOGO:
-			ret = deckard_do_load_logo("logo.bmp.gz");
+			ret = deckard_load_image("logo.bmp.gz");
 			break;
 
 		case BATTERY_CHARGING:
-			ret = deckard_do_load_logo("logo_battery_charging.bmp.gz");
+			ret = deckard_load_image("logo_battery_charging.bmp.gz");
 			break;
 
 		default:
@@ -1028,7 +1028,7 @@ int misc_init_r(void)
 	if ( g_display_enabled )
 	{
 		printf("DISPLAY ON\n");
-		deckard_load_logo(BOOT_LOGO);
+		deckard_load_and_display_image(BOOT_LOGO);
 	}
 	else
 	{
@@ -1505,9 +1505,9 @@ int deckard_prepare_for_boot()
 	int deckard_shutdown_loop_counter = 1;
 
 	if ( deckard_battery_is_charging_enabled(pm8550b) ) {
-		deckard_load_logo(BATTERY_CHARGING);
+		deckard_load_and_display_image(BATTERY_CHARGING);
 	} else {
-		deckard_load_logo(BATTERY_DEAD);
+		deckard_load_and_display_image(BATTERY_DEAD);
 	}
 
 	int deckard_display_off_counter = 20; // 100ms * 20 = 2s
@@ -2066,7 +2066,7 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	//then the kernel will copy that image to it's framebuffer so we see the boot logo
 	total_console_state &= ~VIDEO_CONSOLE_MASK;
 	console_state_handler();
-	deckard_load_logo(BOOT_LOGO); //switch to booting logo before we boot up
+	deckard_load_and_display_image(BOOT_LOGO); //switch to booting logo before we boot up
 	display_turn_off();
 	run_command("booti ${kernel_addr_r} ${ramdisk_addr_r} ${fdtcontroladdr}", 0);
 
@@ -2091,7 +2091,7 @@ U_BOOT_CMD(
 
 int do_deckard_logo(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
-	deckard_load_logo(BOOT_LOGO);
+	deckard_load_and_display_image(BOOT_LOGO);
 	return 0;
 }
 
