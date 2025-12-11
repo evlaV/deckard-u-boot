@@ -157,15 +157,11 @@ int g_power_button_state = 0;
 
 enum full_screen_images_t 
 {
-	BOOT_LOGO = 0,
-	BATTERY_CHARGING = 1,
-	BATTERY_DEAD = 2,
-	BATTERY_PROBLEM = 3,
-	FULLSCREEN_IMAGES_COUNT
+	IMAGE_BOOT_LOGO,
+	IMAGE_BATTERY_DEAD
 };
 
 bool g_display_enabled = false;
-
 int display_turn_off(void);
 int display_turn_off_force(void);
 static void deckard_load_and_display_image(enum full_screen_images_t image);
@@ -354,6 +350,9 @@ static int deckard_load_image(char * logo_name)
 	return do_load(NULL, 0, argc, argv, FS_TYPE_ANY);
 }
 
+// TODO: confirm that this isn't leaking memory 
+// Ideally, also add a comment as to what this does for memory ownership
+
 static void deckard_load_and_display_image(enum full_screen_images_t image)
 {
 	int ret = 0;
@@ -362,14 +361,12 @@ static void deckard_load_and_display_image(enum full_screen_images_t image)
 
 	switch(image)
 	{
-		case BOOT_LOGO:
+		case IMAGE_BOOT_LOGO:
 			ret = deckard_load_image("logo.bmp.gz");
 			break;
-
-		case BATTERY_CHARGING:
-			ret = deckard_load_image("logo_battery_charging.bmp.gz");
+		case IMAGE_BATTERY_DEAD:
+			ret = deckard_load_image("logo_battery_low.bmp.gz");
 			break;
-
 		default:
 			ret = -1;
 			break;
@@ -1026,15 +1023,21 @@ int misc_init_r(void)
 		g_display_enabled = true;
 	}
 
-	if ( g_display_enabled )
+	if ( !g_display_enabled )
 	{
-		printf("DISPLAY ON\n");
-		deckard_load_and_display_image(BOOT_LOGO);
+		// TODO: is this needed?
+		printf("DISPLAY OFF\n");
+		display_turn_off_force(); //force just means dont check if g_display_enabled is true
 	}
 	else
 	{
-		printf("DISPLAY OFF\n");
-		display_turn_off_force(); //force just means dont check if g_display_enabled is true
+		// TODO: it's not ideal to show the boot logo blindly,
+		// as we'd rather check battery state and show the appropraite
+		// image here.  Move that calculation / init here.
+		// TODO: also see if the select button is pressed, and if so
+		// show the console instead
+		// TODO: change 2s delay to only do that if serial console is connected
+		deckard_load_and_display_image(BOOT_LOGO);
 	}
 
 	if (env_get_ulong("vidconsole_enable", 10, 0) == 1)
@@ -1414,7 +1417,6 @@ int deckard_prepare_for_boot()
 	int soc = -1;
 	int ret;
 	int boot_up_desired = 0;
-	int battery_low_condition = 0;
 	
 	// Find the max17320
 	ret = pmic_get("pmic@36", &max17320);
@@ -1463,18 +1465,22 @@ int deckard_prepare_for_boot()
 		boot_up_desired = true;
 	}
 
-	battery_low_condition = ( soc <= BATTERY_MIN_BOOT_SOC || soc < 0 );
+	int battery_low_condition = ( soc <= BATTERY_MIN_BOOT_SOC || soc < 0 );
 	
 	if( battery_low_condition )
 	{
 		printf("low battery, wait to boot until charged further\n");
-	} 
+	}
 	else if( boot_up_desired )
 	{
 		printf("booting normally...\n");
 		return 0;
 	}
 	
+	// We are preventing boot from occuring
+	// this can occur under nominal conditions when a device is plugged in to charge, while off
+	// We are not booting normally.  We are in charging (from off), etc, or error state
+
 	printf("Waiting for power button press and battery state of charge threshold to continue booting...\n");
 
 	int ret_r = led_get_by_label("red", &led_red);
@@ -1505,15 +1511,17 @@ int deckard_prepare_for_boot()
 
 	int deckard_shutdown_loop_counter = 1;
 
-	if ( deckard_battery_is_charging_enabled(pm8550b) ) {
-		deckard_load_and_display_image(BATTERY_CHARGING);
-	} else {
-		deckard_load_and_display_image(BATTERY_DEAD);
+	if ( battery_low_condition )
+	{
+		// TODO: repeated calls to load the image seems redundant. can we skip?
+		deckard_load_and_display_image(IMAGE_BATTERY_DEAD);
 	}
 
-	int deckard_display_off_counter = 20; // 100ms * 20 = 2s
-	//trap in uboot while we wait for power button to be pushed
-	//we should charge and do various things here like light up the LED's etc
+	static const int k_nBatteryImageCount = 10 * 3; // 100ms * 10 * 5 = 3s
+	int deckard_display_off_counter = k_nBatteryImageCount;
+
+	// trap in uboot while we wait for power button to be pushed
+	// we should charge and do various things here like light up the LED's etc
 	while(power_button_avail)
 	{
 		// ADSP Start Check
@@ -1532,12 +1540,16 @@ int deckard_prepare_for_boot()
 
 		if(power_button_pushed(btn)) {
 			ret = check_power_state( deckard_battery_get_capacity(max17320), deckard_battery_get_vfocv(max17320));
-			if(ret == 0) 
+			if(ret == 0)
 			{
 				printf("ok to boot!\n");
+				deckard_display_off_counter = -1;
+				deckard_load_and_display_image(IMAGE_BOOT_LOGO);
 				break;
 			}
-			deckard_display_off_counter = 20;
+
+			deckard_display_off_counter = k_nBatteryImageCount;
+			deckard_load_and_display_image(IMAGE_BATTERY_DEAD);
 		}
 
 #if 0
@@ -1568,8 +1580,8 @@ int deckard_prepare_for_boot()
 				break;
 			}
 		}
-		
-		if ( deckard_display_off_counter-- == 0 )
+
+		if ( deckard_display_off_counter >= 0 && ( deckard_display_off_counter-- == 0 ) )
 		{
 			display_turn_off();
 		}
@@ -1583,7 +1595,8 @@ int deckard_prepare_for_boot()
 		printf("adsp: stopping...\n");
 		rproc_stop(id);
 	}
-		
+	
+	// TODO: move this into the checking loop to show red if underpowered, off otherwise
 	if(leds_avail)
 	{
 		led_set_state(led_red, LEDST_ON);
@@ -2067,7 +2080,7 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	//then the kernel will copy that image to it's framebuffer so we see the boot logo
 	total_console_state &= ~VIDEO_CONSOLE_MASK;
 	console_state_handler();
-	deckard_load_and_display_image(BOOT_LOGO); //switch to booting logo before we boot up
+	deckard_load_and_display_image(IMAGE_BOOT_LOGO); //switch to booting logo before we boot up
 	display_turn_off();
 	run_command("booti ${kernel_addr_r} ${ramdisk_addr_r} ${fdtcontroladdr}", 0);
 
@@ -2092,7 +2105,7 @@ U_BOOT_CMD(
 
 int do_deckard_logo(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
-	deckard_load_and_display_image(BOOT_LOGO);
+	deckard_load_and_display_image(IMAGE_BOOT_LOGO);
 	return 0;
 }
 
