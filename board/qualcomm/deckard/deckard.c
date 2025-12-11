@@ -179,7 +179,7 @@ struct deckard_devices_t
 
 static struct deckard_devices_t g_deckard_devices = { 0 };
 static int deckard_setup_devices( struct deckard_devices_t * pdevices );
-static void deckard_prepare_for_boot( struct deckard_devices_t * pdevices );
+static void deckard_wait_to_boot( struct deckard_devices_t * pdevices );
 
 const char *deckard_get_esp_part(void);
 const char *deckard_get_fw_part(void);
@@ -1331,7 +1331,7 @@ int power_button_pushed(struct udevice *btn)
 	return 0;
 }
 
-int deckard_adsp_start(int id)
+int deckard_adsp_start( int id )
 {
 	int ret;
 
@@ -1349,7 +1349,22 @@ int deckard_adsp_start(int id)
 		return ret;
 	}
 
+	printf("deckard: started adsp\n");
 	return 0;
+}
+
+int deckard_adsp_stop( int id )
+{
+	int ret = rproc_stop( id );
+	if ( ret != 0 )
+	{
+		printf("deckard: failed to stop adsp\n");
+	}
+	else
+	{
+		printf("deckard: stopped adsp\n");
+	}
+	return ret;
 }
 
 int deckard_check_for_key_press()
@@ -1431,50 +1446,54 @@ void show_boot_progress(int progress)
 	display_turn_off();
 }
 
-int check_power_state(int soc, int ocv)
+/*
+	turn device on. lowest level battery allow us to get into SPL at all (prior to uboot).
+	in uboot:
+		- can still be in hairy edge.
+		- need to have enough to boot DSP for higher power charging
+		- need to have enough to boot displays
+*/
+
+// TODO: add is battery_ready_to_show_image. needs new criterial
+
+static int is_battery_ready_to_boot_to_userspace( struct deckard_devices_t * pdevices )
 {
-	int ret = 1;
-	// only proceed to boot if battery is above min boot capacity
-	// if soc read fails, continue to boot
+	if ( !pdevices->max17320 )
+		return true; // error should fail in direction of allow booting
 
+	// state of charge
+	int soc = deckard_battery_get_capacity( pdevices->max17320 );
+	int ocv = deckard_battery_get_vfocv( pdevices->max17320 );
+
+	if ( soc < 0 || ocv < 0 )
+		return true; // error should fail in direction of allow booting
+
+	// old criteria (less strict)
+	// int battery_low_condition = ( soc <= BATTERY_MIN_BOOT_SOC || soc < 0 );
+	// Stricter criteria. Check capacity and voltage
 	// TODO Fix this until VOCV is above UOCVP
-	// Two Checks to exit
-	if ((soc >= BATTERY_MIN_BOOT_SOC && ocv > OCV_BOOT_VOLTAGE) || soc < 0 || ocv < 0) {
-		ret = 0;
-	}
-
-	return ret;
-	
+	return ( soc >= BATTERY_MIN_BOOT_SOC && ocv > OCV_BOOT_VOLTAGE );
 }
 
+enum boot_intention_t {
+	BOOT_INTENTION_START_USERSPACE,
+	BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY,
+	BOOT_INTENTION_CHARGE_AND_WAIT,
+};
 
-static void deckard_prepare_for_boot( struct deckard_devices_t * pdevices )
+static enum boot_intention_t calc_boot_intention( struct deckard_devices_t * pdevices )
 {
-	int power_button_avail = 0;
-	struct udevice *btn; // move to devices?
-	int leds_avail = 0;
-	int id = 0;
-	
-	int ret;
-	int boot_up_desired = 0;
-
-	// get battery capacity
-	int soc =  pdevices->max17320 ? deckard_battery_get_capacity( pdevices->max17320 ) : -1;
-	printf("Battery: %d %%\n", soc);
-
 	/*
 	 * check on/off reasons to see if we were booted by a button
 	 * push or warm reset (reboot command), in case of unknown reason
 	 * (insert of battery and then plug charger) boot also.
 	 */
 	struct pon_on_off_reason pon_poff_reason = { 0 };
-	ret = pmk8550_get_on_off_reason(&pon_poff_reason);
+	int ret = pmk8550_get_on_off_reason(&pon_poff_reason);
 	if (ret < 0) {
 		printf("failed to get on off reason\n");
-		return;
+		return BOOT_INTENTION_START_USERSPACE;
 	}
-	
-	//check pon_reason to see if we were booted by a button push or warm reset (reboot command)
 
 	printf("pon_reset_type: %s [0x%x] trigger: %s  [0x%x] reason: 0x%x\n",
 		pmk8550_get_pon_type_str(pon_poff_reason.type),
@@ -1482,7 +1501,8 @@ static void deckard_prepare_for_boot( struct deckard_devices_t * pdevices )
 		pmk8550_get_pon_trigger_str(pon_poff_reason.trigger),
 		pon_poff_reason.trigger,
 		pon_poff_reason.pon_reason);
-		
+	
+	int boot_up_desired = false;
 	if(pon_poff_reason.pon_reason & 0x80)
 	{
 		printf("pon_reason includes button press, continuing to boot\n");
@@ -1499,84 +1519,83 @@ static void deckard_prepare_for_boot( struct deckard_devices_t * pdevices )
 		boot_up_desired = true;
 	}
 
-	int battery_low_condition = ( soc <= BATTERY_MIN_BOOT_SOC || soc < 0 );
-	
-	if( battery_low_condition )
+	if( boot_up_desired && !is_battery_ready_to_boot_to_userspace( pdevices ) )
 	{
-		printf("low battery, wait to boot until charged further\n");
+		printf("boot intention: cannot boot, battery not ready\n");
+		return BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY;
 	}
 	else if( boot_up_desired )
 	{
-		printf("booting normally...\n");
-		return;
+		printf("boot intention: start userspace\n");
+		return BOOT_INTENTION_START_USERSPACE;
 	}
-	
-	// We are preventing boot from occuring
-	// this can occur under nominal conditions when a device is plugged in to charge, while off
-	// We are not booting normally.  We are in charging (from off), etc, or error state
-
-	printf("Waiting for power button press and battery state of charge threshold to continue booting...\n");
-
-	ret = button_get_by_label("Power Button", &btn);
-	if (ret < 0) 
-	{
-		printf("Couldn't find power button!\n");
-	} 
 	else
 	{
-		power_button_avail = 1;
+		printf("boot intention: charge and wait\n");
+		return BOOT_INTENTION_CHARGE_AND_WAIT;
 	}
+}
 
-	int deckard_shutdown_loop_counter = 1;
+// trap in uboot while we wait for power button to be pushed
+// we should charge and do various things here like light up the LED's etc
 
-	if ( battery_low_condition )
-	{
-		// TODO: repeated calls to load the image seems redundant. can we skip?
-		deckard_load_and_display_image(IMAGE_BATTERY_DEAD);
-	}
-
-	static const int k_nBatteryImageCount = 10 * 3; // 100ms * 10 * 5 = 3s
-	int deckard_display_off_counter = k_nBatteryImageCount;
+static void deckard_wait_to_boot( struct deckard_devices_t * pdevices )
+{
+	printf("Waiting for power button press and battery state of charge threshold to continue booting...\n");
 
 	// Check for the existance of devices used below
 	if ( !pdevices->max17320 || !pdevices->pm8550b )
 	{
-		// Early exit, and continue booting if these are not found
-		// TODO: return error code for better reporting
+		printf( "ERROR: no pdevices->max17320/pdevices->pm8550b. Cannot wait to boot.\n" );
 		return;
 	}
 
-	// trap in uboot while we wait for power button to be pushed
-	// we should charge and do various things here like light up the LED's etc
-	int adsp_loaded = 0;
-	while(power_button_avail)
+	struct udevice *btn; // TODO: move to devices?
+	int ret = button_get_by_label("Power Button", &btn);
+	if (ret < 0) 
 	{
-		// ADSP Start Check
-		if (adsp_loaded == 0) {
-			const int ocv = deckard_battery_get_vfocv(pdevices->max17320);
+		printf( "ERROR: no power button. Cannot wait to boot.\n" );
+		return;
+	} 
+
+	int deckard_shutdown_loop_counter = 1;
+	static const int k_nBatteryImageCount = 10 * 3; // 100ms * 10 * 5 = 3s
+	int deckard_display_off_counter = k_nBatteryImageCount;
+	int adsp_loaded = 0;
+	static const int k_ID_ADSP = 0;
+
+	while( 1 )
+	{
+		// Attempt to load the ADSP, to allow charging
+		if ( adsp_loaded == 0 )
+		{
+			const int ocv = deckard_battery_get_vfocv( pdevices->max17320 );
 			// VF OCV must be above boot voltage to survive charging pause and PD Negotiation.
-			if (ocv > OCV_BOOT_VOLTAGE || ocv < 0) {
-				//start up adsp
-				printf("adsp: starting...\n");
-				ret = deckard_adsp_start(id);
+			// ADSP controls high charging mode. prior to ADSP being initialized, it's still
+			// capable of charging in lower (typically 5V@1A) mode.
+
+			if ( ocv > OCV_BOOT_VOLTAGE || ocv < 0 )
+			{
+				ret = deckard_adsp_start( k_ID_ADSP );
 				if (!ret) {
 					adsp_loaded = 1;
 				}
 			}
 		}
 
-		if(power_button_pushed(btn)) {
-			ret = check_power_state( deckard_battery_get_capacity(pdevices->max17320), deckard_battery_get_vfocv(pdevices->max17320));
-			if(ret == 0)
+		if( power_button_pushed( btn ) )
+		{
+			if( is_battery_ready_to_boot_to_userspace( pdevices ) )
 			{
-				printf("ok to boot!\n");
 				deckard_display_off_counter = -1;
 				deckard_load_and_display_image(IMAGE_BOOT_LOGO);
 				break;
 			}
-
-			deckard_display_off_counter = k_nBatteryImageCount;
-			deckard_load_and_display_image(IMAGE_BATTERY_DEAD);
+			else
+			{
+				deckard_display_off_counter = k_nBatteryImageCount;
+				deckard_load_and_display_image(IMAGE_BATTERY_DEAD);
+			}
 		}
 
 #if 0
@@ -1593,7 +1612,7 @@ static void deckard_prepare_for_boot( struct deckard_devices_t * pdevices )
 		//check every 10 loops to avoid spamming the SPMI bus
 		if ( deckard_shutdown_loop_counter-- == 0 )
 		{
-			soc = deckard_battery_get_capacity(pdevices->max17320);
+			int soc = deckard_battery_get_capacity(pdevices->max17320);
 			int avg_vcell = deckard_battery_get_avg_vcell(pdevices->max17320);
 			printf("\r" ANSI_CLEAR_LINE "Battery: %d%%, %dmV ", soc,avg_vcell); fflush(stdout);
 			deckard_shutdown_loop_counter = 10;
@@ -1617,11 +1636,9 @@ static void deckard_prepare_for_boot( struct deckard_devices_t * pdevices )
 		mdelay(100);
 	}
 
-	if (adsp_loaded)
+	if ( adsp_loaded )
 	{
-		printf("adsp: stopping...\n");
-		// TODO: add a function deckard_adsp_stop and call it instead 
-		rproc_stop(id);
+		deckard_adsp_stop( k_ID_ADSP );
 	}
 	
 	// TODO: move this into the checking loop to show red if underpowered, off otherwise
@@ -2019,14 +2036,13 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 
 	if( booted_from_usb() ) disk_interface = DISK_INTERFACE_USB;
 
-	// Do not run adsp charging if we are in factory mode or coming out of ship mode
-	if (env_get_ulong("factory-mode", 10, 0) == 1)
+	int in_factory_mode = ( env_get_ulong("factory-mode", 10, 0) == 1 );
+	enum boot_intention_t boot_intention = in_factory_mode ? BOOT_INTENTION_START_USERSPACE : calc_boot_intention( &g_deckard_devices );
+
+	if ( boot_intention == BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY ||
+		boot_intention == BOOT_INTENTION_CHARGE_AND_WAIT )
 	{
-		printf("Factory mode, skipping prepare for boot functionality\n");
-	}
-	else
-	{
-		deckard_prepare_for_boot( &g_deckard_devices );
+		deckard_wait_to_boot( &g_deckard_devices );
 	}
 
 	// FIXME: eventually invert this so we try EFI first, maybe find a less hacky way to do this?
