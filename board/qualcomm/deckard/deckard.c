@@ -166,7 +166,21 @@ int display_turn_off(void);
 int display_turn_off_force(void);
 static void deckard_load_and_display_image(enum full_screen_images_t image);
 int deckard_check_for_key_press(void);
-int deckard_prepare_for_boot(void);
+
+struct deckard_devices_t
+{
+	struct udevice *pmk8550;
+	struct udevice *pm8550vse;
+	struct udevice *pm8550b;
+	struct udevice *max17320;
+	struct udevice *vleds[3];
+	// TODO: move buttons here?
+};
+
+static struct deckard_devices_t g_deckard_devices = { 0 };
+static int deckard_setup_devices( struct deckard_devices_t * pdevices );
+static void deckard_prepare_for_boot( struct deckard_devices_t * pdevices );
+
 const char *deckard_get_esp_part(void);
 const char *deckard_get_fw_part(void);
 
@@ -379,59 +393,78 @@ static void deckard_load_and_display_image(enum full_screen_images_t image)
 	bmp_display(CONFIG_SYS_LOAD_ADDR, 0,0);
 }
 
-static void deckard_setup(void)
+// TODO: return richer error codes / bitmask for display, including fatal/non-fatal
+static int deckard_setup_devices( struct deckard_devices_t * pdevices )
 {
-	int             ret;
-	struct udevice *pmk8550;
-	struct udevice *pm8550vse;
-	struct udevice *pm8550b;
-	struct udevice *max17320;
+	memset( pdevices, 0, sizeof( *pdevices ) );
 
 #if CHECK_PMICS
 	check_pmics_comms();
 #endif
 
+	int nerror = 0;
+
 	// Find the PMK8650
-	ret = pmic_get("pmic@0", &pmk8550);
+	int ret = pmic_get("pmic@0", &pdevices->pmk8550);
 	if (ret != 0) {
 		printf("Failed to Find PMK8650\n");
-		return;
+		nerror = 1;
 	}
 
 	// Find the PM8550VS_e
-	ret = pmic_get("pmic@4", &pm8550vse);
+	ret = pmic_get("pmic@4", &pdevices->pm8550vse);
 	if (ret != 0) {
 		printf("Failed to Find PM8550VS_e\n");
-		return;
+		nerror = 1;
 	}
 
 	// Find the PM8550B
-	ret = pmic_get("pmic@7", &pm8550b);
+	ret = pmic_get("pmic@7", &pdevices->pm8550b);
 	if (ret != 0) {
 		printf("Failed to Find PM8550B\n");
-		return;
+		nerror = 1;
 	}
 
 	// Find the max17320
-	ret = pmic_get("pmic@36", &max17320);
+	ret = pmic_get("pmic@36", &pdevices->max17320);
 	if (ret != 0) {
 		printf("Failed to Find max17320\n");
-		return;
+		nerror = 1;
 	}
 
-	smb1510_check_subtype(pmk8550);
+	if ( pdevices->pmk8550 )
+	{
+		// TODO: does this have side-effects? Should we check the return values?
+		smb1510_check_subtype(pdevices->pmk8550);
+	}
 
 	/* Fix GPIO Levels that XBL continues to not let us */
-	pm8550vs_set_gpio_vin_level(pm8550vse, PM8550VS_GPIO_3, PM8550VS_GPIO_VIN_1);
-	pm8550vs_set_gpio_vin_level(pm8550vse, PM8550VS_GPIO_4, PM8550VS_GPIO_VIN_1);
+	// TODO: verify result?
+	if ( pdevices->pm8550vse )
+	{
+		pm8550vs_set_gpio_vin_level(pdevices->pm8550vse, PM8550VS_GPIO_3, PM8550VS_GPIO_VIN_1);
+		pm8550vs_set_gpio_vin_level(pdevices->pm8550vse, PM8550VS_GPIO_4, PM8550VS_GPIO_VIN_1);
+	}
 
 	/* Ensure Battery is OK to proceed */
-	deckard_battery_prep_for_boot(pmk8550, pm8550b, max17320);
+	// TODO: verify result
+	if ( pdevices->pmk8550 && pdevices->pm8550b && pdevices->max17320 )
+	{
+		deckard_battery_prep_for_boot(pdevices->pmk8550, pdevices->pm8550b, pdevices->max17320);
+	}
 
-	printf("smb1510: enable fixed frequency at 500khz mode\n");
-	smb1510_set_switching_frequency(pmk8550, 0x0F);
+	if ( pdevices->pmk8550 )
+	{
+		printf("smb1510: enable fixed frequency at 500khz mode\n");
+		// TODO: verify result
+		smb1510_set_switching_frequency(pdevices->pmk8550, 0x0F);
+	}
 
-	if( booted_from_usb() ) usb_setup();
+	led_get_by_label("red", &pdevices->vleds[0] );
+	led_get_by_label("green", &pdevices->vleds[1] );
+	led_get_by_label("blue", &pdevices->vleds[2] );
+
+	return nerror;
 }
 
 int console_state_handler(void) 
@@ -1012,7 +1045,18 @@ int misc_init_r(void)
 
 	deckard_disable_watchdog();
 
-	deckard_setup();
+	int nsetuperror = deckard_setup_devices( &g_deckard_devices );
+
+	if( booted_from_usb() )
+	{
+		usb_setup();
+	}
+
+	if ( nsetuperror )
+	{
+		printf("ERROR in deckard_setup_devices %d\n", nsetuperror );
+		// TODO: if fatal error, show an error display screen if possible
+	}
 
 	if (env_get_ulong("factory-mode", 10, 0) == 1) //skip display enabling if factory-mode is defined and set to 1
 	{
@@ -1403,41 +1447,31 @@ int check_power_state(int soc, int ocv)
 	
 }
 
-int deckard_prepare_for_boot()
+
+static void deckard_prepare_for_boot( struct deckard_devices_t * pdevices )
 {
-	struct udevice  *led_red, *led_green, *led_blue;
-	struct udevice *pm8550b = NULL;
-	struct udevice *max17320 = NULL;
-	struct pon_on_off_reason pon_poff_reason = { 0 };
 	int power_button_avail = 0;
-	struct udevice *btn;
-	int adsp_loaded = 0;
+	struct udevice *btn; // move to devices?
 	int leds_avail = 0;
 	int id = 0;
-	int soc = -1;
+	
 	int ret;
 	int boot_up_desired = 0;
-	
-	// Find the max17320
-	ret = pmic_get("pmic@36", &max17320);
 
-	if (ret != 0) {
-		printf("Failed to Find max17320\n");
-	} else {
-		// get battery capacity
-		soc = deckard_battery_get_capacity(max17320);
-		printf("Battery: %d %%\n", soc);
-	}
-	
+	// get battery capacity
+	int soc =  pdevices->max17320 ? deckard_battery_get_capacity( pdevices->max17320 ) : -1;
+	printf("Battery: %d %%\n", soc);
+
 	/*
 	 * check on/off reasons to see if we were booted by a button
 	 * push or warm reset (reboot command), in case of unknown reason
 	 * (insert of battery and then plug charger) boot also.
 	 */
+	struct pon_on_off_reason pon_poff_reason = { 0 };
 	ret = pmk8550_get_on_off_reason(&pon_poff_reason);
 	if (ret < 0) {
 		printf("failed to get on off reason\n");
-		return 0;
+		return;
 	}
 	
 	//check pon_reason to see if we were booted by a button push or warm reset (reboot command)
@@ -1474,7 +1508,7 @@ int deckard_prepare_for_boot()
 	else if( boot_up_desired )
 	{
 		printf("booting normally...\n");
-		return 0;
+		return;
 	}
 	
 	// We are preventing boot from occuring
@@ -1483,17 +1517,6 @@ int deckard_prepare_for_boot()
 
 	printf("Waiting for power button press and battery state of charge threshold to continue booting...\n");
 
-	int ret_r = led_get_by_label("red", &led_red);
-	int ret_g = led_get_by_label("green", &led_green);
-	int ret_b = led_get_by_label("blue", &led_blue);
-	if ( ret_r < 0 || ret_g < 0 || ret_b < 0 ) {
-		printf("Couldn't find led!\n");
-	}
-	 else 
-	{
-		leds_avail = 1;
-	}
-	
 	ret = button_get_by_label("Power Button", &btn);
 	if (ret < 0) 
 	{
@@ -1503,11 +1526,6 @@ int deckard_prepare_for_boot()
 	{
 		power_button_avail = 1;
 	}
-
-	// Find the PM8550B
-	ret = pmic_get("pmic@7", &pm8550b);
-	if (ret != 0)
-		printf("Failed to Find PM8550B\n");
 
 	int deckard_shutdown_loop_counter = 1;
 
@@ -1520,13 +1538,22 @@ int deckard_prepare_for_boot()
 	static const int k_nBatteryImageCount = 10 * 3; // 100ms * 10 * 5 = 3s
 	int deckard_display_off_counter = k_nBatteryImageCount;
 
+	// Check for the existance of devices used below
+	if ( !pdevices->max17320 || !pdevices->pm8550b )
+	{
+		// Early exit, and continue booting if these are not found
+		// TODO: return error code for better reporting
+		return;
+	}
+
 	// trap in uboot while we wait for power button to be pushed
 	// we should charge and do various things here like light up the LED's etc
+	int adsp_loaded = 0;
 	while(power_button_avail)
 	{
 		// ADSP Start Check
 		if (adsp_loaded == 0) {
-			const int ocv = deckard_battery_get_vfocv(max17320);
+			const int ocv = deckard_battery_get_vfocv(pdevices->max17320);
 			// VF OCV must be above boot voltage to survive charging pause and PD Negotiation.
 			if (ocv > OCV_BOOT_VOLTAGE || ocv < 0) {
 				//start up adsp
@@ -1539,7 +1566,7 @@ int deckard_prepare_for_boot()
 		}
 
 		if(power_button_pushed(btn)) {
-			ret = check_power_state( deckard_battery_get_capacity(max17320), deckard_battery_get_vfocv(max17320));
+			ret = check_power_state( deckard_battery_get_capacity(pdevices->max17320), deckard_battery_get_vfocv(pdevices->max17320));
 			if(ret == 0)
 			{
 				printf("ok to boot!\n");
@@ -1566,11 +1593,11 @@ int deckard_prepare_for_boot()
 		//check every 10 loops to avoid spamming the SPMI bus
 		if ( deckard_shutdown_loop_counter-- == 0 )
 		{
-			soc = deckard_battery_get_capacity(max17320);
-			int avg_vcell = deckard_battery_get_avg_vcell(max17320);
+			soc = deckard_battery_get_capacity(pdevices->max17320);
+			int avg_vcell = deckard_battery_get_avg_vcell(pdevices->max17320);
 			printf("\r" ANSI_CLEAR_LINE "Battery: %d%%, %dmV ", soc,avg_vcell); fflush(stdout);
 			deckard_shutdown_loop_counter = 10;
-			if(deckard_shutdown_condition(pm8550b)) 
+			if(deckard_shutdown_condition(pdevices->pm8550b)) 
 			{
 				printf("Device not charging for %d seconds, Shutdown\n", DECKARD_SHUTDOWN_TIMEOUT_S);
 				run_command("splctl set-uboot-poweroff-reason battery", 0); //inform the spl that we are shutting down due to low battery
@@ -1593,26 +1620,25 @@ int deckard_prepare_for_boot()
 	if (adsp_loaded)
 	{
 		printf("adsp: stopping...\n");
+		// TODO: add a function deckard_adsp_stop and call it instead 
 		rproc_stop(id);
 	}
 	
 	// TODO: move this into the checking loop to show red if underpowered, off otherwise
-	if(leds_avail)
+	if( pdevices->vleds[0] && pdevices->vleds[1] && pdevices->vleds[2] )
 	{
-		led_set_state(led_red, LEDST_ON);
-		led_set_state(led_green, LEDST_ON);
-		led_set_state(led_blue, LEDST_ON);
+		led_set_state(pdevices->vleds[0], LEDST_ON);
+		led_set_state(pdevices->vleds[1], LEDST_ON);
+		led_set_state(pdevices->vleds[2], LEDST_ON);
 		mdelay(100);
-		led_set_state(led_red, LEDST_OFF);
-		led_set_state(led_green, LEDST_OFF);
-		led_set_state(led_blue, LEDST_OFF);
+		led_set_state(pdevices->vleds[0], LEDST_OFF);
+		led_set_state(pdevices->vleds[1], LEDST_OFF);
+		led_set_state(pdevices->vleds[2], LEDST_OFF);
 		mdelay(100);
-		led_set_state(led_red, LEDST_ON);
-		led_set_state(led_green, LEDST_ON);
-		led_set_state(led_blue, LEDST_ON);
+		led_set_state(pdevices->vleds[0], LEDST_ON);
+		led_set_state(pdevices->vleds[1], LEDST_ON);
+		led_set_state(pdevices->vleds[2], LEDST_ON);
 	}
-
-	return 0;
 }
 
 /* EFI booting with EFI vars on a custom partition */
@@ -1933,7 +1959,10 @@ int enable_factory_reset_if_needed(void)
 }
 
 // Deckard boot command.  Executes sequence that would normally be in the boot.scr
-int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
+// Note: This runs both when manually invoked via the command-line, and also
+// under the nominal startup condition via env_set("bootcmd", "deckard_boot");
+
+int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
 	char * KERNEL_TARGET = "/boot/Image";
 	char * INITRD_TARGET = "/boot/initrd.uImage";
@@ -1948,7 +1977,7 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	char * temp_bootargs;
 	enum disk_interface_t disk_interface = DISK_INTERFACE_SCSI;
 
-	printf("Deckard custom boot function\n");
+	printf("deckard_boot_cmd\n");
 
 	// TODO is there a way to only do this if needed?
 	// If we haven't already scanned the SCSI devices we need to do it here
@@ -1997,7 +2026,7 @@ int do_deckard_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	}
 	else
 	{
-		deckard_prepare_for_boot();
+		deckard_prepare_for_boot( &g_deckard_devices );
 	}
 
 	// FIXME: eventually invert this so we try EFI first, maybe find a less hacky way to do this?
@@ -2106,17 +2135,17 @@ U_BOOT_LONGHELP(deckard_boot,
 );
 
 U_BOOT_CMD(
-	deckard_boot, CONFIG_SYS_MAXARGS,     1,      do_deckard_boot,
+	deckard_boot, CONFIG_SYS_MAXARGS,     1,      deckard_boot_cmd,
     "Boot Deckard system image.", deckard_boot_help_text
 );
 
-int do_deckard_logo(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
+int deckard_logo_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
 	deckard_load_and_display_image(IMAGE_BOOT_LOGO);
 	return 0;
 }
 
-int do_deckard_bootmenu(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
+int deckard_bootmenu_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
 	deckard_boot_menu();
 	return 0;
@@ -2127,7 +2156,7 @@ U_BOOT_LONGHELP(deckard_logo,
 );
 
 U_BOOT_CMD(
-	deckard_logo, CONFIG_SYS_MAXARGS,     1,      do_deckard_logo,
+	deckard_logo, CONFIG_SYS_MAXARGS,     1,      deckard_logo_cmd,
     "Deckard display logo", deckard_logo_help_text
 );
 
@@ -2136,6 +2165,6 @@ U_BOOT_LONGHELP(deckard_bootmenu,
 );
 
 U_BOOT_CMD(
-	deckard_bootmenu, CONFIG_SYS_MAXARGS,     1,      do_deckard_bootmenu,
+	deckard_bootmenu, CONFIG_SYS_MAXARGS,     1,      deckard_bootmenu_cmd,
     "Deckard display logo", deckard_bootmenu_help_text
 );
