@@ -1294,7 +1294,7 @@ int deckard_adsp_start(int id)
 		}
 	}
 
-	ret = rproc_start(id);
+	ret = rproc_start_with_param(id,0);
 	if (ret < 0) {
 		printf("deckard: failed to start rproc\n");
 		return ret;
