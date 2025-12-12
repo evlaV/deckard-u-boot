@@ -12,6 +12,8 @@
 // TODO: return richer error codes / bitmask for display, including fatal/non-fatal
 int deckard_setup_devices( deckard_devices_t * pdevices )
 {
+	printf("deckard_setup_devices\n");
+
 	int nerror = 0;
 	memset( pdevices, 0, sizeof( *pdevices ) );
 
@@ -50,7 +52,28 @@ int deckard_setup_devices( deckard_devices_t * pdevices )
 	// Power button
 	ret = button_get_by_label( "Power Button", &pdevices->btn_power );
 	if (ret != 0) {
-		printf("ERROR: Failed to find power button\n");
+		printf("ERROR: Failed to find button: Power Button\n");
+		nerror = 1;
+	} 
+
+	// Vol down button
+	ret = button_get_by_label( "Volume Down", &pdevices->btn_vol_down );
+	if (ret != 0) {
+		printf("ERROR: Failed to find button: Volume Down\n");
+		nerror = 1;
+	} 
+
+	// Vol down button
+	ret = button_get_by_label( "Volume Up", &pdevices->btn_vol_up );
+	if (ret != 0) {
+		printf("ERROR: Failed to find button: Volume Up\n");
+		nerror = 1;
+	} 
+
+	// Vol down button
+	ret = button_get_by_label( "Select", &pdevices->btn_select );
+	if (ret != 0) {
+		printf("ERROR: Failed to find button: Select\n");
 		nerror = 1;
 	} 
 
@@ -185,4 +208,13 @@ void deckard_setledcolor( LedColor color, deckard_devices_t * pdevices )
 		if ( pdevices->led_blue )
 			led_set_state(pdevices->led_blue, LEDST_OFF);
 	}
+}
+
+combined_button_state_t deckard_get_button_state( deckard_devices_t * pdevices )
+{
+	int mask = 0;
+	mask |= ( pdevices->btn_select    && ( button_get_state( pdevices->btn_select) == BUTTON_ON ) )  ? SELECT_BUTTON_MASK: 0;
+	mask |= ( pdevices->btn_vol_down && ( button_get_state( pdevices->btn_vol_down) == BUTTON_ON ) ) ? VOLDN_BUTTON_MASK : 0;
+	mask |= ( pdevices->btn_vol_up   && ( button_get_state( pdevices->btn_vol_up) == BUTTON_ON ) )   ? VOLUP_BUTTON_MASK : 0;
+	return ( combined_button_state_t ) mask;
 }

@@ -50,28 +50,6 @@ enum boot_priority {
 	BOOT_REMOVABLE_FIRST,
 };
 
-//these are set as a bit-mask typically when we detect a button is enabled
-#define VOLUP_BUTTON_MASK 0b100
-#define VOLDN_BUTTON_MASK 0b010
-#define SELECT_BUTTON_MASK 0b001
-enum combined_button_state_t {
-	VOLUP_OFF__VOLDN_OFF__SELECT_OFF = 0,
-	VOLUP_OFF__VOLDN_OFF__SELECT_ON  = 1,
-	VOLUP_OFF__VOLDN_ON__SELECT_OFF  = 2,
-	VOLUP_OFF__VOLDN_ON__SELECT_ON   = 3,
-	VOLUP_ON__VOLDN_OFF__SELECT_OFF  = 4,
-	VOLUP_ON__VOLDN_OFF__SELECT_ON   = 5,
-	VOLUP_ON__VOLDN_ON__SELECT_OFF   = 6,
-	VOLUP_ON__VOLDN_ON__SELECT_ON    = 7,
-};
-
-enum verbosity_level_t {
-	VERBOSITY_QUIET = 0,
-	VERBOSITY_ON  = 1,
-};
-
-enum combined_button_state_t g_total_button_state = 0;
-
 #define DECKARD_DUMMY_SERIAL_NUMB "123456789"
 #define TCSR_BOOT_MISC_DETECT 0x01fd9000
 
@@ -323,54 +301,10 @@ int enable_ramoops_serial_console(void)
 	return 0;
 }
 
-
-int check_button_states(enum verbosity_level_t verbosity)
-{
-	int ret;
-	struct udevice     *btn = NULL;
-	enum button_state_t button_state;
-
-	g_total_button_state = 0; //always clear previous state
-
-	ret = button_get_by_label("Volume Down", &btn);
-	if (ret < 0) {
-		if(verbosity>VERBOSITY_QUIET) { printf("Couldn't find Vol- button!\n"); }
-	} else {
-		button_state = button_get_state(btn);
-		if (button_state == BUTTON_ON) {
-			if(verbosity>VERBOSITY_QUIET) { printf("Vol- button pressed\n"); }
-			g_total_button_state |= VOLDN_BUTTON_MASK;
-		}
-	}
-
-	ret = button_get_by_label("Volume Up", &btn);
-	if (ret < 0) {
-		if(verbosity>VERBOSITY_QUIET) { printf("Couldn't find Vol+ button!\n"); }
-	} else {
-		button_state = button_get_state(btn);
-		if (button_state == BUTTON_ON) {
-			if(verbosity>VERBOSITY_QUIET) {  printf("Vol+ button pressed\n"); }
-			g_total_button_state |= VOLUP_BUTTON_MASK;
-		}
-	}
-	
-	ret = button_get_by_label("Select", &btn);
-	if (ret < 0) {
-		if(verbosity>VERBOSITY_QUIET) { printf("Couldn't find select button!\n"); }
-	} else {
-		button_state = button_get_state(btn);
-		if (button_state == BUTTON_ON) {
-			if(verbosity>VERBOSITY_QUIET) { printf("Select button pressed\n"); }
-			g_total_button_state |= SELECT_BUTTON_MASK;
-		}
-	}
-
-	return 0;
-}
-
-int button_state_handler(enum combined_button_state_t total_button_state) 
+int button_state_handler( combined_button_state_t total_button_state )
 {
 	printf("total button state = %d\n", total_button_state);
+
 	//note power button is handled separately since holding power button might be required for other button combo's 
 	//to get the device to reboot, so we don't want it to be part of the possible button combos
 	//otherwise it would require people to be holding power button down for a long period, 
@@ -707,8 +641,7 @@ int misc_init_r(void)
 		env_set("bootdelay","20");
 	}
 
-	check_button_states(VERBOSITY_QUIET);
-	button_state_handler(g_total_button_state);
+	button_state_handler( deckard_get_button_state( &g_deckard_devices ) );
 
 	g_total_console_state |= SERIAL_CONSOLE_MASK; //seems likely we always need this on otherwise will get crashes / sync abort handler loops?
 	console_state_handler();
@@ -1294,9 +1227,8 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 	env_set("ramdisk_addr_r", INITRD_ADDR);
 	env_set("fdtcontroladdr", DTB_ADDR);
 
-	check_button_states(VERBOSITY_ON);
-	button_state_handler(g_total_button_state);
-	
+	button_state_handler( deckard_get_button_state( &g_deckard_devices ) );
+
 	if (env_get_ulong("showbootmenu", 10, 0) == 1)
 	{
 		deckard_boot_menu();
