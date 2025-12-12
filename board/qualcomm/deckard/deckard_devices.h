@@ -31,7 +31,7 @@ typedef struct
 	struct udevice *led_red;
 	struct udevice *led_green;
 	struct udevice *led_blue;
-	struct udevice *power_btn;
+	struct udevice *btn_power;
 } deckard_devices_t;
 
 int deckard_setup_devices( deckard_devices_t * pdevices );

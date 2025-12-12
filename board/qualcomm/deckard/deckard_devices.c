@@ -48,7 +48,7 @@ int deckard_setup_devices( deckard_devices_t * pdevices )
 	}
 
 	// Power button
-	ret = button_get_by_label( "Power Button", &pdevices->power_btn );
+	ret = button_get_by_label( "Power Button", &pdevices->btn_power );
 	if (ret != 0) {
 		printf("ERROR: Failed to find power button\n");
 		nerror = 1;

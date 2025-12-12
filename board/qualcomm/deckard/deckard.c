@@ -71,7 +71,6 @@ enum verbosity_level_t {
 };
 
 enum combined_button_state_t g_total_button_state = 0;
-int g_power_button_state = 0;
 
 #define DECKARD_DUMMY_SERIAL_NUMB "123456789"
 #define TCSR_BOOT_MISC_DETECT 0x01fd9000
@@ -355,17 +354,6 @@ int check_button_states(enum verbosity_level_t verbosity)
 		}
 	}
 	
-	ret = button_get_by_label("Power Button", &btn);
-	if (ret < 0) {
-		if(verbosity>VERBOSITY_QUIET) { printf("Couldn't find power button!\n"); }
-	} else {
-		button_state = button_get_state(btn);
-		if (button_state == BUTTON_ON) {
-			if(verbosity>VERBOSITY_QUIET) { printf("PWR button pressed\n"); }
-			g_power_button_state = 1;
-		}
-	}
-
 	ret = button_get_by_label("Select", &btn);
 	if (ret < 0) {
 		if(verbosity>VERBOSITY_QUIET) { printf("Couldn't find select button!\n"); }
@@ -380,9 +368,9 @@ int check_button_states(enum verbosity_level_t verbosity)
 	return 0;
 }
 
-int button_state_handler(enum combined_button_state_t total_button_state, int power_button_state) 
+int button_state_handler(enum combined_button_state_t total_button_state) 
 {
-	printf("total button state = %d, power button = %d\n", total_button_state, power_button_state);
+	printf("total button state = %d\n", total_button_state);
 	//note power button is handled separately since holding power button might be required for other button combo's 
 	//to get the device to reboot, so we don't want it to be part of the possible button combos
 	//otherwise it would require people to be holding power button down for a long period, 
@@ -720,7 +708,7 @@ int misc_init_r(void)
 	}
 
 	check_button_states(VERBOSITY_QUIET);
-	button_state_handler(g_total_button_state, g_power_button_state);
+	button_state_handler(g_total_button_state);
 
 	g_total_console_state |= SERIAL_CONSOLE_MASK; //seems likely we always need this on otherwise will get crashes / sync abort handler loops?
 	console_state_handler();
@@ -1025,7 +1013,6 @@ void show_boot_progress(int progress)
 
 static void deckard_wait_to_boot( deckard_devices_t * pdevices )
 {
-	int ret;
 	printf("Waiting for power button press and battery state of charge threshold to continue booting...\n");
 
 	// Check for the existance of devices used below
@@ -1035,9 +1022,9 @@ static void deckard_wait_to_boot( deckard_devices_t * pdevices )
 		return;
 	}
 
-	if ( !pdevices->power_btn )
+	if ( !pdevices->btn_power )
 	{
-		printf( "ERROR: no pdevices->power_btn. Cannot wait to boot.\n" );
+		printf( "ERROR: no pdevices->btn_power. Cannot wait to boot.\n" );
 		return;
 	}
 
@@ -1069,19 +1056,19 @@ static void deckard_wait_to_boot( deckard_devices_t * pdevices )
 
 			if ( ocv > OCV_BOOT_VOLTAGE || ocv < 0 )
 			{
-				ret = deckard_adsp_start( k_ID_ADSP );
+				int ret = deckard_adsp_start( k_ID_ADSP );
 				if (!ret)
 				{
 					adsp_loaded = 1;
 				}
 				else
 				{
-					printf("ERROR: error starting ADSP in wait_to_boot\n" );
+					printf("ERROR: error starting ADSP in wait_to_boot: %d\n", ret );
 				}
 			}
 		}
 
-		if( button_get_state( pdevices->power_btn ) == BUTTON_ON )
+		if( button_get_state( pdevices->btn_power ) == BUTTON_ON )
 		{
 			if ( !in_press )
 			{
@@ -1118,10 +1105,6 @@ static void deckard_wait_to_boot( deckard_devices_t * pdevices )
 		}
 #endif
 
-		// TODO: why is this needed?
-		// no one is reading the states (there is no call to button_state_handler )
-		check_button_states( VERBOSITY_QUIET );
-
 		//check every 10 loops to avoid spamming the SPMI bus
 		if ( deckard_shutdown_loop_counter-- == 0 )
 		{
@@ -1133,7 +1116,7 @@ static void deckard_wait_to_boot( deckard_devices_t * pdevices )
 			{
 				printf("Device not charging for %d seconds, Shutdown\n", DECKARD_SHUTDOWN_TIMEOUT_S);
 				run_command("splctl set-uboot-poweroff-reason battery", 0); //inform the spl that we are shutting down due to low battery
-				ret = sysreset_walk(SYSRESET_POWER_OFF);
+				int ret = sysreset_walk(SYSRESET_POWER_OFF);
 				if (ret == -EINPROGRESS)
 					mdelay(1000);
 				break;
@@ -1312,7 +1295,7 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 	env_set("fdtcontroladdr", DTB_ADDR);
 
 	check_button_states(VERBOSITY_ON);
-	button_state_handler(g_total_button_state, g_power_button_state);
+	button_state_handler(g_total_button_state);
 	
 	if (env_get_ulong("showbootmenu", 10, 0) == 1)
 	{
