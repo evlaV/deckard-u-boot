@@ -304,51 +304,6 @@ int enable_ramoops_serial_console(void)
 	return 0;
 }
 
-int button_state_handler( combined_button_state_t total_button_state )
-{
-	printf("total button state = %d\n", total_button_state);
-
-	//note power button is handled separately since holding power button might be required for other button combo's 
-	//to get the device to reboot, so we don't want it to be part of the possible button combos
-	//otherwise it would require people to be holding power button down for a long period, 
-	//or removing it at just the right time to avoid the power button being part of a combo or not
-
-	switch(total_button_state)
-	{
-		case VOLUP_OFF__VOLDN_OFF__SELECT_OFF:
-			break;
-		case VOLUP_OFF__VOLDN_OFF__SELECT_ON:
-			//g_total_console_state |= VIDEO_CONSOLE_MASK;
-			//env_set("bootdelay","20");
-			env_set_ulong("showbootmenu", 1);
-			break;
-		case VOLUP_OFF__VOLDN_ON__SELECT_OFF:
-			env_set("reboot_mode", "f");
-			break;
-		case VOLUP_OFF__VOLDN_ON__SELECT_ON:
-			g_deckard_efi_mode = EFI_MODE_ONESHOT;
-			/* Initialise USB to detect external storage before EFI comes up */
-			usb_init();
-			break;
-		case VOLUP_ON__VOLDN_OFF__SELECT_OFF:
-			g_total_console_state |= USB_CONSOLE_MASK;
-			g_total_console_state |= VIDEO_CONSOLE_MASK;
-			env_set("bootdelay","20");
-			break;
-		case VOLUP_ON__VOLDN_OFF__SELECT_ON:
-
-			break;
-		case VOLUP_ON__VOLDN_ON__SELECT_OFF:
-			break;
-		case VOLUP_ON__VOLDN_ON__SELECT_ON:
-			break;
-		default:
-			break;
-	}
-	return 0;
-}
-
-
 static void deckard_reboot_mode_clean(void)
 {
 	if (!env_get("reboot_mode"))
@@ -608,6 +563,13 @@ int misc_init_r(void)
 		g_display_enabled = true;
 	}
 
+	if ( !g_display_enabled )
+	{
+		// TODO: is this needed?
+		printf("DISPLAY OFF\n");
+		display_turn_off_force(); //force just means dont check if g_display_enabled is true
+	}
+	
 	if (env_get_ulong("vidconsole_enable", 10, 0) == 1)
 	{
 		g_total_console_state |= VIDEO_CONSOLE_MASK;
@@ -619,37 +581,46 @@ int misc_init_r(void)
 		env_set("bootdelay","20");
 	}
 
-	// Query the button state so we know if we're booking into bootmenu
-	button_state_handler( deckard_get_button_state( &g_deckard_devices ) );
-
-	if ( !g_display_enabled )
+	boot_intention_t boot_intention = calc_boot_intention( &g_deckard_devices );
+	switch ( boot_intention )
 	{
-		// TODO: is this needed?
-		printf("DISPLAY OFF\n");
-		display_turn_off_force(); //force just means dont check if g_display_enabled is true
-	}
-	else
-	{
-		// TODO: also see if the select button is pressed, and if so
-		// show the console instead
-		boot_intention_t boot_intention = calc_boot_intention( &g_deckard_devices );
-		if ( boot_intention == BOOT_INTENTION_START_USERSPACE )
-		{
-			int showbootmenu = (env_get_ulong("showbootmenu", 10, 0) == 1);
+		case BOOT_INTENTION_START_USERSPACE:
 			deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices );
-			deckard_load_and_display_image( showbootmenu ? IMAGE_ERROR : IMAGE_BOOT_LOGO );
-		}
-		else if ( boot_intention == BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY )
-		{
+			deckard_load_and_display_image( IMAGE_BOOT_LOGO );
+			break;
+		case BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY:
 			deckard_setledcolor( LED_COLOR_RED, &g_deckard_devices );
-
 			// TODO: may be prudent to not show this, yet.
 			// Dont immediately load and show the image. Doing so prior to DSP
 			// charging may be too high of a battery load if the battery is drained.
 			deckard_load_and_display_image( IMAGE_BATTERY_DEAD );
-		}
-
-		// TODO: change 2s delay to only do that if serial console is connected
+			break;
+		case BOOT_INTENTION_BOOT_MENU:
+			deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices );
+			deckard_load_and_display_image( IMAGE_ERROR ); // TODO: make a bespoke boot menu BG
+			env_set_ulong("showbootmenu", 1);
+			break;
+		case BOOT_INTENTION_BOOT_FROM_USB:
+			deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices ); // TODO: custom LED color?
+			deckard_load_and_display_image( IMAGE_BOOT_LOGO );
+			g_deckard_efi_mode = EFI_MODE_ONESHOT;
+			usb_init(); // Initialise USB to detect external storage before EFI comes up
+			break;
+		case BOOT_INTENTION_FASTBOOT:
+			deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices ); // TODO: custom LED color?
+			deckard_load_and_display_image( IMAGE_BOOT_LOGO );
+			env_set("reboot_mode", "f");
+			break;
+		case BOOT_INTENTION_CONSOLE_WAIT:
+			deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices ); // TODO: custom LED color?
+			g_total_console_state |= USB_CONSOLE_MASK;
+			g_total_console_state |= VIDEO_CONSOLE_MASK;
+			env_set("bootdelay","20");
+			break;
+		case BOOT_INTENTION_CHARGE_AND_WAIT:
+		default:
+			// do nothing, show nothing
+			break;
 	}
 
 	g_total_console_state |= SERIAL_CONSOLE_MASK; //seems likely we always need this on otherwise will get crashes / sync abort handler loops?
@@ -1245,8 +1216,6 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 	env_set("kernel_addr_r", ADDR_KERNEL);
 	env_set("ramdisk_addr_r", INITRD_ADDR);
 	env_set("fdtcontroladdr", DTB_ADDR);
-
-	button_state_handler( deckard_get_button_state( &g_deckard_devices ) );
 
 	if (env_get_ulong("showbootmenu", 10, 0) == 1)
 	{

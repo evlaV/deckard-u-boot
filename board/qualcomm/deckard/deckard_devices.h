@@ -11,7 +11,11 @@ typedef enum
 {
 	BOOT_INTENTION_START_USERSPACE,
 	BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY,
-	BOOT_INTENTION_CHARGE_AND_WAIT
+	BOOT_INTENTION_CHARGE_AND_WAIT,
+	BOOT_INTENTION_BOOT_MENU,
+	BOOT_INTENTION_BOOT_FROM_USB,
+	BOOT_INTENTION_FASTBOOT,
+	BOOT_INTENTION_CONSOLE_WAIT,
 } boot_intention_t;
 
 typedef enum
@@ -40,25 +44,5 @@ typedef struct
 int deckard_setup_devices( deckard_devices_t * pdevices );
 boot_intention_t calc_boot_intention( deckard_devices_t * pdevices );
 void deckard_setledcolor( LedColor color, deckard_devices_t * pdevices );
-
-
-//these are set as a bit-mask typically when we detect a button is enabled
-#define VOLUP_BUTTON_MASK 0b100
-#define VOLDN_BUTTON_MASK 0b010
-#define SELECT_BUTTON_MASK 0b001
-
-typedef enum
-{
-	VOLUP_OFF__VOLDN_OFF__SELECT_OFF = 0,
-	VOLUP_OFF__VOLDN_OFF__SELECT_ON  = 1,
-	VOLUP_OFF__VOLDN_ON__SELECT_OFF  = 2,
-	VOLUP_OFF__VOLDN_ON__SELECT_ON   = 3,
-	VOLUP_ON__VOLDN_OFF__SELECT_OFF  = 4,
-	VOLUP_ON__VOLDN_OFF__SELECT_ON   = 5,
-	VOLUP_ON__VOLDN_ON__SELECT_OFF   = 6,
-	VOLUP_ON__VOLDN_ON__SELECT_ON    = 7,
-} combined_button_state_t;
-
-combined_button_state_t deckard_get_button_state( deckard_devices_t * pdevices );
 
 #endif

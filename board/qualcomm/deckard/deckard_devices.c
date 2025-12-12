@@ -112,6 +112,31 @@ int deckard_setup_devices( deckard_devices_t * pdevices )
 	return nerror;
 }
 
+//these are set as a bit-mask typically when we detect a button is enabled
+#define VOLUP_BUTTON_MASK 0b100
+#define VOLDN_BUTTON_MASK 0b010
+#define SELECT_BUTTON_MASK 0b001
+
+typedef enum
+{
+	VOLUP_OFF__VOLDN_OFF__SELECT_OFF = 0,
+	VOLUP_OFF__VOLDN_OFF__SELECT_ON  = 1,
+	VOLUP_OFF__VOLDN_ON__SELECT_OFF  = 2,
+	VOLUP_OFF__VOLDN_ON__SELECT_ON   = 3,
+	VOLUP_ON__VOLDN_OFF__SELECT_OFF  = 4,
+	VOLUP_ON__VOLDN_OFF__SELECT_ON   = 5,
+	VOLUP_ON__VOLDN_ON__SELECT_OFF   = 6,
+	VOLUP_ON__VOLDN_ON__SELECT_ON    = 7,
+} combined_button_state_t;
+
+static combined_button_state_t deckard_get_button_state( deckard_devices_t * pdevices )
+{
+	int mask = 0;
+	mask |= ( pdevices->btn_select   && ( button_get_state( pdevices->btn_select) == BUTTON_ON ) )   ? SELECT_BUTTON_MASK: 0;
+	mask |= ( pdevices->btn_vol_down && ( button_get_state( pdevices->btn_vol_down) == BUTTON_ON ) ) ? VOLDN_BUTTON_MASK : 0;
+	mask |= ( pdevices->btn_vol_up   && ( button_get_state( pdevices->btn_vol_up) == BUTTON_ON ) )   ? VOLUP_BUTTON_MASK : 0;
+	return ( combined_button_state_t ) mask;
+}
 
 boot_intention_t calc_boot_intention( deckard_devices_t * pdevices )
 {
@@ -158,8 +183,21 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices )
 	}
 	else if( boot_up_desired )
 	{
-		printf("boot intention: start userspace\n");
-		return BOOT_INTENTION_START_USERSPACE;
+		combined_button_state_t button_state = deckard_get_button_state( pdevices );
+
+		switch( button_state )
+		{
+			case VOLUP_OFF__VOLDN_OFF__SELECT_ON:
+				return BOOT_INTENTION_BOOT_MENU;
+			case VOLUP_OFF__VOLDN_ON__SELECT_OFF:
+				return BOOT_INTENTION_FASTBOOT;
+			case VOLUP_OFF__VOLDN_ON__SELECT_ON:
+				return BOOT_INTENTION_BOOT_FROM_USB;
+			case VOLUP_ON__VOLDN_OFF__SELECT_OFF:
+				return BOOT_INTENTION_CONSOLE_WAIT;
+			default:
+				return BOOT_INTENTION_START_USERSPACE;
+		}
 	}
 	else
 	{
@@ -208,13 +246,4 @@ void deckard_setledcolor( LedColor color, deckard_devices_t * pdevices )
 		if ( pdevices->led_blue )
 			led_set_state(pdevices->led_blue, LEDST_OFF);
 	}
-}
-
-combined_button_state_t deckard_get_button_state( deckard_devices_t * pdevices )
-{
-	int mask = 0;
-	mask |= ( pdevices->btn_select    && ( button_get_state( pdevices->btn_select) == BUTTON_ON ) )  ? SELECT_BUTTON_MASK: 0;
-	mask |= ( pdevices->btn_vol_down && ( button_get_state( pdevices->btn_vol_down) == BUTTON_ON ) ) ? VOLDN_BUTTON_MASK : 0;
-	mask |= ( pdevices->btn_vol_up   && ( button_get_state( pdevices->btn_vol_up) == BUTTON_ON ) )   ? VOLUP_BUTTON_MASK : 0;
-	return ( combined_button_state_t ) mask;
 }
