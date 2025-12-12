@@ -55,7 +55,8 @@ enum boot_priority {
 enum full_screen_images_t 
 {
 	IMAGE_BOOT_LOGO,
-	IMAGE_BATTERY_DEAD
+	IMAGE_BATTERY_DEAD,
+	IMAGE_ERROR
 };
 
 bool g_display_enabled = false;
@@ -224,6 +225,9 @@ static void deckard_load_and_display_image(enum full_screen_images_t image)
 			break;
 		case IMAGE_BATTERY_DEAD:
 			ret = deckard_load_image("logo_battery_low.bmp.gz");
+			break;
+		case IMAGE_ERROR:
+			ret = deckard_load_image("logo_error.bmp.gz");
 			break;
 		default:
 			ret = -1;
@@ -604,6 +608,20 @@ int misc_init_r(void)
 		g_display_enabled = true;
 	}
 
+	if (env_get_ulong("vidconsole_enable", 10, 0) == 1)
+	{
+		g_total_console_state |= VIDEO_CONSOLE_MASK;
+	}
+
+	if (env_get_ulong("usbconsole_enable", 10, 0) == 1)
+	{
+		g_total_console_state |= USB_CONSOLE_MASK;
+		env_set("bootdelay","20");
+	}
+
+	// Query the button state so we know if we're booking into bootmenu
+	button_state_handler( deckard_get_button_state( &g_deckard_devices ) );
+
 	if ( !g_display_enabled )
 	{
 		// TODO: is this needed?
@@ -617,8 +635,9 @@ int misc_init_r(void)
 		boot_intention_t boot_intention = calc_boot_intention( &g_deckard_devices );
 		if ( boot_intention == BOOT_INTENTION_START_USERSPACE )
 		{
+			int showbootmenu = (env_get_ulong("showbootmenu", 10, 0) == 1);
 			deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices );
-			deckard_load_and_display_image( IMAGE_BOOT_LOGO );
+			deckard_load_and_display_image( showbootmenu ? IMAGE_ERROR : IMAGE_BOOT_LOGO );
 		}
 		else if ( boot_intention == BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY )
 		{
@@ -632,19 +651,6 @@ int misc_init_r(void)
 
 		// TODO: change 2s delay to only do that if serial console is connected
 	}
-
-	if (env_get_ulong("vidconsole_enable", 10, 0) == 1)
-	{
-		g_total_console_state |= VIDEO_CONSOLE_MASK;
-	}
-
-	if (env_get_ulong("usbconsole_enable", 10, 0) == 1)
-	{
-		g_total_console_state |= USB_CONSOLE_MASK;
-		env_set("bootdelay","20");
-	}
-
-	button_state_handler( deckard_get_button_state( &g_deckard_devices ) );
 
 	g_total_console_state |= SERIAL_CONSOLE_MASK; //seems likely we always need this on otherwise will get crashes / sync abort handler loops?
 	console_state_handler();
