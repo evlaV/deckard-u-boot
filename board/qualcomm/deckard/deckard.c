@@ -19,7 +19,6 @@
 #include <asm/global_data.h>
 #include <fdt_support.h>
 #include <linux/delay.h>
-#include <led.h>
 #include <button.h>
 #include <power/pmic.h>
 #include <remoteproc.h>
@@ -624,6 +623,10 @@ int misc_init_r(void)
 		else if ( boot_intention == BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY )
 		{
 			deckard_setledcolor( LED_COLOR_RED, &g_deckard_devices );
+
+			// TODO: may be prudent to not show this, yet.
+			// Dont immediately load and show the image. Doing so prior to DSP
+			// charging may be too high of a battery load if the battery is drained.
 			deckard_load_and_display_image( IMAGE_BATTERY_DEAD );
 		}
 
@@ -989,6 +992,8 @@ static void deckard_wait_to_boot( deckard_devices_t * pdevices )
 
 			if ( ocv > OCV_BOOT_VOLTAGE || ocv < 0 )
 			{
+				deckard_setledcolor( LED_COLOR_OFF, &g_deckard_devices );
+
 				int ret = deckard_adsp_start( k_ID_ADSP );
 				if (!ret)
 				{
@@ -1018,6 +1023,10 @@ static void deckard_wait_to_boot( deckard_devices_t * pdevices )
 				}
 				else
 				{
+					if ( !adsp_loaded )
+					{
+						deckard_setledcolor( LED_COLOR_RED, &g_deckard_devices );
+					}
 					deckard_load_and_display_image(IMAGE_BATTERY_DEAD);
 				}
 			}
@@ -1059,6 +1068,10 @@ static void deckard_wait_to_boot( deckard_devices_t * pdevices )
 		if ( deckard_display_off_counter >= 0 && ( deckard_display_off_counter-- == 0 ) )
 		{
 			display_turn_off();
+			if ( !adsp_loaded )
+			{
+				deckard_setledcolor( LED_COLOR_OFF, &g_deckard_devices );
+			}
 		}
 
 		// polling loop
