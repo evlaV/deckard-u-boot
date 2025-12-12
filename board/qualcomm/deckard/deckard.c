@@ -50,6 +50,7 @@
 #include <membuf.h>
 #include <spl.h>
 #include "deckard.h"
+#include "deckard_devices.h"
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -139,22 +140,6 @@ int g_power_button_state = 0;
 #define DECKARD_DUMMY_SERIAL_NUMB "123456789"
 #define TCSR_BOOT_MISC_DETECT 0x01fd9000
 
-// Deckard uses MAX17320 Smart Empty
-// UOCVP - Undervoltage Open Circuit Voltage Protection
-// This is a value from the MAX17320 Fuel Gauge Model.
-// It is set at 3280 * 2 = 6560 mV to maintain shelf life of the pack.
-// Deckard in practice only reaches this modeled voltage after the SOC is < 0%
-// and operation during usage is still controlled by UVP at 2.8 * 2 = 5.6 Volts
-// When leaving DBR, this model is slow and seems to have
-// a fixed time constant of 3.46 mV/sec. The implication of this time constant
-// is that we must allow for the model to drop while PD negotiation is happening
-// and/or the charger is toggled. This has been seen to take up to 10 seconds.
-// A safety factor of 15 mV is also warranted from testing.
-// aDSP (and Kernel) boot voltage is therefore UOCVP + 3.46 * 10 + 15 = 6610 mV
-#define UOCVP (3280 * 2)
-#define OCV_MARGIN 50
-#define OCV_BOOT_VOLTAGE (UOCVP + OCV_MARGIN)
-
 enum full_screen_images_t 
 {
 	IMAGE_BOOT_LOGO,
@@ -167,38 +152,8 @@ int display_turn_off_force(void);
 static void deckard_load_and_display_image(enum full_screen_images_t image);
 int deckard_check_for_key_press(void);
 
-typedef enum
-{
-	BOOT_INTENTION_START_USERSPACE,
-	BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY,
-	BOOT_INTENTION_CHARGE_AND_WAIT
-} boot_intention_t;
-
-typedef enum
-{
-    LED_COLOR_OFF,
-    LED_COLOR_WHITE,
-    LED_COLOR_YELLOW,
-    LED_COLOR_RED,
-} LedColor;
-
-typedef struct
-{
-	struct udevice *pmk8550;
-	struct udevice *pm8550vse;
-	struct udevice *pm8550b;
-	struct udevice *max17320;
-	struct udevice *led_red;
-	struct udevice *led_green;
-	struct udevice *led_blue;
-	struct udevice *power_btn;
-} deckard_devices_t;
-
 static deckard_devices_t g_deckard_devices = { 0 };
-static int deckard_setup_devices( deckard_devices_t * pdevices );
 static void deckard_wait_to_boot( deckard_devices_t * pdevices );
-static boot_intention_t calc_boot_intention( deckard_devices_t * pdevices );
-static void deckard_setledcolor( LedColor color, deckard_devices_t * pdevices );
 
 const char *deckard_get_esp_part(void);
 const char *deckard_get_fw_part(void);
@@ -410,86 +365,6 @@ static void deckard_load_and_display_image(enum full_screen_images_t image)
 
 	bmp_info(CONFIG_SYS_LOAD_ADDR);
 	bmp_display(CONFIG_SYS_LOAD_ADDR, 0,0);
-}
-
-// TODO: return richer error codes / bitmask for display, including fatal/non-fatal
-static int deckard_setup_devices( deckard_devices_t * pdevices )
-{
-	int nerror = 0;
-	memset( pdevices, 0, sizeof( *pdevices ) );
-
-#if CHECK_PMICS
-	check_pmics_comms();
-#endif
-
-	// Find the PMK8650
-	int ret = pmic_get("pmic@0", &pdevices->pmk8550);
-	if (ret != 0) {
-		printf("ERROR: Failed to find pmk8550\n");
-		nerror = 1;
-	}
-
-	// Find the PM8550VS_e
-	ret = pmic_get("pmic@4", &pdevices->pm8550vse);
-	if (ret != 0) {
-		printf("ERROR: Failed to find pm8550vse\n");
-		nerror = 1;
-	}
-
-	// Find the PM8550B
-	ret = pmic_get("pmic@7", &pdevices->pm8550b);
-	if (ret != 0) {
-		printf("ERROR: Failed to find pm8550b\n");
-		nerror = 1;
-	}
-
-	// Find the max17320
-	ret = pmic_get("pmic@36", &pdevices->max17320);
-	if (ret != 0) {
-		printf("ERROR: Failed to find max17320\n");
-		nerror = 1;
-	}
-
-	// Power button
-	ret = button_get_by_label( "Power Button", &pdevices->power_btn );
-	if (ret != 0) {
-		printf("ERROR: Failed to find power button\n");
-		nerror = 1;
-	} 
-
-	led_get_by_label( "red", &pdevices->led_red );
-	led_get_by_label( "green", &pdevices->led_green );
-	led_get_by_label( "blue", &pdevices->led_blue );
-
-	if ( pdevices->pmk8550 )
-	{
-		// TODO: does this have side-effects? Should we check the return values?
-		smb1510_check_subtype(pdevices->pmk8550);
-	}
-
-	/* Fix GPIO Levels that XBL continues to not let us */
-	// TODO: verify result?
-	if ( pdevices->pm8550vse )
-	{
-		pm8550vs_set_gpio_vin_level(pdevices->pm8550vse, PM8550VS_GPIO_3, PM8550VS_GPIO_VIN_1);
-		pm8550vs_set_gpio_vin_level(pdevices->pm8550vse, PM8550VS_GPIO_4, PM8550VS_GPIO_VIN_1);
-	}
-
-	/* Ensure Battery is OK to proceed */
-	// TODO: verify result
-	if ( pdevices->pmk8550 && pdevices->pm8550b && pdevices->max17320 )
-	{
-		deckard_battery_prep_for_boot(pdevices->pmk8550, pdevices->pm8550b, pdevices->max17320);
-	}
-
-	if ( pdevices->pmk8550 )
-	{
-		printf("smb1510: enable fixed frequency at 500khz mode\n");
-		// TODO: verify result
-		smb1510_set_switching_frequency(pdevices->pmk8550, 0x0F);
-	}
-
-	return nerror;
 }
 
 int console_state_handler(void) 
@@ -1392,48 +1267,6 @@ int overwrite_console(void)
 }
 #endif
 
-static void deckard_setledcolor( LedColor color, deckard_devices_t * pdevices )
-{
-	if ( color == LED_COLOR_WHITE )
-	{
-		if ( pdevices->led_red )
-			led_set_state(pdevices->led_red, LEDST_ON);
-		if ( pdevices->led_green )
-			led_set_state(pdevices->led_green, LEDST_ON);
-		if ( pdevices->led_blue )
-			led_set_state(pdevices->led_blue, LEDST_ON);
-	}
-	else if ( color == LED_COLOR_YELLOW )
-	{
-		if ( pdevices->led_red )
-			led_set_state(pdevices->led_red, LEDST_ON);
-		if ( pdevices->led_green )
-			led_set_state(pdevices->led_green, LEDST_ON);
-		if ( pdevices->led_blue )
-			led_set_state(pdevices->led_blue, LEDST_OFF);
-	}
-	else if ( color == LED_COLOR_RED )
-	{
-		if ( pdevices->led_red )
-			led_set_state(pdevices->led_red, LEDST_ON);
-		if ( pdevices->led_green )
-			led_set_state(pdevices->led_green, LEDST_OFF);
-		if ( pdevices->led_blue )
-			led_set_state(pdevices->led_blue, LEDST_OFF);
-	}
-	else
-	{
-		// LED_COLOR_OFF
-		if ( pdevices->led_red )
-			led_set_state(pdevices->led_red, LEDST_OFF);
-		if ( pdevices->led_green )
-			led_set_state(pdevices->led_green, LEDST_OFF);
-		if ( pdevices->led_blue )
-			led_set_state(pdevices->led_blue, LEDST_OFF);
-	}
-}
-
-
 int display_turn_on(void)
 {
 	struct udevice *dev;
@@ -1476,82 +1309,6 @@ void show_boot_progress(int progress)
 		- need to have enough to boot DSP for higher power charging
 		- need to have enough to boot displays
 */
-
-// TODO: add is battery_ready_to_show_image. needs new criterial
-
-static int is_battery_ready_to_boot_to_userspace( deckard_devices_t * pdevices )
-{
-	if ( !pdevices->max17320 )
-		return true; // error should fail in direction of allow booting
-
-	// state of charge
-	int soc = deckard_battery_get_capacity( pdevices->max17320 );
-	int ocv = deckard_battery_get_vfocv( pdevices->max17320 );
-
-	if ( soc < 0 || ocv < 0 )
-		return true; // error should fail in direction of allow booting
-
-	// old criteria (less strict)
-	// int battery_low_condition = ( soc <= BATTERY_MIN_BOOT_SOC || soc < 0 );
-	// Stricter criteria. Check capacity and voltage
-	// TODO Fix this until VOCV is above UOCVP
-	return ( soc >= BATTERY_MIN_BOOT_SOC && ocv > OCV_BOOT_VOLTAGE );
-}
-
-static boot_intention_t calc_boot_intention( deckard_devices_t * pdevices )
-{
-	/*
-	 * check on/off reasons to see if we were booted by a button
-	 * push or warm reset (reboot command), in case of unknown reason
-	 * (insert of battery and then plug charger) boot also.
-	 */
-	struct pon_on_off_reason pon_poff_reason = { 0 };
-	int ret = pmk8550_get_on_off_reason(&pon_poff_reason);
-	if (ret < 0) {
-		printf("failed to get on off reason\n");
-		return BOOT_INTENTION_START_USERSPACE;
-	}
-
-	printf("pon_reset_type: %s [0x%x] trigger: %s  [0x%x] reason: 0x%x\n",
-		pmk8550_get_pon_type_str(pon_poff_reason.type),
-		pon_poff_reason.type,
-		pmk8550_get_pon_trigger_str(pon_poff_reason.trigger),
-		pon_poff_reason.trigger,
-		pon_poff_reason.pon_reason);
-	
-	int boot_up_desired = false;
-	if(pon_poff_reason.pon_reason & 0x80)
-	{
-		printf("pon_reason includes button press, continuing to boot\n");
-		boot_up_desired = true;
-	}
-	else if(pon_poff_reason.pon_reason & 0x01)
-	{
-		printf("pon_reason includes reset, continuing to boot\n");
-		boot_up_desired = true;
-	}
-	else if(pon_poff_reason.type == PON_RESET_TYPE_WARM )
-	{
-		printf("pon_reason includes warm reset, continuing to boot\n");
-		boot_up_desired = true;
-	}
-
-	if( boot_up_desired && !is_battery_ready_to_boot_to_userspace( pdevices ) )
-	{
-		printf("boot intention: cannot boot, battery not ready\n");
-		return BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY;
-	}
-	else if( boot_up_desired )
-	{
-		printf("boot intention: start userspace\n");
-		return BOOT_INTENTION_START_USERSPACE;
-	}
-	else
-	{
-		printf("boot intention: charge and wait\n");
-		return BOOT_INTENTION_CHARGE_AND_WAIT;
-	}
-}
 
 // trap in uboot while we wait for power button to be pushed
 // we should charge and do various things here like light up the LED's etc
@@ -1620,7 +1377,7 @@ static void deckard_wait_to_boot( deckard_devices_t * pdevices )
 			{
 				deckard_display_off_counter = k_nBatteryImageCount;
 
-				if( is_battery_ready_to_boot_to_userspace( pdevices ) )
+				if( deckard_battery_ready_to_boot_to_userspace( pdevices->max17320 ) )
 				{
 					if ( adsp_loaded )
 					{

@@ -213,6 +213,26 @@ bool deckard_battery_is_charging_enabled(struct udevice *pm8550b)
 	return pm8550b_is_charging_enabled(pm8550b);
 }
 
+int deckard_battery_ready_to_boot_to_userspace( struct udevice *max17320 )
+{
+
+	if ( !max17320 )
+		return true; // error should fail in direction of allow booting
+
+	// state of charge
+	int soc = deckard_battery_get_capacity( max17320 );
+	int ocv = deckard_battery_get_vfocv( max17320 );
+
+	if ( soc < 0 || ocv < 0 )
+		return true; // error should fail in direction of allow booting
+
+	// old criteria (less strict)
+	// int battery_low_condition = ( soc <= BATTERY_MIN_BOOT_SOC || soc < 0 );
+	// Stricter criteria. Check capacity and voltage
+	// TODO Fix this until VOCV is above UOCVP
+	return ( soc >= BATTERY_MIN_BOOT_SOC && ocv > OCV_BOOT_VOLTAGE );
+}
+ 
 int deckard_spl_battery_charging_setup(uint16_t * battery_voltage)
 {
 	int             ret;
