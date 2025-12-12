@@ -1570,6 +1570,7 @@ static void deckard_wait_to_boot( deckard_devices_t * pdevices )
 	static const int k_nBatteryImageCount = 10 * 3; // 100ms * 10 * 5 = 3s
 	int deckard_display_off_counter = k_nBatteryImageCount;
 	int adsp_loaded = 0;
+	int in_press = 0;
 	static const int k_ID_ADSP = 0;
 
 	while( 1 )
@@ -1593,17 +1594,26 @@ static void deckard_wait_to_boot( deckard_devices_t * pdevices )
 
 		if( power_button_pushed( btn ) )
 		{
-			if( is_battery_ready_to_boot_to_userspace( pdevices ) )
-			{
-				deckard_display_off_counter = -1;
-				deckard_load_and_display_image(IMAGE_BOOT_LOGO);
-				break;
-			}
-			else
+			if ( !in_press )
 			{
 				deckard_display_off_counter = k_nBatteryImageCount;
-				deckard_load_and_display_image(IMAGE_BATTERY_DEAD);
+
+				if( is_battery_ready_to_boot_to_userspace( pdevices ) )
+				{
+					deckard_load_and_display_image(IMAGE_BOOT_LOGO);
+					break;
+				}
+				else
+				{
+					deckard_load_and_display_image(IMAGE_BATTERY_DEAD);
+				}
 			}
+
+			in_press = 1;
+		}
+		else
+		{
+			in_press = 0;
 		}
 
 #if 0
