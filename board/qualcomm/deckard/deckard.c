@@ -174,20 +174,31 @@ typedef enum
 	BOOT_INTENTION_CHARGE_AND_WAIT
 } boot_intention_t;
 
+typedef enum
+{
+    LED_COLOR_OFF,
+    LED_COLOR_WHITE,
+    LED_COLOR_YELLOW,
+    LED_COLOR_RED,
+} LedColor;
+
 typedef struct
 {
 	struct udevice *pmk8550;
 	struct udevice *pm8550vse;
 	struct udevice *pm8550b;
 	struct udevice *max17320;
-	struct udevice *vleds[3];
-	// TODO: move buttons here?
+	struct udevice *led_red;
+	struct udevice *led_green;
+	struct udevice *led_blue;
+	struct udevice *power_btn;
 } deckard_devices_t;
 
 static deckard_devices_t g_deckard_devices = { 0 };
 static int deckard_setup_devices( deckard_devices_t * pdevices );
 static void deckard_wait_to_boot( deckard_devices_t * pdevices );
 static boot_intention_t calc_boot_intention( deckard_devices_t * pdevices );
+static void deckard_setledcolor( LedColor color, deckard_devices_t * pdevices );
 
 const char *deckard_get_esp_part(void);
 const char *deckard_get_fw_part(void);
@@ -404,41 +415,51 @@ static void deckard_load_and_display_image(enum full_screen_images_t image)
 // TODO: return richer error codes / bitmask for display, including fatal/non-fatal
 static int deckard_setup_devices( deckard_devices_t * pdevices )
 {
+	int nerror = 0;
 	memset( pdevices, 0, sizeof( *pdevices ) );
 
 #if CHECK_PMICS
 	check_pmics_comms();
 #endif
 
-	int nerror = 0;
-
 	// Find the PMK8650
 	int ret = pmic_get("pmic@0", &pdevices->pmk8550);
 	if (ret != 0) {
-		printf("Failed to Find PMK8650\n");
+		printf("ERROR: Failed to find pmk8550\n");
 		nerror = 1;
 	}
 
 	// Find the PM8550VS_e
 	ret = pmic_get("pmic@4", &pdevices->pm8550vse);
 	if (ret != 0) {
-		printf("Failed to Find PM8550VS_e\n");
+		printf("ERROR: Failed to find pm8550vse\n");
 		nerror = 1;
 	}
 
 	// Find the PM8550B
 	ret = pmic_get("pmic@7", &pdevices->pm8550b);
 	if (ret != 0) {
-		printf("Failed to Find PM8550B\n");
+		printf("ERROR: Failed to find pm8550b\n");
 		nerror = 1;
 	}
 
 	// Find the max17320
 	ret = pmic_get("pmic@36", &pdevices->max17320);
 	if (ret != 0) {
-		printf("Failed to Find max17320\n");
+		printf("ERROR: Failed to find max17320\n");
 		nerror = 1;
 	}
+
+	// Power button
+	int ret = button_get_by_label( "Power Button", &pdevices->power_btn );
+	if (ret != 0) {
+		printf("ERROR: Failed to find power button\n");
+		nerror = 1;
+	} 
+
+	led_get_by_label( "red", &pdevices->led_red );
+	led_get_by_label( "green", &pdevices->led_green );
+	led_get_by_label( "blue", &pdevices->led_blue );
 
 	if ( pdevices->pmk8550 )
 	{
@@ -467,10 +488,6 @@ static int deckard_setup_devices( deckard_devices_t * pdevices )
 		// TODO: verify result
 		smb1510_set_switching_frequency(pdevices->pmk8550, 0x0F);
 	}
-
-	led_get_by_label("red", &pdevices->vleds[0] );
-	led_get_by_label("green", &pdevices->vleds[1] );
-	led_get_by_label("blue", &pdevices->vleds[2] );
 
 	return nerror;
 }
@@ -879,20 +896,6 @@ int fastboot_set_reboot_flag(enum fastboot_reboot_reason reason)
 }
 #endif
 
-int led_set_color_and_state(char * led_name, enum led_state_t state)
-{
-	struct udevice  *led;
-	int ret = led_get_by_label(led_name, &led);
-	if ( ret < 0) {
-		printf("Couldn't find led!\n");
-		return ret;
-	}
-
-	led_set_state(led, state);
-
-	return ret;
-}
-
 /* Get the devnum/partnum for a partition from its GPT partlabel */
 static int deckard_find_part_by_label(enum disk_interface_t disk_interface, const char *partname, int *devnum, int *partnum)
 {
@@ -987,10 +990,6 @@ static int deckard_efi_setup(void *ctx, struct event *event)
 /* Check for vol- button - if pressed - stop autoboot */
 int misc_init_r(void)
 {
-	struct udevice *led_red = NULL;
-	struct udevice *led_green = NULL;
-	struct udevice *led_blue = NULL;
-
 	int                 ret;
 	char * bootedslot;
 	char *reboot_mode;
@@ -1054,6 +1053,7 @@ int misc_init_r(void)
 	deckard_disable_watchdog();
 
 	int nsetuperror = deckard_setup_devices( &g_deckard_devices );
+	deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices );
 
 	if( booted_from_usb() )
 	{
@@ -1088,10 +1088,12 @@ int misc_init_r(void)
 		boot_intention_t boot_intention = calc_boot_intention( &g_deckard_devices );
 		if ( boot_intention == BOOT_INTENTION_START_USERSPACE )
 		{
+			deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices );
 			deckard_load_and_display_image( IMAGE_BOOT_LOGO );
 		}
 		else if ( boot_intention == BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY )
 		{
+			deckard_setledcolor( LED_COLOR_RED, &g_deckard_devices );
 			deckard_load_and_display_image( IMAGE_BATTERY_DEAD );
 		}
 
@@ -1134,27 +1136,6 @@ int misc_init_r(void)
 	/* cleanup all reboot_mode setups if any */
 	deckard_reboot_mode_clean();
 
-	ret = led_get_by_label("red", &led_red);
-	if (ret < 0) {
-		printf("Couldn't find red led!\n");
-	} else {
-		led_set_state(led_red, LEDST_ON);
-	};
-
-	ret = led_get_by_label("green", &led_green);
-	if (ret < 0) {
-		printf("Couldn't find green led!\n");
-	} else {
-		led_set_state(led_green, LEDST_ON);
-	};
-
-	ret = led_get_by_label("blue", &led_blue);
-	if (ret < 0) {
-		printf("Couldn't find blue led!\n");
-	} else {
-		led_set_state(led_blue, LEDST_ON);
-	};
-
 	// get board data from eeprom
 	deckard_eeprom_init();
 
@@ -1189,9 +1170,7 @@ int misc_init_r(void)
 			env_save();
 		}
 
-		led_set_color_and_state("red",LEDST_BLINK);
-		led_set_color_and_state("green",LEDST_BLINK);
-		led_set_color_and_state("blue",LEDST_BLINK);
+		deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices );
 
 		/* disable display (logo off) when idle in fastboot mode */
 		display_turn_off();
@@ -1333,18 +1312,6 @@ int do_load_helper(enum disk_interface_t disk_interface, char * partition, char 
 	return ret;
 }
 
-int power_button_pushed(struct udevice *btn)
-{
-	enum button_state_t state;
-	state = button_get_state(btn);
-	if (state == BUTTON_ON) {
-		printf("PWR button pressed\n");
-		return 1;
-	}
-
-	return 0;
-}
-
 int deckard_adsp_start( int id )
 {
 	int ret;
@@ -1424,6 +1391,48 @@ int overwrite_console(void)
 	return 0;
 }
 #endif
+
+static void deckard_setledcolor( LedColor color, deckard_devices_t * pdevices )
+{
+	if ( color == LED_COLOR_WHITE )
+	{
+		if ( pdevices->led_red )
+			led_set_state(pdevices->led_red, LEDST_ON);
+		if ( pdevices->led_green )
+			led_set_state(pdevices->led_green, LEDST_ON);
+		if ( pdevices->led_blue )
+			led_set_state(pdevices->led_blue, LEDST_ON);
+	}
+	else if ( color == LED_COLOR_YELLOW )
+	{
+		if ( pdevices->led_red )
+			led_set_state(pdevices->led_red, LEDST_ON);
+		if ( pdevices->led_green )
+			led_set_state(pdevices->led_green, LEDST_ON);
+		if ( pdevices->led_blue )
+			led_set_state(pdevices->led_blue, LEDST_OFF);
+	}
+	else if ( color == LED_COLOR_RED )
+	{
+		if ( pdevices->led_red )
+			led_set_state(pdevices->led_red, LEDST_ON);
+		if ( pdevices->led_green )
+			led_set_state(pdevices->led_green, LEDST_OFF);
+		if ( pdevices->led_blue )
+			led_set_state(pdevices->led_blue, LEDST_OFF);
+	}
+	else
+	{
+		// LED_COLOR_OFF
+		if ( pdevices->led_red )
+			led_set_state(pdevices->led_red, LEDST_OFF);
+		if ( pdevices->led_green )
+			led_set_state(pdevices->led_green, LEDST_OFF);
+		if ( pdevices->led_blue )
+			led_set_state(pdevices->led_blue, LEDST_OFF);
+	}
+}
+
 
 int display_turn_on(void)
 {
@@ -1558,13 +1567,11 @@ static void deckard_wait_to_boot( deckard_devices_t * pdevices )
 		return;
 	}
 
-	struct udevice *btn; // TODO: move to devices?
-	int ret = button_get_by_label("Power Button", &btn);
-	if (ret < 0) 
+	if ( !pdevices->power_btn )
 	{
-		printf( "ERROR: no power button. Cannot wait to boot.\n" );
+		printf( "ERROR: no pdevices->power_btn. Cannot wait to boot.\n" );
 		return;
-	} 
+	}
 
 	int deckard_shutdown_loop_counter = 1;
 	static const int k_nBatteryImageCount = 10 * 3; // 100ms * 10 * 5 = 3s
@@ -1572,6 +1579,15 @@ static void deckard_wait_to_boot( deckard_devices_t * pdevices )
 	int adsp_loaded = 0;
 	int in_press = 0;
 	static const int k_ID_ADSP = 0;
+
+	// WARNING: Do not set LED color in the following loop when the ADSP is loaded
+	// The ADSP sets LED colors when active based on state only it is aware of
+	// (such as USB cable insertion). In order to not stomp on each other,
+	// we CANNOT set the LED color
+	//
+	// tldr; if ADSP is running (in either lite or non-lite mode) it is responsible
+	// for LED handling.  uboot only does LED control, for the duration the ADSP
+	// is not loaded
 
 	while( 1 )
 	{
@@ -1586,13 +1602,18 @@ static void deckard_wait_to_boot( deckard_devices_t * pdevices )
 			if ( ocv > OCV_BOOT_VOLTAGE || ocv < 0 )
 			{
 				ret = deckard_adsp_start( k_ID_ADSP );
-				if (!ret) {
+				if (!ret)
+				{
 					adsp_loaded = 1;
+				}
+				else
+				{
+					printf("ERROR: error starting ADSP in wait_to_boot\n" );
 				}
 			}
 		}
 
-		if( power_button_pushed( btn ) )
+		if( button_get_state( pdevices->power_btn ) == BUTTON_ON )
 		{
 			if ( !in_press )
 			{
@@ -1600,8 +1621,12 @@ static void deckard_wait_to_boot( deckard_devices_t * pdevices )
 
 				if( is_battery_ready_to_boot_to_userspace( pdevices ) )
 				{
-					deckard_load_and_display_image(IMAGE_BOOT_LOGO);
-					break;
+					if ( adsp_loaded )
+					{
+						deckard_adsp_stop( k_ID_ADSP );
+					}
+
+					return;
 				}
 				else
 				{
@@ -1625,8 +1650,10 @@ static void deckard_wait_to_boot( deckard_devices_t * pdevices )
 		}
 #endif
 
-		check_button_states(VERBOSITY_QUIET);
-		
+		// TODO: why is this needed?
+		// no one is reading the states (there is no call to button_state_handler )
+		check_button_states( VERBOSITY_QUIET );
+
 		//check every 10 loops to avoid spamming the SPMI bus
 		if ( deckard_shutdown_loop_counter-- == 0 )
 		{
@@ -1650,29 +1677,14 @@ static void deckard_wait_to_boot( deckard_devices_t * pdevices )
 			display_turn_off();
 		}
 
-		//polling loop -- maybe be interrupt driven somehow?
+		// polling loop
+		// TODO : maybe be interrupt driven somehow?
 		mdelay(100);
 	}
 
 	if ( adsp_loaded )
 	{
 		deckard_adsp_stop( k_ID_ADSP );
-	}
-	
-	// TODO: move this into the checking loop to show red if underpowered, off otherwise
-	if( pdevices->vleds[0] && pdevices->vleds[1] && pdevices->vleds[2] )
-	{
-		led_set_state(pdevices->vleds[0], LEDST_ON);
-		led_set_state(pdevices->vleds[1], LEDST_ON);
-		led_set_state(pdevices->vleds[2], LEDST_ON);
-		mdelay(100);
-		led_set_state(pdevices->vleds[0], LEDST_OFF);
-		led_set_state(pdevices->vleds[1], LEDST_OFF);
-		led_set_state(pdevices->vleds[2], LEDST_OFF);
-		mdelay(100);
-		led_set_state(pdevices->vleds[0], LEDST_ON);
-		led_set_state(pdevices->vleds[1], LEDST_ON);
-		led_set_state(pdevices->vleds[2], LEDST_ON);
 	}
 }
 
@@ -2060,7 +2072,14 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 	if ( boot_intention == BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY ||
 		boot_intention == BOOT_INTENTION_CHARGE_AND_WAIT )
 	{
+		// This may be minutes ... hours ... days...
+		// We will stay in this function until the user clicks on the power
+		// button with the intention to boot the device
 		deckard_wait_to_boot( &g_deckard_devices );
+
+		// We're booting!
+		deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices );
+		deckard_load_and_display_image( IMAGE_BOOT_LOGO );
 	}
 
 	// FIXME: eventually invert this so we try EFI first, maybe find a less hacky way to do this?
