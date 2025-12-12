@@ -1,10 +1,21 @@
-#include <env.h>
 #include <dm.h>
+#include <efi_loader.h>
+#include <env.h>
 #include <fs.h>
 #include <part.h>
 
 #include "deckard.h"
 #include "deckard_disk.h"
+
+char g_esp_part[DEVPARTMAXLEN] = { 0 };  //e.g. "1:d"
+
+struct deckard_esp_info {
+	bool valid;
+	int devnum;
+	int partnum;
+};
+
+static struct deckard_esp_info g_efivar_store = { 0 };
 
 char * disk_interface_to_str(enum disk_interface_t disk_interface)
 {
@@ -18,6 +29,63 @@ char * disk_interface_to_str(enum disk_interface_t disk_interface)
 			return "unknown";
 	}
 	return "unknown";
+}
+
+int deckard_find_efi_var_store(void)
+{
+	char partname[16] = { 0 };
+	char *slot;
+	enum disk_interface_t disk_interface = DISK_INTERFACE_SCSI;
+	
+	if (g_efivar_store.valid)
+		return 0;
+
+	if( booted_from_usb() ) disk_interface = DISK_INTERFACE_USB;
+
+	slot = env_get("booted_slot");
+	/* Build the partition name (efi-A/efi-B) */
+	strlcat(partname, "efi-", 16);
+	strlcat(partname, slot, 16);
+
+	if (!deckard_find_part_by_label(disk_interface, partname, &g_efivar_store.devnum, &g_efivar_store.partnum)) {
+		g_efivar_store.valid = true;
+		return 0;
+	}
+
+	return -ENOENT;
+}
+
+void init_esp(void)
+{
+	if( booted_from_usb() )
+	{
+		snprintf(g_esp_part, DEVPARTMAXLEN, DECKARD_ESP_SLOT_U);
+	}
+	else
+	{
+		snprintf(g_esp_part, DEVPARTMAXLEN, DECKARD_ESP_PARTITION);
+	}
+}
+
+/* EFI booting with EFI vars on a custom partition */
+efi_status_t efi_set_blk_dev_to_system_partition(void)
+{
+	int r;
+	char part_str[10];
+
+	r = deckard_find_efi_var_store();
+	if (r)
+		return EFI_DEVICE_ERROR;
+	// It would be nice to use fs_set_blk_dev_with_part() but it doesn't seem to behave quite right
+	snprintf(part_str, sizeof(part_str), "%x:%x",
+		 g_efivar_store.devnum, g_efivar_store.partnum);
+	// printf("%s: %s\n", __func__, part_str);
+	r = fs_set_blk_dev(blk_get_uclass_name(efi_system_partition.uclass_id),
+			   part_str, FS_TYPE_ANY);
+	if (r)
+		return EFI_DEVICE_ERROR;
+
+	return EFI_SUCCESS;
 }
 
 int booted_from_usb(void)

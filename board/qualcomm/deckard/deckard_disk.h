@@ -31,11 +31,20 @@ enum disk_interface_t {
 #define DECKARD_UBOOT_FW_SLOT_U "usbubootfw"
 #define DECKARD_UBOOT_ENV_SLOT_U "usbubootenv"
 
+//add these names as alternatives for supporting old ev2 layouts -- delete once we stop using ev2's
+#define ALLOW_OLD_ROOTFS_NAME_FALLBACK
+#ifdef ALLOW_OLD_ROOTFS_NAME_FALLBACK
+  #define DECKARD_ROOTFS_SLOT_OLD_A "system0"
+  #define DECKARD_ROOTFS_SLOT_OLD_B "system1"
+#endif
+
 char * disk_interface_to_str( enum disk_interface_t disk_interface );
 int booted_from_usb(void);
 char get_booted_slot(void);
 int deckard_find_part_by_label(enum disk_interface_t disk_interface, const char *partname, int *devnum, int *partnum);
 int do_load_helper(enum disk_interface_t disk_interface, char * partition, char * addr, char * path);
 int deckard_load_dtb(enum disk_interface_t disk_interface, char * partition, char * addr);
+int deckard_find_efi_var_store(void);
+void init_esp(void);
 
 #endif

@@ -50,13 +50,6 @@ enum boot_priority {
 	BOOT_REMOVABLE_FIRST,
 };
 
-//add these names as alternatives for supporting old ev2 layouts -- delete once we stop using ev2's
-#define ALLOW_OLD_ROOTFS_NAME_FALLBACK
-#ifdef ALLOW_OLD_ROOTFS_NAME_FALLBACK
-  #define DECKARD_ROOTFS_SLOT_OLD_A "system0"
-  #define DECKARD_ROOTFS_SLOT_OLD_B "system1"
-#endif
-
 //these are set as a bit-mask typically when we detect a button is enabled
 #define VOLUP_BUTTON_MASK 0b100
 #define VOLDN_BUTTON_MASK 0b010
@@ -116,13 +109,6 @@ enum combined_serial_console_state_t {
 };
 enum combined_serial_console_state_t g_total_console_state = 0;
 
-char g_esp_part[DEVPARTMAXLEN] = { 0 };  //e.g. "1:d"
-
-struct deckard_esp_info {
-	bool valid;
-	int devnum;
-	int partnum;
-};
 
 static enum deckard_efi_mode {
 	/* NEVER initialise EFI subsystem */
@@ -134,8 +120,6 @@ static enum deckard_efi_mode {
 	 */
 	EFI_MODE_PERMANENT,
 } g_deckard_efi_mode = EFI_MODE_DISABLED;
-
-static struct deckard_esp_info g_efivar_store = { 0 };
 
 bool deckard_efi_enabled(void) {
 	return g_deckard_efi_mode != EFI_MODE_DISABLED;
@@ -595,30 +579,6 @@ int fastboot_set_reboot_flag(enum fastboot_reboot_reason reason)
 }
 #endif
 
-static int deckard_find_efi_var_store(void)
-{
-	char partname[16] = { 0 };
-	char *slot;
-	enum disk_interface_t disk_interface = DISK_INTERFACE_SCSI;
-	
-	if (g_efivar_store.valid)
-		return 0;
-
-	if( booted_from_usb() ) disk_interface = DISK_INTERFACE_USB;
-
-	slot = env_get("booted_slot");
-	/* Build the partition name (efi-A/efi-B) */
-	strlcat(partname, "efi-", 16);
-	strlcat(partname, slot, 16);
-
-	if (!deckard_find_part_by_label(disk_interface, partname, &g_efivar_store.devnum, &g_efivar_store.partnum)) {
-		g_efivar_store.valid = true;
-		return 0;
-	}
-
-	return -ENOENT;
-}
-
 static int deckard_efi_setup(void *ctx, struct event *event)
 {
 	efi_status_t ret;
@@ -696,14 +656,7 @@ int misc_init_r(void)
 		panic("No chosen node !\n");
 	}
 
-	if( booted_from_usb() )
-	{
-		snprintf(g_esp_part, DEVPARTMAXLEN, DECKARD_ESP_SLOT_U);
-	}
-	else
-	{
-		snprintf(g_esp_part, DEVPARTMAXLEN, DECKARD_ESP_PARTITION);
-	}
+	init_esp();
 
 	deckard_disable_watchdog();
 
@@ -1201,27 +1154,6 @@ static void deckard_wait_to_boot( deckard_devices_t * pdevices )
 	{
 		deckard_adsp_stop( k_ID_ADSP );
 	}
-}
-
-/* EFI booting with EFI vars on a custom partition */
-efi_status_t efi_set_blk_dev_to_system_partition(void)
-{
-	int r;
-	char part_str[10];
-
-	r = deckard_find_efi_var_store();
-	if (r)
-		return EFI_DEVICE_ERROR;
-	// It would be nice to use fs_set_blk_dev_with_part() but it doesn't seem to behave quite right
-	snprintf(part_str, sizeof(part_str), "%x:%x",
-		 g_efivar_store.devnum, g_efivar_store.partnum);
-	// printf("%s: %s\n", __func__, part_str);
-	r = fs_set_blk_dev(blk_get_uclass_name(efi_system_partition.uclass_id),
-			   part_str, FS_TYPE_ANY);
-	if (r)
-		return EFI_DEVICE_ERROR;
-
-	return EFI_SUCCESS;
 }
 
 // per arm64 linux boot documenation, default text_offset is 0x80000
