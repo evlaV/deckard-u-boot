@@ -1,5 +1,6 @@
 #include "deckard.h"
 #include "deckard_bootmenu.h"
+#include "deckard_disk.h"
 
 #include <command.h>
 #include <env.h>
