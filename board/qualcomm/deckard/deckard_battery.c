@@ -124,29 +124,6 @@ void deckard_battery_prep_for_boot(struct udevice *pmk8550, struct udevice *pm85
 		}
 	}
 
-	ret = led_get_by_label("red", &led_red);
-	if (ret < 0) {
-		printf("Couldn't find red led!\n");
-	}
-	else {
-		printf("Enabling Red LED\n");
-		led_set_state(led_red, LEDST_ON);
-	}
-	ret = led_get_by_label("green", &led_green);
-	if (ret < 0) {
-		printf("Couldn't find green led!\n");
-	}
-	else {
-		led_set_state(led_green, LEDST_OFF);
-	}
-	ret = led_get_by_label("blue", &led_blue);
-	if (ret < 0) {
-		printf("Couldn't find blue led!\n");
-	}
-	else {
-		led_set_state(led_blue, LEDST_OFF);
-	}
-
 	// Check for UVLO (or charging and (trickle or precharge))
 	ret = deckard_battery_load_recovery_program();
 	if (ret != 0) {
