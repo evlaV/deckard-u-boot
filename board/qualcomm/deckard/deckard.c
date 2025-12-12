@@ -451,7 +451,7 @@ static int deckard_setup_devices( deckard_devices_t * pdevices )
 	}
 
 	// Power button
-	int ret = button_get_by_label( "Power Button", &pdevices->power_btn );
+	ret = button_get_by_label( "Power Button", &pdevices->power_btn );
 	if (ret != 0) {
 		printf("ERROR: Failed to find power button\n");
 		nerror = 1;
@@ -1558,6 +1558,7 @@ static boot_intention_t calc_boot_intention( deckard_devices_t * pdevices )
 
 static void deckard_wait_to_boot( deckard_devices_t * pdevices )
 {
+	int ret;
 	printf("Waiting for power button press and battery state of charge threshold to continue booting...\n");
 
 	// Check for the existance of devices used below
