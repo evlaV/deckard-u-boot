@@ -615,8 +615,10 @@ static int _fs_read(const char *filename, ulong addr, loff_t offset, loff_t len,
 #if CONFIG_IS_ENABLED(LMB)
 	if (do_lmb_check) {
 		ret = fs_read_lmb_check(filename, addr, offset, len, info);
-		if (ret)
+		if (ret) {
+			fs_close();
 			return ret;
+		}
 	}
 #endif
 
