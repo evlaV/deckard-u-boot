@@ -31,17 +31,14 @@ static int parse_os_info(char *buf, size_t bufsz,
                    char *build_id, size_t build_id_sz)
 {
 	struct membuf mb;
-	char line[200];
+	char line[256];
 	char *data;
 	int len;
 	int namefound=0;
 	int versionidfound=0;
 	int buildidfound=0;
 
-	//init to some sane values
-	strncpy(name,"SteamOS",name_sz); 
-	strncpy(version_id,"0.0.0",version_id_sz);
-	strncpy(build_id,"20000101.000000",build_id_sz);
+	if(!buf) return 1;
 
 	membuf_init(&mb, buf, bufsz);
 	membuf_putraw(&mb, bufsz, true, &data);
@@ -198,15 +195,15 @@ int deckard_boot_menu_handle_actions(void)
 	return 0;
 }
 
-static int deckard_load_slot_info(char * current_slot_menu_str, int current_slot_menu_str_sz, char * previous_slot_menu_str, int previous_slot_menu_str_sz)
+static int deckard_load_slot_info(char * CURRENT_slot_menu_str, int CURRENT_slot_menu_str_sz, char * PREVIOUS_slot_menu_str, int PREVIOUS_slot_menu_str_sz)
 {
 	char cmdstr[256] = {0};
-	char * partition_a;
-	char * partition_b;
+	char * partition_A;
+	char * partition_B;
 	char * filecontents;
 	size_t filesize;
-	char curr_slot='X';
-	char prev_slot='X';
+	char CURRENT_slot='X';
+	char PREVIOUS_slot='X';
 	char name[128] = {0};
 	char version_id[128] = {0};
 	char build_id[128] = {0};
@@ -214,67 +211,69 @@ static int deckard_load_slot_info(char * current_slot_menu_str, int current_slot
 	int ret;
 	int osreleasefilefound;
 
-	partition_a = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_A);
-	partition_b = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_B);
+	partition_A = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_A);
+	partition_B = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_B);
 
 	if( get_booted_slot() == 'A' ) 
 	{
-		curr_slot='A';
-		prev_slot='B';
+		CURRENT_slot='A';
+		PREVIOUS_slot='B';
 	}
 	else if( get_booted_slot() == 'B' ) 
 	{
-		curr_slot='B';
-		prev_slot='A';
+		CURRENT_slot='B';
+		PREVIOUS_slot='A';
 	}
 	else if( get_booted_slot() == 'U' )
 	{
-		curr_slot='A';
-		prev_slot='B';
+		CURRENT_slot='A';
+		PREVIOUS_slot='B';
 	}
 
 ///////////////////////////////////
 	osreleasefilefound=0;
-	if( file_exists(disk_interface_to_str(disk_interface), partition_a, "/etc/os-release", FS_TYPE_ANY) )
+	if( file_exists(disk_interface_to_str(disk_interface), partition_A, "/etc/os-release", FS_TYPE_ANY) )
 	{
-		ret = run_commandf("load %s %s 0x%x /etc/os-release -1",disk_interface_to_str(disk_interface),partition_a,CONFIG_SYS_LOAD_ADDR) ;
-
+		ret = run_commandf("load %s %s 0x%x /etc/os-release -1", disk_interface_to_str(disk_interface), partition_A, CONFIG_SYS_LOAD_ADDR) ;
 		if ( ret == 0 ) {
 			filecontents = (char *)map_sysmem(CONFIG_SYS_LOAD_ADDR, 0);
 			filesize = (size_t) hextoul(env_get("filesize"), NULL);
-			ret = parse_os_info(filecontents, filesize, name, sizeof(name), version_id,
-					sizeof(version_id), build_id, sizeof(build_id));
-
+			ret = parse_os_info(filecontents, filesize, name, sizeof(name), version_id, sizeof(version_id), build_id, sizeof(build_id));
 			if( ret == 0) osreleasefilefound = 1;
-
-
-			snprintf(current_slot_menu_str,current_slot_menu_str_sz,
-				"Current   %s-%c-%s-%s=setenv slottarget current", name,curr_slot,version_id,build_id);
 		}
 	}
-	if(!osreleasefilefound) printf("No valid os-release file found in a\n");
-///////////////////////////////////
 
+	if(!osreleasefilefound) 
+	{
+		printf("No valid os-release file found in A, using defaults\n");
+		strncpy(name,"SteamOS",sizeof(name)); 
+		strncpy(version_id,"0.0.0",sizeof(version_id));
+		strncpy(build_id,"20000101.000000",sizeof(build_id));
+	}
+
+	snprintf(CURRENT_slot_menu_str, CURRENT_slot_menu_str_sz, "Current   %s-%c-%s-%s=setenv slottarget current", name, CURRENT_slot, version_id, build_id);
+///////////////////////////////////
 ///////////////////////////////////
 	osreleasefilefound=0;
-	if( file_exists(disk_interface_to_str(disk_interface), partition_b, "/etc/os-release", FS_TYPE_ANY) )
+	if( file_exists(disk_interface_to_str(disk_interface), partition_B, "/etc/os-release", FS_TYPE_ANY) )
 	{
-		ret = run_commandf("load %s %s 0x%x /etc/os-release -1",disk_interface_to_str(disk_interface),partition_b,CONFIG_SYS_LOAD_ADDR) ;
-
+		ret = run_commandf("load %s %s 0x%x /etc/os-release -1", disk_interface_to_str(disk_interface), partition_B, CONFIG_SYS_LOAD_ADDR) ;
 		if ( ret == 0 ) {
 			filecontents = (char *)map_sysmem(CONFIG_SYS_LOAD_ADDR, 0);
 			filesize = (size_t) hextoul(env_get("filesize"), NULL);
-			ret = parse_os_info(filecontents, filesize, name, sizeof(name), version_id,
-					sizeof(version_id), build_id, sizeof(build_id));
-
+			ret = parse_os_info(filecontents, filesize, name, sizeof(name), version_id, sizeof(version_id), build_id, sizeof(build_id));
 			if( ret == 0) osreleasefilefound = 1;
-
-		
-			snprintf(previous_slot_menu_str,previous_slot_menu_str_sz,
-				"Previous  %s-%c-%s-%s=setenv slottarget previous", name,prev_slot,version_id,build_id);
 		}
 	}
-	if(!osreleasefilefound) printf("No valid os-release file found in b\n");
+	if(!osreleasefilefound) 
+	{
+		printf("No valid os-release file found in B, using defaults\n");
+		strncpy(name,"SteamOS",sizeof(name)); 
+		strncpy(version_id,"0.0.0",sizeof(version_id));
+		strncpy(build_id,"20000101.000000",sizeof(build_id));
+	}
+
+	snprintf(PREVIOUS_slot_menu_str, PREVIOUS_slot_menu_str_sz, "Previous  %s-%c-%s-%s=setenv slottarget previous", name, PREVIOUS_slot, version_id, build_id);
 ///////////////////////////////////
 
 	return 0;
