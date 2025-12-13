@@ -60,13 +60,15 @@ enum full_screen_images_t
 };
 
 bool g_display_enabled = false;
+bool g_factory_mode = false;
+boot_intention_t g_boot_intention = BOOT_INTENTION_START_USERSPACE;
+static deckard_devices_t g_deckard_devices = { 0 };
+
 int display_turn_off(void);
 int display_turn_off_force(void);
 static void deckard_load_and_display_image(enum full_screen_images_t image);
 int deckard_check_for_key_press(void);
-
-static deckard_devices_t g_deckard_devices = { 0 };
-static void deckard_wait_to_boot( deckard_devices_t * pdevices );
+static boot_intention_t deckard_wait_to_boot( deckard_devices_t * pdevices );
 
 const char *deckard_get_esp_part(void);
 const char *deckard_get_fw_part(void);
@@ -552,20 +554,17 @@ int misc_init_r(void)
 		// TODO: if fatal error, show an error display screen if possible
 	}
 
-	if (env_get_ulong("factory-mode", 10, 0) == 1) //skip display enabling if factory-mode is defined and set to 1
-	{
-		printf("Factory mode: not enabling display...\n");
-	}
-	else if (env_get_ulong("display", 10, 1) == 1) //if display env var undefined, display defaults to ON
-	{
-		g_display_enabled = true;
-	}
+	g_factory_mode = ( env_get_ulong("factory-mode", 10, 0 ) ); // defaults to off
+	printf( "Factory mode: %d\n", g_factory_mode );
+
+	g_display_enabled = g_factory_mode ? 0 : env_get_ulong( "display", 10, 1 ); // defaults to on in non-factory mode
+	printf("Display Enabled: %d\n", g_display_enabled );
 
 	if ( !g_display_enabled )
 	{
 		// TODO: is this needed?
-		printf("DISPLAY OFF\n");
-		display_turn_off_force(); //force just means dont check if g_display_enabled is true
+		// force just means dont check if g_display_enabled is true
+		display_turn_off_force();
 	}
 	
 	if (env_get_ulong("vidconsole_enable", 10, 0) == 1)
@@ -579,8 +578,8 @@ int misc_init_r(void)
 		env_set("bootdelay","20");
 	}
 
-	boot_intention_t boot_intention = calc_boot_intention( &g_deckard_devices, 0 );
-	switch ( boot_intention )
+	g_boot_intention = g_factory_mode ? BOOT_INTENTION_START_USERSPACE : calc_boot_intention( &g_deckard_devices, 0 );
+	switch ( g_boot_intention )
 	{
 		case BOOT_INTENTION_START_USERSPACE:
 			deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices );
@@ -596,7 +595,6 @@ int misc_init_r(void)
 		case BOOT_INTENTION_BOOT_MENU:
 			deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices );
 			deckard_load_and_display_image( IMAGE_ERROR ); // TODO: make a bespoke boot menu BG
-			env_set_ulong("showbootmenu", 1);
 			break;
 		case BOOT_INTENTION_BOOT_FROM_USB:
 			deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices ); // TODO: custom LED color?
@@ -920,7 +918,7 @@ void show_boot_progress(int progress)
 // trap in uboot while we wait for power button to be pushed
 // we should charge and do various things here like light up the LED's etc
 
-static void deckard_wait_to_boot( deckard_devices_t * pdevices )
+static boot_intention_t deckard_wait_to_boot( deckard_devices_t * pdevices )
 {
 	printf("Waiting for power button press and battery state of charge threshold to continue booting...\n");
 
@@ -990,24 +988,27 @@ static void deckard_wait_to_boot( deckard_devices_t * pdevices )
 					case BOOT_INTENTION_START_USERSPACE:
 						deckard_load_and_display_image( IMAGE_BOOT_LOGO );
 						if ( adsp_loaded ) deckard_adsp_stop( k_ID_ADSP );
-						return;
+						return boot_intention;
 					case BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY:
 						deckard_load_and_display_image( IMAGE_BATTERY_DEAD );
 						deckard_display_off_counter = k_nBatteryImageCount;
 						break; // continue in wait_to_boot
 					case BOOT_INTENTION_BOOT_MENU:
 						deckard_load_and_display_image( IMAGE_ERROR ); // TODO: make a bespoke boot menu BG
-						env_set_ulong("showbootmenu", 1);
 						if ( adsp_loaded ) deckard_adsp_stop( k_ID_ADSP );
-						return;
+						return boot_intention;
 					case BOOT_INTENTION_BOOT_FROM_USB:
 						deckard_load_and_display_image( IMAGE_BOOT_LOGO );
 						g_deckard_efi_mode = EFI_MODE_ONESHOT;
 						usb_init(); // Initialise USB to detect external storage before EFI comes up
 						if ( adsp_loaded ) deckard_adsp_stop( k_ID_ADSP );
-						return;
+						return boot_intention;
 					case BOOT_INTENTION_FASTBOOT:
 					case BOOT_INTENTION_CONSOLE_WAIT:
+						deckard_load_and_display_image( IMAGE_BOOT_LOGO );
+						// normal boot. TODO: gaber is this right? Does fastboot actually makse sense here?
+						if ( adsp_loaded ) deckard_adsp_stop( k_ID_ADSP );
+						return boot_intention;
 					case BOOT_INTENTION_CHARGE_AND_WAIT:
 					default:
 						// do nothing, show nothing
@@ -1039,14 +1040,19 @@ static void deckard_wait_to_boot( deckard_devices_t * pdevices )
 			int avg_current = deckard_battery_get_avg_current(pdevices->max17320);
 			printf("\r" ANSI_CLEAR_LINE "Battery: %d%%, %dmV, %dmA", soc,avg_vcell,avg_current); fflush(stdout);
 			deckard_shutdown_loop_counter = 10;
-			if(deckard_shutdown_condition(pdevices->pm8550b)) 
+			if( deckard_shutdown_condition( pdevices->pm8550b ) )
 			{
 				printf("Device not charging for %d seconds, Shutdown\n", DECKARD_SHUTDOWN_TIMEOUT_S);
 				run_command("splctl set-uboot-poweroff-reason battery", 0); //inform the spl that we are shutting down due to low battery
 				int ret = sysreset_walk(SYSRESET_POWER_OFF);
 				if (ret == -EINPROGRESS)
 					mdelay(1000);
-				break;
+				// break;
+
+				// TODO: FIXME: should this return BOOT_INTENTION_POWER_OFF?  what does it even mean to return here?
+				// is that poweroff failing?  What should we do in such a case?  doing a normal boot seems inappropriate.
+				// Maybe this chould be a fallthrough instead, without the break?
+				mdelay( 1000 );
 			}
 		}
 
@@ -1064,10 +1070,14 @@ static void deckard_wait_to_boot( deckard_devices_t * pdevices )
 		mdelay(100);
 	}
 
+	printf("ERROR: Code should never get here (end of wait to boot)\n");
+	
 	if ( adsp_loaded )
 	{
 		deckard_adsp_stop( k_ID_ADSP );
 	}
+
+	return BOOT_INTENTION_START_USERSPACE;
 }
 
 int deckard_show_boot_menu(void) 
@@ -1149,16 +1159,13 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 
 	if( booted_from_usb() ) disk_interface = DISK_INTERFACE_USB;
 
-	int in_factory_mode = ( env_get_ulong("factory-mode", 10, 0) == 1 );
-	boot_intention_t boot_intention = in_factory_mode ? BOOT_INTENTION_START_USERSPACE : calc_boot_intention( &g_deckard_devices );
-
-	if ( boot_intention == BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY ||
-		boot_intention == BOOT_INTENTION_CHARGE_AND_WAIT )
+	if ( g_boot_intention == BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY ||
+		g_boot_intention == BOOT_INTENTION_CHARGE_AND_WAIT )
 	{
 		// This may be minutes ... hours ... days...
 		// We will stay in this function until the user clicks on the power
 		// button with the intention to boot the device
-		deckard_wait_to_boot( &g_deckard_devices );
+		g_boot_intention = deckard_wait_to_boot( &g_deckard_devices );
 	}
 
 	// We're booting!
@@ -1226,7 +1233,7 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 	env_set("ramdisk_addr_r", INITRD_ADDR);
 	env_set("fdtcontroladdr", DTB_ADDR);
 
-	if (env_get_ulong("showbootmenu", 10, 0) == 1)
+	if ( g_boot_intention == BOOT_INTENTION_BOOT_MENU )
 	{
 		deckard_setup_bootmenu();
 		deckard_show_boot_menu();
