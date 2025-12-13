@@ -93,7 +93,7 @@ static int env_scsi_load(void)
 	char *default_bootargs;
 	const char *dev_and_part;
 
-	scsi_scan(true);
+	scsi_scan(false);
 
 	dev_and_part = env_scsi_get_dev_part();
 

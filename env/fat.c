@@ -130,7 +130,7 @@ static int env_fat_load(void)
 #ifndef CONFIG_XPL_BUILD
 #if defined(CONFIG_AHCI) || defined(CONFIG_SCSI)
 	if (!strcmp(CONFIG_ENV_FAT_INTERFACE, "scsi"))
-		scsi_scan(true);
+		scsi_scan(false);
 #endif
 #if defined(CONFIG_VIRTIO)
 	if (!strcmp(ifname, "virtio"))

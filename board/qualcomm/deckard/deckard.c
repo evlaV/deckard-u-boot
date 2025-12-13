@@ -1100,9 +1100,7 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 
 	printf("deckard_boot_cmd\n");
 
-	// TODO is there a way to only do this if needed?
-	// If we haven't already scanned the SCSI devices we need to do it here
-	//scsi_scan(true);
+	//TODO: this function assumes scsi has already been probed -- can we enforce that somehow?
 
 	switch( get_booted_slot() ){
 		case 'A':

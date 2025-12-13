@@ -149,7 +149,7 @@ static int env_ext4_load(void)
 #endif
 #if defined(CONFIG_AHCI) || defined(CONFIG_SCSI)
 	if (!strcmp(ifname, "scsi"))
-		scsi_scan(true);
+		scsi_scan(false);
 #endif
 #if defined(CONFIG_VIRTIO)
 	if (!strcmp(ifname, "virtio"))

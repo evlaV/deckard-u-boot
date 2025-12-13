@@ -114,7 +114,7 @@ static int qcom_dsp_load_ext4fs(struct qcom_dsp *dsp, char *buf)
 
 	printf("Loading firmware from partition: %s\n", dev_and_part);
 
-	scsi_scan(true);
+	scsi_scan(false);
 
 	part = blk_get_device_part_str(ifname, dev_and_part, &dev_desc, &info, 1);
 	if (part < 0)
@@ -145,7 +145,7 @@ static int qcom_dsp_load_erofs(struct qcom_dsp *dsp, char *buf)
 
 	printf("Loading firmware from partition: %s\n", dev_and_part);
 
-	scsi_scan(true);
+	scsi_scan(false);
 
 	ret = fs_set_blk_dev(ifname, dev_and_part, FS_TYPE_EROFS);
 	if (ret < 0) {

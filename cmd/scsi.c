@@ -33,13 +33,13 @@ static int do_scsi(struct cmd_tbl *cmdtp, int flag, int argc,
 	if (argc == 2) {
 		if (strncmp(argv[1], "res", 3) == 0) {
 			printf("\nReset SCSI\n");
-			ret = scsi_scan(true);
+			ret = scsi_scan_force(true);
 			if (ret)
 				return CMD_RET_FAILURE;
 			return ret;
 		}
 		if (strncmp(argv[1], "scan", 4) == 0) {
-			ret = scsi_scan(true);
+			ret = scsi_scan_force(true);
 			if (ret)
 				return CMD_RET_FAILURE;
 			return ret;

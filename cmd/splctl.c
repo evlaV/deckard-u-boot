@@ -193,7 +193,7 @@ static int env_spl_scsi_load(void)
 	ulong count;
 	const char *dev_and_part = DECKARD_SPL_ENV_PARTITION;
 
-	//scsi_scan(true);
+	scsi_scan(false);
 
 	part = blk_get_device_part_str("scsi", dev_and_part, &blk_dev, &info, 1);
 	if (part < 0) {

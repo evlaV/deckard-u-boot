@@ -30,7 +30,7 @@ static int scsi_bootdev_hunt(struct bootdev_hunter *info, bool show)
 			return log_msg_ret("pci", ret);
 	}
 
-	ret = scsi_scan(true);
+	ret = scsi_scan(false);
 	if (ret)
 		return log_msg_ret("scs", ret);
 

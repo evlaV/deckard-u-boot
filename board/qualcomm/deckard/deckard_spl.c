@@ -904,7 +904,7 @@ void qcom_spl_board_init(void)
 	if (ret)
 		panic("SCSI device not found (%d)\n", ret);
 
-	ret = scsi_scan_dev(dev, true);
+	ret = scsi_scan_dev(dev, false);
 	if (ret)
 		panic("Failed to scan SCSI (%d)\n", ret);	
 
