@@ -15,6 +15,19 @@
 #define BATTERY_MIN_BOOT_VOLTAGE 7200
 #define BATTERY_DEAD_VOLTAGE     6000
 
+/**
+ * sign_extend32 - sign extend a 32-bit value using specified bit as sign-bit
+ * @value: value to sign extend
+ * @index: 0 based bit index (0<=index<32) to sign bit
+ *
+ * This is safe to use for 16- and 8-bit types as well.
+ */
+static __always_inline __s32 sign_extend32(__u32 value, int index)
+{
+	__u8 shift = 31 - index;
+	return (__s32)(value << shift) >> shift;
+}
+
 static void deckard_battery_enable_charging(struct udevice *pm8550b);
 
 #if 0
@@ -324,5 +337,21 @@ int deckard_battery_get_avg_vcell(struct udevice *max17320)
 	// printf("Avg. VCell: %d mV\n", avg_vcell);
 
 	return avg_vcell;
+}
+
+int deckard_battery_get_avg_current(struct udevice *max17320)
+{
+	uint8_t reg[2];
+	if ( pmic_read(max17320, AVGCURRENT_REG, reg, 2) ) {
+		printf("failed to get battery Average Current\n");
+		return -EIO;
+	}
+
+	// resolution = 625 uA / lsb
+	uint16_t raw_val = (((uint16_t)reg[1]) << 8) + reg[0];
+	const int avg_current = sign_extend32(raw_val, 15) * 625 / 1000;
+	// printf("Avg. Current: %d mA\n", avg_current);
+
+	return avg_current;
 }
 

@@ -1029,7 +1029,8 @@ static void deckard_wait_to_boot( deckard_devices_t * pdevices )
 		{
 			int soc = deckard_battery_get_capacity(pdevices->max17320);
 			int avg_vcell = deckard_battery_get_avg_vcell(pdevices->max17320);
-			printf("\r" ANSI_CLEAR_LINE "Battery: %d%%, %dmV ", soc,avg_vcell); fflush(stdout);
+			int avg_current = deckard_battery_get_avg_current(pdevices->max17320);
+			printf("\r" ANSI_CLEAR_LINE "Battery: %d%%, %dmV, %dmA", soc,avg_vcell,avg_current); fflush(stdout);
 			deckard_shutdown_loop_counter = 10;
 			if(deckard_shutdown_condition(pdevices->pm8550b)) 
 			{
