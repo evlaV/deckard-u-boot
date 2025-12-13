@@ -1084,6 +1084,8 @@ static int deckard_ufs_load_image(struct spl_image_info *spl_image,
 	load.priv = blk_dev;
 	load.bl_len = blk_dev->blksz;
 
+	printf("Booting uboot\n");
+	
 	return spl_load(spl_image, bootdev, &load,
 			info.size * blk_dev->blksz,
 			info.start * blk_dev->blksz);

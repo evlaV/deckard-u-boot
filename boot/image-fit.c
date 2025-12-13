@@ -1306,7 +1306,7 @@ static int fit_image_check_hash(const void *fit, int noffset, const void *data,
 		*err_msgp = "Can't get hash algo property";
 		return -1;
 	}
-	printf("%s", algo);
+	//printf("%s", algo);
 
 	if (!tools_build()) {
 		fit_image_hash_get_ignore(fit, noffset, &ignore);
@@ -1369,7 +1369,7 @@ int fit_image_verify_with_data(const void *fit, int image_noffset,
 			if (fit_image_check_hash(fit, noffset, data, size,
 						 &err_msg))
 				goto error;
-			puts("+ ");
+			//puts("+ ");
 		} else if (FIT_IMAGE_ENABLE_VERIFY && verify_all &&
 				!strncmp(name, FIT_SIG_NODENAME,
 					strlen(FIT_SIG_NODENAME))) {
@@ -1382,10 +1382,8 @@ int fit_image_verify_with_data(const void *fit, int image_noffset,
 			 * an image validation failure. See the call to
 			 * fit_image_verify_required_sigs() above.
 			 */
-			if (ret)
-				puts("- ");
-			else
-				puts("+ ");
+			//if (ret) puts("- ");
+			//else puts("+ ");
 		}
 	}
 
@@ -1975,15 +1973,16 @@ int fit_get_data_conf_prop(const void *fit, const char *prop_name,
 
 static int fit_image_select(const void *fit, int rd_noffset, int verify)
 {
-	fit_image_print(fit, rd_noffset, "   ");
+	//TODO: make an abbreviated version of this gabe
+	//fit_image_print(fit, rd_noffset, "   ");
 
 	if (verify) {
-		puts("   Verifying Hash Integrity ... ");
+		log_debug("   Verifying Hash Integrity ... ");
 		if (!fit_image_verify(fit, rd_noffset)) {
 			puts("Bad Data Hash\n");
 			return -EACCES;
 		}
-		puts("OK\n");
+		log_debug("OK\n");
 	}
 
 	return 0;
@@ -2079,7 +2078,7 @@ int fit_image_load(struct bootm_headers *images, ulong addr,
 	fit_uname_config = fit_uname_configp ? *fit_uname_configp : NULL;
 	fit_base_uname_config = NULL;
 	prop_name = fit_get_image_type_property(ph_type);
-	printf("## Loading %s (%s) from FIT Image at %08lx ...\n",
+	log_debug("## Loading %s (%s) from FIT Image at %08lx ...\n",
 	       prop_name, genimg_get_phase_name(image_ph_phase(ph_type)), addr);
 
 	bootstage_mark(bootstage_id + BOOTSTAGE_SUB_FORMAT);
@@ -2117,20 +2116,20 @@ int fit_image_load(struct bootm_headers *images, ulong addr,
 		cfg_noffset = ret;
 
 		fit_base_uname_config = fdt_get_name(fit, cfg_noffset, NULL);
-		printf("   Using '%s' configuration\n", fit_base_uname_config);
+		log_debug("   Using '%s' configuration\n", fit_base_uname_config);
 		/* Remember this config */
 		if (image_type == IH_TYPE_KERNEL)
 			images->fit_uname_cfg = fit_base_uname_config;
 
 		if (FIT_IMAGE_ENABLE_VERIFY && images->verify) {
-			puts("   Verifying Hash Integrity ... ");
+			log_debug("   Verifying Hash Integrity ... ");
 			if (fit_config_verify(fit, cfg_noffset)) {
 				puts("Bad Data Hash\n");
 				bootstage_error(bootstage_id +
 					BOOTSTAGE_SUB_HASH);
 				return -EACCES;
 			}
-			puts("OK\n");
+			log_debug("OK\n");
 		}
 
 		bootstage_mark(BOOTSTAGE_ID_FIT_CONFIG);
@@ -2140,12 +2139,12 @@ int fit_image_load(struct bootm_headers *images, ulong addr,
 		fit_uname = fit_get_name(fit, noffset, NULL);
 	}
 	if (noffset < 0) {
-		printf("Could not find subimage node type '%s'\n", prop_name);
+		log_debug("Could not find subimage node type '%s'\n", prop_name);
 		bootstage_error(bootstage_id + BOOTSTAGE_SUB_SUBNODE);
 		return -ENOENT;
 	}
 
-	printf("   Trying '%s' %s subimage\n", fit_uname, prop_name);
+	log_debug("   Trying '%s' %s subimage\n", fit_uname, prop_name);
 
 	ret = fit_image_select(fit, noffset, images->verify);
 	if (ret) {
@@ -2215,12 +2214,12 @@ int fit_image_load(struct bootm_headers *images, ulong addr,
 
 	/* Decrypt data before uncompress/move */
 	if (IS_ENABLED(CONFIG_FIT_CIPHER) && IMAGE_ENABLE_DECRYPT) {
-		puts("   Decrypting Data ... ");
+		log_debug("   Decrypting Data ... ");
 		if (fit_image_uncipher(fit, noffset, &buf, &size)) {
 			puts("Error\n");
 			return -EACCES;
 		}
-		puts("OK\n");
+		log_debug("OK\n");
 	}
 
 	/* perform any post-processing on the image data */
@@ -2253,18 +2252,18 @@ int fit_image_load(struct bootm_headers *images, ulong addr,
 		image_start = addr;
 		image_end = addr + fit_get_size(fit);
 
-		printf("   >> Trying to load %s : image = 0x%08lx .. 0x%08lx\n", prop_name, image_start, image_end);
+		log_debug("   >> Trying to load %s : image = 0x%08lx .. 0x%08lx\n", prop_name, image_start, image_end);
 
 		if (image_type != IH_TYPE_KERNEL) 
 		{
-			printf("   >> not IH_TYPE_KERNEL\n");
+			log_debug("   >> not IH_TYPE_KERNEL\n");
 		}
 
 		load_end = load + len;
 
-		printf("   >> Trying to load %s : load = 0x%08lx .. 0x%08lx\n", prop_name, load, load_end);
+		log_debug("   >> Trying to load %s : load = 0x%08lx .. 0x%08lx\n", prop_name, load, load_end);
 		
-		printf("   >> Trying to load %s : len = 0x%08lx\n", prop_name, len);
+		log_debug("   >> Trying to load %s : len = 0x%08lx\n", prop_name, len);
 
 		if (image_type != IH_TYPE_KERNEL &&
 		    load < image_end && load_end > image_start) {
@@ -2272,7 +2271,7 @@ int fit_image_load(struct bootm_headers *images, ulong addr,
 			return -EXDEV;
 		}
 
-		printf("   Loading %s from 0x%08lx to 0x%08lx\n",
+		log_debug("   Loading %s from 0x%08lx to 0x%08lx\n",
 		       prop_name, data, load);
 	} else {
 		load = data;	/* No load address specified */
