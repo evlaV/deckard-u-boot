@@ -692,6 +692,54 @@ int scsi_scan(bool verbose)
 	if (ret)
 		return ret;
 
+	int probe_needed = 0;
+	uclass_foreach_dev(dev, uc) {
+		if ( ! (dev_get_flags(dev) & DM_FLAG_ACTIVATED) )
+			probe_needed = 1;
+	}
+
+	if(probe_needed) printf("scsi: probing\n");
+	else { 
+	    printf("scsi: already probed\n");
+	    return 0;
+	}
+
+	/* remove all children of the SCSI devices */
+	uclass_foreach_dev(dev, uc) {
+		log_debug("unbind %s\n", dev->name);
+		ret = device_chld_remove(dev, NULL, DM_REMOVE_NORMAL);
+		if (!ret)
+			ret = device_chld_unbind(dev, NULL);
+		if (ret) {
+			if (verbose)
+				printf("unable to unbind devices (%dE)\n", ret);
+			return log_msg_ret("unb", ret);
+		}
+	}
+
+	uclass_foreach_dev(dev, uc) {
+		ret = scsi_scan_dev(dev, verbose);
+		if (ret)
+			return ret;
+	}
+
+	return 0;
+}
+
+
+int scsi_scan_force(bool verbose)
+{
+	struct uclass *uc;
+	struct udevice *dev; /* SCSI controller */
+	int ret;
+
+	if (verbose)
+		printf("scanning bus for devices...\n");
+
+	ret = uclass_get(UCLASS_SCSI, &uc);
+	if (ret)
+		return ret;
+
 	/* remove all children of the SCSI devices */
 	uclass_foreach_dev(dev, uc) {
 		log_debug("unbind %s\n", dev->name);

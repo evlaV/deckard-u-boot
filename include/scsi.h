@@ -344,6 +344,13 @@ int scsi_bus_reset(struct udevice *dev);
 int scsi_scan(bool verbose);
 
 /**
+ * scsi_scan_force() - Scan all SCSI controllers for available devices
+ *
+ * @vebose: true to show information about each device found
+ */
+int scsi_scan_force(bool verbose);
+
+/**
  * scsi_scan_dev_lun() - scan a SCSI bus LUN and create devices
  *
  * @dev:	SCSI bus
