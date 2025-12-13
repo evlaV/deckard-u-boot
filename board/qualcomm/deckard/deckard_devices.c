@@ -138,42 +138,52 @@ static combined_button_state_t deckard_get_button_state( deckard_devices_t * pde
 	return ( combined_button_state_t ) mask;
 }
 
-boot_intention_t calc_boot_intention( deckard_devices_t * pdevices )
+boot_intention_t calc_boot_intention( deckard_devices_t * pdevices, int assume_boot_up_desired )
 {
-	/*
-	 * check on/off reasons to see if we were booted by a button
-	 * push or warm reset (reboot command), in case of unknown reason
-	 * (insert of battery and then plug charger) boot also.
-	 */
-	struct pon_on_off_reason pon_poff_reason = { 0 };
-	int ret = pmk8550_get_on_off_reason(&pon_poff_reason);
-	if (ret < 0) {
-		printf("failed to get on off reason\n");
-		return BOOT_INTENTION_START_USERSPACE;
-	}
+	int boot_up_desired;
 
-	printf("pon_reset_type: %s [0x%x] trigger: %s  [0x%x] reason: 0x%x\n",
-		pmk8550_get_pon_type_str(pon_poff_reason.type),
-		pon_poff_reason.type,
-		pmk8550_get_pon_trigger_str(pon_poff_reason.trigger),
-		pon_poff_reason.trigger,
-		pon_poff_reason.pon_reason);
-	
-	int boot_up_desired = false;
-	if(pon_poff_reason.pon_reason & 0x80)
+	if ( assume_boot_up_desired )
 	{
-		printf("pon_reason includes button press, continuing to boot\n");
-		boot_up_desired = true;
+		boot_up_desired = 1;
 	}
-	else if(pon_poff_reason.pon_reason & 0x01)
+	else
 	{
-		printf("pon_reason includes reset, continuing to boot\n");
-		boot_up_desired = true;
-	}
-	else if(pon_poff_reason.type == PON_RESET_TYPE_WARM )
-	{
-		printf("pon_reason includes warm reset, continuing to boot\n");
-		boot_up_desired = true;
+		boot_up_desired = 0;
+		/*
+		* check on/off reasons to see if we were booted by a button
+		* push or warm reset (reboot command), in case of unknown reason
+		* (insert of battery and then plug charger) boot also.
+		*/
+		struct pon_on_off_reason pon_poff_reason = { 0 };
+		int ret = pmk8550_get_on_off_reason(&pon_poff_reason);
+		if (ret < 0) {
+			printf("failed to get on off reason\n");
+			return BOOT_INTENTION_START_USERSPACE;
+		}
+
+		printf("pon_reset_type: %s [0x%x] trigger: %s  [0x%x] reason: 0x%x\n",
+			pmk8550_get_pon_type_str(pon_poff_reason.type),
+			pon_poff_reason.type,
+			pmk8550_get_pon_trigger_str(pon_poff_reason.trigger),
+			pon_poff_reason.trigger,
+			pon_poff_reason.pon_reason);
+		
+		int boot_up_desired = false;
+		if(pon_poff_reason.pon_reason & 0x80)
+		{
+			printf("pon_reason includes button press, continuing to boot\n");
+			boot_up_desired = true;
+		}
+		else if(pon_poff_reason.pon_reason & 0x01)
+		{
+			printf("pon_reason includes reset, continuing to boot\n");
+			boot_up_desired = true;
+		}
+		else if(pon_poff_reason.type == PON_RESET_TYPE_WARM )
+		{
+			printf("pon_reason includes warm reset, continuing to boot\n");
+			boot_up_desired = true;
+		}
 	}
 
 	if( boot_up_desired && !deckard_battery_ready_to_boot_to_userspace( pdevices->max17320 ) )

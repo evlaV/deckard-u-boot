@@ -42,7 +42,7 @@ typedef struct
 } deckard_devices_t;
 
 int deckard_setup_devices( deckard_devices_t * pdevices );
-boot_intention_t calc_boot_intention( deckard_devices_t * pdevices );
+boot_intention_t calc_boot_intention( deckard_devices_t * pdevices, int assume_boot_up_desired );
 void deckard_setledcolor( LedColor color, deckard_devices_t * pdevices );
 
 #endif

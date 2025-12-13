@@ -579,7 +579,7 @@ int misc_init_r(void)
 		env_set("bootdelay","20");
 	}
 
-	boot_intention_t boot_intention = calc_boot_intention( &g_deckard_devices );
+	boot_intention_t boot_intention = calc_boot_intention( &g_deckard_devices, 0 );
 	switch ( boot_intention )
 	{
 		case BOOT_INTENTION_START_USERSPACE:
@@ -983,24 +983,35 @@ static void deckard_wait_to_boot( deckard_devices_t * pdevices )
 		{
 			if ( !in_press )
 			{
-				deckard_display_off_counter = k_nBatteryImageCount;
+				boot_intention_t boot_intention = calc_boot_intention( pdevices, 1 );
 
-				if( deckard_battery_ready_to_boot_to_userspace( pdevices->max17320 ) )
+				switch ( boot_intention )
 				{
-					if ( adsp_loaded )
-					{
-						deckard_adsp_stop( k_ID_ADSP );
-					}
-
-					return;
-				}
-				else
-				{
-					if ( !adsp_loaded )
-					{
-						deckard_setledcolor( LED_COLOR_RED, &g_deckard_devices );
-					}
-					deckard_load_and_display_image(IMAGE_BATTERY_DEAD);
+					case BOOT_INTENTION_START_USERSPACE:
+						deckard_load_and_display_image( IMAGE_BOOT_LOGO );
+						if ( adsp_loaded ) deckard_adsp_stop( k_ID_ADSP );
+						return;
+					case BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY:
+						deckard_load_and_display_image( IMAGE_BATTERY_DEAD );
+						deckard_display_off_counter = k_nBatteryImageCount;
+						break; // continue in wait_to_boot
+					case BOOT_INTENTION_BOOT_MENU:
+						deckard_load_and_display_image( IMAGE_ERROR ); // TODO: make a bespoke boot menu BG
+						env_set_ulong("showbootmenu", 1);
+						if ( adsp_loaded ) deckard_adsp_stop( k_ID_ADSP );
+						return;
+					case BOOT_INTENTION_BOOT_FROM_USB:
+						deckard_load_and_display_image( IMAGE_BOOT_LOGO );
+						g_deckard_efi_mode = EFI_MODE_ONESHOT;
+						usb_init(); // Initialise USB to detect external storage before EFI comes up
+						if ( adsp_loaded ) deckard_adsp_stop( k_ID_ADSP );
+						return;
+					case BOOT_INTENTION_FASTBOOT:
+					case BOOT_INTENTION_CONSOLE_WAIT:
+					case BOOT_INTENTION_CHARGE_AND_WAIT:
+					default:
+						// do nothing, show nothing
+						break;
 				}
 			}
 
@@ -1148,11 +1159,10 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 		// We will stay in this function until the user clicks on the power
 		// button with the intention to boot the device
 		deckard_wait_to_boot( &g_deckard_devices );
-
-		// We're booting!
-		deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices );
-		deckard_load_and_display_image( IMAGE_BOOT_LOGO );
 	}
+
+	// We're booting!
+	deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices );
 
 	// FIXME: eventually invert this so we try EFI first, maybe find a less hacky way to do this?
 	if (g_deckard_efi_mode) {
