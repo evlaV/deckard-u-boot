@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <vsprintf.h>
+#include <fs.h>
 
 static int deckard_load_slot_info(char * current_slot_menu_str, int current_slot_menu_str_sz, char * previous_slot_menu_str, int previous_slot_menu_str_sz);
 
@@ -33,6 +34,9 @@ static int parse_os_info(char *buf, size_t bufsz,
 	char line[200];
 	char *data;
 	int len;
+	int namefound=0;
+	int versionidfound=0;
+	int buildidfound=0;
 
 	//init to some sane values
 	strncpy(name,"SteamOS",name_sz); 
@@ -50,9 +54,9 @@ static int parse_os_info(char *buf, size_t bufsz,
 		//printf("[%s] [%s]\n",tok,p);
 
 		if (p) {
-			if (!strcmp("NAME", tok))       strncpy(name,p,name_sz);
-			if (!strcmp("VERSION_ID", tok)) strncpy(version_id,p,version_id_sz);
-			if (!strcmp("BUILD_ID", tok))   strncpy(build_id,p,build_id_sz);
+			if (!strcmp("NAME", tok))       { strncpy(name,p,name_sz); namefound=1; }
+			if (!strcmp("VERSION_ID", tok)) { strncpy(version_id,p,version_id_sz); versionidfound=1; }
+			if (!strcmp("BUILD_ID", tok))   { strncpy(build_id,p,build_id_sz); buildidfound=1; }
 		}
 	}
 
@@ -62,7 +66,10 @@ static int parse_os_info(char *buf, size_t bufsz,
 	//printf("version_id=%s\n",version_id);
 	//printf("build_id=%s\n",build_id);
 
-	return 0;
+	if(namefound && versionidfound && buildidfound) 
+		return 0;
+
+	return 1;
 }
 
 int deckard_setup_bootmenu(void)
@@ -191,7 +198,6 @@ int deckard_boot_menu_handle_actions(void)
 	return 0;
 }
 
-
 static int deckard_load_slot_info(char * current_slot_menu_str, int current_slot_menu_str_sz, char * previous_slot_menu_str, int previous_slot_menu_str_sz)
 {
 	char cmdstr[256] = {0};
@@ -205,6 +211,8 @@ static int deckard_load_slot_info(char * current_slot_menu_str, int current_slot
 	char version_id[128] = {0};
 	char build_id[128] = {0};
 	enum disk_interface_t disk_interface = DISK_INTERFACE_SCSI;
+	int ret;
+	int osreleasefilefound;
 
 	partition_a = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_A);
 	partition_b = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_B);
@@ -226,34 +234,47 @@ static int deckard_load_slot_info(char * current_slot_menu_str, int current_slot
 	}
 
 ///////////////////////////////////
-	snprintf(cmdstr,256,"load %s %s 0x%x /etc/os-release -1",disk_interface_to_str(disk_interface),partition_a,CONFIG_SYS_LOAD_ADDR);
-	if ( run_command(cmdstr,0) == 0 ) {
-		filecontents = (char *)map_sysmem(CONFIG_SYS_LOAD_ADDR, 0);
-		filesize = (size_t) hextoul(env_get("filesize"), NULL);
-		parse_os_info(filecontents, filesize, name, sizeof(name), version_id,
-				sizeof(version_id), build_id, sizeof(build_id));
+	osreleasefilefound=0;
+	if( file_exists(disk_interface_to_str(disk_interface), partition_a, "/etc/os-release", FS_TYPE_ANY) )
+	{
+		ret = run_commandf("load %s %s 0x%x /etc/os-release -1",disk_interface_to_str(disk_interface),partition_a,CONFIG_SYS_LOAD_ADDR) ;
 
-		snprintf(current_slot_menu_str,current_slot_menu_str_sz,
-			"Current   %s-%c-%s-%s=setenv slottarget current", name,curr_slot,version_id,build_id);
-	} else {
-		printf("No os-release file found in a\n");
+		if ( ret == 0 ) {
+			filecontents = (char *)map_sysmem(CONFIG_SYS_LOAD_ADDR, 0);
+			filesize = (size_t) hextoul(env_get("filesize"), NULL);
+			ret = parse_os_info(filecontents, filesize, name, sizeof(name), version_id,
+					sizeof(version_id), build_id, sizeof(build_id));
+
+			if( ret == 0) osreleasefilefound = 1;
+
+
+			snprintf(current_slot_menu_str,current_slot_menu_str_sz,
+				"Current   %s-%c-%s-%s=setenv slottarget current", name,curr_slot,version_id,build_id);
+		}
 	}
+	if(!osreleasefilefound) printf("No valid os-release file found in a\n");
 ///////////////////////////////////
 
 ///////////////////////////////////
-	memset(cmdstr, '\0', sizeof(cmdstr));
-	snprintf(cmdstr,256,"load %s %s 0x%x /etc/os-release -1",disk_interface_to_str(disk_interface),partition_b,CONFIG_SYS_LOAD_ADDR);
-	if ( run_command(cmdstr,0) == 0 ) {
-		filecontents = (char *)map_sysmem(CONFIG_SYS_LOAD_ADDR, 0);
-		filesize = hextoul(env_get("filesize"), NULL);
-		parse_os_info(filecontents, filesize, name, sizeof(name), version_id,
-				sizeof(version_id), build_id, sizeof(build_id));
+	osreleasefilefound=0;
+	if( file_exists(disk_interface_to_str(disk_interface), partition_b, "/etc/os-release", FS_TYPE_ANY) )
+	{
+		ret = run_commandf("load %s %s 0x%x /etc/os-release -1",disk_interface_to_str(disk_interface),partition_b,CONFIG_SYS_LOAD_ADDR) ;
 
-		snprintf(previous_slot_menu_str,previous_slot_menu_str_sz,
-			"Previous  %s-%c-%s-%s=setenv slottarget previous", name,prev_slot,version_id,build_id);
-	} else {
-		printf("No os-release file found in b\n");
+		if ( ret == 0 ) {
+			filecontents = (char *)map_sysmem(CONFIG_SYS_LOAD_ADDR, 0);
+			filesize = (size_t) hextoul(env_get("filesize"), NULL);
+			ret = parse_os_info(filecontents, filesize, name, sizeof(name), version_id,
+					sizeof(version_id), build_id, sizeof(build_id));
+
+			if( ret == 0) osreleasefilefound = 1;
+
+		
+			snprintf(previous_slot_menu_str,previous_slot_menu_str_sz,
+				"Previous  %s-%c-%s-%s=setenv slottarget previous", name,prev_slot,version_id,build_id);
+		}
 	}
+	if(!osreleasefilefound) printf("No valid os-release file found in b\n");
 ///////////////////////////////////
 
 	return 0;
