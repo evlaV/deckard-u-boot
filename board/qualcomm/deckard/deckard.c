@@ -482,10 +482,10 @@ static int deckard_efi_setup(void *ctx, struct event *event)
 	return 0;
 }
 
-/* Check for vol- button - if pressed - stop autoboot */
+/* PRIMARY ENTRY POINT */
 int misc_init_r(void)
 {
-	int                 ret;
+	int ret;
 	char * bootedslot;
 	char *reboot_mode;
 	char *eeprom_board;
@@ -494,9 +494,7 @@ int misc_init_r(void)
 	int edlmode = 0;
 	int usbmode = 0;
 
-	ofnode node;
-	
-	node = ofnode_path("/chosen");
+	ofnode node = ofnode_path("/chosen");
 	if (ofnode_valid(node)) {
 		const char *bootdev;
 		u32 boot_wrapper_version;
@@ -724,8 +722,6 @@ int misc_init_r(void)
 		else
 			printf("EFI: Couldn't find EFI variable store partition!\n");
 	}
-
-	deckard_setup_bootmenu();
 
 	printf("deckard init: done\n");
 
@@ -1068,7 +1064,7 @@ static void deckard_wait_to_boot( deckard_devices_t * pdevices )
 // this gives us roughly 290 Megabytes for kernel, dtb, and initrd
 #define MAX_ADDR_INITRD 0x99000000
 
-int deckard_boot_menu(void) 
+int deckard_show_boot_menu(void) 
 {
 	fprintf(stderr,"showing boot menu!!!\n");
 	display_turn_on();
@@ -1220,7 +1216,8 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 
 	if (env_get_ulong("showbootmenu", 10, 0) == 1)
 	{
-		deckard_boot_menu();
+		deckard_setup_bootmenu();
+		deckard_show_boot_menu();
 		deckard_boot_menu_handle_actions();
 	}
 	else
@@ -1271,7 +1268,7 @@ int deckard_logo_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 
 int deckard_bootmenu_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
-	deckard_boot_menu();
+	deckard_show_boot_menu();
 	return 0;
 }
 
