@@ -2078,7 +2078,7 @@ int fit_image_load(struct bootm_headers *images, ulong addr,
 	fit_uname_config = fit_uname_configp ? *fit_uname_configp : NULL;
 	fit_base_uname_config = NULL;
 	prop_name = fit_get_image_type_property(ph_type);
-	log_debug("## Loading %s (%s) from FIT Image at %08lx ...\n",
+	printf("## Loading %s (%s) from FIT Image at %08lx ...\n",
 	       prop_name, genimg_get_phase_name(image_ph_phase(ph_type)), addr);
 
 	bootstage_mark(bootstage_id + BOOTSTAGE_SUB_FORMAT);
