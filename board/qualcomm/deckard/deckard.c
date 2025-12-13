@@ -1059,11 +1059,6 @@ static void deckard_wait_to_boot( deckard_devices_t * pdevices )
 	}
 }
 
-// per arm64 linux boot documenation, default text_offset is 0x80000
-#define ADDR_KERNEL "0x88000000"
-// this gives us roughly 290 Megabytes for kernel, dtb, and initrd
-#define MAX_ADDR_INITRD 0x99000000
-
 int deckard_show_boot_menu(void) 
 {
 	fprintf(stderr,"showing boot menu!!!\n");
@@ -1071,10 +1066,19 @@ int deckard_show_boot_menu(void)
 	g_total_console_state |= VIDEO_CONSOLE_MASK;
 	console_state_handler();
 	mdelay(500);
+
+	// This blocks until the user returns from the bootmenu
+	// see common/menu.c , bootmenu_loop
 	run_command("bootmenu",0);
 	
 	return 0;
 }
+
+// per arm64 linux boot documenation, default text_offset is 0x80000
+#define ADDR_KERNEL "0x88000000"
+// this gives us roughly 290 Megabytes for kernel, dtb, and initrd
+#define MAX_ADDR_INITRD 0x99000000
+
 // Deckard boot command.  Executes sequence that would normally be in the boot.scr
 // Note: This runs both when manually invoked via the command-line, and also
 // under the nominal startup condition via env_set("bootcmd", "deckard_boot");
