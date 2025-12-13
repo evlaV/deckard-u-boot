@@ -66,7 +66,7 @@ static deckard_devices_t g_deckard_devices = { 0 };
 
 int display_turn_off(void);
 int display_turn_off_force(void);
-static void deckard_load_and_display_image(enum full_screen_images_t image);
+static void deckard_load_and_display_image( boot_intention_t boot_intention );
 int deckard_check_for_key_press(void);
 static boot_intention_t deckard_wait_to_boot( deckard_devices_t * pdevices );
 
@@ -214,25 +214,24 @@ static int deckard_load_image(char * logo_name)
 // TODO: confirm that this isn't leaking memory 
 // Ideally, also add a comment as to what this does for memory ownership
 
-static void deckard_load_and_display_image(enum full_screen_images_t image)
+static void deckard_load_and_display_image( boot_intention_t boot_intention )
 {
-	int ret = 0;
-	
 	if(!g_display_enabled) return;
 
+	int ret = 0;
 	switch(image)
 	{
-		case IMAGE_BOOT_LOGO:
-			ret = deckard_load_image("logo.bmp.gz");
-			break;
-		case IMAGE_BATTERY_DEAD:
+		case BOOT_INTENTION_CHARGE_AND_WAIT:
+			// Dont show an image on BOOT_INTENTION_CHARGE_AND_WAIT!
+			return;
+		case BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY:
 			ret = deckard_load_image("logo_battery_low.bmp.gz");
 			break;
-		case IMAGE_ERROR:
+		case BOOT_INTENTION_BOOT_MENU:
 			ret = deckard_load_image("logo_error.bmp.gz");
 			break;
-		default:
-			ret = -1;
+		default
+			ret = deckard_load_image("logo.bmp.gz");
 			break;
 	}
 
@@ -484,6 +483,27 @@ static int deckard_efi_setup(void *ctx, struct event *event)
 	return 0;
 }
 
+void setup_boot_intention_global_state( boot_intention_t boot_intention )
+{
+	switch ( boot_intention )
+	{
+		case BOOT_INTENTION_BOOT_FROM_USB:
+			g_deckard_efi_mode = EFI_MODE_ONESHOT;
+			usb_init(); // Initialise USB to detect external storage before EFI comes up
+			break;
+		case BOOT_INTENTION_FASTBOOT:
+			env_set("reboot_mode", "f");
+			break;
+		case BOOT_INTENTION_CONSOLE_WAIT:
+			g_total_console_state |= USB_CONSOLE_MASK;
+			g_total_console_state |= VIDEO_CONSOLE_MASK;
+			env_set("bootdelay","20");
+			break;
+		default:
+			break;
+	}
+}
+
 /* PRIMARY ENTRY POINT */
 int misc_init_r(void)
 {
@@ -578,46 +598,37 @@ int misc_init_r(void)
 		env_set("bootdelay","20");
 	}
 
+	// CALC POWER-ON BOOT INTENTION
 	g_boot_intention = g_factory_mode ? BOOT_INTENTION_START_USERSPACE : calc_boot_intention( &g_deckard_devices, 0 );
-	switch ( g_boot_intention )
+
+	// Set LED Color
+	deckard_setledcolor(
+		( g_boot_intention == BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY ) ? LED_COLOR_RED : LED_COLOR_WHITE,
+		&g_deckard_devices );
+
+	// SHOW BOOT IMAGE
+	if ( g_boot_intention == BOOT_INTENTION_CHARGE_AND_WAIT ||
+		g_boot_intention == BOOT_INTENTION_CONSOLE_WAIT )
 	{
-		case BOOT_INTENTION_START_USERSPACE:
-			deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices );
-			deckard_load_and_display_image( IMAGE_BOOT_LOGO );
-			break;
-		case BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY:
-			deckard_setledcolor( LED_COLOR_RED, &g_deckard_devices );
-			// TODO: may be prudent to not show this, yet.
-			// Dont immediately load and show the image. Doing so prior to DSP
-			// charging may be too high of a battery load if the battery is drained.
-			deckard_load_and_display_image( IMAGE_BATTERY_DEAD );
-			break;
-		case BOOT_INTENTION_BOOT_MENU:
-			deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices );
-			deckard_load_and_display_image( IMAGE_ERROR ); // TODO: make a bespoke boot menu BG
-			break;
-		case BOOT_INTENTION_BOOT_FROM_USB:
-			deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices ); // TODO: custom LED color?
-			deckard_load_and_display_image( IMAGE_BOOT_LOGO );
-			g_deckard_efi_mode = EFI_MODE_ONESHOT;
-			usb_init(); // Initialise USB to detect external storage before EFI comes up
-			break;
-		case BOOT_INTENTION_FASTBOOT:
-			deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices ); // TODO: custom LED color?
-			deckard_load_and_display_image( IMAGE_BOOT_LOGO );
-			env_set("reboot_mode", "f");
-			break;
-		case BOOT_INTENTION_CONSOLE_WAIT:
-			deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices ); // TODO: custom LED color?
-			g_total_console_state |= USB_CONSOLE_MASK;
-			g_total_console_state |= VIDEO_CONSOLE_MASK;
-			env_set("bootdelay","20");
-			break;
-		case BOOT_INTENTION_CHARGE_AND_WAIT:
-		default:
-			// do nothing, show nothing
-			break;
+		// intentionally dont show an image	
 	}
+	else if ( g_boot_intention == BOOT_INTENTION_CHARGE_AND_WAIT )
+	{
+		// FIXME: Add battery check to see if sufficient strength
+		// to show low battery image?
+		// TODO: may be prudent to not show this, yet.
+		// Dont immediately load and show the image. Doing so prior to DSP
+		// charging may be too high of a battery load if the battery is drained.
+
+		deckard_load_and_display_image( g_boot_intention );
+	}
+	else
+	{
+		deckard_load_and_display_image( g_boot_intention );
+	}
+
+	// SETUP CUSTOM STATE TO EXECUTE ON BOOT INTENTION
+	setup_boot_intention_global_state( g_boot_intention );
 
 	g_total_console_state |= SERIAL_CONSOLE_MASK; //seems likely we always need this on otherwise will get crashes / sync abort handler loops?
 	console_state_handler();
@@ -985,30 +996,20 @@ static boot_intention_t deckard_wait_to_boot( deckard_devices_t * pdevices )
 
 				switch ( boot_intention )
 				{
+					// RETURN FROM WAITING
 					case BOOT_INTENTION_START_USERSPACE:
-						deckard_load_and_display_image( IMAGE_BOOT_LOGO );
-						if ( adsp_loaded ) deckard_adsp_stop( k_ID_ADSP );
-						return boot_intention;
-					case BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY:
-						deckard_load_and_display_image( IMAGE_BATTERY_DEAD );
-						deckard_display_off_counter = k_nBatteryImageCount;
-						break; // continue in wait_to_boot
 					case BOOT_INTENTION_BOOT_MENU:
-						deckard_load_and_display_image( IMAGE_ERROR ); // TODO: make a bespoke boot menu BG
-						if ( adsp_loaded ) deckard_adsp_stop( k_ID_ADSP );
-						return boot_intention;
 					case BOOT_INTENTION_BOOT_FROM_USB:
-						deckard_load_and_display_image( IMAGE_BOOT_LOGO );
-						g_deckard_efi_mode = EFI_MODE_ONESHOT;
-						usb_init(); // Initialise USB to detect external storage before EFI comes up
-						if ( adsp_loaded ) deckard_adsp_stop( k_ID_ADSP );
-						return boot_intention;
 					case BOOT_INTENTION_FASTBOOT:
 					case BOOT_INTENTION_CONSOLE_WAIT:
-						deckard_load_and_display_image( IMAGE_BOOT_LOGO );
-						// normal boot. TODO: gaber is this right? Does fastboot actually makse sense here?
 						if ( adsp_loaded ) deckard_adsp_stop( k_ID_ADSP );
 						return boot_intention;
+
+					// CONTINUE WAITING
+					case BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY:
+						deckard_load_and_display_image( boot_intention );
+						deckard_display_off_counter = k_nBatteryImageCount;
+						break; // continue in wait_to_boot
 					case BOOT_INTENTION_CHARGE_AND_WAIT:
 					default:
 						// do nothing, show nothing
@@ -1165,11 +1166,16 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 		// This may be minutes ... hours ... days...
 		// We will stay in this function until the user clicks on the power
 		// button with the intention to boot the device
+
 		g_boot_intention = deckard_wait_to_boot( &g_deckard_devices );
+
+		// The boot intention has changed. Re setup the needed state
+		setup_boot_intention_global_state( g_boot_intention );
 	}
 
 	// We're booting!
 	deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices );
+	deckard_load_and_display_image( g_boot_intention );
 
 	// FIXME: eventually invert this so we try EFI first, maybe find a less hacky way to do this?
 	if (g_deckard_efi_mode) {
