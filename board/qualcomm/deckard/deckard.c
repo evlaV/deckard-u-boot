@@ -66,7 +66,7 @@ static deckard_devices_t g_deckard_devices = { 0 };
 
 int display_turn_off(void);
 int display_turn_off_force(void);
-static void deckard_load_and_display_image( boot_intention_t boot_intention );
+static void deckard_load_and_display_image_for_boot_intention( boot_intention_t boot_intention );
 int deckard_check_for_key_press(void);
 static boot_intention_t deckard_wait_to_boot( deckard_devices_t * pdevices );
 
@@ -214,12 +214,12 @@ static int deckard_load_image(char * logo_name)
 // TODO: confirm that this isn't leaking memory 
 // Ideally, also add a comment as to what this does for memory ownership
 
-static void deckard_load_and_display_image( boot_intention_t boot_intention )
+static void deckard_load_and_display_image_for_boot_intention( boot_intention_t boot_intention )
 {
 	if(!g_display_enabled) return;
 
 	int ret = 0;
-	switch(image)
+	switch(boot_intention)
 	{
 		case BOOT_INTENTION_CHARGE_AND_WAIT:
 			// Dont show an image on BOOT_INTENTION_CHARGE_AND_WAIT!
@@ -230,7 +230,7 @@ static void deckard_load_and_display_image( boot_intention_t boot_intention )
 		case BOOT_INTENTION_BOOT_MENU:
 			ret = deckard_load_image("logo_error.bmp.gz");
 			break;
-		default
+		default:
 			ret = deckard_load_image("logo.bmp.gz");
 			break;
 	}
@@ -620,11 +620,11 @@ int misc_init_r(void)
 		// Dont immediately load and show the image. Doing so prior to DSP
 		// charging may be too high of a battery load if the battery is drained.
 
-		deckard_load_and_display_image( g_boot_intention );
+		deckard_load_and_display_image_for_boot_intention( g_boot_intention );
 	}
 	else
 	{
-		deckard_load_and_display_image( g_boot_intention );
+		deckard_load_and_display_image_for_boot_intention( g_boot_intention );
 	}
 
 	// SETUP CUSTOM STATE TO EXECUTE ON BOOT INTENTION
@@ -937,13 +937,13 @@ static boot_intention_t deckard_wait_to_boot( deckard_devices_t * pdevices )
 	if ( !pdevices->max17320 || !pdevices->pm8550b )
 	{
 		printf( "ERROR: no pdevices->max17320/pdevices->pm8550b. Cannot wait to boot.\n" );
-		return;
+		return BOOT_INTENTION_START_USERSPACE;
 	}
 
 	if ( !pdevices->btn_power )
 	{
 		printf( "ERROR: no pdevices->btn_power. Cannot wait to boot.\n" );
-		return;
+		return BOOT_INTENTION_START_USERSPACE;
 	}
 
 	int deckard_shutdown_loop_counter = 1;
@@ -1007,7 +1007,7 @@ static boot_intention_t deckard_wait_to_boot( deckard_devices_t * pdevices )
 
 					// CONTINUE WAITING
 					case BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY:
-						deckard_load_and_display_image( boot_intention );
+						deckard_load_and_display_image_for_boot_intention( boot_intention );
 						deckard_display_off_counter = k_nBatteryImageCount;
 						break; // continue in wait_to_boot
 					case BOOT_INTENTION_CHARGE_AND_WAIT:
@@ -1175,7 +1175,7 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 
 	// We're booting!
 	deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices );
-	deckard_load_and_display_image( g_boot_intention );
+	deckard_load_and_display_image_for_boot_intention( g_boot_intention );
 
 	// FIXME: eventually invert this so we try EFI first, maybe find a less hacky way to do this?
 	if (g_deckard_efi_mode) {
@@ -1256,7 +1256,7 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 	console_state_handler();
 
 	// TODO: would be really nice to be able to load image without turning display on/off
-	deckard_load_and_display_image(IMAGE_BOOT_LOGO); //switch to booting logo before we boot up
+	deckard_load_and_display_image_for_boot_intention(BOOT_INTENTION_START_USERSPACE); //switch to booting logo before we boot up
 
 	// This is to workaround an incomplete hand-off implementation, where we (as of 12/11/25)
 	// need to allow the kernel to turn the display on itself (vs a 'hot transfer')
@@ -1287,7 +1287,7 @@ U_BOOT_CMD(
 
 int deckard_logo_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
-	deckard_load_and_display_image(IMAGE_BOOT_LOGO);
+	deckard_load_and_display_image_for_boot_intention(BOOT_INTENTION_START_USERSPACE);
 	return 0;
 }
 
