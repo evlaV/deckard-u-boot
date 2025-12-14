@@ -1223,8 +1223,9 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 		deckard_setup_bootmenu();
 		deckard_log("show bootmenu\n");
 		deckard_show_boot_menu();
-		deckard_log("handle bootmenu actions\n");
+		// you cannot print here, or it will show in the boot menu!
 		deckard_boot_menu_handle_actions();
+		deckard_log("handled bootmenu actions\n");
 	}
 
 	//even though we are about to turn the display off, we fill the framebuffer with the boot logo
