@@ -18,6 +18,7 @@
 #include <command.h>
 #include "pmk8550.h"
 #include "deckard_battery.h"
+#include "deckard_log.h"
 #include <sysreset.h>
 #include <linux/delay.h>
 
@@ -86,6 +87,9 @@ void save_boot_params(ulong r0)
 	save_boot_params_ret();
 }
 
+
+#define deckard_log_spl(fmt, ...) deckard_log_with_prefix("uboot-spl", fmt, ##__VA_ARGS__)
+
 static int deckard_spl_get_dev(const char *part_name)
 {
 	char dev_part_str[MAX_DEV_PART_STR];
@@ -137,7 +141,7 @@ void spl_perform_fixups(struct spl_image_info *spl_image)
 	//now do fdt stuff
 	chosen = fdt_find_or_add_subnode(blob, 0, "chosen");
 	if (chosen < 0) {
-		printf("%s: could not find/create '/chosen'\n", __func__);
+		deckard_log_spl("%s: could not find/create '/chosen'\n", __func__);
 		return;
 	}
 
@@ -154,16 +158,16 @@ void spl_perform_fixups(struct spl_image_info *spl_image)
 	{
 		ret = fdt_setprop_string(blob, chosen,
 				"u-boot,spl-boot-device", "X");
-		printf("%s: u-boot,spl-boot-device was set to an unknown value!!\n", __func__);				
+		deckard_log_spl("%s: u-boot,spl-boot-device was set to an unknown value!!\n", __func__);				
 	}
 	if (ret) {
-		printf("%s: could not add u-boot,spl-boot-device property\n", __func__);
+		deckard_log_spl("%s: could not add u-boot,spl-boot-device property\n", __func__);
 		return;
 	}
 
 	ret = fdt_setprop_u32(blob, chosen, "boot-wrapper-version", boot_wrapper_version);
 	if (ret) {
-		printf("%s: could not add u-boot,spl-boot-device property\n", __func__);
+		deckard_log_spl("%s: could not add u-boot,spl-boot-device property\n", __func__);
 		return;
 	}
 }
@@ -245,7 +249,7 @@ static char *check_boot_order(void)
 
 	if (!boot_order ||
 	    (strcmp(boot_order, "A B") && strcmp(boot_order, "B A"))) {
-		printf("Invalid BOOT_ORDER (%s), default to 'A B'\n", boot_order);
+		deckard_log_spl("Invalid BOOT_ORDER (%s), default to 'A B'\n", boot_order);
 		env_set("BOOT_ORDER", "A B");
 		return env_get("BOOT_ORDER");
 	}
@@ -308,7 +312,7 @@ static int show_button_state(struct udevice *dev)
 	if (ret >= BUTTON_COUNT)
 		ret = -EINVAL;
 	if (ret >= 0)
-		printf("%s\n", ret ? "on" : "off");
+		deckard_log_spl("%s\n", ret ? "on" : "off");
 
 	return ret;
 }
@@ -324,16 +328,16 @@ static void list_buttons(void)
 		struct button_uc_plat *plat = dev_get_uclass_plat(dev);
 
 		if (ret) {
-			printf("BUTTON device %s probe error %i\n",
+			deckard_log_spl("BUTTON device %s probe error %i\n",
 			       dev->name, ret);
 			continue;
 		}
 
 		if (plat->label) {
-			printf("%-15s ", plat->label);
+			deckard_log_spl("%-15s ", plat->label);
 			ret = show_button_state(dev);
 			if (ret < 0)
-				printf("Error %d\n", ret);
+				deckard_log_spl("Error %d\n", ret);
 		}
 	}
 }
@@ -365,22 +369,22 @@ static void deckard_spl_leds_set(void)
 
 	ret = led_get_by_label("red", &led_red);
 	if (ret < 0) {
-		printf("Couldn't find red led!\n");
+		deckard_log_spl("Couldn't find red led!\n");
 	}
 	else {
-		printf("Enabling Red LED\n");
+		deckard_log_spl("Enabling Red LED\n");
 		led_set_state(led_red, LEDST_ON);
 	}
 	ret = led_get_by_label("green", &led_green);
 	if (ret < 0) {
-		printf("Couldn't find green led!\n");
+		deckard_log_spl("Couldn't find green led!\n");
 	}
 	else {
 		led_set_state(led_green, LEDST_ON);
 	}
 	ret = led_get_by_label("blue", &led_blue);
 	if (ret < 0) {
-		printf("Couldn't find blue led!\n");
+		deckard_log_spl("Couldn't find blue led!\n");
 	}
 	else {
 		led_set_state(led_blue, LEDST_ON);
@@ -434,7 +438,7 @@ static int update_boot_state_and_boot_valid(char boot_slot)
 			break;
 		
 		default:
-			printf("get_boot_counts: error\n");
+			deckard_log_spl("get_boot_counts: error\n");
 			break;
 	}
 
@@ -471,7 +475,7 @@ static int check_for_boot_firmware_slot_change(void)
 		ret = gpt_set_xbl_partition_bootable_by_slot_partfstype(blk_dev, "b");
 	}
 
-	printf("check_for_boot_firmware_slot_change, ret = %d\n",ret);
+	deckard_log_spl("check_for_boot_firmware_slot_change, ret = %d\n",ret);
 
 	env_set("BOOT_FW_SLOT",NULL); //always delete this variable after we process it
 
@@ -510,7 +514,7 @@ static int get_boot_counts(char boot_slot)
 			break;
 
 		default:
-			printf("get_boot_counts: error\n");
+			deckard_log_spl("get_boot_counts: error\n");
 			break;
 	}
 
@@ -541,7 +545,7 @@ static int get_boot_valid(char boot_slot)
 			break;
 
 		default:
-			printf("get_boot_valid: error\n");
+			deckard_log_spl("get_boot_valid: error\n");
 			break;			
 	}
 
@@ -583,7 +587,7 @@ static int determine_boot_target(void)
 	//if we end up in a situation where both slots are invalid, we will end up just trying to boot our existing slot
 	if (!strcmp(boot_order, "A B")) 
 	{
-		printf("BOOT_ORDER set to A as primary\n");
+		deckard_log_spl("BOOT_ORDER set to A as primary\n");
 
 		if((!boot_valid_a || !boot_count_ok_a) && boot_valid_b && boot_count_ok_b) swap_boot_order = 1;
 		
@@ -600,7 +604,7 @@ static int determine_boot_target(void)
 	} 
 	else if (!strcmp(boot_order, "B A")) 
 	{
-		printf("BOOT_ORDER set to B as primary\n");
+		deckard_log_spl("BOOT_ORDER set to B as primary\n");
 
 		if((!boot_valid_b || !boot_count_ok_b) && boot_valid_a && boot_count_ok_a) swap_boot_order = 1;
 		
@@ -655,7 +659,7 @@ static int spl_env_load(struct blk_desc *blk_dev, struct disk_partition *mainenv
 	if (ret) {
 		ret = env_import(altbuf, 1, 0);
 		if (ret)
-			printf("Failed to import environment\n");
+			deckard_log_spl("Failed to import environment\n");
 	}
 
 	return ret;
@@ -672,17 +676,17 @@ static int spl_env_save(struct blk_desc *blk_dev, struct disk_partition *mainenv
 	{
 		//write env primary
 		ret = blk_write(blk_dev->bdev, mainenv_info->start, mainenv_info->size, mainbuf);
-		if (!ret) printf("SPL: Unable to write env\n");
-		else printf("SPL: env written OK\n");
+		if (!ret) deckard_log_spl("Unable to write env\n");
+		else deckard_log_spl("env written OK\n");
 		
 		//write env alternate
 		ret = blk_write(blk_dev->bdev, altenv_info->start, altenv_info->size, mainbuf);
-		if (!ret) printf("SPL: Unable to write env_alt\n");
-		else printf("SPL: env_alt written OK\n");
+		if (!ret) deckard_log_spl("Unable to write env_alt\n");
+		else deckard_log_spl("env_alt written OK\n");
 	} 
 	else
 	{
-		printf("Failed to export environment");
+		deckard_log_spl("Failed to export environment");
 	}
 
 	return 0;
@@ -692,8 +696,8 @@ void trigger_xblramdump_fault(void) {
 	//trigger xblramdump by reading from memory we should not be reading from!
 	int memfaultaddr=0x8000000;
 	void * tmpbuf = map_sysmem(memfaultaddr, 4); 
-	printf("causing mem fault on 0x%0X\n",memfaultaddr);
-	printf("mem fault on: %x\n",*(volatile uint32_t *)tmpbuf);
+	deckard_log_spl("causing mem fault on 0x%0X\n",memfaultaddr);
+	deckard_log_spl("mem fault on: %x\n",*(volatile uint32_t *)tmpbuf);
 	unmap_sysmem(tmpbuf);
 }
 
@@ -702,26 +706,26 @@ enum combined_button_state_t button_state_handler(void)
 	enum combined_button_state_t total_button_state;
 
 	if ( deckard_spl_get_button_state("Select") == BUTTON_ON) {
-		printf("Select button pressed\n");
+		deckard_log_spl("Select button pressed\n");
 		total_button_state |= SELECT_BUTTON_MASK;
 	}
 
 	if ( deckard_spl_get_button_state("Volume Down") == BUTTON_ON) {
-		printf("Vol- button pressed\n");
+		deckard_log_spl("Vol- button pressed\n");
 		total_button_state |= VOLDN_BUTTON_MASK;
 	}
 
 	if ( deckard_spl_get_button_state("Volume Up") == BUTTON_ON) {
-		printf("Vol+ button pressed\n");
+		deckard_log_spl("Vol+ button pressed\n");
 		total_button_state |= VOLUP_BUTTON_MASK;
 	}
 
 	if ( deckard_spl_get_button_state("Power Button") == BUTTON_ON) {
-		printf("Power button pressed\n");
+		deckard_log_spl("Power button pressed\n");
 		total_button_state |= POWER_BUTTON_MASK;
 	}
 
-	printf("total button state = %d\n", total_button_state);
+	deckard_log_spl("total button state = %d\n", total_button_state);
 
 	switch(total_button_state)
 	{
@@ -740,7 +744,7 @@ enum combined_button_state_t button_state_handler(void)
 			//trigger_xblramdump_fault();
 			break;
 		case POWER_OFF__VOLUP_ON__VOLDN_OFF__SELECT_ON:
-			printf("Forcing USB boot\n");
+			deckard_log_spl("Forcing USB boot\n");
 			env_set_ulong("BOOT_FORCE_USB", 1);
 			break;
 		case POWER_OFF__VOLUP_ON__VOLDN_ON__SELECT_OFF:
@@ -762,7 +766,7 @@ enum combined_button_state_t button_state_handler(void)
 		case POWER_ON__VOLUP_ON__VOLDN_ON__SELECT_OFF:
 			break;
 		case POWER_ON__VOLUP_ON__VOLDN_ON__SELECT_ON: 
-			printf("why are you hitting all of the buttons?\n");
+			deckard_log_spl("why are you hitting all of the buttons?\n");
 			break;
 		default:
 			break;
@@ -805,14 +809,14 @@ void qcom_spl_board_init(void)
 	uint16_t battery_voltage;
 	int skip_iterate_boot_count = 0;
 
-	printf("Hello from deckard_spl\n");
-	printf("spl: boot wrapper version %ld\n", boot_wrapper_version);
+	deckard_log_spl("qcom_spl_board_init\n");
+	deckard_log_spl("boot wrapper version %ld\n", boot_wrapper_version);
 
 	ret = pmk8550_get_on_off_reason(&pon_poff_reason);
 	if (ret == 0) {
 		if (pon_poff_reason.trigger == PON_RESET_TRIGGER_OTHER)
 		{
-			printf("PON %s Unknown Trigger (Irq %d PID %d SID %d)\n",
+			deckard_log_spl("PON %s Unknown Trigger (Irq %d PID %d SID %d)\n",
 			       pmk8550_get_pon_type_str(pon_poff_reason.type),
 				pon_poff_reason.trigger_data.irq,
 				pon_poff_reason.trigger_data.pid,
@@ -820,14 +824,14 @@ void qcom_spl_board_init(void)
 		}
 		else
 		{
-			printf("PON %s Trigger %s\n",
+			deckard_log_spl("PON %s Trigger %s\n",
 			       pmk8550_get_pon_type_str(pon_poff_reason.type),
 			       pmk8550_get_pon_trigger_str(pon_poff_reason.trigger));
 		}
 
-		printf("PON Reason = 0x%0X\n",pon_poff_reason.pon_reason);
-		printf("PON BOOT1 POFF Reason = 0x%0X\n",pon_poff_reason.pon_boot1_poff_reason);
-		printf("PON BOOT1 OFF Reason = 0x%0X\n",pon_poff_reason.pon_boot1_off_reason);
+		deckard_log_spl("PON Reason = 0x%0X\n",pon_poff_reason.pon_reason);
+		deckard_log_spl("PON BOOT1 POFF Reason = 0x%0X\n",pon_poff_reason.pon_boot1_poff_reason);
+		deckard_log_spl("PON BOOT1 OFF Reason = 0x%0X\n",pon_poff_reason.pon_boot1_off_reason);
 
 		// We do this check for when power button was released to check for a situation that should be impossible
 		// Scenario of concern is that somehow the device appears to have been shutdown by powerbutton
@@ -836,35 +840,35 @@ void qcom_spl_board_init(void)
 		// 1. holding the button down to boot device after a hard shutdown (by power button hold down)
 		// 2. or the user is currently shutting down the device via hard shutdown (by power button hold down)
 		//    and they are holding the key down still 
-		printf("PON RTC time = %d\n",pon_poff_reason.pon_rtc_time);
-		printf("Power button release RTC time = %d\n",pon_poff_reason.power_button_release_rtc_time);
+		deckard_log_spl("PON RTC time = %d\n",pon_poff_reason.pon_rtc_time);
+		deckard_log_spl("Power button release RTC time = %d\n",pon_poff_reason.power_button_release_rtc_time);
 		power_button_release_rtc_time_since_pon = pon_poff_reason.power_button_release_rtc_time - pon_poff_reason.pon_rtc_time;
 
-		printf("--------------------------------------------------------------------------\n");
-		printf("pon_reset_type: %s [0x%0x] trigger: %s  [0x%0x] reason: 0x%0x\n",
+		deckard_log_spl("--------------------------------------------------------------------------\n");
+		deckard_log_spl("pon_reset_type: %s [0x%0x] trigger: %s  [0x%0x] reason: 0x%0x\n",
 				pmk8550_get_pon_type_str(pon_poff_reason.type),
 				pon_poff_reason.type,
 				pmk8550_get_pon_trigger_str(pon_poff_reason.trigger),
 				pon_poff_reason.trigger,
 				pon_poff_reason.pon_reason);
-		printf("--------------------------------------------------------------------------\n");
+		deckard_log_spl("--------------------------------------------------------------------------\n");
 
 
 		if(power_button_release_rtc_time_since_pon <= 0)
 		{
-			printf("Power button not released since boot\n");
+			deckard_log_spl("Power button not released since boot\n");
 			power_button_released_since_boot = 0;
 		}
 		else
 		{
-			printf("Power button released %d ms after boot\n",power_button_release_rtc_time_since_pon);
+			deckard_log_spl("Power button released %d ms after boot\n",power_button_release_rtc_time_since_pon);
 			power_button_released_since_boot = 1;
 		}
 
 		if( pon_poff_reason.type == PON_RESET_TYPE_SHUTDOWN 
 			&& pon_poff_reason.trigger == PON_RESET_TRIGGER_KPDPWR )
 		{
-			printf("Last Shutdown occurred by hard shutdown from power button hold down\n");
+			deckard_log_spl("Last Shutdown occurred by hard shutdown from power button hold down\n");
 
 			if(power_button_released_since_boot == 0)
 			{
@@ -872,7 +876,7 @@ void qcom_spl_board_init(void)
 				for(int i=0; i < 100 * 5; i++)
 				{
 					if ( deckard_spl_get_button_state("Power Button") == BUTTON_OFF) {
-						printf("Power button released\n");
+						deckard_log_spl("Power button released\n");
 						power_button_released_since_boot = 1;
 						break;
 					}
@@ -882,7 +886,7 @@ void qcom_spl_board_init(void)
 
 			if(power_button_released_since_boot)
 			{
-				printf("SPL: shutting down...\n");
+				deckard_log_spl("shutting down...\n");
 				ret = sysreset_walk(SYSRESET_POWER_OFF);
 			}
 
@@ -930,7 +934,7 @@ void qcom_spl_board_init(void)
 
 	if(check_for_boot_firmware_slot_change())
 	{
-		printf("Boot firmware changed\n");
+		deckard_log_spl("Boot firmware changed\n");
 		
 		ret = spl_env_save(blk_dev, &mainenv_info, &altenv_info, mainbuf, altbuf);
 		if( ret == 0 ) ret = spl_env_load(blk_dev, &mainenv_info, &altenv_info, mainbuf, altbuf);
@@ -941,7 +945,7 @@ void qcom_spl_board_init(void)
 			if (!boot_fw_slot) 
 			{
 				//confirmed that the variable was removed, safe to reboot now
-				printf("rebooting!\n");
+				deckard_log_spl("rebooting!\n");
 				do_reset(NULL, 0, 0, NULL);
 			}
 		}
@@ -952,37 +956,37 @@ void qcom_spl_board_init(void)
 	/* Sanitize BOOT_ORDER && BOOT_COUNT */
 	boot_order = check_boot_order();
 
-	printf("Environment Variables:\n");
-	printf("- BOOT_ORDER   = '%s'\n", env_get("BOOT_ORDER"));
-	printf("- BOOT_COUNT_A = '%s'\n", env_get("BOOT_COUNT_A"));
-	printf("- BOOT_COUNT_B = '%s'\n", env_get("BOOT_COUNT_B"));
-	printf("- BOOT_STATE_A = '%s'\n", env_get("BOOT_STATE_A"));
-	printf("- BOOT_STATE_B = '%s'\n", env_get("BOOT_STATE_B"));
-	printf("- BOOT_VALID_A = '%s'\n", env_get("BOOT_VALID_A"));
-	printf("- BOOT_VALID_B = '%s'\n", env_get("BOOT_VALID_B"));
-	printf("- BOOT_FORCE_USB = '%s'\n", env_get("BOOT_FORCE_USB"));
-	printf("- BOOT_FORCE_SLOT = '%s'\n", env_get("BOOT_FORCE_SLOT"));
-	printf("- BOOTED_FW_SLOT = '%s'\n", env_get("BOOTED_FW_SLOT"));
+	deckard_log_spl("Environment Variables:\n");
+	deckard_log_spl("- BOOT_ORDER   = '%s'\n", env_get("BOOT_ORDER"));
+	deckard_log_spl("- BOOT_COUNT_A = '%s'\n", env_get("BOOT_COUNT_A"));
+	deckard_log_spl("- BOOT_COUNT_B = '%s'\n", env_get("BOOT_COUNT_B"));
+	deckard_log_spl("- BOOT_STATE_A = '%s'\n", env_get("BOOT_STATE_A"));
+	deckard_log_spl("- BOOT_STATE_B = '%s'\n", env_get("BOOT_STATE_B"));
+	deckard_log_spl("- BOOT_VALID_A = '%s'\n", env_get("BOOT_VALID_A"));
+	deckard_log_spl("- BOOT_VALID_B = '%s'\n", env_get("BOOT_VALID_B"));
+	deckard_log_spl("- BOOT_FORCE_USB = '%s'\n", env_get("BOOT_FORCE_USB"));
+	deckard_log_spl("- BOOT_FORCE_SLOT = '%s'\n", env_get("BOOT_FORCE_SLOT"));
+	deckard_log_spl("- BOOTED_FW_SLOT = '%s'\n", env_get("BOOTED_FW_SLOT"));
 
 	determine_boot_target(); //sets BOOT_TARGET env var
 
 	if (env_get("BOOT_FORCE_USB")) {
-		printf("BOOT_FORCE_USB set in environment, going to try to boot from USB\n");
+		deckard_log_spl("BOOT_FORCE_USB set in environment, going to try to boot from USB\n");
 		go_to_usb = 1;
 		env_set("BOOT_FORCE_USB",NULL);
 	}
 
 	char *boot_force_slot = env_get("BOOT_FORCE_SLOT");
 	if (boot_force_slot) {
-		printf("BOOT_FORCE_SLOT=%s\n",boot_force_slot);
+		deckard_log_spl("BOOT_FORCE_SLOT=%s\n",boot_force_slot);
 		if( strcmp(boot_force_slot,"A") == 0 )
 		{
-			printf("Overriding BOOT_TARGET to A\n");
+			deckard_log_spl("Overriding BOOT_TARGET to A\n");
 			env_set("BOOT_TARGET", "A");
 			skip_iterate_boot_count = 1;
 		} else if( strcmp(boot_force_slot,"B") == 0  )
 		{
-			printf("Overriding BOOT_TARGET to B\n");
+			deckard_log_spl("Overriding BOOT_TARGET to B\n");
 			env_set("BOOT_TARGET", "B");
 			skip_iterate_boot_count = 1;
 		}
@@ -996,14 +1000,14 @@ void qcom_spl_board_init(void)
 	}
 	else
 	{
-		printf("boot count not iterated\n");
+		deckard_log_spl("boot count not iterated\n");
 	}
-	printf("Boot count on target slot is %d\n",boot_count);
+	deckard_log_spl("Boot count on target slot is %d\n",boot_count);
 
 	spl_env_save(blk_dev, &mainenv_info, &altenv_info, mainbuf, altbuf);
 
 	if (go_to_usb) {
-		printf("Forcing USB boot\n");
+		deckard_log_spl("Forcing USB boot\n");
 		env_set_ulong("BOOT_FORCE_USB", 1);
 	}
 }
@@ -1039,14 +1043,14 @@ static int deckard_ufs_load_image(struct spl_image_info *spl_image,
 
 	uboot_lun = deckard_spl_get_dev(DECKARD_UBOOT_SLOT_A);
 	if (uboot_lun < 0) {
-		printf("uboot lun with partition name %s not found\n",
+		deckard_log_spl("uboot lun with partition name %s not found\n",
 			DECKARD_UBOOT_SLOT_A);
 		return -ENODEV;
 	}
 
 	uboot_part_a = deckard_spl_get_part(DECKARD_UBOOT_SLOT_A);
 	if (uboot_part_a < 0) {
-		printf("uboot partition with name %s not found\n",
+		deckard_log_spl("uboot partition with name %s not found\n",
 			DECKARD_UBOOT_SLOT_A);
 		return -ENODEV;
 	}
@@ -1055,7 +1059,7 @@ static int deckard_ufs_load_image(struct spl_image_info *spl_image,
 	if (bootdev->boot_device == BOOT_DEVICE_UFS_B) {
 		uboot_part_b = deckard_spl_get_part(DECKARD_UBOOT_SLOT_B);
 		if (uboot_part_b < 0) {
-			printf("uboot partition with name %s not found\n",
+			deckard_log_spl("uboot partition with name %s not found\n",
 				DECKARD_UBOOT_SLOT_B);
 			return -ENODEV;
 		}
@@ -1066,7 +1070,7 @@ static int deckard_ufs_load_image(struct spl_image_info *spl_image,
 	    bootdev->boot_device == BOOT_DEVICE_UFS_B) {
 		blk_dev = blk_get_devnum_by_uclass_id(UCLASS_SCSI, uboot_lun);
 		if (!blk_dev) {
-			printf("blk desc for %d %d not found\n", UCLASS_SCSI, uboot_lun);
+			deckard_log_spl("blk desc for %d %d not found\n", UCLASS_SCSI, uboot_lun);
 			return -ENODEV;
 		}
 
@@ -1075,7 +1079,7 @@ static int deckard_ufs_load_image(struct spl_image_info *spl_image,
 
 	ret = part_get_info(blk_dev, partid, &info);
 	if (ret == -ENOENT) {
-		printf("partition %d for blk desc for %d %d not found\n",
+		deckard_log_spl("partition %d for blk desc for %d %d not found\n",
 		       partid, UCLASS_SCSI, uboot_lun);
 		return -ENODEV;
 	}
@@ -1084,11 +1088,12 @@ static int deckard_ufs_load_image(struct spl_image_info *spl_image,
 	load.priv = blk_dev;
 	load.bl_len = blk_dev->blksz;
 
-	printf("Booting uboot\n");
-	
-	return spl_load(spl_image, bootdev, &load,
+	deckard_log_spl("Booting uboot\n");
+	ret = spl_load(spl_image, bootdev, &load,
 			info.size * blk_dev->blksz,
 			info.start * blk_dev->blksz);
+	deckard_log_spl("done\n");
+	return ret;
 }
 
 SPL_LOAD_IMAGE_METHOD("UFS_A", 0, BOOT_DEVICE_UFS_A, deckard_ufs_load_image);

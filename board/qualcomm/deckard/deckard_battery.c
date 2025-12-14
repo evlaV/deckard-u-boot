@@ -7,10 +7,12 @@
 #include "pm8550b.h"
 #include "pmk8550.h"
 #include "smb1510.h"
-#include "deckard.h"
-#include "deckard_battery.h"
 #include "power/max17320_fg.h"
 #include <sysreset.h>
+
+#include "deckard.h"
+#include "deckard_battery.h"
+#include "deckard_log.h"
 
 #define BATTERY_MIN_BOOT_VOLTAGE 7200
 #define BATTERY_DEAD_VOLTAGE     6000
@@ -88,7 +90,7 @@ static int deckard_battery_load_recovery_program(void)
 	argv[3]=arg3;
 	argv[4]=arg4;
 
-	printf("loading dead battery program with args: %s, %s, %s, %s, %s\n",argv[0],argv[1],argv[2],argv[3],argv[4]);
+	deckard_log("loading dead battery program with args: %s, %s, %s, %s, %s\n",argv[0],argv[1],argv[2],argv[3],argv[4]);
 	return do_load(NULL, 0, argc, argv, FS_TYPE_EROFS);
 }
 
@@ -113,16 +115,16 @@ void deckard_battery_prep_for_boot(struct udevice *pmk8550, struct udevice *pm85
 	/* Get Battery Voltage to Check for UVLO */
 	ret = pmk8550_get_battery_voltage(pmk8550, &battery_mv);
 	if (ret < 0) {
-		printf("Failed to read battery voltage\n");
-		printf("Attempting to boot anyway!\n");
+		deckard_log("Failed to read battery voltage\n");
+		deckard_log("Attempting to boot anyway!\n");
 		goto complete;
 	}
 
-	printf("Battery: %d mV\n", battery_mv);
+	deckard_log("Battery: %d mV\n", battery_mv);
 #if 0
 	soc = deckard_battery_get_capacity(max17320);
 	if ( soc >= 0 ) {
-		printf("Battery: %d %%\n", soc);
+		deckard_log("Battery: %d %%\n", soc);
 		if (soc >= BATTERY_MIN_BOOT_SOC) {
 			// OK to boot
 			// Enable Charging
@@ -140,8 +142,8 @@ void deckard_battery_prep_for_boot(struct udevice *pmk8550, struct udevice *pm85
 	// Check for UVLO (or charging and (trickle or precharge))
 	ret = deckard_battery_load_recovery_program();
 	if (ret != 0) {
-		printf("Dead Battery Recovery load failed on error: %d\n", ret);
-		printf("Attempting to boot anyway!\n");
+		deckard_log("Dead Battery Recovery load failed on error: %d\n", ret);
+		deckard_log("Attempting to boot anyway!\n");
 		goto complete;
 	}
 
@@ -150,8 +152,8 @@ void deckard_battery_prep_for_boot(struct udevice *pmk8550, struct udevice *pm85
 
 	ret = deckard_battery_run_recovery_program();
 	if (ret != 0) {
-		printf("Dead Battery Recovery Exec Failed on Error: %d\n", ret);
-		printf("Attempting to boot anyway!\n");
+		deckard_log("Dead Battery Recovery Exec Failed on Error: %d\n", ret);
+		deckard_log("Attempting to boot anyway!\n");
 		goto complete;
 	}
 #endif
@@ -186,7 +188,7 @@ static void deckard_battery_enable_charging(struct udevice *pm8550b)
 	/* Enable Charging */
 	ret |= pm8550b_enable_charging(pm8550b, true);
 
-	printf("Charger: %s\n", ret == 0 ? "Enabled" : "Setup Failure");
+	deckard_log("Charger: %s\n", ret == 0 ? "Enabled" : "Setup Failure");
 
 	//pm8550b_test(pm8550b, true);
 }
@@ -216,7 +218,7 @@ int deckard_spl_battery_enable_charging(struct udevice *pm8550b)
 	/* Enable Charging */
 	ret |= pm8550b_enable_charging(pm8550b, true);
 
-	printf("Charger: %s\n", ret == 0 ? "Enabled" : "Setup Failure");
+	deckard_log("Charger: %s\n", ret == 0 ? "Enabled" : "Setup Failure");
 
 	return ret;
 }
@@ -267,35 +269,35 @@ int deckard_spl_battery_charging_setup(uint16_t * battery_voltage)
 	// Find the PMK8650
 	ret = pmic_get("pmic@0", &pmk8550);
 	if (ret != 0) {
-		printf("Failed to Find PMK8650\n");
+		deckard_log("Failed to Find PMK8650\n");
 		return ret;
 	}
 
 	// Find the PM8550B
 	ret = pmic_get("pmic@7", &pm8550b);
 	if (ret != 0) {
-		printf("Failed to Find PM8550B\n");
+		deckard_log("Failed to Find PM8550B\n");
 		return ret;
 	}
 
 	// Find the smb1510
 	ret = smb1510_read_revid(pmk8550);
 	if (ret != 0) {
-		printf("Failed to Find SMB1510\n");
+		deckard_log("Failed to Find SMB1510\n");
 		return ret;
 	}
 
 	/* Get Battery Voltage to Check for UVLO */
 	ret = pmk8550_get_battery_voltage(pmk8550, &battery_mv);
 	if (ret < 0) {
-		printf("Failed to read battery voltage\n");
-		printf("Attempting to boot anyway!\n");
+		deckard_log("Failed to read battery voltage\n");
+		deckard_log("Attempting to boot anyway!\n");
 		*battery_voltage = SPL_BATTERY_MIN_BOOT_VOLTAGE;
 		return ret;
 	}
 
 	*battery_voltage = battery_mv;
-	printf("Battery: %d mV\n", battery_mv);
+	deckard_log("Battery: %d mV\n", battery_mv);
 
 	// Enable Charging
 	deckard_spl_battery_enable_charging(pm8550b);
@@ -307,7 +309,7 @@ int deckard_battery_get_capacity(struct udevice *max17320)
 {
 	uint8_t reg[2];
 	if ( pmic_read(max17320, REPSOC_REG, reg, 2) ) {
-		printf("failed to get battery capacity\n");
+		deckard_log("failed to get battery capacity\n");
 		return -EIO;
 	}
 
@@ -315,7 +317,7 @@ int deckard_battery_get_capacity(struct udevice *max17320)
 	// return SOC >> 8;
 	const int soc = reg[1];
 	// const int soc_frac = (int)reg[0] * 10 / 256;
-	// printf("SOC: %02d.%1d\n", soc, soc_frac);
+	// deckard_log("SOC: %02d.%1d\n", soc, soc_frac);
 
 	return soc;
 }
@@ -324,13 +326,13 @@ int deckard_battery_get_vfocv(struct udevice *max17320)
 {
 	uint8_t reg[2];
 	if ( pmic_read(max17320, VFOCV_REG, reg, 2) ) {
-		printf("failed to get battery OCV\n");
+		deckard_log("failed to get battery OCV\n");
 		return -EIO;
 	}
 
 	// Scale to 2S, 0.078125 mV/lsb
 	const int ocv = (int32_t)((((uint32_t)reg[1]) << 8) + reg[0])*2*7813/1000/100;
-	// printf("OCV: %d mV\n", ocv);
+	// deckard_log("OCV: %d mV\n", ocv);
 
 	return ocv;
 }
@@ -339,13 +341,13 @@ int deckard_battery_get_avg_vcell(struct udevice *max17320)
 {
 	uint8_t reg[2];
 	if ( pmic_read(max17320, AVGVCELL_REG, reg, 2) ) {
-		printf("failed to get battery Average Cell Voltage\n");
+		deckard_log("failed to get battery Average Cell Voltage\n");
 		return -EIO;
 	}
 
 	// Scale to 2S, 0.078125 mV/lsb
 	const int avg_vcell = (int32_t)((((uint32_t)reg[1]) << 8) + reg[0])*2*7813/1000/100;
-	// printf("Avg. VCell: %d mV\n", avg_vcell);
+	// deckard_log("Avg. VCell: %d mV\n", avg_vcell);
 
 	return avg_vcell;
 }
@@ -354,14 +356,14 @@ int deckard_battery_get_avg_current(struct udevice *max17320)
 {
 	uint8_t reg[2];
 	if ( pmic_read(max17320, AVGCURRENT_REG, reg, 2) ) {
-		printf("failed to get battery Average Current\n");
+		deckard_log("failed to get battery Average Current\n");
 		return -EIO;
 	}
 
 	// resolution = 625 uA / lsb
 	uint16_t raw_val = (((uint16_t)reg[1]) << 8) + reg[0];
 	const int avg_current = sign_extend32(raw_val, 15) * 625 / 1000;
-	// printf("Avg. Current: %d mA\n", avg_current);
+	// deckard_log("Avg. Current: %d mA\n", avg_current);
 
 	return avg_current;
 }

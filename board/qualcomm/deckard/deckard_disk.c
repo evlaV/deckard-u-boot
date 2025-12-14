@@ -6,6 +6,7 @@
 
 #include "deckard.h"
 #include "deckard_disk.h"
+#include "deckard_log.h"
 
 char g_esp_part[DEVPARTMAXLEN] = { 0 };  //e.g. "1:d"
 
@@ -79,7 +80,7 @@ efi_status_t efi_set_blk_dev_to_system_partition(void)
 	// It would be nice to use fs_set_blk_dev_with_part() but it doesn't seem to behave quite right
 	snprintf(part_str, sizeof(part_str), "%x:%x",
 		 g_efivar_store.devnum, g_efivar_store.partnum);
-	// printf("%s: %s\n", __func__, part_str);
+	// deckard_log("%s: %s\n", __func__, part_str);
 	r = fs_set_blk_dev(blk_get_uclass_name(efi_system_partition.uclass_id),
 			   part_str, FS_TYPE_ANY);
 	if (r)
@@ -114,10 +115,10 @@ const char *env_scsi_get_dev_part(void)
 	if (ofnode_valid(node)) {
 		bootdev = ofnode_read_string(node, "u-boot,spl-boot-device");
 		if (!bootdev) {
-			printf("No u-boot,spl-boot-device, considering slot\n");
+			deckard_log("No u-boot,spl-boot-device, considering slot\n");
 			return deckard_get_dev_part_str(DECKARD_UBOOT_ENV_SLOT_A);
 		} else {
-			printf("Booted on slot '%s'\n", bootdev);
+			deckard_log("Booted on slot '%s'\n", bootdev);
 
 			switch (bootdev[0]) {
 			case 'A':
@@ -130,13 +131,13 @@ const char *env_scsi_get_dev_part(void)
 				return NULL; //todo, figure out if we want to load an env for USB boot?
 				break;				
 			default:
-				printf("%s: Invalid booted_slot, defaulting to A env\n", __func__);
+				deckard_log("%s: Invalid booted_slot, defaulting to A env\n", __func__);
 				return deckard_get_dev_part_str(DECKARD_UBOOT_ENV_SLOT_A);
 				break;
 			}
 		}
 	} else {
-		printf("No chosen node default to A!\n");
+		deckard_log("No chosen node default to A!\n");
 		return deckard_get_dev_part_str(DECKARD_UBOOT_ENV_SLOT_A);
 	}
 }

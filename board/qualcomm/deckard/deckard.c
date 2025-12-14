@@ -42,6 +42,7 @@
 #include "deckard_devices.h"
 #include "deckard_disk.h"
 #include "deckard_eeprom.h"
+#include "deckard_log.h"
 
 enum boot_priority {
 	BOOT_INTERNAL_ONLY,
@@ -115,17 +116,17 @@ void check_pmic(const char *const pmic_dts, const char *const pmic_name)
 
 	ret = pmic_get(pmic_dts, &pmic);
 	if (ret != 0) {
-		printf("Failed to Find %s - %s, ret: %d\n", pmic_dts, pmic_name, ret);
+		deckard_log("Failed to Find %s - %s, ret: %d\n", pmic_dts, pmic_name, ret);
 		return;
 	}
 
 	ret = pmic_reg_read(pmic, 0x0105);
 	if (ret < 0) {
-		printf("%s failed: %d\n", pmic_name, ret);
+		deckard_log("%s failed: %d\n", pmic_name, ret);
 	}
 	// else
 	// {
-	// 	printf("%s subtype: 0x%02X\n", pmic_name, ret);
+	// 	deckard_log("%s subtype: 0x%02X\n", pmic_name, ret);
 	// }
 }
 
@@ -344,13 +345,13 @@ static int deckard_unbind_usb(void)
 
 	ret = device_remove(dev, DM_REMOVE_NORMAL);
 	if (ret) {
-		printf("Unable to remove. err:%d\n", ret);
+		deckard_log("Unable to remove. err:%d\n", ret);
 		return ret;
 	}
 
 	ret = device_unbind(dev);
 	if (ret) {
-		printf("Unable to unbind. err:%d\n", ret);
+		deckard_log("Unable to unbind. err:%d\n", ret);
 		return ret;
 	}
 
@@ -432,19 +433,19 @@ int fastboot_set_reboot_flag(enum fastboot_reboot_reason reason)
 		return -ENOTSUPP;
 
 	if (reason == FASTBOOT_REBOOT_REASON_FASTBOOTD) {
-		printf("Setting reboot to fastboot flag ...\n");
+		deckard_log("Setting reboot to fastboot flag ...\n");
 		env_set("reboot_mode", "f");
 		env_save();
 	} else if (reason == FASTBOOT_REBOOT_REASON_BOOTLOADER) {
-		printf("Setting reboot to bootloader flag ...\n");
+		deckard_log("Setting reboot to bootloader flag ...\n");
 		env_set("reboot_mode", "b");
 		env_save();
 	} else if (reason == FASTBOOT_REBOOT_REASON_OEM_EDL) {
-		printf("Rebooting to EDL mode ...\n");
+		deckard_log("Rebooting to EDL mode ...\n");
 		env_set("reboot_mode", "e");
 		env_save();
 	} else if (reason == FASTBOOT_REBOOT_REASON_OEM_USB) {
-		printf("Setting reboot to USB mode ...\n");
+		deckard_log("Setting reboot to USB mode ...\n");
 		env_set("reboot_mode", "u");
 		env_save();
 	}
@@ -460,7 +461,7 @@ static int deckard_efi_setup(void *ctx, struct event *event)
 	/* Get the EFI subsystem up and running! */
 	ret = efi_init_obj_list();
 	if (ret != EFI_SUCCESS) {
-		printf("EFI: Initialisation failed!\n");
+		deckard_log("EFI: Init failed!\n");
 		return 0;
 	}
 
@@ -500,7 +501,7 @@ void setup_boot_intention_global_state( boot_intention_t boot_intention )
 /* EARLY ENTRY POINT */
 int misc_init_r(void)
 {
-	printf( "[uboot] ********** misc_init_r **********\n" );
+	deckard_log( "[uboot] ********** misc_init_r **********\n" );
 
 	ofnode node = ofnode_path("/chosen");
 	if (ofnode_valid(node)) {
@@ -509,10 +510,10 @@ int misc_init_r(void)
 
 		bootdev = ofnode_read_string(node, "u-boot,spl-boot-device");
 		if (!bootdev) {
-			printf("No u-boot,spl-boot-device, considering A slot\n");
+			deckard_log("No u-boot,spl-boot-device, considering A slot\n");
 			env_set("booted_slot","A");
 		} else {
-			printf("Booted on slot '%s'\n", bootdev);
+			deckard_log("Booted on slot '%s'\n", bootdev);
 
 			switch (bootdev[0]) {
 			case 'A':
@@ -532,9 +533,9 @@ int misc_init_r(void)
 
 		int ret = ofnode_read_u32(node, "boot-wrapper-version", &boot_wrapper_version);
 		if (ret)
-			printf("No boot wrapper version\n");
+			deckard_log("No boot wrapper version\n");
 		else {
-			printf("Boot Wrapper version: %d\n", boot_wrapper_version);
+			deckard_log("Boot Wrapper version: %d\n", boot_wrapper_version);
 			env_set_ulong("boot_wrapper_version", boot_wrapper_version);
 		}
 
@@ -542,29 +543,35 @@ int misc_init_r(void)
 		panic("No chosen node !\n");
 	}
 
+	deckard_log( "init_esp\n" );
 	init_esp();
 
+	deckard_log( "deckard_disable_watchdog\n" );
 	deckard_disable_watchdog();
 
+	deckard_log( "deckard_setup_devices\n" );
 	int nsetuperror = deckard_setup_devices( &g_deckard_devices );
+
+	deckard_log( "set led white\n" );
 	deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices );
 
 	if( booted_from_usb() )
 	{
+		deckard_log( "usb_setup\n" );
 		usb_setup();
 	}
 
 	if ( nsetuperror )
 	{
-		printf("ERROR in deckard_setup_devices %d\n", nsetuperror );
+		deckard_log("ERROR in deckard_setup_devices %d\n", nsetuperror );
 		// TODO: if fatal error, show an error display screen if possible
 	}
 
 	g_factory_mode = ( env_get_ulong("factory-mode", 10, 0 ) ); // defaults to off
-	printf( "Factory mode: %d\n", g_factory_mode );
+	deckard_log( "Factory mode: %d\n", g_factory_mode );
 
 	g_display_enabled = g_factory_mode ? 0 : env_get_ulong( "display", 10, 1 ); // defaults to on in non-factory mode
-	printf("Display Enabled: %d\n", g_display_enabled );
+	deckard_log("Display Enabled: %d\n", g_display_enabled );
 
 	if ( !g_display_enabled )
 	{
@@ -586,11 +593,13 @@ int misc_init_r(void)
 
 	// CALC POWER-ON BOOT INTENTION
 	g_boot_intention = g_factory_mode ? BOOT_INTENTION_START_USERSPACE : calc_boot_intention( &g_deckard_devices, 0 );
+	deckard_log( "g_boot_intention %d\n", g_boot_intention );
 
 	// Set LED Color
 	deckard_setledcolor(
 		( g_boot_intention == BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY ) ? LED_COLOR_RED : LED_COLOR_WHITE,
 		&g_deckard_devices );
+	deckard_log( "set led to boot intention color\n" );
 
 	// SHOW BOOT IMAGE
 	if ( g_boot_intention == BOOT_INTENTION_CHARGE_AND_WAIT ||
@@ -610,10 +619,12 @@ int misc_init_r(void)
 	}
 	else
 	{
+		deckard_log( "load and display image\n" );
 		deckard_load_and_display_image_for_boot_intention( g_boot_intention );
 	}
 
 	// SETUP CUSTOM STATE TO EXECUTE ON BOOT INTENTION
+	deckard_log( "set boot intention global state\n" );
 	setup_boot_intention_global_state( g_boot_intention );
 
 	g_total_console_state |= SERIAL_CONSOLE_MASK; //seems likely we always need this on otherwise will get crashes / sync abort handler loops?
@@ -641,9 +652,11 @@ int misc_init_r(void)
 		usbmode = 1;
 
 	/* cleanup all reboot_mode setups if any */
+	deckard_log( "deckard_reboot_mode_clean\n" );
 	deckard_reboot_mode_clean();
 
 	// get board data from eeprom
+	deckard_log( "deckard_eeprom_init\n" );
 	deckard_eeprom_init();
 
 	/*
@@ -660,11 +673,11 @@ int misc_init_r(void)
 	// do we still need this?
 	char * bootedslot = env_get("booted_slot");
 	env_set("BOOT_ORDER", bootedslot);
-	printf("booted_slot: %s\n", env_get("booted_slot"));
+	deckard_log("booted_slot: %s\n", env_get("booted_slot"));
 
 	/* Check if special boot mode (fastboot, bootloader, edl) was setup */
 	if(fastbootmode) {
-		printf("Starting fastboot mode...\n");
+		deckard_log("Starting fastboot mode...\n");
 		env_set("kernel_addr_r","90000000"); //is this right?
 		/*
 		 * serial# is a special var, like ethaddr, they are defined as
@@ -672,7 +685,7 @@ int misc_init_r(void)
 		 * writing it only once here, if not before, and avoid error after.
 		 */
 		if (!env_get("serial#")) {
-			printf("setting dummy serial number: %s\n", DECKARD_DUMMY_SERIAL_NUMB);
+			deckard_log("setting dummy serial number: %s\n", DECKARD_DUMMY_SERIAL_NUMB);
 			env_set("serial#", DECKARD_DUMMY_SERIAL_NUMB);
 			env_save();
 		}
@@ -686,18 +699,18 @@ int misc_init_r(void)
 	}
 
 	if (bootloadermode) {
-		printf("Starting bootloader mode...\n");
+		deckard_log("Starting bootloader mode...\n");
 		env_set("bootdelay", "-1");
 	}
 
 	if (edlmode) {
-		printf("Rebooting to EDL mode...\n");
+		deckard_log("Rebooting to EDL mode...\n");
 		deckard_reboot_mode_edl();
 	}
 
 	if (usbmode) {
 		//TODO: gaber this is likely interfering with USB boot
-		printf("Starting usb mode...\n");
+		deckard_log("Starting usb mode...\n");
 		int ret = deckard_reboot_mode_usb();
 		if (!ret) {
 			run_command("usb start", 0);
@@ -720,10 +733,10 @@ int misc_init_r(void)
 			/* Trigger EFI setup just before the main loop */
 			event_register("deckard_bootefi", EVT_MAIN_LOOP, deckard_efi_setup, NULL);
 		else
-			printf("EFI: Couldn't find EFI variable store partition!\n");
+			deckard_log("EFI: Couldn't find EFI variable store partition!\n");
 	}
 
-	printf("deckard init: done\n");
+	deckard_log("deckard init: done\n");
 
 	return 0;
 }
@@ -739,7 +752,7 @@ int ft_board_setup(void *fdt, struct bd_info *bd)
 	char * boot_wrapper_version = env_get("boot_wrapper_version");
 	int ret = fdt_setprop_string(fdt, nodeoffset, "bootwrapper,version", boot_wrapper_version ? boot_wrapper_version : "-1");
 	if (ret < 0) {
-		printf("WARNING: could not set bootwrapper,version %s.\n",
+		deckard_log("WARNING: could not set bootwrapper,version %s.\n",
 			   fdt_strerror(ret));
 		return ret;
 	}
@@ -748,7 +761,7 @@ int ft_board_setup(void *fdt, struct bd_info *bd)
 	//this will indicate that u-boot has the ability to do charging within u-boot
 	ret = fdt_setprop_string(fdt, nodeoffset, "u-boot,charger", "1");
 	if (ret < 0) {
-		printf("WARNING: could not set u-boot,charger %s.\n",
+		deckard_log("WARNING: could not set u-boot,charger %s.\n",
 			   fdt_strerror(ret));
 		return ret;
 	}
@@ -757,7 +770,7 @@ int ft_board_setup(void *fdt, struct bd_info *bd)
 	//this will indicate that u-boot has the ability to driver display within u-boot
 	ret = fdt_setprop_string(fdt, nodeoffset, "u-boot,display", g_display_enabled ? "1": "0");
 	if (ret < 0) {
-		printf("WARNING: could not set u-boot,display %s.\n",
+		deckard_log("WARNING: could not set u-boot,display %s.\n",
 			   fdt_strerror(ret));
 		return ret;
 	}
@@ -767,7 +780,7 @@ int ft_board_setup(void *fdt, struct bd_info *bd)
 	//this will indicate that u-boot has the ability to fall back to old rootfs
 	ret = fdt_setprop_string(fdt, nodeoffset, "u-boot,oldrootfssupport", "1"); //set this to 1 when display works
 	if (ret < 0) {
-		printf("WARNING: could not set u-boot,oldrootfs %s.\n",
+		deckard_log("WARNING: could not set u-boot,oldrootfs %s.\n",
 			   fdt_strerror(ret));
 		return ret;
 	}
@@ -780,7 +793,7 @@ int ft_board_setup(void *fdt, struct bd_info *bd)
 		fdt_for_each_node_by_compatible(offset, fdt, -1, "simple-framebuffer") {
 			ret = fdt_setprop_string(fdt, offset, "status", "okay");
 			if (ret < 0) {
-				printf("WARNING: could not enable simple-frambuffer %s.\n",
+				deckard_log("WARNING: could not enable simple-frambuffer %s.\n",
 			   		fdt_strerror(ret));
 				return ret;
 			}
@@ -797,18 +810,18 @@ int deckard_adsp_start( int id )
 	if (!rproc_is_initialized()) {
 		ret = rproc_init();
 		if (ret < 0) {
-			printf("[uboot]: failed to start ADSP rproc_init (%d)\n", ret );
+			deckard_log("failed to start ADSP rproc_init (%d)\n", ret );
 			return ret;
 		}
 	}
 
 	ret = rproc_start_with_param(id,0);
 	if (ret < 0) {
-		printf("[uboot]: failed to start ADSP rproc_start_with_param (%d)\n", ret );
+		deckard_log("failed to start ADSP rproc_start_with_param (%d)\n", ret );
 		return ret;
 	}
 
-	printf("[uboot]: started ADSP\n");
+	deckard_log("started ADSP\n");
 	return 0;
 }
 
@@ -817,11 +830,11 @@ int deckard_adsp_stop( int id )
 	int ret = rproc_stop( id );
 	if ( ret != 0 )
 	{
-		printf("[uboot]: failed to stop ADSP rproc_stop (%d)\n", ret );
+		deckard_log("failed to stop ADSP rproc_stop (%d)\n", ret );
 	}
 	else
 	{
-		printf("[uboot]: stopped ADSP\n" );
+		deckard_log("stopped ADSP\n" );
 	}
 	return ret;
 }
@@ -844,7 +857,7 @@ bool deckard_shutdown_condition(struct udevice *pmic)
 
 	if (deckard_battery_is_charging_enabled(pmic)) {
 		if(timeout > 0)
-			printf("[charging enabled]\n");
+			deckard_log("[charging enabled]\n");
 
 		timeout = 0;
 		return false;
@@ -852,7 +865,7 @@ bool deckard_shutdown_condition(struct udevice *pmic)
 
 	if (!timeout)
 	{
-		printf("[charging disabled]\n");
+		deckard_log("[charging disabled]\n");
 		timeout = timer_get_us() + DECKARD_SHUTDOWN_TIMEOUT_US;
 	}
 
@@ -918,18 +931,18 @@ void show_boot_progress(int progress)
 
 static boot_intention_t deckard_wait_to_boot( deckard_devices_t * pdevices )
 {
-	printf("Waiting for power button press and battery state of charge threshold to continue booting...\n");
+	deckard_log("Waiting for power button press and battery state of charge threshold to continue booting...\n");
 
 	// Check for the existance of devices used below
 	if ( !pdevices->max17320 || !pdevices->pm8550b )
 	{
-		printf( "ERROR: no pdevices->max17320/pdevices->pm8550b. Cannot wait to boot.\n" );
+		deckard_log( "ERROR: no pdevices->max17320/pdevices->pm8550b. Cannot wait to boot.\n" );
 		return BOOT_INTENTION_START_USERSPACE;
 	}
 
 	if ( !pdevices->btn_power )
 	{
-		printf( "ERROR: no pdevices->btn_power. Cannot wait to boot.\n" );
+		deckard_log( "ERROR: no pdevices->btn_power. Cannot wait to boot.\n" );
 		return BOOT_INTENTION_START_USERSPACE;
 	}
 
@@ -1005,11 +1018,11 @@ static boot_intention_t deckard_wait_to_boot( deckard_devices_t * pdevices )
 			int soc = deckard_battery_get_capacity(pdevices->max17320);
 			int avg_vcell = deckard_battery_get_avg_vcell(pdevices->max17320);
 			int avg_current = deckard_battery_get_avg_current(pdevices->max17320);
-			printf("\r" ANSI_CLEAR_LINE "Battery: %d%%, %dmV, %dmA", soc,avg_vcell,avg_current); fflush(stdout);
+			deckard_log("\r" ANSI_CLEAR_LINE "Battery: %d%%, %dmV, %dmA", soc,avg_vcell,avg_current); fflush(stdout);
 			deckard_shutdown_loop_counter = 10;
 			if( deckard_shutdown_condition( pdevices->pm8550b ) )
 			{
-				printf("Device not charging for %d seconds, Shutdown\n", DECKARD_SHUTDOWN_TIMEOUT_S);
+				deckard_log("Device not charging for %d seconds, Shutdown\n", DECKARD_SHUTDOWN_TIMEOUT_S);
 				run_command("splctl set-uboot-poweroff-reason battery", 0); //inform the spl that we are shutting down due to low battery
 				int ret = sysreset_walk(SYSRESET_POWER_OFF);
 				if (ret == -EINPROGRESS)
@@ -1037,7 +1050,7 @@ static boot_intention_t deckard_wait_to_boot( deckard_devices_t * pdevices )
 		mdelay(100);
 	}
 
-	printf("ERROR: Code should never get here (end of wait to boot)\n");
+	deckard_log("ERROR: Code should never get here (end of wait to boot)\n");
 	
 	if ( adsp_loaded )
 	{
@@ -1049,7 +1062,6 @@ static boot_intention_t deckard_wait_to_boot( deckard_devices_t * pdevices )
 
 int deckard_show_boot_menu(void) 
 {
-	fprintf(stderr,"showing boot menu!!!\n");
 	display_turn_on();
 	g_total_console_state |= VIDEO_CONSOLE_MASK;
 	console_state_handler();
@@ -1073,7 +1085,7 @@ int deckard_show_boot_menu(void)
 
 int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
-	printf("deckard_boot_cmd\n");
+	deckard_log("************ deckard_boot_cmd ******************\n");
 
 	char * k_KERNEL_TARGET = "/boot/Image";  // should be const but uboot's do_load makes this inconvenient
 	char * k_INITRD_TARGET = "/boot/initrd.uImage";  // should be const but uboot's do_load makes this inconvenient
@@ -1102,7 +1114,7 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 #ifdef ALLOW_OLD_ROOTFS_NAME_FALLBACK
 	if(!partition)
 	{
-		printf("Trying old rootfs partition names...\n");
+		deckard_log("Trying old rootfs partition names...\n");
 		switch( get_booted_slot() ){
 			case 'A':
 			default:
@@ -1138,15 +1150,15 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 
 	// FIXME: eventually invert this so we try EFI first, maybe find a less hacky way to do this?
 	if (g_deckard_efi_mode) {
-		printf("Attempting to boot with EFI!\n");
+		deckard_log("Attempting to boot with EFI!\n");
 		run_command("bootefi bootmgr", 0);
 	}
 
-	printf("Attempting to load kernel from %s [ %s ]\n", label, partition);
+	deckard_log("Attempting to load kernel from %s [ %s ]\n", label, partition);
 
 	// Load kernel
 	if ( do_load_helper(disk_interface, partition, ADDR_KERNEL, k_KERNEL_TARGET) ) {
-		printf("Failed to load kernel from %s [ %s ]\n", label, partition);
+		deckard_log("Failed to load kernel from %s [ %s ]\n", label, partition);
 		goto fail;
 	}
 
@@ -1155,7 +1167,7 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 	ulong image_size = 0;
 	int ret = booti_get_image_size(addr_kernel, &image_size);
 	if (ret)
-		printf("Could not get linux image size ( %d )\n", ret);
+		deckard_log("Could not get linux image size ( %d )\n", ret);
     // get dtb address.  kernel will expand to the nearest 2MB boundary, so we give us a 10MB buffer
 	ulong addr_dtb = addr_kernel + image_size + 0xA00000;
 	// align to next 2MB address
@@ -1163,11 +1175,11 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 
 	char DTB_ADDR[DEVPARTMAXLEN] = { 0 };
 	sprintf(DTB_ADDR, "0x%lX", addr_dtb);
-	printf("DTB_ADDR %s\n", DTB_ADDR); // debug
+	deckard_log("DTB_ADDR %s\n", DTB_ADDR); // debug
 
 	// load dtb
 	if ( deckard_load_dtb(disk_interface, partition, DTB_ADDR) ) {
-		printf("Failed to load dtb from %s [ %s ]\n", label, partition);
+		deckard_log("Failed to load dtb from %s [ %s ]\n", label, partition);
 		goto fail;
 	}
 	// get address for initrd
@@ -1176,17 +1188,18 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 	addr_initrd += 0x200000 - ( addr_initrd % 0x200000 );
 	char INITRD_ADDR[DEVPARTMAXLEN] = { 0 };
 	sprintf(INITRD_ADDR, "0x%lX", addr_initrd);
-	printf("INITRD_ADDR %s\n", INITRD_ADDR); // debug
+	deckard_log("INITRD_ADDR %s\n", INITRD_ADDR); // debug
 	// load inird
 	if ( do_load_helper(disk_interface, partition, INITRD_ADDR, k_INITRD_TARGET) ) {
-		printf("Failed to load initrd from %s [ %s ]\n", label, partition);
+		deckard_log("Failed to load initrd from %s [ %s ]\n", label, partition);
 		goto fail;
 	}
 
 	// check for max file sizes
-	image_size = hextoul(env_get("filesize"), NULL);
+	image_size = hextoul(env_get("filesize"), NULL); // fixme hextoul(NULL) is bad
 	if ( addr_initrd + image_size > MAX_ADDR_INITRD ) {
-		printf("DANGER!! exceeded maximum memory allocated for kernel, dtb, and initrd!!!");
+		deckard_log("DANGER!! exceeded maximum memory allocated for kernel, dtb, and initrd!!!");
+		// FIX<E: goto fail?
 	}
 
 	// prep bootargs
@@ -1206,13 +1219,12 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 
 	if ( g_boot_intention == BOOT_INTENTION_BOOT_MENU )
 	{
+		deckard_log("setup bootmenu\n");
 		deckard_setup_bootmenu();
+		deckard_log("show bootmenu\n");
 		deckard_show_boot_menu();
+		deckard_log("handle bootmenu actions\n");
 		deckard_boot_menu_handle_actions();
-	}
-	else
-	{
-		fprintf(stderr,"NOT showing boot menu!!!\n");
 	}
 
 	//even though we are about to turn the display off, we fill the framebuffer with the boot logo
@@ -1228,9 +1240,9 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 	display_turn_off();
 
     // Attempt to launch the kernel.  If this succeeds, we now leave uboot and enter kernel code
+	deckard_log("**********   ATTEMPTING TO BOOT KERNEL ********\n");
 	run_command("booti ${kernel_addr_r} ${ramdisk_addr_r} ${fdtcontroladdr}", 0);
-
-	printf("!!Boot Failed, Reset!!");
+	deckard_log("**********   KERNEL BOOT FAILED. RESETTING. ********\n");
 
 	// intentional fall through
 fail:

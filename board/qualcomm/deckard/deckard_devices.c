@@ -8,11 +8,12 @@
 #include "smb1510.h"
 #include "pmk8550.h"
 #include "deckard_battery.h"
+#include "deckard_log.h"
 
 // TODO: return richer error codes / bitmask for display, including fatal/non-fatal
 int deckard_setup_devices( deckard_devices_t * pdevices )
 {
-	printf("deckard_setup_devices\n");
+	deckard_log("deckard_setup_devices\n");
 
 	int nerror = 0;
 	memset( pdevices, 0, sizeof( *pdevices ) );
@@ -24,56 +25,56 @@ int deckard_setup_devices( deckard_devices_t * pdevices )
 	// Find the PMK8650
 	int ret = pmic_get("pmic@0", &pdevices->pmk8550);
 	if (ret != 0) {
-		printf("ERROR: Failed to find pmk8550\n");
+		deckard_log("ERROR: Failed to find pmk8550\n");
 		nerror = 1;
 	}
 
 	// Find the PM8550VS_e
 	ret = pmic_get("pmic@4", &pdevices->pm8550vse);
 	if (ret != 0) {
-		printf("ERROR: Failed to find pm8550vse\n");
+		deckard_log("ERROR: Failed to find pm8550vse\n");
 		nerror = 1;
 	}
 
 	// Find the PM8550B
 	ret = pmic_get("pmic@7", &pdevices->pm8550b);
 	if (ret != 0) {
-		printf("ERROR: Failed to find pm8550b\n");
+		deckard_log("ERROR: Failed to find pm8550b\n");
 		nerror = 1;
 	}
 
 	// Find the max17320
 	ret = pmic_get("pmic@36", &pdevices->max17320);
 	if (ret != 0) {
-		printf("ERROR: Failed to find max17320\n");
+		deckard_log("ERROR: Failed to find max17320\n");
 		nerror = 1;
 	}
 
 	// Power button
 	ret = button_get_by_label( "Power Button", &pdevices->btn_power );
 	if (ret != 0) {
-		printf("ERROR: Failed to find button: Power Button\n");
+		deckard_log("ERROR: Failed to find button: Power Button\n");
 		nerror = 1;
 	} 
 
 	// Vol down button
 	ret = button_get_by_label( "Volume Down", &pdevices->btn_vol_down );
 	if (ret != 0) {
-		printf("ERROR: Failed to find button: Volume Down\n");
+		deckard_log("ERROR: Failed to find button: Volume Down\n");
 		nerror = 1;
 	} 
 
 	// Vol down button
 	ret = button_get_by_label( "Volume Up", &pdevices->btn_vol_up );
 	if (ret != 0) {
-		printf("ERROR: Failed to find button: Volume Up\n");
+		deckard_log("ERROR: Failed to find button: Volume Up\n");
 		nerror = 1;
 	} 
 
 	// Vol down button
 	ret = button_get_by_label( "Select", &pdevices->btn_select );
 	if (ret != 0) {
-		printf("ERROR: Failed to find button: Select\n");
+		deckard_log("ERROR: Failed to find button: Select\n");
 		nerror = 1;
 	} 
 
@@ -104,7 +105,7 @@ int deckard_setup_devices( deckard_devices_t * pdevices )
 
 	if ( pdevices->pmk8550 )
 	{
-		printf("smb1510: enable fixed frequency at 500khz mode\n");
+		deckard_log("smb1510: enable fixed frequency at 500khz mode\n");
 		// TODO: verify result
 		smb1510_set_switching_frequency(pdevices->pmk8550, 0x0F);
 	}
@@ -157,11 +158,11 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices, int assume_b
 		struct pon_on_off_reason pon_poff_reason = { 0 };
 		int ret = pmk8550_get_on_off_reason(&pon_poff_reason);
 		if (ret < 0) {
-			printf("failed to get on off reason\n");
+			deckard_log("failed to get on off reason\n");
 			return BOOT_INTENTION_START_USERSPACE;
 		}
 
-		printf("pon_reset_type: %s [0x%x] trigger: %s  [0x%x] reason: 0x%x\n",
+		deckard_log("pon_reset_type: %s [0x%x] trigger: %s  [0x%x] reason: 0x%x\n",
 			pmk8550_get_pon_type_str(pon_poff_reason.type),
 			pon_poff_reason.type,
 			pmk8550_get_pon_trigger_str(pon_poff_reason.trigger),
@@ -171,24 +172,24 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices, int assume_b
 		int boot_up_desired = false;
 		if(pon_poff_reason.pon_reason & 0x80)
 		{
-			printf("pon_reason includes button press, continuing to boot\n");
+			deckard_log("pon_reason includes button press, continuing to boot\n");
 			boot_up_desired = true;
 		}
 		else if(pon_poff_reason.pon_reason & 0x01)
 		{
-			printf("pon_reason includes reset, continuing to boot\n");
+			deckard_log("pon_reason includes reset, continuing to boot\n");
 			boot_up_desired = true;
 		}
 		else if(pon_poff_reason.type == PON_RESET_TYPE_WARM )
 		{
-			printf("pon_reason includes warm reset, continuing to boot\n");
+			deckard_log("pon_reason includes warm reset, continuing to boot\n");
 			boot_up_desired = true;
 		}
 	}
 
 	if( boot_up_desired && !deckard_battery_ok_for_userspace( pdevices->max17320 ) )
 	{
-		printf("boot intention: cannot boot, battery not ready\n");
+		deckard_log("boot intention: cannot boot, battery not ready\n");
 		return BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY;
 	}
 	else if( boot_up_desired )
@@ -211,7 +212,7 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices, int assume_b
 	}
 	else
 	{
-		printf("boot intention: charge and wait\n");
+		deckard_log("boot intention: charge and wait\n");
 		return BOOT_INTENTION_CHARGE_AND_WAIT;
 	}
 }
