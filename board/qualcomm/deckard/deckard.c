@@ -600,13 +600,13 @@ int misc_init_r(void)
 	}
 	else if ( g_boot_intention == BOOT_INTENTION_CHARGE_AND_WAIT )
 	{
-		// FIXME: Add battery check to see if sufficient strength
-		// to show low battery image?
-		// TODO: may be prudent to not show this, yet.
 		// Dont immediately load and show the image. Doing so prior to DSP
-		// charging may be too high of a battery load if the battery is drained.
-
-		deckard_load_and_display_image_for_boot_intention( g_boot_intention );
+		// charging may be too high of a risk of battery load if the battery is drained
+		// on power up.  We DO attempt to show a low battery image
+		// later on in the wait loop, as even if that browns out the unit a
+		// suequent reset (then charge) is alright.
+		// But doing so here could be a permenant boot loop under minimal power
+		// conditions
 	}
 	else
 	{
