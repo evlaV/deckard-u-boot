@@ -186,7 +186,7 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices, int assume_b
 		}
 	}
 
-	if( boot_up_desired && !deckard_battery_ready_to_boot_to_userspace( pdevices->max17320 ) )
+	if( boot_up_desired && !deckard_battery_ok_for_userspace( pdevices->max17320 ) )
 	{
 		printf("boot intention: cannot boot, battery not ready\n");
 		return BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY;

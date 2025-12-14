@@ -178,26 +178,19 @@ int usb_setup(void)
 
 static int deckard_load_image(char * logo_name)
 {
-	int  argc = 5;
-	char *argv[5];
-	char arg0[] = "";
+	/* Setup load address */
 	char part_arg[DEVPARTMAXLEN] = { 0 };  //e.g. "1:d"
 	char loadaddr_arg[LOADADDRMAXLEN] = { 0 }; //e.g. "0xa7000000"
 	char logo_arg[LOGO_PATHMAX + 1] = { 0 };
-
-	argv[0] = arg0;
-	//argv[1] = disk_interface_to_str(disk_interface);
-	argv[2] = part_arg;
-	argv[3] = loadaddr_arg;
-	argv[4] = logo_arg;
-
-	if( booted_from_usb() ) argv[1] = disk_interface_to_str(DISK_INTERFACE_USB);
-	else  argv[1] = disk_interface_to_str(DISK_INTERFACE_SCSI);
-
-	/* Setup load address */
 	snprintf(loadaddr_arg, LOADADDRMAXLEN, "0x%x", CONFIG_SYS_LOAD_ADDR);
 	snprintf(part_arg, DEVPARTMAXLEN, "%s", deckard_get_esp_part()); //this returns 1:d for example
 	snprintf(logo_arg, LOGO_PATHMAX, "/steamos/%s", logo_name); //not case sensitive
+
+	char *argv[] = { "", disk_interface_to_str( booted_from_usb() ? DISK_INTERFACE_USB : DISK_INTERFACE_SCSI ),
+			part_arg, loadaddr_arg, logo_arg };
+	int argc = 5;
+
+
 	if (!do_load(NULL, 0, argc, argv, FS_TYPE_ANY)) {
 		log_debug("Deckard: loaded splash from ESP!\n");
 		return 0;
@@ -504,17 +497,10 @@ void setup_boot_intention_global_state( boot_intention_t boot_intention )
 	}
 }
 
-/* PRIMARY ENTRY POINT */
+/* EARLY ENTRY POINT */
 int misc_init_r(void)
 {
-	int ret;
-	char * bootedslot;
-	char *reboot_mode;
-	char *eeprom_board;
-	int fastbootmode = 0;
-	int bootloadermode = 0;
-	int edlmode = 0;
-	int usbmode = 0;
+	printf( "[uboot] ********** misc_init_r **********\n" );
 
 	ofnode node = ofnode_path("/chosen");
 	if (ofnode_valid(node)) {
@@ -544,7 +530,7 @@ int misc_init_r(void)
 			}
 		}
 
-		ret = ofnode_read_u32(node, "boot-wrapper-version", &boot_wrapper_version);
+		int ret = ofnode_read_u32(node, "boot-wrapper-version", &boot_wrapper_version);
 		if (ret)
 			printf("No boot wrapper version\n");
 		else {
@@ -639,7 +625,12 @@ int misc_init_r(void)
 	 * mode, i.e, interrupt autoboot
 	 * and e - for edl mode
 	 */
-	reboot_mode = env_get("reboot_mode");
+	// TODO: Add enum for reboot_mode?
+	char * reboot_mode = env_get("reboot_mode");
+	int fastbootmode = 0;
+	int bootloadermode = 0;
+	int edlmode = 0;
+	int usbmode = 0;
 	if (reboot_mode && (reboot_mode[0] == 'f' ))
 		fastbootmode = 1;
 	else if (reboot_mode && (reboot_mode[0] == 'b' ))
@@ -659,7 +650,7 @@ int misc_init_r(void)
 	 * Set the magic $fdtfile variable so we load the right DTB during EFI boot. This will be used
 	 * to populate the EFI configuration table, it can be overwritten by an OS Loader.
 	 */
-	eeprom_board = env_get("EEPROM_BOARD");
+	char * eeprom_board = env_get("EEPROM_BOARD");
 	if (eeprom_board) {
 		char fdtfile[32];
 		snprintf(fdtfile, 32, "qcom/sm8650-%s.dtb", eeprom_board);
@@ -667,7 +658,7 @@ int misc_init_r(void)
 	}
 
 	// do we still need this?
-	bootedslot = env_get("booted_slot");
+	char * bootedslot = env_get("booted_slot");
 	env_set("BOOT_ORDER", bootedslot);
 	printf("booted_slot: %s\n", env_get("booted_slot"));
 
@@ -707,7 +698,7 @@ int misc_init_r(void)
 	if (usbmode) {
 		//TODO: gaber this is likely interfering with USB boot
 		printf("Starting usb mode...\n");
-		ret = deckard_reboot_mode_usb();
+		int ret = deckard_reboot_mode_usb();
 		if (!ret) {
 			run_command("usb start", 0);
 		}
@@ -739,18 +730,14 @@ int misc_init_r(void)
 
 int ft_board_setup(void *fdt, struct bd_info *bd)
 {
-	char *boot_wrapper_version;
-	int nodeoffset;
-	int ret;
-
 	/* find or create "/chosen" node. */
-	nodeoffset = fdt_find_or_add_subnode(fdt, 0, "chosen");
+	int nodeoffset = fdt_find_or_add_subnode(fdt, 0, "chosen");
 	if (nodeoffset < 0)
 		return nodeoffset;
 
 	/* add bootwrapper version */
-	boot_wrapper_version = env_get("boot_wrapper_version");
-	ret = fdt_setprop_string(fdt, nodeoffset, "bootwrapper,version", boot_wrapper_version ? boot_wrapper_version : "-1");
+	char * boot_wrapper_version = env_get("boot_wrapper_version");
+	int ret = fdt_setprop_string(fdt, nodeoffset, "bootwrapper,version", boot_wrapper_version ? boot_wrapper_version : "-1");
 	if (ret < 0) {
 		printf("WARNING: could not set bootwrapper,version %s.\n",
 			   fdt_strerror(ret));
@@ -810,18 +797,18 @@ int deckard_adsp_start( int id )
 	if (!rproc_is_initialized()) {
 		ret = rproc_init();
 		if (ret < 0) {
-			printf("deckard: failed to initialized rproc\n");
+			printf("[uboot]: failed to start ADSP rproc_init (%d)\n", ret );
 			return ret;
 		}
 	}
 
 	ret = rproc_start_with_param(id,0);
 	if (ret < 0) {
-		printf("deckard: failed to start rproc\n");
+		printf("[uboot]: failed to start ADSP rproc_start_with_param (%d)\n", ret );
 		return ret;
 	}
 
-	printf("deckard: started adsp\n");
+	printf("[uboot]: started ADSP\n");
 	return 0;
 }
 
@@ -830,11 +817,11 @@ int deckard_adsp_stop( int id )
 	int ret = rproc_stop( id );
 	if ( ret != 0 )
 	{
-		printf("deckard: failed to stop adsp\n");
+		printf("[uboot]: failed to stop ADSP rproc_stop (%d)\n", ret );
 	}
 	else
 	{
-		printf("deckard: stopped adsp\n");
+		printf("[uboot]: stopped ADSP\n" );
 	}
 	return ret;
 }
@@ -950,7 +937,7 @@ static boot_intention_t deckard_wait_to_boot( deckard_devices_t * pdevices )
 	static const int k_nBatteryImageCount = 10 * 3; // 100ms * 10 * 5 = 3s
 	int deckard_display_off_counter = k_nBatteryImageCount;
 	int adsp_loaded = 0;
-	int in_press = 0;
+	int power_button_down = ( button_get_state( pdevices->btn_power ) == BUTTON_ON );
 	static const int k_ID_ADSP = 0;
 
 	// WARNING: Do not set LED color in the following loop when the ADSP is loaded
@@ -964,65 +951,44 @@ static boot_intention_t deckard_wait_to_boot( deckard_devices_t * pdevices )
 
 	while( 1 )
 	{
-		// Attempt to load the ADSP, to allow charging
-		if ( adsp_loaded == 0 )
+		// Start the ADSP to allow charging
+		if ( adsp_loaded == 0 && deckard_battery_ok_for_dsp( pdevices->max17320 ) )
 		{
-			const int ocv = deckard_battery_get_vfocv( pdevices->max17320 );
-			// VF OCV must be above boot voltage to survive charging pause and PD Negotiation.
-			// ADSP controls high charging mode. prior to ADSP being initialized, it's still
-			// capable of charging in lower (typically 5V@1A) mode.
+			deckard_setledcolor( LED_COLOR_OFF, &g_deckard_devices );
+			adsp_loaded = ( deckard_adsp_start( k_ID_ADSP ) == 0 );
+		}
 
-			if ( ocv > OCV_BOOT_VOLTAGE || ocv < 0 )
+		// Watch for power button click
+		int latest_power_button_down = ( button_get_state( pdevices->btn_power ) == BUTTON_ON );
+		if ( latest_power_button_down && power_button_down != latest_power_button_down )
+		{
+			boot_intention_t boot_intention = calc_boot_intention( pdevices, 1 );
+
+			switch ( boot_intention )
 			{
-				deckard_setledcolor( LED_COLOR_OFF, &g_deckard_devices );
+				// RETURN FROM WAITING
+				case BOOT_INTENTION_START_USERSPACE:
+				case BOOT_INTENTION_BOOT_MENU:
+				case BOOT_INTENTION_BOOT_FROM_USB:
+				case BOOT_INTENTION_FASTBOOT:
+				case BOOT_INTENTION_CONSOLE_WAIT:
+					if ( adsp_loaded ) deckard_adsp_stop( k_ID_ADSP );
+					return boot_intention;
 
-				int ret = deckard_adsp_start( k_ID_ADSP );
-				if (!ret)
-				{
-					adsp_loaded = 1;
-				}
-				else
-				{
-					printf("ERROR: error starting ADSP in wait_to_boot: %d\n", ret );
-				}
+				// CONTINUE WAITING
+				case BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY:
+					// TODO: only show if battery is ok to show
+					deckard_load_and_display_image_for_boot_intention( boot_intention );
+					deckard_display_off_counter = k_nBatteryImageCount;
+					break; // continue in wait_to_boot
+				case BOOT_INTENTION_CHARGE_AND_WAIT:
+				default:
+					// do nothing, show nothing
+					break;
 			}
 		}
 
-		if( button_get_state( pdevices->btn_power ) == BUTTON_ON )
-		{
-			if ( !in_press )
-			{
-				boot_intention_t boot_intention = calc_boot_intention( pdevices, 1 );
-
-				switch ( boot_intention )
-				{
-					// RETURN FROM WAITING
-					case BOOT_INTENTION_START_USERSPACE:
-					case BOOT_INTENTION_BOOT_MENU:
-					case BOOT_INTENTION_BOOT_FROM_USB:
-					case BOOT_INTENTION_FASTBOOT:
-					case BOOT_INTENTION_CONSOLE_WAIT:
-						if ( adsp_loaded ) deckard_adsp_stop( k_ID_ADSP );
-						return boot_intention;
-
-					// CONTINUE WAITING
-					case BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY:
-						deckard_load_and_display_image_for_boot_intention( boot_intention );
-						deckard_display_off_counter = k_nBatteryImageCount;
-						break; // continue in wait_to_boot
-					case BOOT_INTENTION_CHARGE_AND_WAIT:
-					default:
-						// do nothing, show nothing
-						break;
-				}
-			}
-
-			in_press = 1;
-		}
-		else
-		{
-			in_press = 0;
-		}
+		power_button_down = latest_power_button_down;
 
 #if 0
 		//may want to check for keyboard press for some reason or another here
@@ -1107,22 +1073,15 @@ int deckard_show_boot_menu(void)
 
 int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
-	char * KERNEL_TARGET = "/boot/Image";
-	char * INITRD_TARGET = "/boot/initrd.uImage";
-	char *partition;
-	char label[DEVPARTMAXLEN];
-	int ret;
-	ulong image_size, addr_kernel, addr_dtb, addr_initrd;
-	char DTB_ADDR[DEVPARTMAXLEN];
-	char INITRD_ADDR[DEVPARTMAXLEN];
-	char bootargs[PATHMAXLEN]; // how long can this be?
-	char * default_bootargs;
-	char * temp_bootargs;
-	enum disk_interface_t disk_interface = DISK_INTERFACE_SCSI;
-
 	printf("deckard_boot_cmd\n");
 
+	char * k_KERNEL_TARGET = "/boot/Image";  // should be const but uboot's do_load makes this inconvenient
+	char * k_INITRD_TARGET = "/boot/initrd.uImage";  // should be const but uboot's do_load makes this inconvenient
+
 	//TODO: this function assumes scsi has already been probed -- can we enforce that somehow?
+
+	char *partition = NULL;
+	char label[DEVPARTMAXLEN] = { 0 };
 
 	switch( get_booted_slot() ){
 		case 'A':
@@ -1158,7 +1117,7 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 	}
 #endif
 
-	if( booted_from_usb() ) disk_interface = DISK_INTERFACE_USB;
+	const enum disk_interface_t disk_interface = booted_from_usb() ? DISK_INTERFACE_USB : DISK_INTERFACE_SCSI;
 
 	if ( g_boot_intention == BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY ||
 		g_boot_intention == BOOT_INTENTION_CHARGE_AND_WAIT )
@@ -1186,22 +1145,26 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 	printf("Attempting to load kernel from %s [ %s ]\n", label, partition);
 
 	// Load kernel
-	if ( do_load_helper(disk_interface, partition, ADDR_KERNEL, KERNEL_TARGET) ) {
+	if ( do_load_helper(disk_interface, partition, ADDR_KERNEL, k_KERNEL_TARGET) ) {
 		printf("Failed to load kernel from %s [ %s ]\n", label, partition);
 		goto fail;
 	}
 
 	// Get kernel size.  TODO for now we are assuming an uncompressed linux image
-	addr_kernel = hextoul(ADDR_KERNEL, NULL);
-	ret = booti_get_image_size(addr_kernel, &image_size);
+	ulong addr_kernel = hextoul(ADDR_KERNEL, NULL);
+	ulong image_size = 0;
+	int ret = booti_get_image_size(addr_kernel, &image_size);
 	if (ret)
 		printf("Could not get linux image size ( %d )\n", ret);
     // get dtb address.  kernel will expand to the nearest 2MB boundary, so we give us a 10MB buffer
-	addr_dtb = addr_kernel + image_size + 0xA00000;
+	ulong addr_dtb = addr_kernel + image_size + 0xA00000;
 	// align to next 2MB address
 	addr_dtb += 0x200000 - ( addr_dtb % 0x200000 );
+
+	char DTB_ADDR[DEVPARTMAXLEN] = { 0 };
 	sprintf(DTB_ADDR, "0x%lX", addr_dtb);
 	printf("DTB_ADDR %s\n", DTB_ADDR); // debug
+
 	// load dtb
 	if ( deckard_load_dtb(disk_interface, partition, DTB_ADDR) ) {
 		printf("Failed to load dtb from %s [ %s ]\n", label, partition);
@@ -1209,12 +1172,13 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 	}
 	// get address for initrd
 	image_size = hextoul(env_get("filesize"), NULL);
-	addr_initrd = addr_dtb + image_size + + 0xA00000;
+	ulong addr_initrd = addr_dtb + image_size + + 0xA00000;
 	addr_initrd += 0x200000 - ( addr_initrd % 0x200000 );
+	char INITRD_ADDR[DEVPARTMAXLEN] = { 0 };
 	sprintf(INITRD_ADDR, "0x%lX", addr_initrd);
 	printf("INITRD_ADDR %s\n", INITRD_ADDR); // debug
 	// load inird
-	if ( do_load_helper(disk_interface, partition, INITRD_ADDR, INITRD_TARGET) ) {
+	if ( do_load_helper(disk_interface, partition, INITRD_ADDR, k_INITRD_TARGET) ) {
 		printf("Failed to load initrd from %s [ %s ]\n", label, partition);
 		goto fail;
 	}
@@ -1226,8 +1190,9 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 	}
 
 	// prep bootargs
-	default_bootargs = env_get("default_bootargs");
-	temp_bootargs = env_get("temp_bootargs");
+	char * default_bootargs = env_get("default_bootargs");
+	char * temp_bootargs = env_get("temp_bootargs");
+	char bootargs[PATHMAXLEN] = { 0 }; // how long can this be?
 	snprintf(bootargs, PATHMAXLEN, "%s %s root=PARTLABEL=%s init=/sbin/init rauc.slot=%c noresume rootwait earlycon",
 									default_bootargs ? default_bootargs : "", temp_bootargs ? temp_bootargs : "", label, get_booted_slot() );
 	env_set("bootargs", bootargs);

@@ -226,7 +226,7 @@ bool deckard_battery_is_charging_enabled(struct udevice *pm8550b)
 	return pm8550b_is_charging_enabled(pm8550b);
 }
 
-int deckard_battery_ready_to_boot_to_userspace( struct udevice *max17320 )
+int deckard_battery_ok_for_userspace( struct udevice *max17320 )
 {
 
 	if ( !max17320 )
@@ -244,6 +244,17 @@ int deckard_battery_ready_to_boot_to_userspace( struct udevice *max17320 )
 	// Stricter criteria. Check capacity and voltage
 	// TODO Fix this until VOCV is above UOCVP
 	return ( soc >= BATTERY_MIN_BOOT_SOC && ocv > OCV_BOOT_VOLTAGE );
+}
+
+int deckard_battery_ok_for_dsp( struct udevice *max17320 )
+{
+	// VF OCV must be above boot voltage to survive charging pause and PD Negotiation.
+	// ADSP controls high charging mode. prior to ADSP being initialized, it's still
+	// capable of charging in lower (typically 5V@1A) mode.
+
+	int ocv = deckard_battery_get_vfocv( max17320 );
+
+	return ( ocv > OCV_BOOT_VOLTAGE || ocv < 0 );
 }
  
 int deckard_spl_battery_charging_setup(uint16_t * battery_voltage)
