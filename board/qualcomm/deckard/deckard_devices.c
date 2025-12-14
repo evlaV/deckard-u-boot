@@ -192,10 +192,11 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices, int assume_b
 		deckard_log("boot intention: cannot boot, battery not ready\n");
 		return BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY;
 	}
-	else if( boot_up_desired )
+	else
 	{
 		combined_button_state_t button_state = deckard_get_button_state( pdevices );
 
+		// Some button are intended to work at true power on/reset, indepedent of boot_up_desired
 		switch( button_state )
 		{
 			case VOLUP_OFF__VOLDN_OFF__SELECT_ON:
@@ -204,16 +205,26 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices, int assume_b
 				return BOOT_INTENTION_FASTBOOT;
 			case VOLUP_OFF__VOLDN_ON__SELECT_ON:
 				return BOOT_INTENTION_BOOT_FROM_USB;
-			case VOLUP_ON__VOLDN_OFF__SELECT_OFF:
-				return BOOT_INTENTION_CONSOLE_WAIT;
 			default:
-				return BOOT_INTENTION_START_USERSPACE;
+				break;
 		}
-	}
-	else
-	{
-		deckard_log("boot intention: charge and wait\n");
-		return BOOT_INTENTION_CHARGE_AND_WAIT;
+
+		if ( boot_up_desired )
+		{
+			switch( button_state )
+			{
+				case VOLUP_ON__VOLDN_OFF__SELECT_OFF:
+					return BOOT_INTENTION_CONSOLE_WAIT;
+				case 0:
+				default:
+					return BOOT_INTENTION_START_USERSPACE;
+			}
+		}
+		else
+		{
+			deckard_log( "boot intention: charge and wait\n" );
+			return BOOT_INTENTION_CHARGE_AND_WAIT;
+		}
 	}
 }
 
