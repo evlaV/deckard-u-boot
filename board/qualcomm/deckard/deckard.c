@@ -607,7 +607,7 @@ int misc_init_r(void)
 	{
 		// intentionally dont show an image	
 	}
-	else if ( g_boot_intention == BOOT_INTENTION_CHARGE_AND_WAIT )
+	else if ( g_boot_intention == BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY )
 	{
 		// Dont immediately load and show the image. Doing so prior to DSP
 		// charging may be too high of a risk of battery load if the battery is drained
