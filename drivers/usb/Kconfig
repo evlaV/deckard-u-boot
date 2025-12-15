@@ -130,6 +130,19 @@ config USB_HUB_DEBOUNCE_TIMEOUT
 	  value = 1s because some usb device needs around 1.5s to be initialized
 	  and a 2s value should solve detection issue on problematic USB keys.
 
+config USB_HUB_POWERGOOD_OVERRIDE
+	bool "USB Hub power good delay override"
+	default false
+	help
+	  Allow user defined usb power good delay
+
+config USB_HUB_POWERGOOD_DELAY
+	int "Timeout in milliseconds for USB HUB power good check"
+	default 1000
+	depends on USB_HUB_POWERGOOD_OVERRIDE
+	help
+	  Value in milliseconds of the USB power good check
+
 if SPL_USB_HOST
 
 comment "USB peripherals in SPL"
@@ -149,6 +162,19 @@ config SYS_USB_FAT_BOOT_PARTITION
 	default 1
 	help
 	  Partition on the USB storage device to load U-Boot from.
+
+config SPL_USB_HUB_POWERGOOD_OVERRIDE
+	bool "USB Hub power good delay override in SPL"
+	default false
+	help
+	  Allow user defined usb power good delay in SPL
+
+config SPL_USB_HUB_POWERGOOD_DELAY
+	int "Timeout in milliseconds for USB HUB power good check in SPL"
+	default 1000
+	depends on SPL_USB_HUB_POWERGOOD_OVERRIDE
+	help
+	  Value in milliseconds of the USB power good check in SPL
 
 endif
 

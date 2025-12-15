@@ -181,6 +181,12 @@ static void usb_hub_power_on(struct usb_hub_device *hub)
 		debug("PowerOn : port %d returns %lX\n", i + 1, dev->status);
 	}
 
+#if defined(CONFIG_USB_HUB_POWERGOOD_DELAY)
+	pgood_delay=CONFIG_USB_HUB_DEBOUNCE_TIMEOUT;
+#elif defined(CONFIG_SPL_USB_HUB_POWERGOOD_DELAY)
+	pgood_delay=CONFIG_SPL_USB_HUB_DEBOUNCE_TIMEOUT;
+#endif
+
 #ifdef CONFIG_SANDBOX
 	/*
 	 * Don't set timeout / delay values here. This results
