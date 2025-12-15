@@ -106,69 +106,92 @@ char get_booted_slot(void)
 
 	return bootedslot_char;
 }
-const char *env_scsi_get_dev_part(void)
-{
-	ofnode node;
-	const char *bootdev;
 
-	node = ofnode_path("/chosen");
+// return the static slotname
+static const char *env_scsi_get_dev_part_slotname(void)
+{
+	ofnode node = ofnode_path("/chosen");
 	if (ofnode_valid(node)) {
-		bootdev = ofnode_read_string(node, "u-boot,spl-boot-device");
+		const char * bootdev = ofnode_read_string(node, "u-boot,spl-boot-device");
 		if (!bootdev) {
-			deckard_log("No u-boot,spl-boot-device, considering slot\n");
-			return deckard_get_dev_part_str(DECKARD_UBOOT_ENV_SLOT_A);
+			deckard_log("No u-boot,spl-boot-device, considering slot A\n");
+			return DECKARD_UBOOT_ENV_SLOT_A;
 		} else {
 			deckard_log("Booted on slot '%s'\n", bootdev);
 
 			switch (bootdev[0]) {
 			case 'A':
-				return deckard_get_dev_part_str(DECKARD_UBOOT_ENV_SLOT_A);
-				break;
+				return DECKARD_UBOOT_ENV_SLOT_A;
 			case 'B':
-				return deckard_get_dev_part_str(DECKARD_UBOOT_ENV_SLOT_B);
-				break;
+				return DECKARD_UBOOT_ENV_SLOT_B;
 			case 'U':
 				return NULL; //todo, figure out if we want to load an env for USB boot?
-				break;				
 			default:
-				deckard_log("%s: Invalid booted_slot, defaulting to A env\n", __func__);
-				return deckard_get_dev_part_str(DECKARD_UBOOT_ENV_SLOT_A);
-				break;
+				return DECKARD_UBOOT_ENV_SLOT_A;
 			}
 		}
 	} else {
 		deckard_log("No chosen node default to A!\n");
-		return deckard_get_dev_part_str(DECKARD_UBOOT_ENV_SLOT_A);
+		return DECKARD_UBOOT_ENV_SLOT_A;
 	}
 }
 
-const char *deckard_get_fw_part(void)
+const char *env_scsi_get_dev_part(void)
+{
+	const char * slotname = env_scsi_get_dev_part_slotname();
+
+	// We cannot change this signature, so we have to store it in static memory for return
+	// TODO: we could rotate through multiple buffers if more than one of these need
+	// to be in flight, concurrently
+	static char s_device_partition[DEVPARTMAXLEN] = { 0 };
+	if ( slotname && deckard_get_dev_part_str_buf( slotname, &s_device_partition[0], sizeof(s_device_partition ) ) != 0 )
+	{
+		return s_device_partition;
+	}
+	else
+	{
+		return NULL;
+	}
+}
+
+
+const char *deckard_get_booted_firmware_slotname(void)
 {
 	switch( get_booted_slot() )
 	{
+		case 'B':
+			return DECKARD_UBOOT_FW_SLOT_B;
+		case 'U':
+			return DECKARD_UBOOT_FW_SLOT_U;
 		case 'A':
 		default:
-			return deckard_get_dev_part_str(DECKARD_UBOOT_FW_SLOT_A);
-		case 'B':
-			return deckard_get_dev_part_str(DECKARD_UBOOT_FW_SLOT_B);
-		case 'U':
-			return deckard_get_dev_part_str(DECKARD_UBOOT_FW_SLOT_U);
+			return DECKARD_UBOOT_FW_SLOT_A;
 	}
 }
 
-const char *deckard_get_esp_part(void)
+const char *deckard_get_booted_esp_part(void)
 {
-	if( booted_from_usb() )
-	{
-		return DECKARD_ESP_SLOT_U;
-	}
-
-	return DECKARD_ESP_PARTITION;
+	return booted_from_usb() ? DECKARD_ESP_SLOT_U : DECKARD_ESP_PARTITION;
 }
 
 const char *fs_firmware_get_partition(void)
 {
-	return deckard_get_fw_part();
+	// We cannot change this signature, so we have to store it in static memory for return
+	// TODO: we could rotate through multiple buffers if more than one of these need
+	// to be in flight, concurrently
+	static char s_firmware_partition[DEVPARTMAXLEN] = { 0 };
+
+	const char * slotname = deckard_get_booted_firmware_slotname();
+	if ( slotname && deckard_get_dev_part_str_buf( slotname, &s_firmware_partition[0], sizeof(s_firmware_partition ) ) != 0 )
+	{
+		return s_firmware_partition;
+	}
+	else
+	{
+		return NULL;
+	}
+
+	return s_firmware_partition;
 }
 
 /* Get the devnum/partnum for a partition from its GPT partlabel */
@@ -215,27 +238,29 @@ int deckard_find_part_by_label(enum disk_interface_t disk_interface, const char 
 	return -ENODEV;
 }
 
-#if 0
-static char *deckard_get_dev_str(const char *part_name)
+
+int deckard_get_dev_part_str_buf(const char *part_name, char *out, int out_sz)
 {
-	return strtok(deckard_get_dev_part_str(part_name), ":");
-}
-#endif
+	if (!part_name || !out || out_sz <= 0)
+		return -EINVAL;
 
-// BUG BUG BUG FIXME: this returns heap memory!  Callers must free this
-char *deckard_get_dev_part_str(const char *part_name)
-{
-	char dev_part_str[MAX_DEV_PART_STR];
-	int ret;
-	enum disk_interface_t disk_interface = DISK_INTERFACE_SCSI;
+	out[0] = '\0';
 
-	if(booted_from_usb()) disk_interface = DISK_INTERFACE_USB;
+	// TODO: use MAX_DEV_PART_STR+1 instead?
+	// why the discrepancy vs DEVPARTMAXLEN
+	char tmp[DEVPARTMAXLEN+1] = { 0 };  // +1 for null terminator
 
-	ret = part_get_dev_part_str_by_name( disk_interface_to_str(disk_interface), part_name, dev_part_str);
+	enum disk_interface_t disk_interface = booted_from_usb() ? DISK_INTERFACE_USB : DISK_INTERFACE_SCSI;
+	int ret = part_get_dev_part_str_by_name(disk_interface_to_str(disk_interface), part_name, tmp);
 	if (ret < 0)
-		return NULL;
+		return ret;
 
-	return strdup(dev_part_str);
+	size_t bytes_needed = strnlen( tmp, sizeof( tmp ) ) + 1; // +1 for null terminator
+	if ( (int) bytes_needed > out_sz )
+		return -ENOSPC;
+
+	memcpy( out, tmp, bytes_needed );
+	return 0;
 }
 
 int do_load_helper(enum disk_interface_t disk_interface, char * partition, char * addr, char * path)

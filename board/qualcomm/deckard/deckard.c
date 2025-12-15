@@ -71,9 +71,6 @@ static void deckard_load_and_display_image_for_boot_intention( boot_intention_t 
 int deckard_check_for_key_press(void);
 static boot_intention_t deckard_wait_to_boot( deckard_devices_t * pdevices );
 
-const char *deckard_get_esp_part(void);
-const char *deckard_get_fw_part(void);
-
 #define SERIAL_CONSOLE_MASK 0b100
 #define USB_CONSOLE_MASK 0b010
 #define VIDEO_CONSOLE_MASK 0b001
@@ -180,26 +177,30 @@ int usb_setup(void)
 static int deckard_load_image(char * logo_name)
 {
 	/* Setup load address */
-	char part_arg[DEVPARTMAXLEN] = { 0 };  //e.g. "1:d"
 	char loadaddr_arg[LOADADDRMAXLEN] = { 0 }; //e.g. "0xa7000000"
-	char logo_arg[LOGO_PATHMAX + 1] = { 0 };
 	snprintf(loadaddr_arg, LOADADDRMAXLEN, "0x%x", CONFIG_SYS_LOAD_ADDR);
-	snprintf(part_arg, DEVPARTMAXLEN, "%s", deckard_get_esp_part()); //this returns 1:d for example
+
+	char logo_arg[LOGO_PATHMAX + 1] = { 0 };
 	snprintf(logo_arg, LOGO_PATHMAX, "/steamos/%s", logo_name); //not case sensitive
 
-	char *argv[] = { "", disk_interface_to_str( booted_from_usb() ? DISK_INTERFACE_USB : DISK_INTERFACE_SCSI ),
-			part_arg, loadaddr_arg, logo_arg };
+	char deckard_firmware_part[DEVPARTMAXLEN] = { 0 }; //e.g. "1:d"
+	if ( deckard_get_dev_part_str_buf( deckard_get_booted_firmware_slotname(),
+		&deckard_firmware_part[0], sizeof(deckard_firmware_part ) ) != 0 )
+	{
+		return 1;
+	}
+
+	char *argv[] = { "",
+			disk_interface_to_str( booted_from_usb() ? DISK_INTERFACE_USB : DISK_INTERFACE_SCSI ),
+			deckard_firmware_part, loadaddr_arg, logo_arg };
 	int argc = 5;
-
-
 	if (!do_load(NULL, 0, argc, argv, FS_TYPE_ANY)) {
 		log_debug("Deckard: loaded splash from ESP!\n");
 		return 0;
 	}
 	log_warning("Deckard: using splash image from firmware partition\n");
 
-	/* Fall back to firmware partition */
-	snprintf(part_arg, DEVPARTMAXLEN, "%s", deckard_get_fw_part()); //this returns 1:d for example
+
 	snprintf(logo_arg, LOGO_PATHMAX, "/%s", logo_name);
 
 	return do_load(NULL, 0, argc, argv, FS_TYPE_ANY);
@@ -848,7 +849,7 @@ int deckard_check_for_key_press()
 	return 0;
 }
 
-bool deckard_shutdown_condition(struct udevice *pmic)
+static bool deckard_shutdown_condition(struct udevice *pmic)
 {
 	static unsigned long timeout;
 
@@ -1083,6 +1084,36 @@ int deckard_show_boot_menu(void)
 // Note: This runs both when manually invoked via the command-line, and also
 // under the nominal startup condition via env_set("bootcmd", "deckard_boot");
 
+
+static const char * get_booted_rootfs_slotname( void )
+{
+	switch( get_booted_slot() ){
+		case 'B':
+			return DECKARD_ROOTFS_SLOT_B;
+		case 'U':
+			return DECKARD_ROOTFS_SLOT_U;
+		case 'A':
+		default:
+			return DECKARD_ROOTFS_SLOT_A;
+	}
+}
+
+#ifdef ALLOW_OLD_ROOTFS_NAME_FALLBACK
+
+static const char * get_booted_rootfs_slotname_OLD( void )
+{
+	switch( get_booted_slot() )
+	{
+		case 'B':
+			return DECKARD_ROOTFS_SLOT_OLD_B;
+		case 'A':
+		default:
+			return DECKARD_ROOTFS_SLOT_OLD_A;
+	}
+}
+#endif
+
+
 int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
 	deckard_log("************ deckard_boot_cmd ******************\n");
@@ -1092,39 +1123,21 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 
 	//TODO: this function assumes scsi has already been probed -- can we enforce that somehow?
 
-	char *partition = NULL;
-	char label[DEVPARTMAXLEN] = { 0 };
-
-	switch( get_booted_slot() ){
-		case 'A':
-		default:
-			partition = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_A);
-			strncpy(label, DECKARD_ROOTFS_SLOT_A, DEVPARTMAXLEN);
-			break;
-		case 'B':
-			partition = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_B);
-			strncpy(label, DECKARD_ROOTFS_SLOT_B, DEVPARTMAXLEN);
-			break;
-		case 'U':
-			partition = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_U);
-			strncpy(label, DECKARD_ROOTFS_SLOT_U, DEVPARTMAXLEN);
-			break;			
+	const char *label = get_booted_rootfs_slotname();
+	char partition[DEVPARTMAXLEN] = { 0 };
+	if ( deckard_get_dev_part_str_buf( label, &partition[0], sizeof(partition) ) != 0 )
+	{
+		partition[0] = '\0';
 	}
 
 #ifdef ALLOW_OLD_ROOTFS_NAME_FALLBACK
-	if(!partition)
+	if( !partition[0] )
 	{
 		deckard_log("Trying old rootfs partition names...\n");
-		switch( get_booted_slot() ){
-			case 'A':
-			default:
-				partition = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_OLD_A);
-				strncpy(label, DECKARD_ROOTFS_SLOT_OLD_A, DEVPARTMAXLEN);
-				break;
-			case 'B':
-				partition = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_OLD_B);
-				strncpy(label, DECKARD_ROOTFS_SLOT_OLD_B, DEVPARTMAXLEN);
-				break;
+		label = get_booted_rootfs_slotname_OLD();
+		if ( deckard_get_dev_part_str_buf( label, &partition[0], sizeof(partition) ) != 0 )
+		{
+			partition[0] = '\0';
 		}
 	}
 #endif

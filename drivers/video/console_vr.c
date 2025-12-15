@@ -167,33 +167,34 @@ int consolevr_simple_select_font(struct udevice *dev, const char *name, uint siz
 #define FIRMWARE_INTERFACE "scsi"
 #define FIRMWARE_MAX_SIZE (1024 * 1024)
 
-const char *deckard_get_fw_part(void);
+// TODO: find a better place to land global deckard utils that makes these not needed
+// (and probably not deckard specific)
+int deckard_get_dev_part_str_buf( const char *part_name, char *out, int outsize );
+const char *deckard_get_booted_firmware_slotname(void);
 
 static int vrconsole_load_erofs(const char *filename)
 {
 	#define DEVPARTMAXLEN 16
-	#define LOADADDRMAXLEN 16
+	#define LOADADDRMAXLEN 20
 	#define LOGO_PATHMAX 256
 
-	int  argc = 5;
-	char *argv[5];
-	char arg0[] = "do_the_dew";
-	char part_arg[DEVPARTMAXLEN] = { 0 };  //e.g. "1:d"
+	const char * deckard_firmware_slotname = deckard_get_booted_firmware_slotname();
+	char deckard_firmware_part[DEVPARTMAXLEN] = { 0 };
+	if ( deckard_get_dev_part_str_buf( deckard_firmware_slotname, &deckard_firmware_part[0], sizeof(deckard_firmware_part ) ) != 0 )
+	{
+		return 1;
+	}
+
 	char loadaddr_arg[LOADADDRMAXLEN] = { 0 }; //e.g. "0xa7000000"
 	char file_arg[LOGO_PATHMAX + 1] = { 0 };
 	int ret = 0;
 
-	argv[0] = arg0;
-	argv[1] = "scsi";
-	argv[2] = part_arg;
-	argv[3] = loadaddr_arg;
-	argv[4] = file_arg;
-
 	/* Setup load address */
 	snprintf(loadaddr_arg, LOADADDRMAXLEN, "0x%x", CONFIG_SYS_LOAD_ADDR);
-	snprintf(part_arg, DEVPARTMAXLEN, "%s", deckard_get_fw_part()); //this returns 1:d for example
 	snprintf(file_arg, LOGO_PATHMAX, "/%s", filename);
 
+	int argc = 5;
+	char * argv[5] = { "do_the_dew", "scsi", deckard_firmware_part, loadaddr_arg, file_arg };
 	ret = do_load(NULL, 0, argc, argv, FS_TYPE_ANY);
 	
 	printf("[%s] read=%ld addr=0x%0lx\n",

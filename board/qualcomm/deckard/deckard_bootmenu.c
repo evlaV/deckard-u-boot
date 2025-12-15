@@ -198,8 +198,6 @@ int deckard_boot_menu_handle_actions(void)
 static int deckard_load_slot_info(char * CURRENT_slot_menu_str, int CURRENT_slot_menu_str_sz, char * PREVIOUS_slot_menu_str, int PREVIOUS_slot_menu_str_sz)
 {
 	char cmdstr[256] = {0};
-	char * partition_A;
-	char * partition_B;
 	char * filecontents;
 	size_t filesize;
 	char CURRENT_slot='X';
@@ -211,8 +209,17 @@ static int deckard_load_slot_info(char * CURRENT_slot_menu_str, int CURRENT_slot
 	int ret;
 	int osreleasefilefound;
 
-	partition_A = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_A);
-	partition_B = deckard_get_dev_part_str(DECKARD_ROOTFS_SLOT_B);
+	char partition_A[DEVPARTMAXLEN] = { 0 };
+	if ( deckard_get_dev_part_str_buf( DECKARD_ROOTFS_SLOT_A, &partition_A[0], sizeof(partition_A ) ) != 0 )
+	{
+		// TODO: Error
+	}
+
+	char partition_B[DEVPARTMAXLEN] = { 0 };
+	if ( deckard_get_dev_part_str_buf( DECKARD_ROOTFS_SLOT_B, &partition_B[0], sizeof(partition_B ) ) != 0 )
+	{
+		// TODO: Error
+	}
 
 	if( get_booted_slot() == 'A' ) 
 	{

@@ -71,7 +71,7 @@ static dbr_pointer_table_t s_pointer_table = {
 static int deckard_battery_load_recovery_program(void)
 {
 	#define DEVPARTMAXLEN 16
-	#define LOADADDRMAXLEN 16
+	#define LOADADDRMAXLEN 20
 
 	int  argc = 5;
 	char *argv[5];

@@ -9,11 +9,8 @@
 
 struct udevice;
 
-const char *deckard_get_fw_part(void);
-bool deckard_shutdown_condition(struct udevice *pmic);
-
 #define DEVPARTMAXLEN 16
-#define LOADADDRMAXLEN 16
+#define LOADADDRMAXLEN 20
 #define PATHMAXLEN 256
 #define LOGO_PATHMAX 256
 
@@ -34,8 +31,5 @@ bool deckard_shutdown_condition(struct udevice *pmic);
 #define ENV_EFI_RESET_BOOT_ENTRIES "efi-reset-boot-entries"
 /* Our boot entry is always 0xFAFF for convenience and to avoid conflicts */
 #define EFI_INTERNAL_BOOT_INDEX (0xFAFF)
-
-// FIXME WTF: This leaks memory. 
-char *deckard_get_dev_part_str(const char *part_name);
 
 #endif /* __DECKARD_H */

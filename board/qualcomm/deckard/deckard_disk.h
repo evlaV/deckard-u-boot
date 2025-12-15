@@ -47,4 +47,9 @@ int deckard_load_dtb(enum disk_interface_t disk_interface, char * partition, cha
 int deckard_find_efi_var_store(void);
 void init_esp(void);
 
+// gets dev:part string for partition name.  return 0 on success
+int deckard_get_dev_part_str_buf( const char *part_name, char *out, int outsize );
+const char *deckard_get_booted_firmware_slotname(void);
+const char *deckard_get_booted_esp_part(void);
+
 #endif
