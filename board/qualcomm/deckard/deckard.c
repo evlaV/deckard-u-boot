@@ -502,7 +502,8 @@ void setup_boot_intention_global_state( boot_intention_t boot_intention )
 /* EARLY ENTRY POINT */
 int misc_init_r(void)
 {
-	deckard_log( "[uboot] ********** misc_init_r **********\n" );
+	printf("\n");
+	deckard_log( "********** misc_init_r **********\n" );
 
 	ofnode node = ofnode_path("/chosen");
 	if (ofnode_valid(node)) {
@@ -932,7 +933,7 @@ void show_boot_progress(int progress)
 
 static boot_intention_t deckard_wait_to_boot( deckard_devices_t * pdevices )
 {
-	deckard_log("Waiting for power button press and battery state of charge threshold to continue booting...\n");
+	deckard_log("deckard_wait_to_boot...\n");
 
 	// Check for the existance of devices used below
 	if ( !pdevices->max17320 || !pdevices->pm8550b )
@@ -987,6 +988,7 @@ static boot_intention_t deckard_wait_to_boot( deckard_devices_t * pdevices )
 				case BOOT_INTENTION_FASTBOOT:
 				case BOOT_INTENTION_CONSOLE_WAIT:
 					if ( adsp_loaded ) deckard_adsp_stop( k_ID_ADSP );
+					deckard_log( "Completed deckard_wait_to_boot %d\n", boot_intention );
 					return boot_intention;
 
 				// CONTINUE WAITING
@@ -1051,13 +1053,13 @@ static boot_intention_t deckard_wait_to_boot( deckard_devices_t * pdevices )
 		mdelay(100);
 	}
 
-	deckard_log("ERROR: Code should never get here (end of wait to boot)\n");
-	
 	if ( adsp_loaded )
 	{
 		deckard_adsp_stop( k_ID_ADSP );
 	}
 
+	deckard_log("Warning: Code should never get here (end of wait to boot)\n");
+	deckard_log( "Completed deckard_wait_to_boot %d\n", BOOT_INTENTION_START_USERSPACE );
 	return BOOT_INTENTION_START_USERSPACE;
 }
 
@@ -1116,7 +1118,8 @@ static const char * get_booted_rootfs_slotname_OLD( void )
 
 int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
-	deckard_log("************ deckard_boot_cmd ******************\n");
+	printf("\n");
+	deckard_log( "********** deckard_boot_cmd **********\n" );
 
 	char * k_KERNEL_TARGET = "/boot/Image";  // should be const but uboot's do_load makes this inconvenient
 	char * k_INITRD_TARGET = "/boot/initrd.uImage";  // should be const but uboot's do_load makes this inconvenient
