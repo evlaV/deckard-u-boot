@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: GPL-2.0+
 /* Some example code to get and transfer one byte for adsp */
 
+#include <asm/io.h>
 #include <command.h>
 #include <dm.h>
-#include <asm/io.h>
 #include <linux/types.h>
+#include <remoteproc.h>
 #include <time.h>
+
+#include "deckard_adsp.h"
+#include "deckard_log.h"
 
 #define QDSP6SS_BASE		0x06800000
 #define QDSP6SS_BOOT_PARAMS0 	0x60
@@ -16,6 +20,48 @@
 
 #define DECKARD_ADSP_TX_ADDR	(QDSP6SS_BASE + QDSP6SS_BOOT_PARAMS0 + 4)
 #define DECKARD_ADSP_RX_ADDR	(QDSP6SS_BASE + QDSP6SS_BOOT_PARAMS0 + 8)
+
+#define DECKARD_ADSP_ID 0
+
+
+int deckard_adsp_start( void )
+{
+	int id = DECKARD_ADSP_ID;
+	int ret;
+
+	if (!rproc_is_initialized()) {
+		ret = rproc_init();
+		if (ret < 0) {
+			deckard_log("failed to start ADSP rproc_init (%d)\n", ret );
+			return ret;
+		}
+	}
+
+	ret = rproc_start_with_param(id,0);
+	if (ret < 0) {
+		deckard_log("failed to start ADSP rproc_start_with_param (%d)\n", ret );
+		return ret;
+	}
+
+	deckard_log("started ADSP\n");
+	return 0;
+}
+
+int deckard_adsp_stop( void )
+{
+	int id = DECKARD_ADSP_ID;
+
+	int ret = rproc_stop( id );
+	if ( ret != 0 )
+	{
+		deckard_log("failed to stop ADSP rproc_stop (%d)\n", ret );
+	}
+	else
+	{
+		deckard_log("stopped ADSP\n" );
+	}
+	return ret;
+}
 
 static int deckard_adsp_tx(u32 val)
 {

@@ -21,7 +21,6 @@
 #include <linux/delay.h>
 #include <button.h>
 #include <power/pmic.h>
-#include <remoteproc.h>
 #include <command.h>
 #include <dm/device-internal.h>
 #include <fs.h>
@@ -37,6 +36,7 @@
 #include <string.h>
 
 #include "deckard.h"
+#include "deckard_adsp.h"
 #include "deckard_battery.h"
 #include "deckard_bootmenu.h"
 #include "deckard_devices.h"
@@ -805,42 +805,6 @@ int ft_board_setup(void *fdt, struct bd_info *bd)
 	return 0;
 }
 
-int deckard_adsp_start( int id )
-{
-	int ret;
-
-	if (!rproc_is_initialized()) {
-		ret = rproc_init();
-		if (ret < 0) {
-			deckard_log("failed to start ADSP rproc_init (%d)\n", ret );
-			return ret;
-		}
-	}
-
-	ret = rproc_start_with_param(id,0);
-	if (ret < 0) {
-		deckard_log("failed to start ADSP rproc_start_with_param (%d)\n", ret );
-		return ret;
-	}
-
-	deckard_log("started ADSP\n");
-	return 0;
-}
-
-int deckard_adsp_stop( int id )
-{
-	int ret = rproc_stop( id );
-	if ( ret != 0 )
-	{
-		deckard_log("failed to stop ADSP rproc_stop (%d)\n", ret );
-	}
-	else
-	{
-		deckard_log("stopped ADSP\n" );
-	}
-	return ret;
-}
-
 int deckard_check_for_key_press()
 {
 	if (tstc()) {	/* we got a key press	*/
@@ -953,7 +917,6 @@ static boot_intention_t deckard_wait_to_boot( deckard_devices_t * pdevices )
 	int deckard_display_off_counter = k_nBatteryImageCount;
 	int adsp_loaded = 0;
 	int power_button_down = ( button_get_state( pdevices->btn_power ) == BUTTON_ON );
-	static const int k_ID_ADSP = 0;
 
 	// WARNING: Do not set LED color in the following loop when the ADSP is loaded
 	// The ADSP sets LED colors when active based on state only it is aware of
