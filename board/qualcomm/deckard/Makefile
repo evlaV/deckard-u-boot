@@ -5,7 +5,7 @@
 ifdef CONFIG_SPL_BUILD
 obj-y := deckard_spl.o deckard_battery.o deckard_log.o smb1510.o pm8550b.o pm8550vs.o pmk8550.o
 else
-obj-y := deckard.o deckard_devices.o deckard_bootmenu.o deckard_disk.o deckard_log.o deckard_eeprom.o deckard_battery.o smb1510.o pm8550b.o pm8550vs.o pmk8550.o
+obj-y := deckard.o deckard_devices.o deckard_bootmenu.o deckard_disk.o deckard_log.o deckard_eeprom.o deckard_battery.o smb1510.o pm8550b.o pm8550vs.o pmk8550.o deckard_adsp.o
 endif
 
 warn_flags := -Wextra -Werror -Wformat=2 \
