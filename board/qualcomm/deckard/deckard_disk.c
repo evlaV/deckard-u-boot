@@ -144,7 +144,7 @@ const char *env_scsi_get_dev_part(void)
 	// TODO: we could rotate through multiple buffers if more than one of these need
 	// to be in flight, concurrently
 	static char s_device_partition[DEVPARTMAXLEN] = { 0 };
-	if ( slotname && deckard_get_dev_part_str_buf( slotname, &s_device_partition[0], sizeof(s_device_partition ) ) != 0 )
+	if ( slotname && deckard_get_dev_part_str_buf( slotname, &s_device_partition[0], sizeof(s_device_partition ) ) == 0 )
 	{
 		return s_device_partition;
 	}
@@ -182,7 +182,7 @@ const char *fs_firmware_get_partition(void)
 	static char s_firmware_partition[DEVPARTMAXLEN] = { 0 };
 
 	const char * slotname = deckard_get_booted_firmware_slotname();
-	if ( slotname && deckard_get_dev_part_str_buf( slotname, &s_firmware_partition[0], sizeof(s_firmware_partition ) ) != 0 )
+	if ( slotname && deckard_get_dev_part_str_buf( slotname, &s_firmware_partition[0], sizeof(s_firmware_partition ) ) == 0 )
 	{
 		return s_firmware_partition;
 	}
