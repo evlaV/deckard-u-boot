@@ -102,6 +102,11 @@ static int qcom_dsp_stop(struct udevice *dev)
 	return 0;
 }
 
+static int qcom_dsp_start(struct udevice *dev)
+{
+	return qcom_dsp_start_with_param(dev, 0);
+}
+
 static int qcom_dsp_load_ext4fs(struct qcom_dsp *dsp, char *buf)
 {
 	const char *dev_and_part = fs_firmware_get_partition();
@@ -231,6 +236,7 @@ static const struct dm_rproc_ops qcom_dsp_ops = {
 	.init = qcom_dsp_init,
 	.stop = qcom_dsp_stop,
 	.load = qcom_dsp_load,
+	.start = qcom_dsp_start,
 	.start_with_param = qcom_dsp_start_with_param,
 };
 
