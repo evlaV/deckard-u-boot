@@ -69,7 +69,7 @@ int display_turn_off(void);
 int display_turn_off_force(void);
 static void deckard_load_and_display_image_for_boot_intention( boot_intention_t boot_intention );
 int deckard_check_for_key_press(void);
-static boot_intention_t deckard_wait_to_boot( deckard_devices_t * pdevices );
+static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_devices_t * pdevices );
 
 #define SERIAL_CONSOLE_MASK 0b100
 #define USB_CONSOLE_MASK 0b010
@@ -884,6 +884,26 @@ void show_boot_progress(int progress)
 	display_turn_off();
 }
 
+static bool should_wait_to_boot( boot_intention_t boot_intention )
+{
+	switch ( boot_intention )
+	{
+		case BOOT_INTENTION_START_USERSPACE:
+		case BOOT_INTENTION_BOOT_MENU:
+		case BOOT_INTENTION_BOOT_FROM_USB:
+		case BOOT_INTENTION_FASTBOOT:
+		case BOOT_INTENTION_CONSOLE_WAIT:
+			return false;
+
+		case BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY:
+		case BOOT_INTENTION_CHARGE_AND_WAIT:
+		default:
+			return true;
+	}
+}
+
+
+
 /*
 	turn device on. lowest level battery allow us to get into SPL at all (prior to uboot).
 	in uboot:
@@ -895,27 +915,37 @@ void show_boot_progress(int progress)
 // trap in uboot while we wait for power button to be pushed
 // we should charge and do various things here like light up the LED's etc
 
-static boot_intention_t deckard_wait_to_boot( deckard_devices_t * pdevices )
+static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_devices_t * pdevices )
 {
-	deckard_log("deckard_wait_to_boot...\n");
+	printf("\n");
+	deckard_log("********** deckard_wait_to_boot **********\n");
+	deckard_log("boot_intention: %d\n", *p_boot_intention );
+
+	boot_intention_t boot_intention = *p_boot_intention;
 
 	// Check for the existance of devices used below
 	if ( !pdevices->max17320 || !pdevices->pm8550b )
 	{
 		deckard_log( "ERROR: no pdevices->max17320/pdevices->pm8550b. Cannot wait to boot.\n" );
-		return BOOT_INTENTION_START_USERSPACE;
+		*p_boot_intention = BOOT_INTENTION_START_USERSPACE;
+		return;
 	}
 
 	if ( !pdevices->btn_power )
 	{
 		deckard_log( "ERROR: no pdevices->btn_power. Cannot wait to boot.\n" );
-		return BOOT_INTENTION_START_USERSPACE;
+		*p_boot_intention = BOOT_INTENTION_START_USERSPACE;
+		return;
 	}
 
 	int deckard_shutdown_loop_counter = 1;
 	static const int k_nBatteryImageCount = 10 * 3; // 100ms * 10 * 5 = 3s
 	int deckard_display_off_counter = k_nBatteryImageCount;
-	int adsp_loaded = 0;
+	bool adsp_loaded = 0;
+	bool in_shutdown = 0;
+
+	// This default implies a new discrete press will be required to retrigger,
+	// which is intentional
 	int power_button_down = ( button_get_state( pdevices->btn_power ) == BUTTON_ON );
 
 	// WARNING: Do not set LED color in the following loop when the ADSP is loaded
@@ -926,44 +956,42 @@ static boot_intention_t deckard_wait_to_boot( deckard_devices_t * pdevices )
 	// tldr; if ADSP is running (in either lite or non-lite mode) it is responsible
 	// for LED handling.  uboot only does LED control, for the duration the ADSP
 	// is not loaded
+	//
+	// TODO: also do not use the i2c bus that the ADSP is on.  It needs it for
+	// power negotiation
 
-	while( 1 )
+	while( should_wait_to_boot( boot_intention ) )
 	{
 		// Start the ADSP to allow charging
-		if ( adsp_loaded == 0 && deckard_battery_ok_for_dsp( pdevices->max17320 ) )
+		if ( !adsp_loaded && deckard_battery_ok_for_dsp( pdevices->max17320 ) )
 		{
 			deckard_setledcolor( LED_COLOR_OFF, &g_deckard_devices );
-			adsp_loaded = ( deckard_adsp_start( k_ID_ADSP ) == 0 );
+			adsp_loaded = ( deckard_adsp_start() == 0 );
 		}
 
 		// Watch for power button click
 		int latest_power_button_down = ( button_get_state( pdevices->btn_power ) == BUTTON_ON );
 		if ( latest_power_button_down && power_button_down != latest_power_button_down )
 		{
-			boot_intention_t boot_intention = calc_boot_intention( pdevices, 1 );
-
-			switch ( boot_intention )
+			// Update our boot intention on a click
+			boot_intention = calc_boot_intention( pdevices, 1 );
+			deckard_log( "User power button pressed. boot_intention:%d\n", boot_intention );
+			
+			if ( boot_intention == BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY )
 			{
-				// RETURN FROM WAITING
-				case BOOT_INTENTION_START_USERSPACE:
-				case BOOT_INTENTION_BOOT_MENU:
-				case BOOT_INTENTION_BOOT_FROM_USB:
-				case BOOT_INTENTION_FASTBOOT:
-				case BOOT_INTENTION_CONSOLE_WAIT:
-					if ( adsp_loaded ) deckard_adsp_stop( k_ID_ADSP );
-					deckard_log( "Completed deckard_wait_to_boot %d\n", boot_intention );
-					return boot_intention;
+				if ( !adsp_loaded )
+				{
+					deckard_setledcolor( LED_COLOR_RED, &g_deckard_devices );
+				}
 
-				// CONTINUE WAITING
-				case BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY:
-					// TODO: only show if battery is ok to show
-					deckard_load_and_display_image_for_boot_intention( boot_intention );
-					deckard_display_off_counter = k_nBatteryImageCount;
-					break; // continue in wait_to_boot
-				case BOOT_INTENTION_CHARGE_AND_WAIT:
-				default:
-					// do nothing, show nothing
-					break;
+				// TODO: only show if battery is ok to show
+				deckard_load_and_display_image_for_boot_intention( boot_intention );
+				deckard_display_off_counter = k_nBatteryImageCount;
+			}
+
+			if ( !should_wait_to_boot( boot_intention ) )
+			{
+				break;
 			}
 		}
 
@@ -979,26 +1007,34 @@ static boot_intention_t deckard_wait_to_boot( deckard_devices_t * pdevices )
 #endif
 
 		//check every 10 loops to avoid spamming the SPMI bus
-		if ( deckard_shutdown_loop_counter-- == 0 )
+		if ( !in_shutdown && deckard_shutdown_loop_counter-- == 0 )
 		{
 			int soc = deckard_battery_get_capacity(pdevices->max17320);
 			int avg_vcell = deckard_battery_get_avg_vcell(pdevices->max17320);
 			int avg_current = deckard_battery_get_avg_current(pdevices->max17320);
 			deckard_log("\r" ANSI_CLEAR_LINE "Battery: %d%%, %dmV, %dmA", soc,avg_vcell,avg_current); fflush(stdout);
+
 			deckard_shutdown_loop_counter = 10;
 			if( deckard_shutdown_condition( pdevices->pm8550b ) )
 			{
 				deckard_log("Device not charging for %d seconds, Shutdown\n", DECKARD_SHUTDOWN_TIMEOUT_S);
 				run_command("splctl set-uboot-poweroff-reason battery", 0); //inform the spl that we are shutting down due to low battery
-				int ret = sysreset_walk(SYSRESET_POWER_OFF);
-				if (ret == -EINPROGRESS)
-					mdelay(1000);
-				// break;
 
-				// TODO: FIXME: should this return BOOT_INTENTION_POWER_OFF?  what does it even mean to return here?
-				// is that poweroff failing?  What should we do in such a case?  doing a normal boot seems inappropriate.
-				// Maybe this chould be a fallthrough instead, without the break?
-				mdelay( 1000 );
+				deckard_log("SYSRESET_POWER_OFF\n" );
+				int ret = sysreset_walk(SYSRESET_POWER_OFF);
+				if ( ret )
+				{
+					deckard_log("WARNING: SYSRESET_POWER_OFF returned error code %d\n", ret );
+
+					// Note: SYSRESET_POWER_OFF can take time, so if the first call to SYSRESET_POWER_OFF succeeds
+					// we want to give it time to take effect and not attempt a subsequent immediate call
+					// But at the same time, we don't want to just return from this wait loop (which would
+					// have the effect of beginning to start the kernel).
+				}
+				else
+				{
+					in_shutdown = true;
+				}
 			}
 		}
 
@@ -1016,14 +1052,9 @@ static boot_intention_t deckard_wait_to_boot( deckard_devices_t * pdevices )
 		mdelay(100);
 	}
 
-	if ( adsp_loaded )
-	{
-		deckard_adsp_stop( k_ID_ADSP );
-	}
-
-	deckard_log("Warning: Code should never get here (end of wait to boot)\n");
-	deckard_log( "Completed deckard_wait_to_boot %d\n", BOOT_INTENTION_START_USERSPACE );
-	return BOOT_INTENTION_START_USERSPACE;
+	if ( adsp_loaded ) deckard_adsp_stop();
+	deckard_log( "deckard_wait_to_boot end\n" );
+	*p_boot_intention = boot_intention;
 }
 
 int deckard_show_boot_menu(void) 
@@ -1117,7 +1148,7 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 		// We will stay in this function until the user clicks on the power
 		// button with the intention to boot the device
 
-		g_boot_intention = deckard_wait_to_boot( &g_deckard_devices );
+		deckard_wait_to_boot( &g_boot_intention, &g_deckard_devices );
 
 		// The boot intention has changed. Re setup the needed state
 		setup_boot_intention_global_state( g_boot_intention );
