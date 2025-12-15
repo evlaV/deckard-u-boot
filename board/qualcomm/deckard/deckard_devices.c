@@ -145,11 +145,11 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices, int assume_b
 
 	if ( assume_boot_up_desired )
 	{
-		boot_up_desired = 1;
+		boot_up_desired = true;
 	}
 	else
 	{
-		boot_up_desired = 0;
+		boot_up_desired = false;
 		/*
 		* check on/off reasons to see if we were booted by a button
 		* push or warm reset (reboot command), in case of unknown reason
@@ -169,7 +169,6 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices, int assume_b
 			pon_poff_reason.trigger,
 			pon_poff_reason.pon_reason);
 		
-		int boot_up_desired = false;
 		if(pon_poff_reason.pon_reason & 0x80)
 		{
 			deckard_log("pon_reason includes button press, continuing to boot\n");
