@@ -35,6 +35,7 @@ bool deckard_shutdown_condition(struct udevice *pmic);
 /* Our boot entry is always 0xFAFF for convenience and to avoid conflicts */
 #define EFI_INTERNAL_BOOT_INDEX (0xFAFF)
 
+#define DECKARD_USB_PGOOD_DELAY 1000
 // FIXME WTF: This leaks memory. 
 char *deckard_get_dev_part_str(const char *part_name);
 

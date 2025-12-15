@@ -64,7 +64,8 @@ enum combined_button_state_t {
 	POWER_ON__VOLUP_ON__VOLDN_ON__SELECT_OFF    = 14,
 	POWER_ON__VOLUP_ON__VOLDN_ON__SELECT_ON     = 15,
 };
- 
+
+#define DECKARD_USB_PGOOD_DELAY 1000
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -973,6 +974,7 @@ void qcom_spl_board_init(void)
 	if (env_get("BOOT_FORCE_USB")) {
 		deckard_log_spl("BOOT_FORCE_USB set in environment, going to try to boot from USB\n");
 		go_to_usb = 1;
+		env_set_ulong("usb_pgood_delay", DECKARD_USB_PGOOD_DELAY);
 		env_set("BOOT_FORCE_USB",NULL);
 	}
 

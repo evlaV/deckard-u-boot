@@ -555,6 +555,8 @@ int misc_init_r(void)
 	deckard_log( "set led white\n" );
 	deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices );
 
+	env_set_ulong("usb_pgood_delay", DECKARD_USB_PGOOD_DELAY);
+
 	if( booted_from_usb() )
 	{
 		deckard_log( "usb_setup\n" );
