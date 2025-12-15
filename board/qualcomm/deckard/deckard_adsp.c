@@ -26,29 +26,32 @@
 
 int deckard_adsp_start( void )
 {
+	deckard_log("Starting ADSP...\n");
+
 	int id = DECKARD_ADSP_ID;
 	int ret;
 
 	if (!rproc_is_initialized()) {
 		ret = rproc_init();
 		if (ret < 0) {
-			deckard_log("failed to start ADSP rproc_init (%d)\n", ret );
+			deckard_log("ERROR: rproc_init failed (%d)\n", ret );
 			return ret;
 		}
 	}
 
 	ret = rproc_start_with_param(id,0);
 	if (ret < 0) {
-		deckard_log("failed to start ADSP rproc_start_with_param (%d)\n", ret );
+		deckard_log("ERROR: rproc_start_with_param failed(%d)\n", ret );
 		return ret;
 	}
 
-	deckard_log("started ADSP\n");
+	deckard_log("Started ADSP\n");
 	return 0;
 }
 
 int deckard_adsp_stop( void )
 {
+	deckard_log("Stopping ADSP...\n");
 	int id = DECKARD_ADSP_ID;
 
 	int ret = rproc_stop( id );
