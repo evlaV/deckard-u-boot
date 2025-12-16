@@ -60,6 +60,7 @@ enum full_screen_images_t
 	IMAGE_ERROR
 };
 
+// TODO: make these globals all static
 bool g_display_enabled = false;
 bool g_factory_mode = false;
 boot_intention_t g_boot_intention = BOOT_INTENTION_START_USERSPACE;
@@ -67,7 +68,6 @@ static deckard_devices_t g_deckard_devices = { 0 };
 
 int display_turn_off(void);
 int display_turn_off_force(void);
-static void deckard_load_and_display_image_for_boot_intention( boot_intention_t boot_intention );
 int deckard_check_for_key_press(void);
 static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_devices_t * pdevices );
 
@@ -176,11 +176,11 @@ int usb_setup(void)
 	return run_command("usb start", 0);
 }
 
-static int deckard_load_image(char * logo_name)
+static int deckard_load_image(const char * logo_name, ulong addr )
 {
 	/* Setup load address */
 	char loadaddr_arg[LOADADDRMAXLEN] = { 0 }; //e.g. "0xa7000000"
-	snprintf(loadaddr_arg, LOADADDRMAXLEN, "0x%x", CONFIG_SYS_LOAD_ADDR);
+	snprintf(loadaddr_arg, LOADADDRMAXLEN, "0x%lx", addr);
 
 	char logo_arg[LOGO_PATHMAX + 1] = { 0 };
 	snprintf(logo_arg, LOGO_PATHMAX, "/steamos/%s", logo_name); //not case sensitive
@@ -208,33 +208,14 @@ static int deckard_load_image(char * logo_name)
 	return do_load(NULL, 0, argc, argv, FS_TYPE_ANY);
 }
 
-// TODO: confirm that this isn't leaking memory 
-// Ideally, also add a comment as to what this does for memory ownership
-
-static void deckard_load_and_display_image_for_boot_intention( boot_intention_t boot_intention )
+static void deckard_display_image( const char * filename )
 {
-	if(!g_display_enabled) return;
-
-	int ret = 0;
-	switch(boot_intention)
-	{
-		case BOOT_INTENTION_CHARGE_AND_WAIT:
-			// Dont show an image on BOOT_INTENTION_CHARGE_AND_WAIT!
-			return;
-		case BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY:
-			ret = deckard_load_image("logo_battery_low.bmp.gz");
-			break;
-		case BOOT_INTENTION_BOOT_MENU:
-			ret = deckard_load_image("logo_error.bmp.gz");
-			break;
-		default:
-			ret = deckard_load_image("logo.bmp.gz");
-			break;
-	}
-
-	if ( ret != 0 )
+	if (!g_display_enabled || !filename)
 		return;
 
+	int ret = deckard_load_image( filename, CONFIG_SYS_LOAD_ADDR );
+	if ( ret != 0 )
+		return;
 	bmp_info(CONFIG_SYS_LOAD_ADDR);
 	bmp_display(CONFIG_SYS_LOAD_ADDR, 0,0);
 }
@@ -604,23 +585,13 @@ int misc_init_r(void)
 	deckard_log( "g_boot_intention %d\n", g_boot_intention );
 
 	// Set LED Color
-	// TODO: consider setting weirder colors for the weirder modes
 	deckard_setledcolor(
-		( g_boot_intention == BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY ) ? LED_COLOR_RED : LED_COLOR_WHITE,
+		get_led_color_for_boot_intention( g_boot_intention ),
 		&g_deckard_devices );
 	deckard_log( "set led to boot intention color\n" );
 
 	// SHOW BOOT IMAGE
-	if ( g_boot_intention == BOOT_INTENTION_CHARGE_AND_WAIT ||
-		g_boot_intention == BOOT_INTENTION_CONSOLE_WAIT || 
-		g_boot_intention == BOOT_INTENTION_BOOTLOADER ||
-		g_boot_intention == BOOT_INTENTION_FASTBOOT	|| 
-		g_boot_intention == BOOT_INTENTION_EDL )
-	{
-		// intentionally dont show an image. Also keeps the display off
-		// (if it was previously off)
-	}
-	else if ( g_boot_intention == BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY )
+	if ( g_boot_intention == BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY )
 	{
 		// Dont immediately load and show the image. Doing so prior to DSP
 		// charging may be too high of a risk of battery load if the battery is drained
@@ -632,10 +603,7 @@ int misc_init_r(void)
 	}
 	else
 	{
-		// We've now decided we want to show the user a splash image.
-		// Do it!
-		deckard_log( "load and display image\n" );
-		deckard_load_and_display_image_for_boot_intention( g_boot_intention );
+		deckard_display_image( get_image_filename_for_boot_intention( g_boot_intention ) );
 	}
 
 	// SETUP CUSTOM STATE TO EXECUTE ON BOOT INTENTION
@@ -874,31 +842,6 @@ void show_boot_progress(int progress)
 	display_turn_off();
 }
 
-// TODO: move all functions which are just big switch statements which
-// are required for all cases... pull into common stop in deckard_devices
-
-static bool deckard_should_wait( boot_intention_t boot_intention )
-{
-	switch ( boot_intention )
-	{
-		case BOOT_INTENTION_START_USERSPACE:
-		case BOOT_INTENTION_BOOT_MENU:
-		case BOOT_INTENTION_BOOT_FROM_USB:
-		case BOOT_INTENTION_FASTBOOT:
-		case BOOT_INTENTION_CONSOLE_WAIT:
-		case BOOT_INTENTION_BOOTLOADER:
-			return false;
-
-		case BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY:
-		case BOOT_INTENTION_CHARGE_AND_WAIT:
-		case BOOT_INTENTION_EDL:
-		// it would be cool to omit default and let the compile flag if we missed a case, but it doesnt work
-		default:
-			return true;
-	}
-}
-
-
 
 /*
 	turn device on. lowest level battery allow us to get into SPL at all (prior to uboot).
@@ -979,16 +922,17 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 				{
 					if ( !adsp_loaded )
 					{
-						deckard_setledcolor( LED_COLOR_RED, &g_deckard_devices );
+						deckard_setledcolor( get_led_color_for_boot_intention( boot_intention ), &g_deckard_devices );
 					}
 
-					// TODO: only show if battery is ok to show
-					deckard_load_and_display_image_for_boot_intention( boot_intention );
+					// We can be a bit less conservative showing the out of battery image on a click.
+					// It's on a user interaction, so no chance of bootloop.
+					deckard_display_image( get_image_filename_for_boot_intention( boot_intention ) );
 					deckard_display_off_counter = k_nBatteryImageCount;
 				}
 
 				// Is it time to exit our loop?
-				if ( !deckard_should_wait( boot_intention ) )
+				if ( !deckard_should_wait_for_button_to_boot( boot_intention ) )
 				{
 					break;
 				}
@@ -1141,8 +1085,7 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 
 	const enum disk_interface_t disk_interface = booted_from_usb() ? DISK_INTERFACE_USB : DISK_INTERFACE_SCSI;
 
-	if ( g_boot_intention == BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY ||
-		g_boot_intention == BOOT_INTENTION_CHARGE_AND_WAIT )
+	if ( deckard_should_wait_for_button_to_boot( g_boot_intention ) )
 	{
 		// This may be minutes ... hours ... days...
 		// We will stay in this function until the user clicks on the power
@@ -1158,7 +1101,7 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 
 	// We're booting!
 	deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices );
-	deckard_load_and_display_image_for_boot_intention( g_boot_intention );
+	deckard_display_image( get_image_filename_for_boot_intention( g_boot_intention ) );
 
 	// FIXME: eventually invert this so we try EFI first, maybe find a less hacky way to do this?
 	if (g_deckard_efi_mode) {
@@ -1246,7 +1189,7 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 	console_state_handler();
 
 	// TODO: would be really nice to be able to load image without turning display on/off
-	deckard_load_and_display_image_for_boot_intention(BOOT_INTENTION_START_USERSPACE); //switch to booting logo before we boot up
+	deckard_display_image( get_image_filename_for_boot_intention( BOOT_INTENTION_START_USERSPACE ) ); //switch to booting logo before we boot up
 
 	// This is to workaround an incomplete hand-off implementation, where we (as of 12/11/25)
 	// need to allow the kernel to turn the display on itself (vs a 'hot transfer')
@@ -1277,7 +1220,7 @@ U_BOOT_CMD(
 
 int deckard_logo_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
-	deckard_load_and_display_image_for_boot_intention(BOOT_INTENTION_START_USERSPACE);
+	deckard_display_image( get_image_filename_for_boot_intention( BOOT_INTENTION_START_USERSPACE ) );
 	return 0;
 }
 
