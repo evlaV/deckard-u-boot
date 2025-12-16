@@ -1,6 +1,7 @@
 #include "deckard.h"
 #include "deckard_bootmenu.h"
 #include "deckard_disk.h"
+#include "deckard_log.h"
 
 #include <command.h>
 #include <env.h>
@@ -14,7 +15,8 @@
 #include <vsprintf.h>
 #include <fs.h>
 
-static int deckard_load_slot_info(char * current_slot_menu_str, int current_slot_menu_str_sz, char * previous_slot_menu_str, int previous_slot_menu_str_sz);
+
+static int deckard_build_slot_menu_items(char * current_slot_menu_str, int current_slot_menu_str_sz, char * previous_slot_menu_str, int previous_slot_menu_str_sz);
 
 static void trim_quotes(char *s)
 {
@@ -48,7 +50,7 @@ static int parse_os_info(char *buf, size_t bufsz,
 
 		tok = strsep(&p, "=");
 
-		//printf("[%s] [%s]\n",tok,p);
+		//deckard_log("[%s] [%s]\n",tok,p);
 
 		if (p) {
 			if (!strcmp("NAME", tok))       { strncpy(name,p,name_sz); namefound=1; }
@@ -59,9 +61,9 @@ static int parse_os_info(char *buf, size_t bufsz,
 
 	trim_quotes(name);
 
-	//printf("name=%s\n",name);
-	//printf("version_id=%s\n",version_id);
-	//printf("build_id=%s\n",build_id);
+	//deckard_log("name=%s\n",name);
+	//deckard_log("version_id=%s\n",version_id);
+	//deckard_log("build_id=%s\n",build_id);
 
 	if(namefound && versionidfound && buildidfound) 
 		return 0;
@@ -69,7 +71,7 @@ static int parse_os_info(char *buf, size_t bufsz,
 	return 1;
 }
 
-int deckard_setup_bootmenu(void)
+int deckard_bootmenu_populate(void)
 {
 	char current_slot_menu_str[256] = {0};
 	char previous_slot_menu_str[256] = {0};
@@ -83,111 +85,107 @@ int deckard_setup_bootmenu(void)
 	if( usb_boot_mode )
 	{
 		//usb boot mode
-		env_set("bootmenu_title", "SteamOS : USB Boot");
+		env_set("bootmenu_title", "SteamOS (USB Boot)");
 		env_set("bootmenu_0", "USB Disk=setenv slottarget current"); //this means just continue booting
 	}
 	else
 	{
-		deckard_load_slot_info(current_slot_menu_str,256,previous_slot_menu_str,256);
+		deckard_build_slot_menu_items( current_slot_menu_str, sizeof(current_slot_menu_str),
+			previous_slot_menu_str,	sizeof(previous_slot_menu_str) );
+
 		//normal boot
 		env_set("bootmenu_title", "SteamOS");
 		env_set("bootmenu_0", current_slot_menu_str);
 		env_set("bootmenu_1", previous_slot_menu_str);
 		env_set("bootmenu_2", "Boot from USB=setenv slottarget usb");
 		env_set("bootmenu_3", "  -- ERASE USER DATA FROM FRAME --=setenv slottarget current && setenv factoryreset 1");
-		// TODO: add advanced option to add fastboot
 	}
+
+	// TODO: add advanced option to add fastboot
+
 	env_set("bootmenu_delay", "15");
 	env_set("bootdefault", "0");
 	
 	return 0;
 }
 
-static int enable_factory_reset_if_needed(void)
+static int do_factory_reset(void)
 {
-	char cfg_file_contents[]="factorreset\n";
+	char cfg_file_contents[]="factoryreset\n"; // We can write anything into this file, it just needs to exist
 	char cmdstr[256] = {0};
 	char addr[19] = {0};
 	char *buffer;
 	enum disk_interface_t disk_interface = DISK_INTERFACE_SCSI;
 
-	if (env_get("factoryreset") && !strcmp(env_get("factoryreset"), "1"))
-	{
-		printf("factory reset: creating file in /efi/steamos/factory-reset/factoryreset.cfg\n");
-		snprintf(cmdstr,256,"mkdir %s %s /efi", disk_interface_to_str(disk_interface), DECKARD_ESP_PARTITION); run_command(cmdstr,0);
-		memset(cmdstr, '\0', sizeof(cmdstr));
-		snprintf(cmdstr,256,"mkdir %s %s /efi/steamos", disk_interface_to_str(disk_interface), DECKARD_ESP_PARTITION); run_command(cmdstr,0);
-		memset(cmdstr, '\0', sizeof(cmdstr));
-		snprintf(cmdstr,256,"mkdir %s %s /efi/steamos/factory-reset", disk_interface_to_str(disk_interface), DECKARD_ESP_PARTITION); run_command(cmdstr,0);
-		
-		buffer = malloc_cache_aligned(strlen(cfg_file_contents));
-		if(!buffer) return -1;
-		sprintf(addr, "0x%08lx", (ulong)map_to_sysmem(buffer));
-		memcpy(buffer,cfg_file_contents,strlen(cfg_file_contents));
-		memset(cmdstr, '\0', sizeof(cmdstr));
-		snprintf(cmdstr,256,"save %s %s %s /efi/steamos/factory-reset/factoryreset.cfg %d",
-							disk_interface_to_str(disk_interface), DECKARD_ESP_PARTITION, addr, (int)strlen(cfg_file_contents));
-		printf("cmdstr=[%s]\n",cmdstr);
-		run_command(cmdstr,0);
-		printf("factory reset: file create done\n");
-		free(buffer);
-	}
+	deckard_log("factory reset: creating file in /efi/steamos/factory-reset/factoryreset.cfg\n");
+	snprintf(cmdstr,256,"mkdir %s %s /efi", disk_interface_to_str(disk_interface), DECKARD_ESP_PARTITION); run_command(cmdstr,0);
+	memset(cmdstr, '\0', sizeof(cmdstr));
+	snprintf(cmdstr,256,"mkdir %s %s /efi/steamos", disk_interface_to_str(disk_interface), DECKARD_ESP_PARTITION); run_command(cmdstr,0);
+	memset(cmdstr, '\0', sizeof(cmdstr));
+	snprintf(cmdstr,256,"mkdir %s %s /efi/steamos/factory-reset", disk_interface_to_str(disk_interface), DECKARD_ESP_PARTITION); run_command(cmdstr,0);
+	
+	buffer = malloc_cache_aligned(strlen(cfg_file_contents));
+	if(!buffer) return -1;
+	sprintf(addr, "0x%08lx", (ulong)map_to_sysmem(buffer));
+	memcpy(buffer,cfg_file_contents,strlen(cfg_file_contents));
+	memset(cmdstr, '\0', sizeof(cmdstr));
+	snprintf(cmdstr,256,"save %s %s %s /efi/steamos/factory-reset/factoryreset.cfg %d",
+						disk_interface_to_str(disk_interface), DECKARD_ESP_PARTITION, addr, (int)strlen(cfg_file_contents));
+	deckard_log("cmdstr=[%s]\n",cmdstr);
+	run_command(cmdstr,0);
+	deckard_log("factory reset: file create done\n");
+	free(buffer);
 
 	return 0;
 }
 
 
-int deckard_boot_menu_handle_actions(void)
+int deckard_bootmenu_handle_actions(void)
 {
-	int bootother=0;
-	int bootusb=0;
+	deckard_log("deckard_bootmenu_handle_actions\n");
+
 	int reset_needed = 0;
-
-	enable_factory_reset_if_needed();
-
-	if (env_get("slottarget") && !strcmp(env_get("slottarget"), "current"))
+	const char * factoryreset = env_get("factoryreset");
+	if ( factoryreset && !strcmp(factoryreset, "1") )
 	{
-		bootother=0;
+		deckard_log("do_factory_reset\n");
+		do_factory_reset();
 	}
 
-	if (env_get("slottarget") && !strcmp(env_get("slottarget"), "previous"))
+	const char * slottarget = env_get("slottarget");
+	if ( slottarget )
 	{
-		bootother=1;
-	}
-
-	if (env_get("slottarget") && !strcmp(env_get("slottarget"), "usb"))
-	{
-		bootusb=1;
-	}
-
-	if(bootother)
-	{
-		if(get_booted_slot() == 'A')
+		deckard_log( "slottarget %s\n", slottarget );
+		if ( !strcmp( slottarget, "current") )
 		{
-			run_command("splctl force-slot B",0);
+			deckard_log( "Selected current target. do nothing\n" );
+		}
+		else if ( !strcmp( slottarget, "previous") )
+		{
+			char slot = get_booted_slot();
+			if( slot == 'A' )
+			{
+				deckard_log("splctl force-slot B\n");
+				run_command("splctl force-slot B",0);
+				reset_needed = 1;
+			}
+			else if(slot == 'B')
+			{
+				deckard_log("splctl force-slot A\n");
+				run_command("splctl force-slot A",0);
+				reset_needed = 1;
+			}
+		}
+		else if ( !strcmp( slottarget, "usb") )
+		{
+
+			deckard_log("splctl force-usb\n");
+			run_command("splctl force-usb",0);
 			reset_needed = 1;
 		}
-		
-		if(get_booted_slot() == 'B')
-		{
-			run_command("splctl force-slot A",0);
-			reset_needed = 1;
-		}
 	}
 
-	if(bootusb)
-	{
-		run_command("splctl force-usb",0);
-		reset_needed = 1;
-	}
-	
-	//printf("----------------\n");
-	//printf("bootedslot=%c bootedslot=%s\n",bootedslot_char,bootedslot);
-	//printf("bootother=%d\n",bootother);
-	//printf("bootusb=%d\n",bootusb);
-	//printf("----------------\n");
-
-	if(reset_needed)
+	if ( reset_needed )
 	{
 		printf("resetting...\n");
 		run_command("reset",0);
@@ -196,7 +194,7 @@ int deckard_boot_menu_handle_actions(void)
 	return 0;
 }
 
-static int deckard_load_slot_info(char * CURRENT_slot_menu_str, int CURRENT_slot_menu_str_sz, char * PREVIOUS_slot_menu_str, int PREVIOUS_slot_menu_str_sz)
+static int deckard_build_slot_menu_items(char * CURRENT_slot_menu_str, int CURRENT_slot_menu_str_sz, char * PREVIOUS_slot_menu_str, int PREVIOUS_slot_menu_str_sz)
 {
 	char cmdstr[256] = {0};
 	char * filecontents;
@@ -275,7 +273,7 @@ static int deckard_load_slot_info(char * CURRENT_slot_menu_str, int CURRENT_slot
 	}
 	if(!osreleasefilefound) 
 	{
-		printf("No valid os-release file found in B, using defaults\n");
+		deckard_log("No valid os-release file found in B, using defaults\n");
 		strncpy(name,"SteamOS",sizeof(name)); 
 		strncpy(version_id,"0.0.0",sizeof(version_id));
 		strncpy(build_id,"20000101.000000",sizeof(build_id));

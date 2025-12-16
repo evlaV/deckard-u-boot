@@ -7,7 +7,7 @@
 #ifndef __DECKARD_BOOTMENU_H
 #define __DECKARD_BOOTMENU_H
 
-int deckard_setup_bootmenu(void);
-int deckard_boot_menu_handle_actions(void);
+int deckard_bootmenu_populate(void);
+int deckard_bootmenu_handle_actions(void);
 
 #endif

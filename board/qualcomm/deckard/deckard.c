@@ -106,8 +106,6 @@ bool deckard_efi_enabled(void) {
 	return g_deckard_efi_mode != EFI_MODE_DISABLED;
 }
 
-int enable_factory_reset_if_needed(void);
-
 // #define CHECK_PMICS
 #ifdef CHECK_PMICS
 void check_pmic(const char *const pmic_dts, const char *const pmic_name)
@@ -1001,18 +999,33 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 	*p_boot_intention = boot_intention;
 }
 
-int deckard_show_boot_menu(void) 
+static void deckard_do_bootmenu(void)
 {
+	deckard_log("populate bootmenu\n");
+	deckard_bootmenu_populate();
+
+	// Turn on the display
 	display_turn_on();
+
+	// Turn on the VR Console
 	g_total_console_state |= VIDEO_CONSOLE_MASK;
 	console_state_handler();
+
 	mdelay(500);
 
 	// This blocks until the user returns from the bootmenu
 	// see common/menu.c , bootmenu_loop
 	run_command("bootmenu",0);
 	
-	return 0;
+	// Hides the boot menu upon completion
+	// Otherwise logging in deckard_bootmenu_handle_actions makes it to the screen
+	g_total_console_state &= ~VIDEO_CONSOLE_MASK;
+	console_state_handler();
+
+	mdelay(500);
+
+	deckard_log("handle bootmenu actions\n");
+	deckard_bootmenu_handle_actions();
 }
 
 // per arm64 linux boot documenation, default text_offset is 0x80000
@@ -1174,13 +1187,7 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 
 	if ( g_boot_intention == BOOT_INTENTION_BOOT_MENU )
 	{
-		deckard_log("setup bootmenu\n");
-		deckard_setup_bootmenu();
-		deckard_log("show bootmenu\n");
-		deckard_show_boot_menu();
-		// you cannot print here, or it will show in the boot menu!
-		deckard_boot_menu_handle_actions();
-		deckard_log("handled bootmenu actions\n");
+		deckard_do_bootmenu();
 	}
 
 	//even though we are about to turn the display off, we fill the framebuffer with the boot logo
@@ -1226,7 +1233,7 @@ int deckard_logo_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 
 int deckard_bootmenu_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
-	deckard_show_boot_menu();
+	deckard_do_bootmenu();
 	return 0;
 }
 
@@ -1245,5 +1252,5 @@ U_BOOT_LONGHELP(deckard_bootmenu,
 
 U_BOOT_CMD(
 	deckard_bootmenu, CONFIG_SYS_MAXARGS,     1,      deckard_bootmenu_cmd,
-    "Deckard display logo", deckard_bootmenu_help_text
+    "Deckard Boot Menu", deckard_bootmenu_help_text
 );
