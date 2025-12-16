@@ -24,6 +24,7 @@
 #include <command.h>
 #include <dm/device-internal.h>
 #include <fs.h>
+#include <fs_loader.h>
 #include <image.h>
 #include <sysreset.h>
 #include <splash.h>
@@ -174,36 +175,55 @@ int usb_setup(void)
 	return run_command("usb start", 0);
 }
 
+static void deckard_log_argv(const char *tag, int argc, char *const argv[])
+{
+	int i;
+
+	deckard_log("%s: argc=%d\n", tag, argc);
+	for (i = 0; i < argc; i++) {
+		deckard_log("%s: argv[%d]=%p '%s'\n",
+			    tag, i, argv[i], argv[i] ? argv[i] : "<NULL>");
+	}
+}
+
 static int deckard_load_image(const char * logo_name, ulong addr )
 {
-	/* Setup load address */
 	char loadaddr_arg[LOADADDRMAXLEN] = { 0 }; //e.g. "0xa7000000"
 	snprintf(loadaddr_arg, LOADADDRMAXLEN, "0x%lx", addr);
 
-	char logo_arg[LOGO_PATHMAX + 1] = { 0 };
-	snprintf(logo_arg, LOGO_PATHMAX, "/steamos/%s", logo_name); //not case sensitive
+	char * interface_str = disk_interface_to_str( booted_from_usb() ? DISK_INTERFACE_USB : DISK_INTERFACE_SCSI );
 
-	char deckard_firmware_part[DEVPARTMAXLEN] = { 0 }; //e.g. "1:d"
-	if ( deckard_get_dev_part_str_buf( deckard_get_booted_firmware_slotname(),
-		&deckard_firmware_part[0], sizeof(deckard_firmware_part ) ) != 0 )
+	// Attempt to load the image from the ESP partition
 	{
-		return 1;
+		char filename[LOGO_PATHMAX + 1] = { 0 };
+		snprintf(filename, LOGO_PATHMAX, "/steamos/%s", logo_name); // beware case 
+
+		char *argv[] = { "", interface_str, (char *) deckard_get_booted_esp_part(), loadaddr_arg, filename };
+		int argc = 5;
+
+		if ( !do_load(NULL, 0, argc, argv, FS_TYPE_ANY ) )
+		{
+			deckard_log("deckard_load_image: loaded splash from ESP!\n");
+			return 0;
+		}
 	}
 
-	char *argv[] = { "",
-			disk_interface_to_str( booted_from_usb() ? DISK_INTERFACE_USB : DISK_INTERFACE_SCSI ),
-			deckard_firmware_part, loadaddr_arg, logo_arg };
-	int argc = 5;
-	if (!do_load(NULL, 0, argc, argv, FS_TYPE_ANY)) {
-		log_debug("Deckard: loaded splash from ESP!\n");
-		return 0;
+	deckard_log( "deckard_load_image: could not find image %s on ESP, falling back to firmware partition\n", logo_name );
+
+	// Fall back to firmware partition
+	{
+		// 'j' during boot to get shell, then...
+		//  ls scsi 2:5   (or whatever fs_firmware_get_partition() is to see files)
+
+		char filename[LOGO_PATHMAX + 1] = { 0 };
+		snprintf(filename, LOGO_PATHMAX, "/%s", logo_name); // beware case
+	
+		char *argv[] = { "", interface_str, (char * ) fs_firmware_get_partition(), loadaddr_arg, filename };
+		int argc = 5;
+
+		return do_load(NULL, 0, argc, argv, FS_TYPE_ANY);
 	}
-	log_warning("Deckard: using splash image from firmware partition\n");
 
-
-	snprintf(logo_arg, LOGO_PATHMAX, "/%s", logo_name);
-
-	return do_load(NULL, 0, argc, argv, FS_TYPE_ANY);
 }
 
 static void deckard_display_image( const char * filename )
@@ -583,10 +603,9 @@ int misc_init_r(void)
 	deckard_log( "g_boot_intention %d\n", g_boot_intention );
 
 	// Set LED Color
-	deckard_setledcolor(
-		get_led_color_for_boot_intention( g_boot_intention ),
-		&g_deckard_devices );
-	deckard_log( "set led to boot intention color\n" );
+	LedColor ledColor = get_led_color_for_boot_intention( g_boot_intention );
+	deckard_setledcolor( ledColor, &g_deckard_devices );
+	deckard_log( "set led to boot intention color %d\n", (int) ledColor );
 
 	// SHOW BOOT IMAGE
 	if ( g_boot_intention == BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY )
@@ -601,7 +620,9 @@ int misc_init_r(void)
 	}
 	else
 	{
-		deckard_display_image( get_image_filename_for_boot_intention( g_boot_intention ) );
+		const char * image = get_image_filename_for_boot_intention( g_boot_intention );
+		deckard_log( "showing image for boot intention %s\n", image ? image : "no image" );
+		deckard_display_image( image );
 	}
 
 	// SETUP CUSTOM STATE TO EXECUTE ON BOOT INTENTION
