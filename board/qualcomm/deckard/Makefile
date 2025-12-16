@@ -11,7 +11,7 @@ endif
 warn_flags := -Wextra -Werror -Wformat=2 \
 	-Wno-unused-parameter -Wno-unused-function \
 	-Wno-unused-variable -Wno-sign-compare \
-	-Wformat -Wformat-security
+	-Wformat -Wformat-security -Wshadow=compatible-local
 
 ccflags-y += $(warn_flags)
 subdir-ccflags-y += $(warn_flags)
