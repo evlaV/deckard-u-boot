@@ -651,13 +651,10 @@ int misc_init_r(void)
 	char * reboot_mode = env_get("reboot_mode");
 	int fastbootmode = 0;
 	int edlmode = 0;
-	int usbmode = 0;
 	if (reboot_mode && (reboot_mode[0] == 'f' ))
 		fastbootmode = 1;
 	else if (reboot_mode && (reboot_mode[0] == 'e' ))
 		edlmode = 1;
-	else if (reboot_mode && (reboot_mode[0] == 'u' ))
-		usbmode = 1;
 
 	/* cleanup all reboot_mode setups if any */
 	deckard_log( "deckard_reboot_mode_clean\n" );
@@ -712,7 +709,8 @@ int misc_init_r(void)
 		deckard_reboot_mode_edl();
 	}
 
-	if (usbmode) {
+	if ( g_boot_intention == BOOT_INTENTION_BOOT_FROM_USB )
+	{
 		//TODO: gaber this is likely interfering with USB boot
 		deckard_log("Starting usb mode...\n");
 		int ret = deckard_reboot_mode_usb();

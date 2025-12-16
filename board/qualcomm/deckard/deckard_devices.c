@@ -153,6 +153,8 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices, int assume_b
 		{
 			case 'b':
 				return BOOT_INTENTION_BOOTLOADER;
+			case 'u':
+				return BOOT_INTENTION_BOOT_FROM_USB;
 			default:
 				break;
 		}
