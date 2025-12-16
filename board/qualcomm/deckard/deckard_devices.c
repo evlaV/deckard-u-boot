@@ -1,7 +1,8 @@
 #include "deckard_devices.h"
 
-#include <led.h>
 #include <button.h>
+#include <env.h>
+#include <led.h>
 #include <power/pmic.h>
 
 #include "pm8550vs.h"
@@ -141,8 +142,30 @@ static combined_button_state_t deckard_get_button_state( deckard_devices_t * pde
 
 boot_intention_t calc_boot_intention( deckard_devices_t * pdevices, int assume_boot_up_desired )
 {
-	int boot_up_desired;
+	// These boot-up modes (those which are dev centric) blindly obey "reboot_mode"
+	// Note that in some cases like 'b', they are set from the OS (user-space)
+	// so do not expect to see the corresponding setter in uboot!
 
+	char * reboot_mode = env_get("reboot_mode");
+	if ( reboot_mode )
+	{
+		switch ( *reboot_mode )
+		{
+			case 'b':
+				return BOOT_INTENTION_BOOTLOADER;
+			default:
+				break;
+		}
+	}
+
+	// Next, if we're in factory mode, dont worry about any other cases
+	if ( deckard_factory_mode_enabled() )
+	{
+		return BOOT_INTENTION_START_USERSPACE;
+	}
+
+	// Figure out if boot-up (to kernel, etc) is desired.
+	int boot_up_desired = false;
 	if ( assume_boot_up_desired )
 	{
 		boot_up_desired = true;
@@ -267,4 +290,10 @@ void deckard_setledcolor( LedColor color, deckard_devices_t * pdevices )
 		if ( pdevices->led_blue )
 			led_set_state(pdevices->led_blue, LEDST_OFF);
 	}
+}
+
+
+bool deckard_factory_mode_enabled( void )
+{
+	return ( env_get_ulong( "factory-mode", 10, 0 ) != 0 ); // defaults to off
 }

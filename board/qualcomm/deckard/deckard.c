@@ -71,8 +71,12 @@ static void deckard_load_and_display_image_for_boot_intention( boot_intention_t 
 int deckard_check_for_key_press(void);
 static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_devices_t * pdevices );
 
+// Normal physical uart serial port
 #define SERIAL_CONSOLE_MASK 0b100
+// USB_CONSOLE_MASK emulates a serial port device over type-c
 #define USB_CONSOLE_MASK 0b010
+// VIDEO_CONSOLE_MASK is the VR specific console (when enabled)
+// requires the display to be enabled
 #define VIDEO_CONSOLE_MASK 0b001
 enum combined_serial_console_state_t {
 	SERIAL_OFF__USB_OFF__VID_OFF = 0,
@@ -169,9 +173,7 @@ static void deckard_disable_watchdog(void)
 
 int usb_setup(void)
 {
-	run_command("usb start", 0);
-
-	return 0;
+	return run_command("usb start", 0);
 }
 
 static int deckard_load_image(char * logo_name)
@@ -437,10 +439,6 @@ int fastboot_set_reboot_flag(enum fastboot_reboot_reason reason)
 		deckard_log("Setting reboot to fastboot flag ...\n");
 		env_set("reboot_mode", "f");
 		env_save();
-	} else if (reason == FASTBOOT_REBOOT_REASON_BOOTLOADER) {
-		deckard_log("Setting reboot to bootloader flag ...\n");
-		env_set("reboot_mode", "b");
-		env_save();
 	} else if (reason == FASTBOOT_REBOOT_REASON_OEM_EDL) {
 		deckard_log("Rebooting to EDL mode ...\n");
 		env_set("reboot_mode", "e");
@@ -491,8 +489,12 @@ void setup_boot_intention_global_state( boot_intention_t boot_intention )
 			break;
 		case BOOT_INTENTION_CONSOLE_WAIT:
 			g_total_console_state |= USB_CONSOLE_MASK;
-			g_total_console_state |= VIDEO_CONSOLE_MASK;
+			g_total_console_state |= VIDEO_CONSOLE_MASK; // warning: display must be on for this to not fail
 			env_set("bootdelay","20");
+			break;
+		case BOOT_INTENTION_BOOTLOADER:
+			g_total_console_state |= USB_CONSOLE_MASK;
+			env_set("bootdelay","-1");
 			break;
 		default:
 			break;
@@ -546,12 +548,14 @@ int misc_init_r(void)
 	}
 
 	deckard_log( "init_esp\n" );
+	// TODO: This does set esp_part, but nobody uses it!
 	init_esp();
 
 	deckard_log( "deckard_disable_watchdog\n" );
 	deckard_disable_watchdog();
 
 	deckard_log( "deckard_setup_devices\n" );
+	// TODO: pull out the prep battery for boot into a separate function
 	int nsetuperror = deckard_setup_devices( &g_deckard_devices );
 
 	deckard_log( "set led white\n" );
@@ -560,7 +564,7 @@ int misc_init_r(void)
 	if( booted_from_usb() )
 	{
 		deckard_log( "usb_setup\n" );
-		usb_setup();
+		usb_setup(); // TODO: look at result?
 	}
 
 	if ( nsetuperror )
@@ -569,7 +573,7 @@ int misc_init_r(void)
 		// TODO: if fatal error, show an error display screen if possible
 	}
 
-	g_factory_mode = ( env_get_ulong("factory-mode", 10, 0 ) ); // defaults to off
+	g_factory_mode = deckard_factory_mode_enabled();
 	deckard_log( "Factory mode: %d\n", g_factory_mode );
 
 	g_display_enabled = g_factory_mode ? 0 : env_get_ulong( "display", 10, 1 ); // defaults to on in non-factory mode
@@ -582,6 +586,7 @@ int misc_init_r(void)
 		display_turn_off_force();
 	}
 	
+	// Give devs the opportunity to use a big hammer to force stuff on
 	if (env_get_ulong("vidconsole_enable", 10, 0) == 1)
 	{
 		g_total_console_state |= VIDEO_CONSOLE_MASK;
@@ -594,7 +599,7 @@ int misc_init_r(void)
 	}
 
 	// CALC POWER-ON BOOT INTENTION
-	g_boot_intention = g_factory_mode ? BOOT_INTENTION_START_USERSPACE : calc_boot_intention( &g_deckard_devices, 0 );
+	g_boot_intention = calc_boot_intention( &g_deckard_devices, 0 );
 	deckard_log( "g_boot_intention %d\n", g_boot_intention );
 
 	// Set LED Color
@@ -605,9 +610,11 @@ int misc_init_r(void)
 
 	// SHOW BOOT IMAGE
 	if ( g_boot_intention == BOOT_INTENTION_CHARGE_AND_WAIT ||
-		g_boot_intention == BOOT_INTENTION_CONSOLE_WAIT )
+		g_boot_intention == BOOT_INTENTION_CONSOLE_WAIT || 
+		g_boot_intention == BOOT_INTENTION_BOOTLOADER )
 	{
-		// intentionally dont show an image	
+		// intentionally dont show an image. Also keeps the display off
+		// (if it was previously off)
 	}
 	else if ( g_boot_intention == BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY )
 	{
@@ -621,6 +628,8 @@ int misc_init_r(void)
 	}
 	else
 	{
+		// We've now decided we want to show the user a splash image.
+		// Do it!
 		deckard_log( "load and display image\n" );
 		deckard_load_and_display_image_for_boot_intention( g_boot_intention );
 	}
@@ -641,13 +650,10 @@ int misc_init_r(void)
 	// TODO: Add enum for reboot_mode?
 	char * reboot_mode = env_get("reboot_mode");
 	int fastbootmode = 0;
-	int bootloadermode = 0;
 	int edlmode = 0;
 	int usbmode = 0;
 	if (reboot_mode && (reboot_mode[0] == 'f' ))
 		fastbootmode = 1;
-	else if (reboot_mode && (reboot_mode[0] == 'b' ))
-		bootloadermode = 1;
 	else if (reboot_mode && (reboot_mode[0] == 'e' ))
 		edlmode = 1;
 	else if (reboot_mode && (reboot_mode[0] == 'u' ))
@@ -680,7 +686,8 @@ int misc_init_r(void)
 	/* Check if special boot mode (fastboot, bootloader, edl) was setup */
 	if(fastbootmode) {
 		deckard_log("Starting fastboot mode...\n");
-		env_set("kernel_addr_r","90000000"); //is this right?
+		// TODO: make this consistent with the other user of kernel_addr_r, which has a leading 0x prefix
+		env_set("kernel_addr_r","90000000");
 		/*
 		 * serial# is a special var, like ethaddr, they are defined as
 		 * write-once as a protection, we want to maintain that protection
@@ -698,11 +705,6 @@ int misc_init_r(void)
 		display_turn_off();
 
 		run_command("fastboot -l 0x880000000 -s 0x10000000 usb 0", 0);
-	}
-
-	if (bootloadermode) {
-		deckard_log("Starting bootloader mode...\n");
-		env_set("bootdelay", "-1");
 	}
 
 	if (edlmode) {
@@ -884,7 +886,10 @@ void show_boot_progress(int progress)
 	display_turn_off();
 }
 
-static bool should_wait_to_boot( boot_intention_t boot_intention )
+// TODO: move all functions which are just big switch statements which
+// are required for all cases... pull into common stop in deckard_devices
+
+static bool deckard_should_wait( boot_intention_t boot_intention )
 {
 	switch ( boot_intention )
 	{
@@ -893,10 +898,12 @@ static bool should_wait_to_boot( boot_intention_t boot_intention )
 		case BOOT_INTENTION_BOOT_FROM_USB:
 		case BOOT_INTENTION_FASTBOOT:
 		case BOOT_INTENTION_CONSOLE_WAIT:
+		case BOOT_INTENTION_BOOTLOADER:
 			return false;
 
 		case BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY:
 		case BOOT_INTENTION_CHARGE_AND_WAIT:
+		// it would be cool to omit default and let the compile flag if we missed a case, but it doesnt work
 		default:
 			return true;
 	}
@@ -960,9 +967,10 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 	// TODO: also do not use the i2c bus that the ADSP is on.  It needs it for
 	// power negotiation
 
-	while( should_wait_to_boot( boot_intention ) )
+	while ( true )
 	{
 		// Start the ADSP to allow charging
+		// TODO: throttle this, if for some reason we cant start?
 		if ( !adsp_loaded && deckard_battery_ok_for_dsp( pdevices->max17320 ) )
 		{
 			deckard_setledcolor( LED_COLOR_OFF, &g_deckard_devices );
@@ -970,32 +978,35 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 		}
 
 		// Watch for power button click
-		int latest_power_button_down = ( button_get_state( pdevices->btn_power ) == BUTTON_ON );
-		if ( latest_power_button_down && power_button_down != latest_power_button_down )
 		{
-			// Update our boot intention on a click
-			boot_intention = calc_boot_intention( pdevices, 1 );
-			deckard_log( "User power button pressed. boot_intention:%d\n", boot_intention );
-			
-			if ( boot_intention == BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY )
+			int latest_power_button_down = ( button_get_state( pdevices->btn_power ) == BUTTON_ON );
+			if ( latest_power_button_down && power_button_down != latest_power_button_down )
 			{
-				if ( !adsp_loaded )
+				// Update our boot intention on a click
+				boot_intention = calc_boot_intention( pdevices, 1 );
+				deckard_log( "User power button pressed. boot_intention:%d\n", boot_intention );
+				
+				if ( boot_intention == BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY )
 				{
-					deckard_setledcolor( LED_COLOR_RED, &g_deckard_devices );
+					if ( !adsp_loaded )
+					{
+						deckard_setledcolor( LED_COLOR_RED, &g_deckard_devices );
+					}
+
+					// TODO: only show if battery is ok to show
+					deckard_load_and_display_image_for_boot_intention( boot_intention );
+					deckard_display_off_counter = k_nBatteryImageCount;
 				}
 
-				// TODO: only show if battery is ok to show
-				deckard_load_and_display_image_for_boot_intention( boot_intention );
-				deckard_display_off_counter = k_nBatteryImageCount;
+				// Is it time to exit our loop?
+				if ( !deckard_should_wait( boot_intention ) )
+				{
+					break;
+				}
 			}
 
-			if ( !should_wait_to_boot( boot_intention ) )
-			{
-				break;
-			}
+			power_button_down = latest_power_button_down;
 		}
-
-		power_button_down = latest_power_button_down;
 
 #if 0
 		//may want to check for keyboard press for some reason or another here
