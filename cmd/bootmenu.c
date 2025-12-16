@@ -126,10 +126,8 @@ static char *bootmenu_choice_entry(void *data)
 				iter = iter->next;
 			return iter->key;
 		case BKEY_QUIT:
-			/* Quit by choosing the last entry */
+			/* VALVE: Quit by choosing the FIRST entry */
 			iter = menu->first;
-			while (iter->next)
-				iter = iter->next;
 			return iter->key;
 		default:
 			break;
