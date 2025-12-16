@@ -95,6 +95,7 @@ int deckard_setup_bootmenu(void)
 		env_set("bootmenu_1", previous_slot_menu_str);
 		env_set("bootmenu_2", "Boot from USB=setenv slottarget usb");
 		env_set("bootmenu_3", "  -- ERASE USER DATA FROM FRAME --=setenv slottarget current && setenv factoryreset 1");
+		// TODO: add advanced option to add fastboot
 	}
 	env_set("bootmenu_delay", "15");
 	env_set("bootdefault", "0");

@@ -484,9 +484,6 @@ void setup_boot_intention_global_state( boot_intention_t boot_intention )
 			g_deckard_efi_mode = EFI_MODE_ONESHOT;
 			usb_init(); // Initialise USB to detect external storage before EFI comes up
 			break;
-		case BOOT_INTENTION_FASTBOOT:
-			env_set("reboot_mode", "f");
-			break;
 		case BOOT_INTENTION_CONSOLE_WAIT:
 			g_total_console_state |= USB_CONSOLE_MASK;
 			g_total_console_state |= VIDEO_CONSOLE_MASK; // warning: display must be on for this to not fail
@@ -611,7 +608,8 @@ int misc_init_r(void)
 	// SHOW BOOT IMAGE
 	if ( g_boot_intention == BOOT_INTENTION_CHARGE_AND_WAIT ||
 		g_boot_intention == BOOT_INTENTION_CONSOLE_WAIT || 
-		g_boot_intention == BOOT_INTENTION_BOOTLOADER )
+		g_boot_intention == BOOT_INTENTION_BOOTLOADER ||
+		g_boot_intention == BOOT_INTENTION_FASTBOOT	)
 	{
 		// intentionally dont show an image. Also keeps the display off
 		// (if it was previously off)
@@ -649,11 +647,8 @@ int misc_init_r(void)
 	 */
 	// TODO: Add enum for reboot_mode?
 	char * reboot_mode = env_get("reboot_mode");
-	int fastbootmode = 0;
 	int edlmode = 0;
-	if (reboot_mode && (reboot_mode[0] == 'f' ))
-		fastbootmode = 1;
-	else if (reboot_mode && (reboot_mode[0] == 'e' ))
+	if (reboot_mode && (reboot_mode[0] == 'e' ))
 		edlmode = 1;
 
 	/* cleanup all reboot_mode setups if any */
@@ -681,7 +676,7 @@ int misc_init_r(void)
 	deckard_log("booted_slot: %s\n", env_get("booted_slot"));
 
 	/* Check if special boot mode (fastboot, bootloader, edl) was setup */
-	if(fastbootmode) {
+	if( g_boot_intention == BOOT_INTENTION_FASTBOOT ) {
 		deckard_log("Starting fastboot mode...\n");
 		// TODO: make this consistent with the other user of kernel_addr_r, which has a leading 0x prefix
 		env_set("kernel_addr_r","90000000");

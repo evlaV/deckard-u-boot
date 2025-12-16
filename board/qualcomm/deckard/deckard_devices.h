@@ -24,6 +24,7 @@ typedef enum
 // TODO: Major bootloader bug: You cannot charge with DSP in the current bootloader implementation
 // We drop to a shell before charge and wait completes, so we dont have charging!
 // Refactor misc_init_r and deckard boot so that charging is enabled during console_wait?
+// TODO: We also (likely) want the same charge behavior in BOOT_INTENTION_FASTBOOT
 
 /*
 bootloader mode:  reboot and stop in uboot.  disable autoboot. like console wait, but instead of waiting 20s to
