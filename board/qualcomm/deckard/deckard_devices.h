@@ -19,6 +19,7 @@ typedef enum
 	BOOT_INTENTION_FASTBOOT,
 	BOOT_INTENTION_CONSOLE_WAIT,
 	BOOT_INTENTION_BOOTLOADER,  // like console wait, but indefinitely hold off autoboot
+	BOOT_INTENTION_EDL
 } boot_intention_t;
 
 // TODO: Major bootloader bug: You cannot charge with DSP in the current bootloader implementation

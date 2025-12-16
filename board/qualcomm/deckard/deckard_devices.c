@@ -157,6 +157,8 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices, int assume_b
 				return BOOT_INTENTION_BOOT_FROM_USB;
 			case 'f':
 				return BOOT_INTENTION_FASTBOOT;
+			case 'e':
+				return BOOT_INTENTION_EDL;
 			default:
 				break;
 		}

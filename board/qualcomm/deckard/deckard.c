@@ -302,12 +302,16 @@ int enable_ramoops_serial_console(void)
 	return 0;
 }
 
-static void deckard_reboot_mode_clean(void)
+static void deckard_clear_reboot_mode_from_env(void)
 {
 	if (!env_get("reboot_mode"))
 		return;
 
+	// WARNING: If this fails (and reboot_mode is stuck enabled)
+	// this will become a boot loop!
+
 	env_set("reboot_mode", "");
+	// TODO: make this a more surgical edit of env
 	env_save();
 	mdelay(1000);
 }
@@ -414,7 +418,7 @@ static int deckard_reboot_mode_usb(void)
 	return 0;
 }
 
-static void deckard_reboot_mode_edl(void)
+static int deckard_reboot_mode_edl(void)
 {
 	/*
 	 * Setup the boot_misc to 0x1 for EDL, 0x10 is minidump,
@@ -423,7 +427,7 @@ static void deckard_reboot_mode_edl(void)
 	 * our platform has it disable by default.
 	 */
 	writel(0x1, TCSR_BOOT_MISC_DETECT);
-	sysreset_walk(SYSRESET_WARM);
+	return sysreset_walk(SYSRESET_WARM);
 }
 
 #if IS_ENABLED(CONFIG_FASTBOOT) && !CONFIG_IS_ENABLED(ENV_IS_NOWHERE)
@@ -600,6 +604,7 @@ int misc_init_r(void)
 	deckard_log( "g_boot_intention %d\n", g_boot_intention );
 
 	// Set LED Color
+	// TODO: consider setting weirder colors for the weirder modes
 	deckard_setledcolor(
 		( g_boot_intention == BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY ) ? LED_COLOR_RED : LED_COLOR_WHITE,
 		&g_deckard_devices );
@@ -609,7 +614,8 @@ int misc_init_r(void)
 	if ( g_boot_intention == BOOT_INTENTION_CHARGE_AND_WAIT ||
 		g_boot_intention == BOOT_INTENTION_CONSOLE_WAIT || 
 		g_boot_intention == BOOT_INTENTION_BOOTLOADER ||
-		g_boot_intention == BOOT_INTENTION_FASTBOOT	)
+		g_boot_intention == BOOT_INTENTION_FASTBOOT	|| 
+		g_boot_intention == BOOT_INTENTION_EDL )
 	{
 		// intentionally dont show an image. Also keeps the display off
 		// (if it was previously off)
@@ -639,21 +645,9 @@ int misc_init_r(void)
 	g_total_console_state |= SERIAL_CONSOLE_MASK; //seems likely we always need this on otherwise will get crashes / sync abort handler loops?
 	console_state_handler();
 
-	/*
-	 * Check if we have a special boot command
-	 * f - for fastboot and b - to stay in bootloader
-	 * mode, i.e, interrupt autoboot
-	 * and e - for edl mode
-	 */
-	// TODO: Add enum for reboot_mode?
-	char * reboot_mode = env_get("reboot_mode");
-	int edlmode = 0;
-	if (reboot_mode && (reboot_mode[0] == 'e' ))
-		edlmode = 1;
-
 	/* cleanup all reboot_mode setups if any */
-	deckard_log( "deckard_reboot_mode_clean\n" );
-	deckard_reboot_mode_clean();
+	deckard_log( "deckard_clear_reboot_mode_from_env\n" );
+	deckard_clear_reboot_mode_from_env();
 
 	// get board data from eeprom
 	deckard_log( "deckard_eeprom_init\n" );
@@ -699,7 +693,8 @@ int misc_init_r(void)
 		run_command("fastboot -l 0x880000000 -s 0x10000000 usb 0", 0);
 	}
 
-	if (edlmode) {
+	if ( g_boot_intention == BOOT_INTENTION_EDL )
+	{
 		deckard_log("Rebooting to EDL mode...\n");
 		deckard_reboot_mode_edl();
 	}
@@ -896,6 +891,7 @@ static bool deckard_should_wait( boot_intention_t boot_intention )
 
 		case BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY:
 		case BOOT_INTENTION_CHARGE_AND_WAIT:
+		case BOOT_INTENTION_EDL:
 		// it would be cool to omit default and let the compile flag if we missed a case, but it doesnt work
 		default:
 			return true;
@@ -1155,6 +1151,8 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 		deckard_wait_to_boot( &g_boot_intention, &g_deckard_devices );
 
 		// The boot intention has changed. Re setup the needed state
+		// TODO: This is no longer needed, now that we cannot transition
+		// to these particular boot intentions out of wait_to_boot
 		setup_boot_intention_global_state( g_boot_intention );
 	}
 
