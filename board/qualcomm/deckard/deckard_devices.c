@@ -217,34 +217,22 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices, int assume_b
 	else
 	{
 		combined_button_state_t button_state = deckard_get_button_state( pdevices );
-
-		// Some button are intended to work at true power on/reset, indepedent of boot_up_desired
-		switch( button_state )
+		if ( button_state == VOLUP_OFF__VOLDN_OFF__SELECT_ON )
 		{
-			case VOLUP_OFF__VOLDN_OFF__SELECT_ON:
-				return BOOT_INTENTION_BOOT_MENU;
-			case VOLUP_OFF__VOLDN_ON__SELECT_OFF:
-				return BOOT_INTENTION_FASTBOOT;
-			case VOLUP_OFF__VOLDN_ON__SELECT_ON:
-				return BOOT_INTENTION_BOOT_FROM_USB;
-			default:
-				break;
+			deckard_log("Select button pressed. Boot intention: boot menu\n");
+			return BOOT_INTENTION_BOOT_MENU;
 		}
-
-		if ( boot_up_desired )
+		else if ( boot_up_desired )
 		{
-			switch( button_state )
-			{
-				case VOLUP_ON__VOLDN_OFF__SELECT_OFF:
-					return BOOT_INTENTION_CONSOLE_WAIT;
-				case 0:
-				default:
-					return BOOT_INTENTION_START_USERSPACE;
-			}
+			return BOOT_INTENTION_START_USERSPACE;
+		}
+		else if ( !pdevices->btn_power )
+		{
+			deckard_log("ERROR: power button not found! Forcing bootloader active.\n");
+			return BOOT_INTENTION_BOOTLOADER;
 		}
 		else
 		{
-			deckard_log( "boot intention: charge and wait\n" );
 			return BOOT_INTENTION_CHARGE_AND_WAIT;
 		}
 	}

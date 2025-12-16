@@ -21,8 +21,11 @@ typedef enum
 	BOOT_INTENTION_BOOTLOADER,  // like console wait, but indefinitely hold off autoboot
 } boot_intention_t;
 
-/*
+// TODO: Major bootloader bug: You cannot charge with DSP in the current bootloader implementation
+// We drop to a shell before charge and wait completes, so we dont have charging!
+// Refactor misc_init_r and deckard boot so that charging is enabled during console_wait?
 
+/*
 bootloader mode:  reboot and stop in uboot.  disable autoboot. like console wait, but instead of waiting 20s to
 		autoboot, wait indefinitely.  TODO: should we bring up the console?  Intention is to give console.
 		TODO: Do we really need console wait and bootloader?
