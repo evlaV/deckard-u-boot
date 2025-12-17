@@ -902,8 +902,8 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 	bool adsp_loaded = 0;
 	bool in_shutdown = 0;
 
-	// This default implies a new discrete press will be required to retrigger,
-	// which is intentional
+	// This default allows for a launch on a subsequent power button
+	// release, if the user happens to enter the loop with it held
 	int power_button_down = ( button_get_state( pdevices->btn_power ) == BUTTON_ON );
 
 	// WARNING: Do not set LED color in the following loop when the ADSP is loaded
@@ -928,10 +928,10 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 			adsp_loaded = ( deckard_adsp_start() == 0 );
 		}
 
-		// Watch for power button click
+		// Watch for power button RELEASE to trigger
 		{
 			int latest_power_button_down = ( button_get_state( pdevices->btn_power ) == BUTTON_ON );
-			if ( latest_power_button_down && power_button_down != latest_power_button_down )
+			if ( !latest_power_button_down && power_button_down != latest_power_button_down )
 			{
 				// Update our boot intention on a click
 				boot_intention = calc_boot_intention( pdevices, 1 );
