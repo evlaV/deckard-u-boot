@@ -35,6 +35,8 @@
 #define PON_AOP_BOOT1_POFF_REASON1	   0x726C
 #define PON_AOP_BOOT1_OFF_REASON	   0x726D
 
+#define PON_PBS_SOFT_RB_SPARE 			0x7148
+
 #define PON_PBS_RAW_XVDD_RB_MASK             0x8000
 #define PON_PBS_RAW_DVDD_RB_MASK             0x4000
 #define PON_PBS_IMMEDIATE_XVDD_SHUTDOWN_MASK 0x2000
@@ -124,6 +126,48 @@ const char *pmk8550_get_pon_trigger_str(enum pon_reset_trigger trigger)
 	if (trigger < PON_RESET_TRIGGER_COUNT)
 		return pon_trigger_str[trigger];
 	return "Invalid";
+}
+
+int pmk8550_get_pbs_soft_rb_spare(struct udevice *pmic)
+{
+	int ret = pmic_reg_read(pmic, PON_PBS_SOFT_RB_SPARE);
+
+	return ret;
+}
+
+int pmk8550_set_pbs_soft_rb_spare(struct udevice *pmic, u8 val)
+{
+	int ret = pmic_reg_write(pmic, PON_PBS_SOFT_RB_SPARE,val);
+
+	return ret;
+}
+
+enum reboot_command_reason_t pmk8550_get_reboot_command_reason(struct udevice *pmic)
+{
+	enum reboot_command_reason_t reboot_command_reason;
+	int pbs_soft_rb = pmk8550_get_pbs_soft_rb_spare(pmic);
+	
+	printf("reason->pbs_soft_rb = %d\n",pbs_soft_rb);
+
+	reboot_command_reason = (pbs_soft_rb >> 1); //bits 7:1 are the reboot reason, bit 0 is unused
+
+	switch(reboot_command_reason)
+	{
+		case REBOOT_COMMAND_REASON_RECOVERY:
+			printf("reboot command reason: REBOOT_COMMAND_REASON_RECOVERY\n");
+			break;
+		case REBOOT_COMMAND_REASON_BOOTLOADER:
+			printf("reboot command reason: REBOOT_COMMAND_REASON_BOOTLOADER\n");
+			break;
+		case REBOOT_COMMAND_REASON_EDL:			
+			printf("reboot command reason: REBOOT_COMMAND_REASON_EDL\n");
+			break;
+		default:
+			printf("reboot command reason: NONE\n");
+			break;
+	}
+
+	return reboot_command_reason;
 }
 
 /// @brief Read the PON log to get the reset type & trigger
@@ -257,6 +301,8 @@ int pmk8550_get_on_off_reason(struct pon_on_off_reason *reason)
 	reason->pon_rtc_time = pmk8550_get_pon_rtc_time(pmic);
 
 	reason->power_button_release_rtc_time = pmk8550_get_power_button_release_rtc_time(pmic);
+
+	reason->reboot_command_reason = pmk8550_get_reboot_command_reason(pmic);
 
 	return 0;
 }

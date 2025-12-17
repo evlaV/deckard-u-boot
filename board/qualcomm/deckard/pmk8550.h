@@ -33,7 +33,16 @@ enum pon_reset_trigger {
 	PON_RESET_TRIGGER_COUNT
 };
 
-struct pon_on_off_reason {
+//these reasons here need to match what is in the kernel
+enum reboot_command_reason_t
+{
+	REBOOT_COMMAND_REASON_NONE          = 0x00,
+	REBOOT_COMMAND_REASON_RECOVERY      = 0x01,
+	REBOOT_COMMAND_REASON_BOOTLOADER    = 0x02,
+	REBOOT_COMMAND_REASON_EDL           = 0x04,
+ };
+
+ struct pon_on_off_reason {
 	enum pon_reset_type type;
 	enum pon_reset_trigger trigger;
 	struct {
@@ -46,6 +55,7 @@ struct pon_on_off_reason {
 	int pon_boot1_off_reason;
 	uint32_t pon_rtc_time;
 	uint32_t power_button_release_rtc_time;
+	enum reboot_command_reason_t reboot_command_reason;
 };
 
 const char *pmk8550_get_pon_trigger_str(enum pon_reset_trigger trigger);
