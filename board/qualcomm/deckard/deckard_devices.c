@@ -368,3 +368,8 @@ bool deckard_factory_mode_enabled( void )
 {
 	return ( env_get_ulong( "factory-mode", 10, 0 ) != 0 ); // defaults to off
 }
+
+bool deckard_adb_mode_enabled( void )
+{
+	return ( env_get_ulong( "adb-mode", 10, 0 ) != 0 ); // defaults to off
+}

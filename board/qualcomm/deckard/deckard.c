@@ -754,6 +754,20 @@ int ft_board_setup(void *fdt, struct bd_info *bd)
 		return ret;
 	}
 
+	ret = fdt_setprop_string(fdt, nodeoffset, "u-boot,factory-mode", deckard_factory_mode_enabled() ? "1": "0");
+	if (ret < 0) {
+		deckard_log("WARNING: could not set u-boot,factory-mode %s.\n",
+			   fdt_strerror(ret));
+		return ret;
+	}
+
+	ret = fdt_setprop_string(fdt, nodeoffset, "u-boot,adb-mode", deckard_adb_mode_enabled() ? "1": "0");
+	if (ret < 0) {
+		deckard_log("WARNING: could not set u-boot,adb-mode %s.\n",
+			   fdt_strerror(ret));
+		return ret;
+	}
+
 #ifdef ALLOW_OLD_ROOTFS_NAME_FALLBACK
 	/* add old rootfs fallback capability */
 	//this will indicate that u-boot has the ability to fall back to old rootfs
