@@ -487,6 +487,16 @@ U_BOOT_CMD(
 #endif
 #endif
 
+static int do_env_update(struct cmd_tbl *cmdtp, int flag, int argc,
+		      char *const argv[])
+{
+	if (argc < 2)
+		return CMD_RET_USAGE;
+
+	//todo pass in correct args
+	return env_update("test", "1");
+}
+
 #if defined(CONFIG_CMD_NVEDIT_LOAD)
 static int do_env_load(struct cmd_tbl *cmdtp, int flag, int argc,
 		       char *const argv[])
@@ -1066,6 +1076,9 @@ static struct cmd_tbl cmd_env_sub[] = {
 	U_BOOT_CMD_MKENT(delete, CONFIG_SYS_MAXARGS, 0, do_env_delete, "", ""),
 #if defined(CONFIG_CMD_EDITENV)
 	U_BOOT_CMD_MKENT(edit, 2, 0, do_env_edit, "", ""),
+#endif
+#if 1
+	U_BOOT_CMD_MKENT(update, 2, 0, do_env_update, "", ""),
 #endif
 #if defined(CONFIG_CMD_ENV_CALLBACK)
 	U_BOOT_CMD_MKENT(callbacks, 1, 0, do_env_callback, "", ""),

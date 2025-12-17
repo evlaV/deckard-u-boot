@@ -153,6 +153,13 @@ struct env_driver {
 	int (*save)(void);
 
 	/**
+	 * update() - Update environment on storage with one variable with a value
+	 *
+	 * @return 0 if OK, -ve on error
+	 */
+	int (*update)(char *varname, char *varvalue);
+
+	/**
 	 * erase() - Erase the environment on storage
 	 *
 	 * This method is optional and required for 'eraseenv' to work.

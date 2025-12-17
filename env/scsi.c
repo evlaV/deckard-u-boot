@@ -301,7 +301,7 @@ static int env_local_scsi_load(void)
 	return err;
 }
 
-static int env_local_save_env_var(const char *varname, const char *varvalue)
+static int env_local_save_env_var(char *varname, char *varvalue)
 {
 	int ret = 0;
 
@@ -363,6 +363,6 @@ U_BOOT_ENV_LOCATION(scsi) = {
 	ENV_NAME("SCSI")
 	.load		= env_scsi_load,
 	.save		= ENV_SAVE_PTR(env_scsi_save),
-	//add save_env_var or something similar
+	.update     = env_local_save_env_var,
 	.erase		= ENV_ERASE_PTR(env_scsi_erase),
 };

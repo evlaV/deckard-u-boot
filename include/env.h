@@ -273,6 +273,13 @@ int env_load(void);
 int env_reload(void);
 
 /**
+ * env_update() - update single var in ondisk storage
+ *
+ * Return: 0 if OK, -ve on error
+ */
+int env_update(char *var, char *val);
+
+/**
  * env_save() - Save the environment to storage
  *
  * Return: 0 if OK, -ve on error
