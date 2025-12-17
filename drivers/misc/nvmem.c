@@ -137,6 +137,7 @@ int nvmem_cell_get_by_index(struct udevice *dev, int index,
 {
 	fdt_addr_t offset;
 	fdt_size_t size = FDT_SIZE_T_NONE;
+	ofnode pnode;
 	int ret;
 	struct ofnode_phandle_args args;
 
@@ -147,9 +148,14 @@ int nvmem_cell_get_by_index(struct udevice *dev, int index,
 	if (ret)
 		return ret;
 
-	ret = nvmem_get_device(ofnode_get_parent(args.node), &cell->nvmem);
-	if (ret)
-		return ret;
+	pnode = ofnode_get_parent(args.node);
+	ret = nvmem_get_device(pnode, &cell->nvmem);
+	if (ret) {
+		/* try one level above, before given up */
+		ret = nvmem_get_device(ofnode_get_parent(pnode), &cell->nvmem);
+		if (ret)
+			return ret;
+	}
 
 	offset = ofnode_get_addr_size_index_notrans(args.node, 0, &size);
 	if (offset == FDT_ADDR_T_NONE || size == FDT_SIZE_T_NONE) {
