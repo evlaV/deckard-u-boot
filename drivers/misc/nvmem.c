@@ -18,9 +18,11 @@ int nvmem_cell_read(struct nvmem_cell *cell, void *buf, size_t size)
 {
 	int ret;
 
-	dev_dbg(cell->nvmem, "%s: off=%u size=%zu\n", __func__, cell->offset, size);
-	if (cell->size && size != cell->size)
+	dev_dbg(cell->nvmem, "%s: off=0x%x size=%zu\n", __func__, cell->offset, size);
+	if (!cell->size)
 		return -EINVAL;
+
+	size = min_t(size_t, size, cell->size);
 
 	switch (cell->nvmem->driver->id) {
 	case UCLASS_I2C_EEPROM:
@@ -51,8 +53,10 @@ int nvmem_cell_read(struct nvmem_cell *cell, void *buf, size_t size)
 int nvmem_cell_write(struct nvmem_cell *cell, const void *buf, size_t size)
 {
 	dev_dbg(cell->nvmem, "%s: off=0x%x size=%zu\n", __func__, cell->offset, size);
-	if (cell->size && size != cell->size)
+	if (!cell->size)
 		return -EINVAL;
+
+	size = min_t(size_t, size, cell->size);
 
 	switch (cell->nvmem->driver->id) {
 	case UCLASS_I2C_EEPROM:
