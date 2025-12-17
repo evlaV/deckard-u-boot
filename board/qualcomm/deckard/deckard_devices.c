@@ -112,6 +112,24 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices, int assume_b
 			deckard_log("pon_reason includes warm reset, continuing to boot\n");
 			boot_up_desired = true;
 		}
+		
+		//TODO: integrate with above logic potentially?
+		if( pon_poff_reason.reboot_command_reason == REBOOT_COMMAND_REASON_BOOTLOADER )
+		{
+			deckard_log("user issued 'reboot bootloader' detected\n");
+		}
+		else if( pon_poff_reason.reboot_command_reason == REBOOT_COMMAND_REASON_RECOVERY )
+		{
+			deckard_log("user issued 'reboot recovery' detected\n");
+		}
+		else if( pon_poff_reason.reboot_command_reason == REBOOT_COMMAND_REASON_EDL )
+		{
+			deckard_log("user issued 'reboot edl' detected\n");
+		}
+		else if( pon_poff_reason.reboot_command_reason == REBOOT_COMMAND_REASON_NONE )
+		{
+			//default case
+		}
 	}
 
 	if( boot_up_desired && !deckard_battery_ok_for_userspace( pdevices->max17320 ) )
