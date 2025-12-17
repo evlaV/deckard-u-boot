@@ -17,6 +17,7 @@
 #include <linux/printk.h>
 #include <linux/stddef.h>
 #include <mapmem.h>
+#include <memalign.h>
 #include <search.h>
 #include <errno.h>
 #include <malloc.h>
@@ -132,6 +133,42 @@ int env_do_env_set(int flag, int argc, char *const argv[], int env_flag)
 	}
 
 	return 0;
+}
+
+int env_update(const char *varname, const char *varvalue)
+{
+	const char * const argv[4] = { "setenv", varname, varvalue, NULL };
+	ALLOC_CACHE_ALIGN_BUFFER(env_t, saved_env, 1);
+	int ret;
+
+	/* backup current env */
+	ret = env_export(saved_env);
+	if (ret)
+		return ret;
+
+	gd->env_actions_disable = 1;
+	ret = env_reload();
+	if (ret)
+		goto out_import;
+
+	if (varvalue == NULL || varvalue[0] == '\0')
+		ret = env_do_env_set(0, 2, (char * const *)argv, H_PROGRAMMATIC);
+	else
+		ret = env_do_env_set(0, 3, (char * const *)argv, H_PROGRAMMATIC);
+	if (ret)
+		goto out_import;
+
+	ret = env_save();
+	if (ret)
+		goto out_import;
+
+out_import:
+	/* restore previous env */
+	env_import((char *)saved_env, 1, H_EXTERNAL);
+
+	gd->env_actions_disable = 0;
+
+	return ret;
 }
 
 int env_set(const char *varname, const char *varvalue)

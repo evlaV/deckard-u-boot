@@ -149,6 +149,10 @@ struct global_data {
 	 */
 	unsigned char env_valid;
 	/**
+	 * @env_actions_disable: disable callbacks and flags
+	 */
+	unsigned short env_actions_disable;
+	/**
 	 * @env_load_prio: priority of the loaded environment
 	 */
 	char env_load_prio;

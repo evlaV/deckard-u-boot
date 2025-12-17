@@ -34,6 +34,7 @@
 #include <errno.h>
 #include <malloc.h>
 #include <mapmem.h>
+#include <memalign.h>
 #include <asm/global_data.h>
 #include <linux/bitops.h>
 #include <linux/printk.h>
@@ -485,6 +486,46 @@ U_BOOT_CMD(
 	""
 );
 #endif
+#endif
+
+#if defined(CONFIG_CMD_SAVEENV) && !IS_ENABLED(CONFIG_ENV_IS_DEFAULT)
+static int do_env_update(struct cmd_tbl *cmdtp, int flag, int argc,
+		      char *const argv[])
+{
+	ALLOC_CACHE_ALIGN_BUFFER(env_t, saved_env, 1);
+	int ret;
+
+	if (argc < 2)
+		return CMD_RET_USAGE;
+
+	/* backup current env */
+	ret = env_export(saved_env);
+	if (ret)
+		return ret;
+
+	/* disable callbacks and flags */
+	gd->env_actions_disable = 1;
+
+	ret = env_reload();
+	if (ret)
+		goto out_import;
+
+	ret = env_do_env_set(flag, argc, argv, H_INTERACTIVE);
+	if (ret)
+		goto out_import;
+
+	ret = env_save();
+	if (ret)
+		goto out_import;
+
+out_import:
+	/* restore previous env */
+	env_import((char *)saved_env, 1, H_EXTERNAL);
+
+	gd->env_actions_disable = 0;
+
+	return ret;
+}
 #endif
 
 #if defined(CONFIG_CMD_NVEDIT_LOAD)
@@ -1101,6 +1142,9 @@ static struct cmd_tbl cmd_env_sub[] = {
 	U_BOOT_CMD_MKENT(erase, 1, 0, do_env_erase, "", ""),
 #endif
 #endif
+#if defined(CONFIG_CMD_SAVEENV) && !IS_ENABLED(CONFIG_ENV_IS_DEFAULT)
+	U_BOOT_CMD_MKENT(update, 2, 0, do_env_update, "", ""),
+ #endif
 #if defined(CONFIG_CMD_NVEDIT_SELECT)
 	U_BOOT_CMD_MKENT(select, 2, 0, do_env_select, "", ""),
 #endif

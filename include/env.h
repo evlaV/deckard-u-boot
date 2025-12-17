@@ -149,6 +149,18 @@ int env_get_yesno(const char *var);
 bool env_get_autostart(void);
 
 /**
+ * env_update() - update the stored value af environment variable
+ *
+ * This sets or deletes the value stared of an environment variable. For setting the
+ * value the variable is created if it does not already exist.
+ *
+ * @varname: Variable to adjust
+ * @value: Value to set for the variable, or NULL or "" to delete the variable
+ * Return: 0 if OK, 1 on error
+ */
+int env_update(const char *varname, const char *value);
+
+/**
  * env_set() - set an environment variable
  *
  * This sets or deletes the value of an environment variable. For setting the

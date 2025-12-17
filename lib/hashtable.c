@@ -30,8 +30,12 @@
 #  endif
 # endif
 #else				/* U-Boot build */
+#include <asm/global_data.h>
 # include <linux/string.h>
 # include <linux/ctype.h>
+
+DECLARE_GLOBAL_DATA_PTR;
+
 #endif
 
 #define USED_FREE 0
@@ -410,10 +414,12 @@ int hsearch_r(struct env_entry item, enum env_action action,
 
 		++htab->filled;
 
-		/* This is a new entry, so look up a possible callback */
-		env_callback_init(&htab->table[idx].entry);
-		/* Also look for flags */
-		env_flags_init(&htab->table[idx].entry);
+		if (!gd->env_actions_disable) {
+			/* This is a new entry, so look up a possible callback */
+			env_callback_init(&htab->table[idx].entry);
+			/* Also look for flags */
+			env_flags_init(&htab->table[idx].entry);
+		}
 
 		/* check for permission */
 		if (htab->change_ok != NULL && htab->change_ok(
