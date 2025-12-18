@@ -751,18 +751,26 @@ int ft_board_setup(void *fdt, struct bd_info *bd)
 		return ret;
 	}
 
-	ret = fdt_setprop_string(fdt, nodeoffset, "u-boot,factory-mode", deckard_factory_mode_enabled() ? "1": "0");
-	if (ret < 0) {
-		deckard_log("WARNING: could not set u-boot,factory-mode %s.\n",
-			   fdt_strerror(ret));
-		return ret;
+	if(deckard_factory_mode_enabled())
+	{
+		//userspace will just look for the existence of this file or not, we set it to 1 just for simplicity
+		ret = fdt_setprop_string(fdt, nodeoffset, "u-boot,factory-mode", "1");
+		if (ret < 0) {
+			deckard_log("WARNING: could not set u-boot,factory-mode %s.\n",
+				fdt_strerror(ret));
+			return ret;
+		}
 	}
 
-	ret = fdt_setprop_string(fdt, nodeoffset, "u-boot,adb-mode", deckard_adb_mode_enabled() ? "1": "0");
-	if (ret < 0) {
-		deckard_log("WARNING: could not set u-boot,adb-mode %s.\n",
-			   fdt_strerror(ret));
-		return ret;
+	if(deckard_adb_mode_enabled())
+	{
+		//userspace will just look for the existence of this file or not, we set it to 1 just for readability
+		ret = fdt_setprop_string(fdt, nodeoffset, "u-boot,adb-mode", "1");
+		if (ret < 0) {
+			deckard_log("WARNING: could not set u-boot,adb-mode %s.\n",
+				fdt_strerror(ret));
+			return ret;
+		}
 	}
 
 #ifdef ALLOW_OLD_ROOTFS_NAME_FALLBACK
