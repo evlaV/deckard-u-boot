@@ -549,6 +549,9 @@ int misc_init_r(void)
 	deckard_log( "deckard_disable_watchdog\n" );
 	deckard_disable_watchdog();
 
+	deckard_log( "setting bootdelay to 0, hit j key to interrupt boot\n" );
+	env_set("bootdelay","0");
+
 	deckard_log( "deckard_setup_devices\n" );
 	// TODO: pull out the prep battery for boot into a separate function
 	int nsetuperror = deckard_setup_devices( &g_deckard_devices );
