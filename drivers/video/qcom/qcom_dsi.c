@@ -4,7 +4,7 @@
  *
  */
 
-#define DEBUG
+//#define DEBUG
 #define LOG_CATEGORY UCLASS_VIDEO_BRIDGE
 
 #include <clk.h>
