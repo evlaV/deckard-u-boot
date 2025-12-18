@@ -854,7 +854,7 @@ int do_load(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[],
 	ret = _fs_read(filename, addr, pos, bytes, 1, &len_read);
 	time = get_timer(time);
 	if (ret < 0) {
-		log_err("Failed to load '%s'\n", filename);
+		log_debug("Failed to load '%s'\n", filename);
 		return 1;
 	}
 
@@ -863,12 +863,12 @@ int do_load(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[],
 			len_read);
 
 	log_debug("%llu bytes read in %lu ms", len_read, time);
-	if (time > 0) {
+	if (time > 0 && (LOGL_DEBUG < LOGL_INFO) ) {
 		puts(" (");
 		print_size(div_u64(len_read, time) * 1000, "/s");
 		puts(")");
 	}
-	puts("\n");
+	log_debug("\n");
 
 	env_set_hex("fileaddr", addr);
 	env_set_hex("filesize", len_read);
