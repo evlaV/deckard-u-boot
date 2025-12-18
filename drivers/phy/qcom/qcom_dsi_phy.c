@@ -665,7 +665,7 @@ static int dsi_pll_7nm_vco_unprepare(struct clk *clk)
 {
 	struct dsi_pll_7nm *pll_7nm = dev_get_priv(clk->dev);
 
-	printf("%s\n", __func__);
+	debug("%s\n", __func__);
 
 	if (!pll_7nm->plat->phy_powered_on) {
 		debug("%s PLL(%d) PHY is not powered on\n", __func__, pll_7nm->plat->id);
@@ -1054,7 +1054,7 @@ static int dsi_7nm_phy_enable(struct msm_dsi_phy *phy,
 	/* DSI lane settings */
 	dsi_phy_hw_v4_0_lane_settings(phy);
 
-	debug("DSI%d PHY enabled\n", phy->plat->id);
+	debug("DSI%d PHY enabled gabegabe\n", phy->plat->id);
 
 	phy->plat->phy_powered_on = true;
 
@@ -1110,7 +1110,7 @@ static void dsi_7nm_phy_disable(struct msm_dsi_phy *phy)
 
 	phy->plat->phy_powered_on = false;
 
-	printf("DSI%d PHY disabled\n", phy->plat->id);
+	debug("DSI%d PHY disabled\n", phy->plat->id);
 }
 
 static int msm_dsi_phy_power_on(struct phy *phy)
