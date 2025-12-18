@@ -316,7 +316,11 @@ int pmk8550_get_on_off_reason(struct pon_on_off_reason *reason)
 
 	reason->reboot_command_reason = pmk8550_get_reboot_command_reason(pmic);
 
-	pmk8550_set_pbs_soft_rb_spare(pmic,0x00); //clear so we don't get into a boot loop
+	if (!IS_ENABLED(CONFIG_SPL_BUILD))
+	{
+		//only clear this in uboot
+		pmk8550_set_pbs_soft_rb_spare(pmic,0x00); //clear so we don't get into a boot loop
+	}
 
 	return 0;
 }
