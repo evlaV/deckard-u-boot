@@ -137,7 +137,16 @@ int pmk8550_get_pbs_soft_rb_spare(struct udevice *pmic)
 
 int pmk8550_set_pbs_soft_rb_spare(struct udevice *pmic, u8 val)
 {
-	int ret = pmic_reg_write(pmic, PON_PBS_SOFT_RB_SPARE,val);
+	int ret = -1;
+	if(!pmic)
+	{
+		//allows handling the case where pmic is passed in as null
+		ret = pmic_get("pmic@0", &pmic);
+	}
+	if(pmic)
+	{
+		ret = pmic_reg_write(pmic, PON_PBS_SOFT_RB_SPARE,val);
+	}
 
 	return ret;
 }
@@ -306,6 +315,8 @@ int pmk8550_get_on_off_reason(struct pon_on_off_reason *reason)
 	reason->power_button_release_rtc_time = pmk8550_get_power_button_release_rtc_time(pmic);
 
 	reason->reboot_command_reason = pmk8550_get_reboot_command_reason(pmic);
+
+	pmk8550_set_pbs_soft_rb_spare(pmic,0x00); //clear so we don't get into a boot loop
 
 	return 0;
 }

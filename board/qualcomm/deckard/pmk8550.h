@@ -70,5 +70,5 @@ int pmk8550_get_boot1_poff_reason1(struct udevice *pmic);
 int pmk8550_get_boot1_off_reason(struct udevice *pmic);
 uint32_t pmk8550_get_pon_rtc_time(struct udevice *pmic);
 uint32_t pmk8550_get_power_button_release_rtc_time(struct udevice *pmic);
-
+int pmk8550_set_pbs_soft_rb_spare(struct udevice *pmic, u8 val);
 #endif /* __PMK8550_H */

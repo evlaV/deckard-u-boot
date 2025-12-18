@@ -438,13 +438,13 @@ int fastboot_set_reboot_flag(enum fastboot_reboot_reason reason)
 
 	if (reason == FASTBOOT_REBOOT_REASON_FASTBOOTD) {
 		deckard_log("Setting reboot to fastboot flag ...\n");
-		env_update("reboot_mode", "f");
+		pmk8550_set_pbs_soft_rb_spare(NULL, (REBOOT_COMMAND_REASON_FASTBOOT << 1) );
 	} else if (reason == FASTBOOT_REBOOT_REASON_OEM_EDL) {
 		deckard_log("Rebooting to EDL mode ...\n");
-		env_update("reboot_mode", "e");
+		pmk8550_set_pbs_soft_rb_spare(NULL, (REBOOT_COMMAND_REASON_EDL << 1) );
 	} else if (reason == FASTBOOT_REBOOT_REASON_OEM_USB) {
 		deckard_log("Setting reboot to USB mode ...\n");
-		env_update("reboot_mode", "u");
+		pmk8550_set_pbs_soft_rb_spare(NULL, (REBOOT_COMMAND_REASON_BOOTLOADER << 1) ); //TODO, is this right?
 	}
 
 	return 0;
