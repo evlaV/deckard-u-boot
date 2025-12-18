@@ -197,7 +197,7 @@ static int vrconsole_load_erofs(const char *filename)
 	char * argv[5] = { "do_the_dew", "scsi", deckard_firmware_part, loadaddr_arg, file_arg };
 	ret = do_load(NULL, 0, argc, argv, FS_TYPE_ANY);
 	
-	printf("[%s] read=%ld addr=0x%0lx\n",
+	log_debug("[%s] read=%ld addr=0x%0lx\n",
 				filename, 
 				env_get_hex("filesize", -1),
 				env_get_hex("fileaddr", -1) );
@@ -222,7 +222,7 @@ uint8_t * load_data_fromdisk( const char * pchFilename, uint32_t *pBytes, uint32
 	filesize = env_get_hex("filesize", -1);
 	fileaddr = env_get_hex("fileaddr", -1);
 	datamap = (void*) map_sysmem(CONFIG_SYS_LOAD_ADDR, 0);
-	printf("vrconsole: filesize = %d, fileaddr = 0x%0x\n",filesize,fileaddr);
+	log_debug("vrconsole: filesize = %d, fileaddr = 0x%0x\n",filesize,fileaddr);
 	/////////////////////////////////////////////
 
 	if ( filesize < 0 || filesize > n_max_size )
@@ -256,7 +256,7 @@ int consolevr_probe(struct udevice *dev)
 	char vrfontfilename[] = "RobotoMono-Bold.vrfont";
 	char vrterminalfilename[] = "terminal_80x24.vrterminal";
 
-	printf("consolevr probe\n");
+	log_debug("consolevr probe\n");
 
 	priv->fontdata = fontdata;
 	vc_priv->x_charsize = fontdata->width;
