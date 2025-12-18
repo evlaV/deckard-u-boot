@@ -108,16 +108,17 @@ char get_booted_slot(void)
 }
 
 // return the static slotname
-static const char *env_scsi_get_dev_part_slotname(void)
+// logging should be disabled by default since this is called by many functions
+static const char *env_scsi_get_dev_part_slotname(bool verbose)
 {
 	ofnode node = ofnode_path("/chosen");
 	if (ofnode_valid(node)) {
 		const char * bootdev = ofnode_read_string(node, "u-boot,spl-boot-device");
 		if (!bootdev) {
-			deckard_log("No u-boot,spl-boot-device, considering slot A\n");
+			if(verbose) deckard_log("No u-boot,spl-boot-device, considering slot A\n");
 			return DECKARD_UBOOT_ENV_SLOT_A;
 		} else {
-			deckard_log("Booted on slot '%s'\n", bootdev);
+			if(verbose) deckard_log("Booted on slot '%s'\n", bootdev);
 
 			switch (bootdev[0]) {
 			case 'A':
@@ -131,14 +132,14 @@ static const char *env_scsi_get_dev_part_slotname(void)
 			}
 		}
 	} else {
-		deckard_log("No chosen node default to A!\n");
+		if(verbose) deckard_log("No chosen node default to A!\n");
 		return DECKARD_UBOOT_ENV_SLOT_A;
 	}
 }
 
 const char *env_scsi_get_dev_part(void)
 {
-	const char * slotname = env_scsi_get_dev_part_slotname();
+	const char * slotname = env_scsi_get_dev_part_slotname(false);
 
 	// We cannot change this signature, so we have to store it in static memory for return
 	// TODO: we could rotate through multiple buffers if more than one of these need
