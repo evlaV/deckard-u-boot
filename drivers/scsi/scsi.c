@@ -700,7 +700,7 @@ int scsi_scan(bool verbose)
 
 	if(probe_needed) printf("scsi: probing\n");
 	else { 
-	    printf("scsi: already probed\n");
+	    log_debug("scsi: already probed\n");
 	    return 0;
 	}
 
