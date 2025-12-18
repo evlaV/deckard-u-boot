@@ -170,9 +170,12 @@ static int clk_rpmh_send_aggregate_command(struct clk_rpmh *c)
 			cmd.data = on_val;
 
 		wait = cmd_state && state == RPMH_ACTIVE_ONLY_STATE;
+#if 0	
+		//should we always print this?
 		dev_err(c->dev, "set %s state of %s to %d (was aggr %#x)\n",
 				rpmh_state_str(state), c->res_name,
 				cmd.data, c->last_sent_aggr_state);
+#endif				
 		ret = clk_rpmh_send(c, state, &cmd, wait);
 		if (ret) {
 			dev_err(c->dev, "set %s state of %s failed: (%d)\n",
