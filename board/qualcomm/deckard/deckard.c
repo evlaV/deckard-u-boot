@@ -309,9 +309,7 @@ static void deckard_clear_reboot_mode_from_env(void)
 	// WARNING: If this fails (and reboot_mode is stuck enabled)
 	// this will become a boot loop!
 
-	env_set("reboot_mode", "");
-	// TODO: make this a more surgical edit of env
-	env_save();
+	env_update("reboot_mode", "");
 	mdelay(1000);
 }
 
@@ -440,16 +438,13 @@ int fastboot_set_reboot_flag(enum fastboot_reboot_reason reason)
 
 	if (reason == FASTBOOT_REBOOT_REASON_FASTBOOTD) {
 		deckard_log("Setting reboot to fastboot flag ...\n");
-		env_set("reboot_mode", "f");
-		env_save();
+		env_update("reboot_mode", "f");
 	} else if (reason == FASTBOOT_REBOOT_REASON_OEM_EDL) {
 		deckard_log("Rebooting to EDL mode ...\n");
-		env_set("reboot_mode", "e");
-		env_save();
+		env_update("reboot_mode", "e");
 	} else if (reason == FASTBOOT_REBOOT_REASON_OEM_USB) {
 		deckard_log("Setting reboot to USB mode ...\n");
-		env_set("reboot_mode", "u");
-		env_save();
+		env_update("reboot_mode", "u");
 	}
 
 	return 0;
@@ -668,8 +663,7 @@ int misc_init_r(void)
 		 */
 		if (!env_get("serial#")) {
 			deckard_log("setting dummy serial number: %s\n", DECKARD_DUMMY_SERIAL_NUMB);
-			env_set("serial#", DECKARD_DUMMY_SERIAL_NUMB);
-			env_save();
+			env_update("serial#", DECKARD_DUMMY_SERIAL_NUMB);
 		}
 
 		deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices );
