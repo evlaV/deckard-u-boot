@@ -39,7 +39,8 @@ enum reboot_command_reason_t
 	REBOOT_COMMAND_REASON_NONE          = 0x00,
 	REBOOT_COMMAND_REASON_RECOVERY      = 0x01,
 	REBOOT_COMMAND_REASON_BOOTLOADER    = 0x02,
-	REBOOT_COMMAND_REASON_EDL           = 0x04,
+	REBOOT_COMMAND_REASON_EDL           = 0x03,
+	REBOOT_COMMAND_REASON_FASTBOOT      = 0x04,
  };
 
  struct pon_on_off_reason {

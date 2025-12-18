@@ -149,7 +149,7 @@ enum reboot_command_reason_t pmk8550_get_reboot_command_reason(struct udevice *p
 	
 	reboot_command_reason = (pbs_soft_rb >> 1) & 0x7F; //bits 7:1 are the reboot reason, bit 0 is unused
 
-	printf("[xxxx] reason->pbs_soft_rb = %d, reboot_command_reason = %d\n",pbs_soft_rb,reboot_command_reason);
+	//printf("reason->pbs_soft_rb = %d, reboot_command_reason = %d\n",pbs_soft_rb,reboot_command_reason);
 
 	switch(reboot_command_reason)
 	{
@@ -162,6 +162,9 @@ enum reboot_command_reason_t pmk8550_get_reboot_command_reason(struct udevice *p
 		case REBOOT_COMMAND_REASON_EDL:			
 			printf("reboot command reason: REBOOT_COMMAND_REASON_EDL\n");
 			break;
+		case REBOOT_COMMAND_REASON_FASTBOOT:			
+			printf("reboot command reason: REBOOT_COMMAND_REASON_FASTBOOT\n");
+			break;			
 		default:
 			printf("reboot command reason: NONE\n");
 			break;

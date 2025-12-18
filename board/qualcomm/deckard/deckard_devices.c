@@ -117,14 +117,22 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices, int assume_b
 		if( pon_poff_reason.reboot_command_reason == REBOOT_COMMAND_REASON_BOOTLOADER )
 		{
 			deckard_log("user issued 'reboot bootloader' detected\n");
+			return BOOT_INTENTION_BOOTLOADER;
 		}
 		else if( pon_poff_reason.reboot_command_reason == REBOOT_COMMAND_REASON_RECOVERY )
 		{
 			deckard_log("user issued 'reboot recovery' detected\n");
+			return BOOT_INTENTION_CONSOLE_WAIT;
+		}
+		else if( pon_poff_reason.reboot_command_reason == REBOOT_COMMAND_REASON_FASTBOOT )
+		{
+			deckard_log("user issued 'reboot fastboot' detected\n");
+			return BOOT_INTENTION_FASTBOOT;
 		}
 		else if( pon_poff_reason.reboot_command_reason == REBOOT_COMMAND_REASON_EDL )
 		{
 			deckard_log("user issued 'reboot edl' detected\n");
+			return BOOT_INTENTION_EDL;
 		}
 		else if( pon_poff_reason.reboot_command_reason == REBOOT_COMMAND_REASON_NONE )
 		{
