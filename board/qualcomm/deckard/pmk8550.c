@@ -2,6 +2,7 @@
 #include "pmk8550.h"
 
 #include <linux/delay.h>
+#include "deckard_log.h"
 
 /* PON Event Logging */
 #define SDAM05_BASE_ADDR		0x7400
@@ -163,19 +164,19 @@ enum reboot_command_reason_t pmk8550_get_reboot_command_reason(struct udevice *p
 	switch(reboot_command_reason)
 	{
 		case REBOOT_COMMAND_REASON_RECOVERY:
-			printf("reboot command reason: REBOOT_COMMAND_REASON_RECOVERY\n");
+			deckard_log("reboot command reason: REBOOT_COMMAND_REASON_RECOVERY\n");
 			break;
 		case REBOOT_COMMAND_REASON_BOOTLOADER:
-			printf("reboot command reason: REBOOT_COMMAND_REASON_BOOTLOADER\n");
+			deckard_log("reboot command reason: REBOOT_COMMAND_REASON_BOOTLOADER\n");
 			break;
 		case REBOOT_COMMAND_REASON_EDL:			
-			printf("reboot command reason: REBOOT_COMMAND_REASON_EDL\n");
+			deckard_log("reboot command reason: REBOOT_COMMAND_REASON_EDL\n");
 			break;
 		case REBOOT_COMMAND_REASON_FASTBOOT:			
-			printf("reboot command reason: REBOOT_COMMAND_REASON_FASTBOOT\n");
+			deckard_log("reboot command reason: REBOOT_COMMAND_REASON_FASTBOOT\n");
 			break;			
 		default:
-			printf("reboot command reason: NONE\n");
+			deckard_log("reboot command reason: NONE\n");
 			break;
 	}
 

@@ -3,6 +3,7 @@
 #include <errno.h>
 
 #include <linux/delay.h>
+#include "deckard_log.h"
 
 #define MAX_WAIT_COUNT    (5)
 #define SPMI_BRIDGE_DELAY (30)
@@ -118,7 +119,7 @@ int smb1510_check_subtype(struct udevice *pmic)
 	}
 
 	if (ret == SMB_SVST_SUBTYPE) {
-		printf("Found SMB1510\n");
+		deckard_log("Found SMB1510\n");
 		return 0;
 	} else {
 		printf("SMB1510 read Failed - Check XBL Config!!!!\n");

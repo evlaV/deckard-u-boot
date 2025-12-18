@@ -6,6 +6,7 @@
 #include <i2c.h>
 #include <i2c_eeprom.h>
 #include <env.h>
+#include "deckard_log.h"
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -41,13 +42,13 @@ static bool _eeprom_verify(eeprom_bootloader_t *eeprom_data)
 
 	if((eeprom_data->hdr.magic_number == EEPROM_BOOTLOADER_MAGIC_NUMBER) && (calc_checksum.value == eeprom_data->checksum.value))
 	{
-		printf("EEPROM verify succeeded ( Magic Number %x ( expected %x ), CRC %x ( expected %x ) )\n", 
+		deckard_log("EEPROM verify succeeded ( Magic Number %x ( expected %x ), CRC %x ( expected %x ) )\n", 
 		eeprom_data->hdr.magic_number, EEPROM_BOOTLOADER_MAGIC_NUMBER,
 		eeprom_data->checksum.value, calc_checksum.value );
 		return true;
 	}
 
-	printf("EEPROM verify failed ( Magic Number %x ( expected %x ), CRC %x ( expected %x ) )\n", 
+	deckard_log("EEPROM verify failed ( Magic Number %x ( expected %x ), CRC %x ( expected %x ) )\n", 
 			eeprom_data->hdr.magic_number, EEPROM_BOOTLOADER_MAGIC_NUMBER,
 			eeprom_data->checksum.value, calc_checksum.value );
 
@@ -68,69 +69,69 @@ void deckard_eeprom_init(void)
 	eeprom_bootloader_t eeprom_strap_data;
 
 	if (!gd->fdt_blob) {
-		printf("%s: don't have a valid gd->fdt_blob!\n", __func__);
+		deckard_log("%s: don't have a valid gd->fdt_blob!\n", __func__);
 		return;
 	}
 
 	node = fdt_path_offset(gd->fdt_blob, "/aliases");
 	if (node < 0) {
-		printf("%s: no aliases found\n", __func__);
+		deckard_log("%s: no aliases found\n", __func__);
 		return;
 	}
 
 	path = fdt_getprop(gd->fdt_blob, node, "eeprom-core", NULL);
 	if (!path) {
-		printf("%s: no alias for %s\n", __func__, "eeprom-core");
+		deckard_log("%s: no alias for %s\n", __func__, "eeprom-core");
 		return;
 	}
 
 	eeprom = ofnode_path(path);
 	if (!ofnode_valid(eeprom)) {
-		printf("%s: invalid hardware path to EEPROM\n", __func__);
+		deckard_log("%s: invalid hardware path to EEPROM\n", __func__);
 		return;
 	}
 
 	ret = uclass_get_device_by_ofnode(UCLASS_I2C_EEPROM, eeprom, &dev);
 	if (ret) {
-		printf("%s: cannot find EEPROM by node\n", __func__);
+		deckard_log("%s: cannot find EEPROM by node\n", __func__);
 		return;
 	}
 
 	ret = i2c_eeprom_read(dev, EEPROM_BOOTLOADER_ADDRESS_START, (uint8_t*)&eeprom_data, sizeof(eeprom_bootloader_t));
 	if (ret) {
-		printf("%s: Could not read EEPROM\n", __func__);
+		deckard_log("%s: Could not read EEPROM\n", __func__);
 	}
 
 	if ( _eeprom_verify(&eeprom_data) ) {
 		if ( eeprom_data.board_revision_valid == EEPROM_VALID ) {
-			printf("EEPROM Board Revision: %s\n", eeprom_data.board_revision );
+			deckard_log("EEPROM Board Revision: %s\n", eeprom_data.board_revision );
 			env_set("EEPROM_BOARD",  eeprom_data.board_revision);
 		} else {
-			printf("EEPROM Board Revision not valid\n" );
+			deckard_log("EEPROM Board Revision not valid\n" );
 		}
 	}
 
 	// test code for eeprom strap
 	path_strap = fdt_getprop(gd->fdt_blob, node, "eeprom-strap", NULL);
 	if (!path) {
-		printf("%s: no alias for %s\n", __func__, "eeprom-strap");
+		deckard_log("%s: no alias for %s\n", __func__, "eeprom-strap");
 		return;
 	}
 
 	eeprom_strap = ofnode_path(path_strap);
 	if (!ofnode_valid(eeprom)) {
-		printf("%s: invalid hardware path_strap to strap EEPROM\n", __func__);
+		deckard_log("%s: invalid hardware path_strap to strap EEPROM\n", __func__);
 		return;
 	}
 
 	ret = uclass_get_device_by_ofnode(UCLASS_I2C_EEPROM, eeprom_strap, &strap_dev);
 	if (ret) {
-		printf("%s: cannot find strap EEPROM by node\n", __func__);
+		deckard_log("%s: cannot find strap EEPROM by node\n", __func__);
 		return;
 	}
 
 	ret = i2c_eeprom_read(strap_dev, EEPROM_BOOTLOADER_ADDRESS_START, (uint8_t*)&eeprom_strap_data, sizeof(eeprom_bootloader_t));
 	if (ret) {
-		printf("%s: Could not read EEPROM\n", __func__);
+		deckard_log("%s: Could not read EEPROM\n", __func__);
 	}
 }
