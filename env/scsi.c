@@ -31,6 +31,7 @@ static int env_scsi_save_buffer(env_t *env_new)
 	struct disk_partition info;
 	int ret, part;
 	const char *dev_and_part = env_scsi_get_dev_part();
+	ALLOC_CACHE_ALIGN_BUFFER(char, env_tmp, CONFIG_ENV_SIZE); //used for read back check
 
 	part = blk_get_device_part_str("scsi", dev_and_part,
 					&blk_dev, &info, 1);
@@ -43,6 +44,10 @@ static int env_scsi_save_buffer(env_t *env_new)
 	if (!ret)
 		printf("Unable to write env\n");
 
+	//read back to ensure flushed
+	ret = blk_read(blk_dev->bdev, info.start, CONFIG_ENV_SIZE < info.size * info.blksz ? CONFIG_ENV_SIZE / info.blksz : info.size, env_tmp);
+	if (!ret)
+		printf("Unable to read back env after save\n");
 
 	return 0;
 }

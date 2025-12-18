@@ -237,7 +237,7 @@ int env_reload(void)
 	if (drv) {
 		int ret;
 
-		printf("Loading Environment from %s... ", drv->name);
+		debug("Loading Environment from %s... ", drv->name);
 
 		if (!env_has_inited(drv->location)) {
 			printf("not initialized\n");
@@ -265,7 +265,7 @@ int env_save(void)
 	if (drv) {
 		int ret;
 
-		printf("Saving Environment to %s... ", drv->name);
+		debug("Saving Environment to %s... ", drv->name);
 		if (!drv->save) {
 			printf("not possible\n");
 			return -ENODEV;
