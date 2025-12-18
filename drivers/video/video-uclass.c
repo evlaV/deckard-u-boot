@@ -695,7 +695,7 @@ static int video_post_probe(struct udevice *dev)
 	 * rotated console in that case.
 	 */
 	if(IS_ENABLED(CONFIG_CONSOLE_VR) && priv->vrmode > 0) {
-		printf("video: vrconsole enabled\n");
+		debug("video: vrconsole enabled\n");
 		snprintf(name, sizeof(name), "%s.vidconsolevr%d", dev->name,priv->vrmode);
 		snprintf(drv, sizeof(drv), "vidconsolevr%d", priv->vrmode);
 	} else if (!priv->rot && IS_ENABLED(CONFIG_CONSOLE_TRUETYPE)) {

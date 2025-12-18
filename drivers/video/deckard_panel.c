@@ -333,10 +333,10 @@ static void dsi_panel_on(struct deckard_panel_priv *priv)
 		priv->panel_vendor = priv->panel_mfg_info[VENDOR_OFFSET];
 	}
 	if ( priv->panel_vendor == VENDOR_SHARP || priv->panel_vendor == VENDOR_BOE || priv->panel_vendor == VENDOR_JDI ) {
-		printf("panel vendor: %c\n", priv->panel_vendor);
+		log_debug("panel vendor: %c\n", priv->panel_vendor);
 	} else {
 		priv->panel_vendor = VENDOR_SHARP;
-		printf("unrecognized panel vendor ( %c ), default to %c\n", priv->panel_mfg_info[VENDOR_OFFSET], priv->panel_vendor );
+		log_debug("unrecognized panel vendor ( %c ), default to %c\n", priv->panel_mfg_info[VENDOR_OFFSET], priv->panel_vendor );
 	}
 
 	dsi_write_panel_on(priv);
@@ -480,7 +480,7 @@ static int deckard_panel_panel_of_to_plat(struct udevice *dev)
 		ret = device_get_supply_regulator(dev, "backlight-left-supply", &panels_regs[REGULATOR_BACKLIGHT_LEFT]);
 		ret |= device_get_supply_regulator(dev, "backlight-right-supply", &panels_regs[REGULATOR_BACKLIGHT_RIGHT]);
 		if ( ret ) {
-			dev_err(dev, "error getting dv backlight power supplies, try ev version: ret=%d\n", ret);
+			//dev_err(dev, "error getting dv backlight power supplies, try ev version: ret=%d\n", ret);
 			// look for DV1- backlight drivers
 			ret = device_get_supply_regulator(dev, "backlight-left-supply-old", &panels_regs[REGULATOR_BACKLIGHT_LEFT]);
 			ret= device_get_supply_regulator(dev, "backlight-right-supply-old", &panels_regs[REGULATOR_BACKLIGHT_RIGHT]);

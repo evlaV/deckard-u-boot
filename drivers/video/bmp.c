@@ -95,10 +95,10 @@ int bmp_info(ulong addr)
 		return 1;
 	}
 
-	printf("Image size    : %d x %d\n", le32_to_cpu(bmp->header.width),
+	log_debug("Image size    : %d x %d\n", le32_to_cpu(bmp->header.width),
 	       le32_to_cpu(bmp->header.height));
-	printf("Bits per pixel: %d\n", le16_to_cpu(bmp->header.bit_count));
-	printf("Compression   : %d\n", le32_to_cpu(bmp->header.compression));
+	log_debug("Bits per pixel: %d\n", le16_to_cpu(bmp->header.bit_count));
+	log_debug("Compression   : %d\n", le32_to_cpu(bmp->header.compression));
 
 	if (bmp_alloc_addr)
 		free(bmp_alloc_addr);
