@@ -1217,6 +1217,8 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 	env_set("ramdisk_addr_r", INITRD_ADDR);
 	env_set("fdtcontroladdr", DTB_ADDR);
 
+	// check one more time to see if the user has hit select button to go to the menu
+	g_boot_intention = calc_boot_intention( &g_deckard_devices, 0 );
 	if ( g_boot_intention == BOOT_INTENTION_BOOT_MENU )
 	{
 		deckard_do_bootmenu();
