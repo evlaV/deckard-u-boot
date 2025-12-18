@@ -310,7 +310,7 @@ static int mp3317_regulator_probe(struct udevice *dev)
 	udelay(2000);
 	ret = dm_i2c_read(pdata->i2c, MP3317_MODE_CTL, &regval, 1);
 	if (ret) {
-		dev_err(dev, "i2c read ctl failed: %d\n", ret);
+		//dev_err(dev, "i2c read ctl failed: %d\n", ret);
 		dm_gpio_free(dev, &pdata->en);
 		return ret;
 	}
