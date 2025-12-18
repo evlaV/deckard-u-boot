@@ -9,12 +9,14 @@
 #include <scsi.h>
 #include <fdt_support.h>
 #include <spl_load.h>
+#include <cpu_func.h>
 #include <spl.h>
 #include <stdlib.h>
 #include <env_internal.h>
 #include <led.h>
 #include <button.h>
 #include <gpt.h>
+#include <asm/armv8/mmu.h>
 #include <command.h>
 #include "pmk8550.h"
 #include "deckard_battery.h"
@@ -67,6 +69,40 @@ enum combined_button_state_t {
  
 
 DECLARE_GLOBAL_DATA_PTR;
+
+static struct mm_region deckard_spl_mem_map[] = {
+	{
+		.virt = 0x100UL,
+		.phys = 0x100UL,
+		.size = 0x7fffff00UL,
+		.attrs = PTE_BLOCK_MEMTYPE(MT_DEVICE_NGNRNE) |
+			PTE_BLOCK_NON_SHARE |
+			PTE_BLOCK_PXN | PTE_BLOCK_UXN
+	}, {
+		.virt = 0x80000000UL,
+		.phys = 0x80000000UL,
+		.size = 0x58040000UL,
+		.attrs = PTE_BLOCK_MEMTYPE(MT_NORMAL) |
+			PTE_BLOCK_OUTER_SHARE,
+	}, {
+		.virt = 0xe1200000UL,
+		.phys = 0xe1200000UL,
+		.size = 0x1ee00000UL,
+		.attrs = PTE_BLOCK_MEMTYPE(MT_NORMAL) |
+			PTE_BLOCK_OUTER_SHARE,
+	}, {
+		.virt = 0x880000000UL,
+		.phys = 0x880000000UL,
+		.size = 0x1ee00000UL,
+		.attrs = PTE_BLOCK_MEMTYPE(MT_NORMAL) |
+			PTE_BLOCK_OUTER_SHARE,
+	}, {
+		/* List terminator */
+		0,
+	}
+};
+
+struct mm_region *mem_map = deckard_spl_mem_map;
 
 static ulong boot_wrapper_version __section(".data");
 
@@ -214,6 +250,10 @@ void board_boot_order(u32 *spl_boot_list)
 		spl_boot_list[0] = BOOT_DEVICE_USB;
 		spl_boot_list[1] = BOOT_DEVICE_UFS_A;
 		spl_boot_list[2] = BOOT_DEVICE_UFS_B;
+
+		/* we need to disable dcache before booting from USB */
+		dcache_disable();
+		invalidate_dcache_all();
 	} else if (!strcmp(boot_order, "A B"))
 	{
 		spl_boot_list[0] = BOOT_DEVICE_UFS_A;
@@ -808,6 +848,12 @@ void qcom_spl_board_init(void)
 	uint16_t battery_voltage;
 	int skip_iterate_boot_count = 0;
 
+	/* enable dcache */
+	gd->relocaddr =  0xb00000000;
+
+	arch_reserve_mmu();
+	dcache_enable();
+
 	printf("\n");
 	deckard_log( "********** qcom_spl_board_init **********\n" );
 	deckard_log("boot wrapper version %ld\n", boot_wrapper_version);
@@ -1091,6 +1137,10 @@ static int deckard_ufs_load_image(struct spl_image_info *spl_image,
 			info.size * blk_dev->blksz,
 			info.start * blk_dev->blksz);
 	deckard_log("done\n");
+
+	dcache_disable();
+	invalidate_dcache_all();
+
 	return ret;
 }
 
