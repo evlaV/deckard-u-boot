@@ -11,18 +11,12 @@
 #include "deckard_adsp.h"
 #include "deckard_log.h"
 
-#define QDSP6SS_BASE		0x06800000
-#define QDSP6SS_BOOT_PARAMS0 	0x60
-
-#define DECKARD_ADSP_TIMEOUT	3000
-
-#define DECKARD_ADSP_CLEAN_PATTERN 0xffffffff
-
-#define DECKARD_ADSP_TX_ADDR	(QDSP6SS_BASE + QDSP6SS_BOOT_PARAMS0 + 4)
-#define DECKARD_ADSP_RX_ADDR	(QDSP6SS_BASE + QDSP6SS_BOOT_PARAMS0 + 8)
-
 #define DECKARD_ADSP_ID 0
 
+#define QDSP6V67SS_BASE		0x06800000
+#define QDSP6V67SS_BOOT_PARAMS0 (QDSP6V67SS_BASE + 0x60)
+#define DECKARD_ADSP_OUT_ADDR	(QDSP6V67SS_BOOT_PARAMS0 + 4)
+#define DECKARD_ADSP_IN_ADDR	(QDSP6V67SS_BOOT_PARAMS0 + 8)
 
 int deckard_adsp_start( void )
 {
@@ -66,79 +60,22 @@ int deckard_adsp_stop( void )
 	return ret;
 }
 
-static int deckard_adsp_tx(u32 val)
+void deckard_adsp_write( ADSP_PayloadIn_t * payload )
 {
-	ulong timeout;
-	int ret;
-
-	if (readl(DECKARD_ADSP_TX_ADDR) != DECKARD_ADSP_CLEAN_PATTERN)
-		return -ENODEV;
-
-	writel(val, DECKARD_ADSP_TX_ADDR);
-
-	timeout = get_timer(0) + DECKARD_ADSP_TIMEOUT;
-
-	while(get_timer(0) < timeout) {
-		if (readl(DECKARD_ADSP_TX_ADDR) == DECKARD_ADSP_CLEAN_PATTERN)
-			return 0;
-	}
-
-	return -ETIMEDOUT;
+	if ( !payload )
+		return;
+	payload->bits.magic = DECKARD_ADSP_IN_MAGIC;
+	payload->bits.rsvd = 0;
+	writel( payload->u32, DECKARD_ADSP_IN_ADDR );
 }
 
-static int deckard_adsp_rx(u32 *val)
+int deckard_adsp_read( ADSP_PayloadOut_t * payload )
 {
-	ulong timeout;
-	u32 cur;
-	int ret;
-
-	timeout = get_timer(0) + DECKARD_ADSP_TIMEOUT;
-
-	while(get_timer(0) < timeout) {
-		cur = readl(DECKARD_ADSP_RX_ADDR);
-		if (cur == DECKARD_ADSP_CLEAN_PATTERN)
-			continue;
-		*val = cur;
-		return 0;
+	u32 cur = readl(DECKARD_ADSP_OUT_ADDR);
+	if ( payload )
+	{
+		payload->u32 = cur;
 	}
 
-	return -ETIMEDOUT;
+	return ( payload->bits.magic == DECKARD_ADSP_OUT_MAGIC ) ? 0 : -1;
 }
-
-static int do_adsp(struct cmd_tbl *cmdtp, int flag, int argc,
-			char *const argv[])
-{
-	struct cmd_tbl *cp;
-	u32 val = 0;
-	int ret;
-
-	if (argc < 1)
-		return CMD_RET_USAGE;
-
-	/* drop initial arg */
-	argc--;
-	argv++;
-
-	if (!strncmp(argv[0], "tx", 2)) {
-		val = simple_strtoul(argv[1], NULL, 10);
-
-		printf("APPS PING: %d\n", val);
-		ret = deckard_adsp_tx(val);
-		if (ret < 0)
-			return ret;
-	} else if (!strncmp(argv[0], "rx", 2)) {
-		ret = deckard_adsp_rx(&val);
-		if (ret < 0)
-			return ret;
-
-		printf("ADSP PONG: %d\n", val);
-	}
-
-	return 0;
-}
-
-U_BOOT_LONGHELP(adsp,
-		"tx [value] - send u32 value to ADSP and block until read on the other side\n"
-		"rx - try to read until timeout from the ADSP\n");
-
-U_BOOT_CMD(adsp, 3, 1, do_adsp, "adsp", adsp_help_text);
