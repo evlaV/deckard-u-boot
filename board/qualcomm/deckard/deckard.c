@@ -925,6 +925,9 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 	// release, if the user happens to enter the loop with it held
 	int power_button_down = ( button_get_state( pdevices->btn_power ) == BUTTON_ON );
 
+	// This is ok (and in fact appropriate) to do before adsp is loaded
+	deckard_uboot_out_write_clear();
+
 	// WARNING: Do not set LED color in the following loop when the ADSP is loaded
 	// The ADSP sets LED colors when active based on state only it is aware of
 	// (such as USB cable insertion). In order to not stomp on each other,
@@ -949,10 +952,12 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 
 		int latest_power_button_down = ( button_get_state( pdevices->btn_power ) == BUTTON_ON );
 
+		// TODO: should we do this even if adsp is not loaded?
+		// It doesn't hurt.
 		if ( adsp_loaded )
 		{
 			// If the adsp is loaded, tell it about our button state
-			deckard_adsp_write( (bool) latest_power_button_down,
+			deckard_uboot_out_write( (bool) latest_power_button_down,
 				( button_get_state( pdevices->btn_select ) == BUTTON_ON ),
 				( button_get_state( pdevices->btn_vol_down ) == BUTTON_ON ),
 				( button_get_state( pdevices->btn_vol_up ) == BUTTON_ON ) );

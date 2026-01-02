@@ -25,25 +25,23 @@ typedef union ADSP_PayloadOut_t {
     } bits;
 } ADSP_PayloadOut_t;
 
-typedef union ADSP_PayloadIn_t {
+typedef union UBOOT_PayloadOut_t {
     uint32_t u32;
     struct {
-        uint32_t magic  : 5; // DECKARD_ADSP_IN_MAGIC
+        uint32_t magic  : 5; // DECKARD_UBOOT_OUT_MAGIC
 		uint32_t btn_power : 1;
         uint32_t btn_select : 1;
         uint32_t btn_vol_down : 1;
         uint32_t btn_vol_up : 1;
         uint32_t rsvd   : 23; // sender should clear if unused
     } bits;
-} ADSP_PayloadIn_t;
-
-#define DECKARD_ADSP_IN_MAGIC  0b10101
-#define DECKARD_ADSP_OUT_MAGIC 0b01010
-
+} UBOOT_PayloadOut_t;
 #define QDSP6V67SS_BASE		0x06800000
 #define QDSP6V67SS_BOOT_PARAMS0 (QDSP6V67SS_BASE + 0x60)
 #define DECKARD_ADSP_OUT_ADDR	(QDSP6V67SS_BOOT_PARAMS0 + 4)
-#define DECKARD_ADSP_IN_ADDR	(QDSP6V67SS_BOOT_PARAMS0 + 8)
+#define DECKARD_UBOOT_OUT_ADDR	(QDSP6V67SS_BOOT_PARAMS0 + 8)
+#define DECKARD_UBOOT_OUT_MAGIC  0b10101
+#define DECKARD_ADSP_OUT_MAGIC 0b01010
 
 #pragma pack(pop)
 
@@ -92,15 +90,20 @@ int deckard_adsp_stop( void )
 	return ret;
 }
 
-void deckard_adsp_write( bool btn_power, bool btn_select, bool btn_vol_down, bool btn_vol_up )
+void deckard_uboot_out_write_clear()
 {
-	ADSP_PayloadIn_t payload = { 0 };
-	payload.bits.magic = DECKARD_ADSP_IN_MAGIC;
+	writel( 0, DECKARD_UBOOT_OUT_ADDR );
+}
+
+void deckard_uboot_out_write( bool btn_power, bool btn_select, bool btn_vol_down, bool btn_vol_up )
+{
+	UBOOT_PayloadOut_t payload = { 0 };
+	payload.bits.magic = DECKARD_UBOOT_OUT_MAGIC;
 	payload.bits.btn_power = btn_power ? 1 : 0;
 	payload.bits.btn_select = btn_select ? 1 : 0;
 	payload.bits.btn_vol_down = btn_vol_down ? 1 : 0;
 	payload.bits.btn_vol_up = btn_vol_up ? 1 : 0;
-	writel( payload.u32, DECKARD_ADSP_IN_ADDR );
+	writel( payload.u32, DECKARD_UBOOT_OUT_ADDR );
 }
 
 /*
