@@ -947,9 +947,19 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 			adsp_loaded = ( deckard_adsp_start() == 0 );
 		}
 
+		int latest_power_button_down = ( button_get_state( pdevices->btn_power ) == BUTTON_ON );
+
+		if ( adsp_loaded )
+		{
+			// If the adsp is loaded, tell it about our button state
+			deckard_adsp_write( (bool) latest_power_button_down,
+				( button_get_state( pdevices->btn_select ) == BUTTON_ON ),
+				( button_get_state( pdevices->btn_vol_down ) == BUTTON_ON ),
+				( button_get_state( pdevices->btn_vol_up ) == BUTTON_ON ) );
+		}
+
 		// Watch for power button RELEASE to trigger
 		{
-			int latest_power_button_down = ( button_get_state( pdevices->btn_power ) == BUTTON_ON );
 			if ( !latest_power_button_down && power_button_down != latest_power_button_down )
 			{
 				// Update our boot intention on a click
