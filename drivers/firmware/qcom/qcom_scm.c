@@ -194,7 +194,7 @@ int qcom_scm_pas_init_image(u32 peripheral, const void *metadata, size_t size,
 
 	memcpy(mdata_buf, metadata, size);
 
-	scm_flush_cache(mdata_buf, size);
+	scm_flush_cache((uintptr_t)mdata_buf, size);
 
 	desc.args[1] = mdata_phys;
 
