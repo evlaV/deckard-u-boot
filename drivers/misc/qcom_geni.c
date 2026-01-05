@@ -499,7 +499,7 @@ static int qcom_geni_fw_tz_load(char *fw_name, void *buf, size_t size)
 		return ret;
 	}
 
-	geni_flush_cache((void *)mem_phys, mem_size);
+	geni_flush_cache((uintptr_t) mem_phys, mem_size);
 
 	ret = qcom_scm_pas_auth_and_reset(SCM_PAS_ID_QUPFW);
 	if (ret) {
