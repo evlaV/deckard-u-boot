@@ -3,6 +3,7 @@
 #include <env.h>
 #include <fs.h>
 #include <part.h>
+#include <usb.h>
 
 #include "deckard.h"
 #include "deckard_disk.h"
@@ -36,8 +37,8 @@ int deckard_find_efi_var_store(void)
 {
 	char partname[16] = { 0 };
 	char *slot;
-	enum disk_interface_t disk_interface = DISK_INTERFACE_SCSI;
-	int devnum_restrict = 0; //only look on LUN0 by default
+	enum disk_interface_t disk_interface;
+	int devnum_restrict; //only look on LUN0 by default
 	
 	if (g_efivar_store.valid)
 		return 0;
@@ -46,17 +47,33 @@ int deckard_find_efi_var_store(void)
 	{
 		disk_interface = DISK_INTERFACE_USB;
 		devnum_restrict = -1; //allow finding efi var store on any USB disk device -- TODO is this right?
+		strlcat(partname, DECKARD_EFI_NAME_SLOT_U, 16);
 	}
-
-	slot = env_get("booted_slot");
-	/* Build the partition name (efi-A/efi-B) */
-	strlcat(partname, "efi-", 16);
-	strlcat(partname, slot, 16);
+	else if(get_booted_slot() == 'A')
+	{
+		disk_interface = DISK_INTERFACE_SCSI;
+		devnum_restrict = 0; //LUN0
+		strlcat(partname, DECKARD_EFI_NAME_SLOT_A, 16);
+	}
+	else if(get_booted_slot() == 'B')
+	{
+		disk_interface = DISK_INTERFACE_SCSI;
+		devnum_restrict = 0; //LUN0
+		strlcat(partname, DECKARD_EFI_NAME_SLOT_B, 16);
+	}
+	else
+	{
+		return -ENOENT;
+	}
 
 	if (!deckard_find_part_by_label(disk_interface, devnum_restrict, partname, &g_efivar_store.devnum, &g_efivar_store.partnum)) 
 	{
 		g_efivar_store.valid = true;
 		return 0;
+	}
+	else
+	{
+		deckard_log("Error: could not find %s part %s\n", disk_interface_to_str(disk_interface), partname);
 	}
 
 	return -ENOENT;
@@ -236,7 +253,34 @@ int deckard_find_part_by_label(enum disk_interface_t disk_interface, int devnum_
 	enum uclass_id target_uclass_id = UCLASS_SCSI;
 	uclass_get(UCLASS_BLK, &blk_class);
 
-	if(disk_interface == DISK_INTERFACE_USB) target_uclass_id = UCLASS_USB;
+	if(disk_interface == DISK_INTERFACE_USB) 
+	{
+		target_uclass_id = UCLASS_USB;
+		/* try to recognize storage devices immediately */
+		int usb_stor_curr_dev = usb_stor_scan(1);
+		desc = blk_get_devnum_by_uclass_id(UCLASS_USB, usb_stor_curr_dev);
+		if (!desc) return -ENODEV;
+
+		for (*partnum = 1;; (*partnum)++) {
+			r = part_get_info(desc, *partnum, &part);
+			/* Last partition, go next */
+			if (r < 0)
+				break;
+			/* Skip if the name doesn't match */
+			if (strncmp(partname, part.name, strlen(partname)))
+				continue;
+			
+			if ( (devnum_restrict >= 0) && (devnum_restrict != desc->devnum) ) //strict match of devnum can be done if desired
+				continue;
+
+			//printf("Found EFI partition '%s' (%d:%d) blksz %#lx\n", part.name, desc->devnum, *partnum, desc->blksz);
+			*devnum = desc->devnum;
+
+			return 0;
+		}
+
+		return -ENODEV;
+	}
 
 	/* Devices are already probed! */
 	uclass_foreach_dev(blkdev, blk_class) {
