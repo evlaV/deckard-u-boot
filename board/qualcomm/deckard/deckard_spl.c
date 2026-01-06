@@ -742,7 +742,7 @@ void trigger_xblramdump_fault(void) {
 
 enum combined_button_state_t button_state_handler(void) 
 {
-	enum combined_button_state_t total_button_state;
+	enum combined_button_state_t total_button_state = 0;
 
 	if ( deckard_spl_get_button_state("Select") == BUTTON_ON) {
 		deckard_log("Select button pressed\n");
