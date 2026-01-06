@@ -31,6 +31,7 @@
 #include <time.h>
 #include <video.h>
 #include <ansi.h>
+#include <linux/arm-smccc.h>
 #include "pm8550vs.h"
 #include "smb1510.h"
 #include "pmk8550.h"
@@ -53,6 +54,16 @@ enum boot_priority {
 
 #define DECKARD_DUMMY_SERIAL_NUMB "123456789"
 #define TCSR_BOOT_MISC_DETECT 0x01fd9000
+
+#define QCOM_SCM_SMCCC_64 0x42000000
+#define QCOM_SCM_SVC_BOOT 0x01
+#define QCOM_SCM_BOOT_SDI_CONFIG 0x09
+#define QCOM_SCM_BOOT_SET_DLMODE 0x10
+
+#define QCOM_SCM_BOOT_DISABLE_SDI (QCOM_SCM_SMCCC_64 | QCOM_SCM_SVC_BOOT << 8 | \
+					QCOM_SCM_BOOT_SDI_CONFIG)
+#define QCOM_SCM_BOOT_ENABLE_DLMODE (QCOM_SCM_SMCCC_64 | QCOM_SCM_SVC_BOOT << 8 | \
+					QCOM_SCM_BOOT_SET_DLMODE)
 
 enum full_screen_images_t 
 {
@@ -417,6 +428,18 @@ static int deckard_reboot_mode_usb(void)
 
 static int deckard_reboot_mode_edl(void)
 {
+	struct arm_smccc_res res = {0};
+
+	/*
+	 * Disble debug mode,
+	 * a1: num of args
+	 * a2: 1 => Disable watchdog
+	 * a3: 0 => Disable SDI
+	 */
+	arm_smccc_smc(QCOM_SCM_BOOT_DISABLE_SDI, 0x2, 0x1, 0x0, 0, 0, 0, 0,
+			&res);
+	mdelay(100);
+
 	/*
 	 * Setup the boot_misc to 0x1 for EDL, 0x10 is minidump,
 	 * 0x20 is dump. We may need to disalble PMIC watchdog
