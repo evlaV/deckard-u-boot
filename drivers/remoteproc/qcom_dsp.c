@@ -97,6 +97,8 @@ static int qcom_dsp_stop(struct udevice *dev)
 	udelay(20000);
 	writel(0, dsp->base +  QDSP6SS_RESET_CFG);
 
+	dsp->state = QCOM_DSP_STATE_LOADED;
+	
 	printf("qcom_dsp: firmware stopped\n");
 
 	return 0;
