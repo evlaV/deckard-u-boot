@@ -276,31 +276,46 @@ void reset_misc(void)
 }
 #endif /* CONFIG_PSCI_RESET */
 
-void psci_sys_reset(u32 type)
+int psci_sys_reset(u32 type)
 {
 	bool reset2_supported;
+	int ret;
 
 	do_psci_probe();
 
 	reset2_supported = psci_is_system_reset2_supported();
 
-	if (type == SYSRESET_WARM && reset2_supported) {
+	if (type == SYSRESET_WARM && !reset2_supported) {
+		return -ENOTSUPP;
+	} else if (type == SYSRESET_WARM && reset2_supported) {
 		/*
 		 * reset_type[31] = 0 (architectural)
 		 * reset_type[30:0] = 0 (SYSTEM_WARM_RESET)
 		 * cookie = 0 (ignored by the implementation)
 		 */
-		invoke_psci_fn(PSCI_FN_NATIVE(1_1, SYSTEM_RESET2), 0, 0, 0);
+		ret = invoke_psci_fn(PSCI_FN_NATIVE(1_1, SYSTEM_RESET2), 0, 0, 0);
+		if (ret != PSCI_RET_SUCCESS)
+			return ret;
 	} else {
-		invoke_psci_fn(PSCI_0_2_FN_SYSTEM_RESET, 0, 0, 0);
+		ret = invoke_psci_fn(PSCI_0_2_FN_SYSTEM_RESET, 0, 0, 0);
+		if (ret != PSCI_RET_SUCCESS)
+			return ret;
 	}
+
+	return 0;
 }
 
-void psci_sys_poweroff(void)
+int psci_sys_poweroff(void)
 {
+	int ret;
+
 	do_psci_probe();
 
-	invoke_psci_fn(PSCI_0_2_FN_SYSTEM_OFF, 0, 0, 0);
+	ret = invoke_psci_fn(PSCI_0_2_FN_SYSTEM_OFF, 0, 0, 0);
+	if (ret != PSCI_RET_SUCCESS)
+		return ret;
+
+	return 0;
 }
 
 #if IS_ENABLED(CONFIG_CMD_POWEROFF) && !IS_ENABLED(CONFIG_SYSRESET_CMD_POWEROFF)
