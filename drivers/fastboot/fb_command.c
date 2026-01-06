@@ -45,6 +45,7 @@ static void oem_console(char *, char *);
 static void oem_console_usb(char *, char *);
 static void oem_board(char *, char *);
 static void oem_reboot_edl(char *, char *);
+static void oem_reboot_usb(char *, char *);
 static void oem_stop(char *, char *);
 static void run_ucmd(char *, char *);
 static void run_acmd(char *, char *);
@@ -620,10 +621,10 @@ static void __maybe_unused oem_console_usb(char *cmd_parameter, char *response)
  */
 static void __maybe_unused oem_reboot_usb(char *cmd_parameter, char *response)
 {
-	fastboot_okay(NULL, response);
-
 	if (fastboot_set_reboot_flag(FASTBOOT_REBOOT_REASON_OEM_USB))
 		printf("Cannot set recovery flag\n");
+	else
+		fastboot_okay(NULL, response);
 }
 
 /**
