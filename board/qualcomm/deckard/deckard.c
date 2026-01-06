@@ -537,19 +537,26 @@ int fastboot_set_reboot_flag(enum fastboot_reboot_reason reason)
 {
 	if ((reason != FASTBOOT_REBOOT_REASON_FASTBOOTD) &&
 			(reason != FASTBOOT_REBOOT_REASON_OEM_EDL) &&
+			(reason != FASTBOOT_REBOOT_REASON_RECOVERY) &&
 			(reason != FASTBOOT_REBOOT_REASON_OEM_USB) &&
 			(reason != FASTBOOT_REBOOT_REASON_BOOTLOADER))
 		return -ENOTSUPP;
 
 	if (reason == FASTBOOT_REBOOT_REASON_FASTBOOTD) {
 		deckard_log("Setting reboot to fastboot flag ...\n");
-		pmk8550_set_pbs_soft_rb_spare(NULL, (REBOOT_COMMAND_REASON_FASTBOOT << 1) );
+		pmk8550_set_reboot_command_reason(REBOOT_COMMAND_REASON_FASTBOOT);
+	} else if (reason == FASTBOOT_REBOOT_REASON_BOOTLOADER) {
+		deckard_log("Rebooting to bootloader mode ...\n");
+		pmk8550_set_reboot_command_reason(REBOOT_COMMAND_REASON_BOOTLOADER);
 	} else if (reason == FASTBOOT_REBOOT_REASON_OEM_EDL) {
 		deckard_log("Rebooting to EDL mode ...\n");
-		pmk8550_set_pbs_soft_rb_spare(NULL, (REBOOT_COMMAND_REASON_EDL << 1) );
+		pmk8550_set_reboot_command_reason(REBOOT_COMMAND_REASON_EDL);
+	} else if (reason == FASTBOOT_REBOOT_REASON_RECOVERY) {
+		deckard_log("Setting reboot to recovery mode ...\n");
+		pmk8550_set_reboot_command_reason(REBOOT_COMMAND_REASON_RECOVERY);
 	} else if (reason == FASTBOOT_REBOOT_REASON_OEM_USB) {
 		deckard_log("Setting reboot to USB mode ...\n");
-		pmk8550_set_pbs_soft_rb_spare(NULL, (REBOOT_COMMAND_REASON_BOOTLOADER << 1) ); //TODO, is this right?
+		pmk8550_set_reboot_command_reason(REBOOT_COMMAND_REASON_USB);
 	}
 
 	return 0;
