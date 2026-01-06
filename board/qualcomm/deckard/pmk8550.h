@@ -41,6 +41,7 @@ enum reboot_command_reason_t
 	REBOOT_COMMAND_REASON_BOOTLOADER    = 0x02,
 	REBOOT_COMMAND_REASON_EDL           = 0x03,
 	REBOOT_COMMAND_REASON_FASTBOOT      = 0x04,
+	REBOOT_COMMAND_REASON_USB           = 0x05,
  };
 
  struct pon_on_off_reason {
@@ -71,4 +72,6 @@ int pmk8550_get_boot1_off_reason(struct udevice *pmic);
 uint32_t pmk8550_get_pon_rtc_time(struct udevice *pmic);
 uint32_t pmk8550_get_power_button_release_rtc_time(struct udevice *pmic);
 int pmk8550_set_pbs_soft_rb_spare(struct udevice *pmic, u8 val);
+int pmk8550_set_reboot_command_reason(enum reboot_command_reason_t reason);
+enum reboot_command_reason_t pmk8550_get_reboot_command_reason(struct udevice *pmic);
 #endif /* __PMK8550_H */
