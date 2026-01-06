@@ -92,29 +92,7 @@ bool deckard_boot_desired( struct pon_on_off_reason pon_poff_reason )
 
 boot_intention_t calc_boot_intention( deckard_devices_t * pdevices )
 {
-	// These boot-up modes (those which are dev centric) blindly obey "reboot_mode"
-	// Note that in some cases like 'b', they are set from the OS (user-space)
-	// so do not expect to see the corresponding setter in uboot!
-
-	char * reboot_mode = env_get("reboot_mode");
-	if ( reboot_mode )
-	{
-		switch ( *reboot_mode )
-		{
-			case 'b':
-				return BOOT_INTENTION_BOOTLOADER;
-			case 'u':
-				return BOOT_INTENTION_BOOT_FROM_USB;
-			case 'f':
-				return BOOT_INTENTION_FASTBOOT;
-			case 'e':
-				return BOOT_INTENTION_EDL;
-			default:
-				break;
-		}
-	}
-
-	// Next, if we're in factory mode, dont worry about any other cases
+	// if we're in factory mode, dont worry about any other cases
 	if ( deckard_factory_mode_enabled() )
 	{
 		return BOOT_INTENTION_START_USERSPACE;
@@ -164,6 +142,11 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices )
 		{
 			deckard_log("user issued 'reboot edl' detected\n");
 			return BOOT_INTENTION_EDL;
+		}
+		else if( pon_poff_reason.reboot_command_reason == REBOOT_COMMAND_REASON_USB)
+		{
+			deckard_log("user issued 'reboot usb' detected\n");
+			return BOOT_INTENTION_BOOT_FROM_USB;
 		}
 		else if( pon_poff_reason.reboot_command_reason == REBOOT_COMMAND_REASON_NONE )
 		{
