@@ -118,6 +118,11 @@ void reset_cpu(void)
 }
 
 #if IS_ENABLED(CONFIG_SYSRESET_CMD_RESET)
+__weak void sysreset_board_reset_prepare(int argc, char *const argv[],
+					 enum sysreset_t *reset_type)
+{
+}
+
 int do_reset(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
 	enum sysreset_t reset_type = SYSRESET_COLD;
@@ -131,6 +136,8 @@ int do_reset(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 
 	printf("resetting ...\n");
 	mdelay(100);
+
+	sysreset_board_reset_prepare(argc, argv, &reset_type);
 
 	sysreset_walk_halt(reset_type);
 
