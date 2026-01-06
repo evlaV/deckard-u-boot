@@ -15,17 +15,22 @@ __weak int psci_sysreset_get_status(struct udevice *dev, char *buf, int size)
 
 static int psci_sysreset_request(struct udevice *dev, enum sysreset_t type)
 {
+	int ret;
+
 	switch (type) {
 	case SYSRESET_WARM:
 	case SYSRESET_COLD:
-		psci_sys_reset(type);
+		ret = psci_sys_reset(type);
 		break;
 	case SYSRESET_POWER_OFF:
-		psci_sys_poweroff();
+		ret = psci_sys_poweroff();
 		break;
 	default:
 		return -EPROTONOSUPPORT;
 	}
+
+	if (ret)
+		return ret;
 
 	return -EINPROGRESS;
 }
