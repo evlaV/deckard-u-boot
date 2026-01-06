@@ -312,19 +312,6 @@ int enable_ramoops_serial_console(void)
 	return 0;
 }
 
-static void deckard_clear_reboot_mode_from_env(void)
-{
-	if (!env_get("reboot_mode"))
-		return;
-
-	// WARNING: If this fails (and reboot_mode is stuck enabled)
-	// this will become a boot loop!
-
-	env_update("reboot_mode", "");
-	mdelay(1000);
-}
-
-
 static int deckard_unbind_usb(void)
 {
 	struct device_node *snps_np = NULL;
@@ -426,7 +413,7 @@ static int deckard_reboot_mode_usb(void)
 	return 0;
 }
 
-static int deckard_reboot_mode_edl(void)
+static void deckard_sysreset_prepare_edl(void)
 {
 	struct arm_smccc_res res = {0};
 
@@ -447,7 +434,26 @@ static int deckard_reboot_mode_edl(void)
 	 * our platform has it disable by default.
 	 */
 	writel(0x1, TCSR_BOOT_MISC_DETECT);
-	return sysreset_walk(SYSRESET_WARM);
+}
+
+void sysreset_board_reset_prepare(int argc, char *const argv[],
+					enum sysreset_t *reset_type)
+{
+	if ((argc == 2 && !strncmp(argv[1], "edl", 3)) ||
+		(pmk8550_get_reboot_command_reason(NULL) == REBOOT_COMMAND_REASON_EDL)) {
+		pmk8550_set_reboot_command_reason(REBOOT_COMMAND_REASON_NONE);
+		deckard_sysreset_prepare_edl();
+		*reset_type = SYSRESET_WARM;
+	} else if (argc == 2 && !strncmp(argv[1], "usb", 3)) {
+		pmk8550_set_reboot_command_reason(REBOOT_COMMAND_REASON_USB);
+		run_command("splctl force-usb", 0);
+	} else if (argc == 2 && !strncmp(argv[1], "fastboot", 8)) {
+		pmk8550_set_reboot_command_reason(REBOOT_COMMAND_REASON_FASTBOOT);
+	} else if (argc == 2 && !strncmp(argv[1], "bootloader", 8)) {
+		pmk8550_set_reboot_command_reason(REBOOT_COMMAND_REASON_BOOTLOADER);
+	} else if (argc == 2 && !strncmp(argv[1], "recovery", 8)) {
+		pmk8550_set_reboot_command_reason(REBOOT_COMMAND_REASON_RECOVERY);
+	}
 }
 
 #if IS_ENABLED(CONFIG_FASTBOOT) && !CONFIG_IS_ENABLED(ENV_IS_NOWHERE)
@@ -660,10 +666,6 @@ int misc_init_r(void)
 	g_total_console_state |= SERIAL_CONSOLE_MASK; //seems likely we always need this on otherwise will get crashes / sync abort handler loops?
 	console_state_handler();
 
-	/* cleanup all reboot_mode setups if any */
-	deckard_log( "deckard_clear_reboot_mode_from_env\n" );
-	deckard_clear_reboot_mode_from_env();
-
 	// get board data from eeprom
 	deckard_log( "deckard_eeprom_init\n" );
 	deckard_eeprom_init();
@@ -707,10 +709,9 @@ int misc_init_r(void)
 		run_command("fastboot -l 0x880000000 -s 0x10000000 usb 0", 0);
 	}
 
-	if ( g_boot_intention == BOOT_INTENTION_EDL )
-	{
-		deckard_log("Rebooting to EDL mode...\n");
-		deckard_reboot_mode_edl();
+	if ( g_boot_intention == BOOT_INTENTION_EDL) {
+		deckard_log("Starting edl mode...\n");
+		run_command("reset edl", 0);
 	}
 
 	if ( g_boot_intention == BOOT_INTENTION_BOOT_FROM_USB )

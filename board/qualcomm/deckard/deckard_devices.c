@@ -41,29 +41,7 @@ static combined_button_state_t deckard_get_button_state( deckard_devices_t * pde
 
 boot_intention_t calc_boot_intention( deckard_devices_t * pdevices, int assume_boot_up_desired )
 {
-	// These boot-up modes (those which are dev centric) blindly obey "reboot_mode"
-	// Note that in some cases like 'b', they are set from the OS (user-space)
-	// so do not expect to see the corresponding setter in uboot!
-
-	char * reboot_mode = env_get("reboot_mode");
-	if ( reboot_mode )
-	{
-		switch ( *reboot_mode )
-		{
-			case 'b':
-				return BOOT_INTENTION_BOOTLOADER;
-			case 'u':
-				return BOOT_INTENTION_BOOT_FROM_USB;
-			case 'f':
-				return BOOT_INTENTION_FASTBOOT;
-			case 'e':
-				return BOOT_INTENTION_EDL;
-			default:
-				break;
-		}
-	}
-
-	// Next, if we're in factory mode, dont worry about any other cases
+	// if we're in factory mode, dont worry about any other cases
 	if ( deckard_factory_mode_enabled() )
 	{
 		return BOOT_INTENTION_START_USERSPACE;
@@ -96,7 +74,7 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices, int assume_b
 			pmk8550_get_pon_trigger_str(pon_poff_reason.trigger),
 			pon_poff_reason.trigger,
 			pon_poff_reason.pon_reason);
-		
+
 		if(pon_poff_reason.pon_reason & 0x80)
 		{
 			deckard_log("pon_reason includes button press, continuing to boot\n");
@@ -112,7 +90,7 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices, int assume_b
 			deckard_log("pon_reason includes warm reset, continuing to boot\n");
 			boot_up_desired = true;
 		}
-		
+
 		//TODO: integrate with above logic potentially?
 		if( pon_poff_reason.reboot_command_reason == REBOOT_COMMAND_REASON_BOOTLOADER )
 		{
@@ -133,6 +111,11 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices, int assume_b
 		{
 			deckard_log("user issued 'reboot edl' detected\n");
 			return BOOT_INTENTION_EDL;
+		}
+		else if( pon_poff_reason.reboot_command_reason == REBOOT_COMMAND_REASON_USB)
+		{
+			deckard_log("user issued 'reboot usb' detected\n");
+			return BOOT_INTENTION_BOOT_FROM_USB;
 		}
 		else if( pon_poff_reason.reboot_command_reason == REBOOT_COMMAND_REASON_NONE )
 		{
