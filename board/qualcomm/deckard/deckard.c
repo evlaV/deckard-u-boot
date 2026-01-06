@@ -1229,8 +1229,12 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 	char * default_bootargs = env_get("default_bootargs");
 	char * temp_bootargs = env_get("temp_bootargs");
 	char bootargs[PATHMAXLEN] = { 0 }; // how long can this be?
-	snprintf(bootargs, PATHMAXLEN, "%s %s root=PARTLABEL=%s init=/sbin/init rauc.slot=%c noresume rootwait earlycon",
-									default_bootargs ? default_bootargs : "", temp_bootargs ? temp_bootargs : "", label, get_booted_slot() );
+	char steamos_efi_arg[128] = { 0 }; // should be something like: steamos.efi=PARTUUID=886aefa6-96a5-4693-bc09-02b9ad5a288e
+
+	ret = init_steamos_efi_uuid_part_arg(steamos_efi_arg);
+
+	snprintf(bootargs, PATHMAXLEN, "%s %s root=PARTLABEL=%s init=/sbin/init rauc.slot=%c noresume rootwait earlycon %s",
+									default_bootargs ? default_bootargs : "", temp_bootargs ? temp_bootargs : "", label, get_booted_slot(), steamos_efi_arg );
 	env_set("bootargs", bootargs);
 
 	// erase temp bootargs which is used for Testing

@@ -37,23 +37,53 @@ int deckard_find_efi_var_store(void)
 	char partname[16] = { 0 };
 	char *slot;
 	enum disk_interface_t disk_interface = DISK_INTERFACE_SCSI;
+	int devnum_restrict = 0; //only look on LUN0 by default
 	
 	if (g_efivar_store.valid)
 		return 0;
 
-	if( booted_from_usb() ) disk_interface = DISK_INTERFACE_USB;
+	if( booted_from_usb() ) 
+	{
+		disk_interface = DISK_INTERFACE_USB;
+		devnum_restrict = -1; //allow finding efi var store on any USB disk device -- TODO is this right?
+	}
 
 	slot = env_get("booted_slot");
 	/* Build the partition name (efi-A/efi-B) */
 	strlcat(partname, "efi-", 16);
 	strlcat(partname, slot, 16);
 
-	if (!deckard_find_part_by_label(disk_interface, partname, &g_efivar_store.devnum, &g_efivar_store.partnum)) {
+	if (!deckard_find_part_by_label(disk_interface, devnum_restrict, partname, &g_efivar_store.devnum, &g_efivar_store.partnum)) 
+	{
 		g_efivar_store.valid = true;
 		return 0;
 	}
 
 	return -ENOENT;
+}
+
+int init_steamos_efi_uuid_part_arg(char * efi_part_uuid_arg)
+{
+	enum disk_interface_t disk_interface = DISK_INTERFACE_SCSI;
+	int ret = 0;
+
+	if( booted_from_usb() ) disk_interface = DISK_INTERFACE_USB;
+
+	deckard_find_efi_var_store(); //sets g_efivar_store
+
+	if (g_efivar_store.valid)
+	{
+		ret = run_commandf("part uuid %s %d:%d efi_uuid", disk_interface_to_str(disk_interface), g_efivar_store.devnum, g_efivar_store.partnum);
+		char *efi_uuid = env_get("efi_uuid");
+		if(ret == 0 && efi_part_uuid_arg && efi_uuid)
+		{
+			strlcat(efi_part_uuid_arg, "steamos.efi=PARTUUID=", 32); //steamos.efi=PARTUUID=886aefa6-96a5-4693-bc09-02b9ad5a288e
+			strlcat(efi_part_uuid_arg, efi_uuid, 64);
+			return 0;
+		}
+	}
+
+	return 1;
 }
 
 void init_esp(void)
@@ -196,7 +226,7 @@ const char *fs_firmware_get_partition(void)
 }
 
 /* Get the devnum/partnum for a partition from its GPT partlabel */
-int deckard_find_part_by_label(enum disk_interface_t disk_interface, const char *partname, int *devnum, int *partnum)
+int deckard_find_part_by_label(enum disk_interface_t disk_interface, int devnum_restrict, const char *partname, int *devnum, int *partnum)
 {
 	int r;
 	struct udevice *blkdev;
@@ -229,6 +259,10 @@ int deckard_find_part_by_label(enum disk_interface_t disk_interface, const char 
 			/* Skip if the name doesn't match */
 			if (strncmp(partname, part.name, strlen(partname)))
 				continue;
+			
+			if ( (devnum_restrict >= 0) && (devnum_restrict != desc->devnum) ) //strict match of devnum can be done if desired
+				continue;
+
 			// printf("Found EFI partition '%s' (%d:%d) blksz %#lx\n", part.name, desc->devnum, *partnum, desc->blksz);
 			*devnum = desc->devnum;
 

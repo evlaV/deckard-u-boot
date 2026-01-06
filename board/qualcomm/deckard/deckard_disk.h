@@ -41,11 +41,12 @@ enum disk_interface_t {
 char * disk_interface_to_str( enum disk_interface_t disk_interface );
 int booted_from_usb(void);
 char get_booted_slot(void);
-int deckard_find_part_by_label(enum disk_interface_t disk_interface, const char *partname, int *devnum, int *partnum);
+int deckard_find_part_by_label(enum disk_interface_t disk_interface, int devnum_restrict, const char *partname, int *devnum, int *partnum);
 int do_load_helper(enum disk_interface_t disk_interface, char * partition, char * addr, char * path);
 int deckard_load_dtb(enum disk_interface_t disk_interface, char * partition, char * addr);
 int deckard_find_efi_var_store(void);
 void init_esp(void);
+int init_steamos_efi_uuid_part_arg(char * efi_part_uuid_arg);
 
 // gets dev:part string for partition name.  return 0 on success
 int deckard_get_dev_part_str_buf( const char *part_name, char *out, int outsize );
