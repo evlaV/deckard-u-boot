@@ -780,6 +780,8 @@ enum combined_button_state_t button_state_handler(void)
 		case POWER_OFF__VOLUP_OFF__VOLDN_ON__SELECT_ON:
 			break;
 		case POWER_OFF__VOLUP_ON__VOLDN_OFF__SELECT_OFF:
+			deckard_log("reseting reboot reason to none\n");
+			pmk8550_set_reboot_command_reason(REBOOT_COMMAND_REASON_NONE);
 			//trigger_xblramdump_fault();
 			break;
 		case POWER_OFF__VOLUP_ON__VOLDN_OFF__SELECT_ON:
