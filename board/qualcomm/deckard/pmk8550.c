@@ -152,11 +152,24 @@ int pmk8550_set_pbs_soft_rb_spare(struct udevice *pmic, u8 val)
 	return ret;
 }
 
+int pmk8550_set_reboot_command_reason(enum reboot_command_reason_t reason)
+{
+	return pmk8550_set_pbs_soft_rb_spare(NULL, reason << 1);
+}
+
 enum reboot_command_reason_t pmk8550_get_reboot_command_reason(struct udevice *pmic)
 {
-	enum reboot_command_reason_t reboot_command_reason;
-	int pbs_soft_rb = pmk8550_get_pbs_soft_rb_spare(pmic);
-	
+	enum reboot_command_reason_t reboot_command_reason = REBOOT_COMMAND_REASON_NONE;
+	int pbs_soft_rb;
+
+	if (!pmic)
+		pmic_get("pmic@0", &pmic);
+
+	if (!pmic)
+		return reboot_command_reason;
+
+	pbs_soft_rb = pmk8550_get_pbs_soft_rb_spare(pmic);
+
 	reboot_command_reason = (pbs_soft_rb >> 1) & 0x7F; //bits 7:1 are the reboot reason, bit 0 is unused
 
 	//printf("reason->pbs_soft_rb = %d, reboot_command_reason = %d\n",pbs_soft_rb,reboot_command_reason);
@@ -169,12 +182,15 @@ enum reboot_command_reason_t pmk8550_get_reboot_command_reason(struct udevice *p
 		case REBOOT_COMMAND_REASON_BOOTLOADER:
 			deckard_log("reboot command reason: REBOOT_COMMAND_REASON_BOOTLOADER\n");
 			break;
-		case REBOOT_COMMAND_REASON_EDL:			
+		case REBOOT_COMMAND_REASON_EDL:
 			deckard_log("reboot command reason: REBOOT_COMMAND_REASON_EDL\n");
 			break;
-		case REBOOT_COMMAND_REASON_FASTBOOT:			
+		case REBOOT_COMMAND_REASON_FASTBOOT:
 			deckard_log("reboot command reason: REBOOT_COMMAND_REASON_FASTBOOT\n");
-			break;			
+			break;
+		case REBOOT_COMMAND_REASON_USB:
+			deckard_log("reboot command reason: REBOOT_COMMAND_REASON_USB\n");
+			break;
 		default:
 			deckard_log("reboot command reason: NONE\n");
 			break;
