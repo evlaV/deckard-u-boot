@@ -13,7 +13,7 @@ int deckard_adsp_stop( void );
 
 // Send data to the adsp
 // This is just a volatile register write; non-blocking
-void deckard_adsp_write( bool dsp_exit_request, bool btn_power, bool btn_select, bool btn_vol_down, bool btn_vol_up );
+void deckard_adsp_write( bool dsp_exit_request, bool btn_power );
 
 // This must match the definition in ADSP code, as it's send 'across the wire'
 // dont expand these states without changing bit allocation in the implementation

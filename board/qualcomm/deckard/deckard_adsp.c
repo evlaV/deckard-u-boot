@@ -20,18 +20,14 @@
 */
 #pragma pack(push, 1)
 
-
 typedef union UBOOT_PayloadOut_t {
-    uint32_t u32;
-    struct {
-        uint32_t magic  : 2; // DECKARD_UBOOT_OUT_MAGIC
+	uint32_t u32;
+	struct {
+		uint32_t magic  : 2; // DECKARD_UBOOT_OUT_MAGIC
 		uint32_t dsp_exit_request : 1;
 		uint32_t btn_power : 1;
-        uint32_t btn_select : 1;
-        uint32_t btn_vol_down : 1;
-        uint32_t btn_vol_up : 1;
-        uint32_t rsvd   : 25; // sender should clear if unused
-    } bits;
+		uint32_t rsvd   : 28; // sender should clear if unused
+	} bits;
 } UBOOT_PayloadOut_t;
 
 typedef union ADSP_PayloadOut_t {
@@ -106,15 +102,12 @@ int deckard_adsp_stop( void )
 }
 
 void deckard_adsp_write( bool dsp_exit_request,
-	bool btn_power, bool btn_select, bool btn_vol_down, bool btn_vol_up )
+	bool btn_power )
 {
 	UBOOT_PayloadOut_t payload = { 0 };
 	payload.bits.magic = DECKARD_UBOOT_OUT_MAGIC; 
 	payload.bits.dsp_exit_request = dsp_exit_request ? 1 : 0;
 	payload.bits.btn_power = btn_power ? 1 : 0;
-	payload.bits.btn_select = btn_select ? 1 : 0;
-	payload.bits.btn_vol_down = btn_vol_down ? 1 : 0;
-	payload.bits.btn_vol_up = btn_vol_up ? 1 : 0;
 	writel( payload.u32, DECKARD_UBOOT_OUT_ADDR );
 }
 

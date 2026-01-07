@@ -971,11 +971,7 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 			deckard_log( "Starting ADSP...\n" );
 
 			// Initial startup state (important to set dsp_exit_request to false)
-			deckard_adsp_write( false,
-				( button_get_state( pdevices->btn_power ) == BUTTON_ON ),
-				( button_get_state( pdevices->btn_select ) == BUTTON_ON ),
-				( button_get_state( pdevices->btn_vol_down ) == BUTTON_ON ),
-				( button_get_state( pdevices->btn_vol_up ) == BUTTON_ON ) );
+			deckard_adsp_write( false, ( button_get_state( pdevices->btn_power ) == BUTTON_ON ) );
 
 			adsp_runstate = RUNSTATE_UNKNOWN;
 			adsp_started = true;
@@ -1034,20 +1030,15 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 				adsp_runstate = RUNSTATE_UNKNOWN;
 			}
 		}
-
-		bool bSelectDown = ( button_get_state( pdevices->btn_select ) == BUTTON_ON );
-
 		deckard_adsp_write( false,
-				(bool) latest_power_button_down,
-				bSelectDown,
-			( button_get_state( pdevices->btn_vol_down ) == BUTTON_ON ),
-			( button_get_state( pdevices->btn_vol_up ) == BUTTON_ON ) );
+				(bool) latest_power_button_down  );
 
 		// Watch for power button RELEASE to trigger
 		{
 			if ( !latest_power_button_down && power_button_down != latest_power_button_down )
 			{
-				boot_intention = bSelectDown ? BOOT_INTENTION_BOOT_MENU : BOOT_INTENTION_START_USERSPACE;
+				boot_intention = ( button_get_state( pdevices->btn_select ) == BUTTON_ON ) ? 
+					BOOT_INTENTION_BOOT_MENU : BOOT_INTENTION_START_USERSPACE;
 				if ( adsp_started )
 				{
 					// TODO: query deckard_battery_ok_for_userspace
@@ -1150,7 +1141,7 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 	if ( adsp_runstate == RUNSTATE_RUNNING || adsp_runstate == RUNSTATE_STARTING )
 	{
 		// Send an exit request
-		deckard_adsp_write( true, false, false, false, false );
+		deckard_adsp_write( true, ( button_get_state( pdevices->btn_power ) == BUTTON_ON ) );
 
 		// And wait to stop
 		// TODO: we need to clean up ADSP charge loop during init to be faster
