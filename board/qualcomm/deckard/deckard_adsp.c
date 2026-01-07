@@ -26,7 +26,6 @@ typedef union UBOOT_PayloadOut_t {
 		uint32_t magic  : 2; // DECKARD_UBOOT_OUT_MAGIC
 		uint32_t dsp_exit_request : 1;
 		uint32_t btn_power : 1;
-		uint32_t rsvd   : 28; // sender should clear if unused
 	} bits;
 } UBOOT_PayloadOut_t;
 
@@ -36,7 +35,7 @@ typedef union ADSP_PayloadOut_t {
         uint32_t magic  : 2;  // DECKARD_ADSP_OUT_MAGIC
         uint32_t sequence_count : 4; // sequence counter.  increments on each update
 		uint32_t run_state : 2; // ADSPLite_RunState_t
-        uint32_t rsvd   : 24; // sender should clear if unused
+		uint32_t battery_ok_for_userspace : 1;
     } bits;
 } ADSP_PayloadOut_t;
 
@@ -111,7 +110,7 @@ void deckard_adsp_write( bool dsp_exit_request,
 	writel( payload.u32, DECKARD_UBOOT_OUT_ADDR );
 }
 
-uint32_t deckard_adsp_read( ADSPLite_RunState_t * runstate, int * sequence_count )
+uint32_t deckard_adsp_read( ADSPLite_RunState_t * runstate, int * sequence_count, bool * battery_ok_for_userspace )
 {
 	ADSP_PayloadOut_t payload;
 	payload.u32 = readl(DECKARD_ADSP_OUT_ADDR);
@@ -120,12 +119,14 @@ uint32_t deckard_adsp_read( ADSPLite_RunState_t * runstate, int * sequence_count
 	{
 		if ( runstate ) *runstate = payload.bits.run_state;
 		if ( sequence_count ) *sequence_count = ( payload.bits.sequence_count ) + 1; // to not overlap with 0
+		if ( battery_ok_for_userspace) *battery_ok_for_userspace = payload.bits.battery_ok_for_userspace;
 		return payload.u32;
 	}
 	else
 	{
 		if ( runstate ) *runstate = RUNSTATE_UNKNOWN;
 		if ( sequence_count ) *sequence_count = 0;
+		if ( battery_ok_for_userspace) *battery_ok_for_userspace = true; // fail safe
 		return 0;
 	}
 }
@@ -138,12 +139,12 @@ ADSPLite_RunState_t deckard_adsp_wait_for_runstate( ADSPLite_RunState_t expected
 
 	ADSPLite_RunState_t runstate = RUNSTATE_UNKNOWN;
 	int sequence_count = 0;
-	deckard_adsp_read( &runstate, &sequence_count );
+	deckard_adsp_read( &runstate, &sequence_count, NULL );
 
 	ulong starttime = get_timer( 0 );
 	while ( get_timer( starttime ) < max_wait_ms )
 	{
-		deckard_adsp_read( &runstate, &sequence_count );
+		deckard_adsp_read( &runstate, &sequence_count, NULL );
 		if ( runstate == expected_runstate )
 		{
 			deckard_log( "    completed ADSP wait in %d ms\n", (int) get_timer( starttime ) );

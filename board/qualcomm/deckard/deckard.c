@@ -953,10 +953,12 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 	static const bool k_do_adsp_healthchecks = true;
 
 	// Health check timeouts
-	static const int k_ADSP_MaxUnknownWaitMS = 500; // 500 ms
-	static const int k_ADSP_MaxStartWaitMS = 10 * 1000; // 10s
-	static const int k_ADSP_MaxHeartbeatWaitMS = 1000; // 1s
+	static const int k_ADSP_MaxUnknownWaitMS = 500; // 500 ms  (measured: ~5ms nominal)
+	static const int k_ADSP_MaxStartWaitMS = 2000; // 2s (measured: ~400 ms nominal)
+	static const int k_ADSP_MaxHeartbeatWaitMS = 1000; // 1s (measured: ~20-50ms nominal )
 	static const int k_ADSP_RestartIntervalMS = 30 * 1000; // 30s. should be > k_ADSP_MaxStartWaitMS
+
+	bool adsp_battery_ok_for_userspace = true;
 
 	while ( true )
 	{
@@ -984,7 +986,7 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 		{
 			ADSPLite_RunState_t adsp_runstate_new = RUNSTATE_UNKNOWN;
 			int adsp_sequence_count_new = 0;
-			deckard_adsp_read( &adsp_runstate_new, &adsp_sequence_count_new );
+			deckard_adsp_read( &adsp_runstate_new, &adsp_sequence_count_new, &adsp_battery_ok_for_userspace );
 
 			if ( adsp_runstate_new != adsp_runstate )
 			{
@@ -1039,16 +1041,13 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 			{
 				boot_intention = ( button_get_state( pdevices->btn_select ) == BUTTON_ON ) ? 
 					BOOT_INTENTION_BOOT_MENU : BOOT_INTENTION_START_USERSPACE;
-				if ( adsp_started )
+				if ( adsp_started && !adsp_battery_ok_for_userspace )
 				{
-					// TODO: query deckard_battery_ok_for_userspace
+					boot_intention = BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY;
 				}
-				else
+				else if ( !adsp_started && !deckard_battery_ok_for_userspace( pdevices->max17320 ) )
 				{
-					if ( !deckard_battery_ok_for_userspace( pdevices->max17320 ) )
-					{
-						boot_intention = BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY;
-					}
+					boot_intention = BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY;
 				}
 
 				deckard_log( "User power button pressed. boot_intention:%d\n", boot_intention );
@@ -1098,6 +1097,7 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 			}
 
 			// TODO: Replace with inf from dsp state, when dsp is loaded
+			//
 			deckard_shutdown_loop_counter = 10;
 			if( deckard_shutdown_condition( pdevices->pm8550b ) )
 			{
@@ -1144,7 +1144,6 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 		deckard_adsp_write( true, ( button_get_state( pdevices->btn_power ) == BUTTON_ON ) );
 
 		// And wait to stop
-		// TODO: we need to clean up ADSP charge loop during init to be faster
 		// The user will be impacted in button responsiveness if this time is too long
 		adsp_runstate = deckard_adsp_wait_for_runstate( RUNSTATE_STOPPED, 500 );
 

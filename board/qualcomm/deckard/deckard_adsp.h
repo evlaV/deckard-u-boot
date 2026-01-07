@@ -27,7 +27,7 @@ typedef enum
 
 // Return uint32_t hash on success, 0 on failure
 // This is just a volatile register read; non-blocking
-uint32_t deckard_adsp_read( ADSPLite_RunState_t * runstate, int * sequence_count );
+uint32_t deckard_adsp_read( ADSPLite_RunState_t * runstate, int * sequence_count, bool * battery_ok_for_userspace );
 
 // wait up to max_wait_ms for the specified adsp_state
 ADSPLite_RunState_t deckard_adsp_wait_for_runstate( ADSPLite_RunState_t expected_runstate, int max_wait_ms );

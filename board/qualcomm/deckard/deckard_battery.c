@@ -230,7 +230,6 @@ bool deckard_battery_is_charging_enabled(struct udevice *pm8550b)
 
 int deckard_battery_ok_for_userspace( struct udevice *max17320 )
 {
-
 	if ( !max17320 )
 		return true; // error should fail in direction of allow booting
 
