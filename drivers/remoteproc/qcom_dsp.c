@@ -40,6 +40,14 @@ enum qcom_dsp_state {
 	QCOM_DSP_STATE_INITIALIZED,
 	QCOM_DSP_STATE_LOADED,
 	QCOM_DSP_STATE_STARTED,
+	QCOM_DSP_STATE_STOPED,
+};
+
+static char * const qcom_dsp_state_str[] = {
+	"DSP_INITIALIZED",
+	"DSP_LOADED",
+	"DSP_STARTED",
+	"DSP_STOPED",
 };
 
 struct qcom_dsp {
@@ -52,17 +60,25 @@ struct qcom_dsp {
 	enum qcom_dsp_state state;
 };
 
+static const char *qcom_dsp_state_to_str(enum qcom_dsp_state state)
+{
+	if (state > QCOM_DSP_STATE_STOPED)
+		return "DSP_INVALID";
+
+	return qcom_dsp_state_str[state];
+}
+
 static int qcom_dsp_start_with_param(struct udevice *dev, uint32_t param)
 {
 	struct qcom_dsp *dsp = dev_get_priv(dev);
 
 	if (dsp->state == QCOM_DSP_STATE_STARTED) {
-		printf("%s is already started: %d\n", dsp->firmware_name,
-			dsp->state);
+		printf("%s is already started: %s\n", dsp->firmware_name,
+			qcom_dsp_state_to_str(dsp->state));
 		return 0;
 	} else if (dsp->state != QCOM_DSP_STATE_LOADED) {
-		printf("%s is in wrong state: %d\n", dsp->firmware_name,
-			dsp->state);
+		printf("%s is in wrong state: %s\n", dsp->firmware_name,
+			qcom_dsp_state_to_str(dsp->state));
 		return -EINVAL;
 	}
 
@@ -91,13 +107,19 @@ static int qcom_dsp_stop(struct udevice *dev)
 {
 	struct qcom_dsp *dsp = dev_get_priv(dev);
 
+	if (dsp->state != QCOM_DSP_STATE_STARTED) {
+		printf("%s is in wrong state: %s\n", dsp->firmware_name,
+			qcom_dsp_state_to_str(dsp->state));
+		return -EINVAL;
+	}
+
 	writel(~0u, dsp->base +  QDSP6SS_RESET_CFG);
 	writel(1, dsp->base +  QDSP6SS_RESET_CMD);
 	udelay(20000);
 	writel(0, dsp->base +  QDSP6SS_RESET_CFG);
 
-	dsp->state = QCOM_DSP_STATE_LOADED;
-	
+	dsp->state = QCOM_DSP_STATE_STOPED;
+
 	printf("qcom_dsp: firmware stopped\n");
 
 	return 0;
@@ -184,12 +206,6 @@ static int qcom_dsp_load(struct udevice *dev, ulong addr, ulong size)
 	struct qcom_dsp *dsp = dev_get_priv(dev);
 	int ret;
 
-	if (dsp->state != QCOM_DSP_STATE_INITIALIZED) {
-		printf("%s is in wrong state: %d\n", dsp->firmware_name,
-			dsp->state);
-		return -EINVAL;
-	}
-
 	ret = rproc_elf_load_image(dev, addr, size);
 	if (ret < 0) {
 		printf("qcom_dsp: %s: failed loading elf\n", __func__);
@@ -206,29 +222,18 @@ static int qcom_dsp_load(struct udevice *dev, ulong addr, ulong size)
 	return 0;
 }
 
-static int qcom_dsp_init(struct udevice *dev)
+static int qcom_dsp_load_elf(struct qcom_dsp *dsp)
 {
 	ALLOC_CACHE_ALIGN_BUFFER(char, buf, CONFIG_REMOTEPROC_MAX_FW_SIZE);
-	struct qcom_dsp *dsp = dev_get_priv(dev);
 	int chip_id;
 	int read;
 	int ret;
 
-#if 0
-	read = qcom_dsp_load_ext4fs(dsp, buf);
-	if (read < 0) {
-		printf("ext4fs: failed to load: %s\n", dsp->firmware_name);
-		return read;
-	}
-#else
 	read = qcom_dsp_load_any(dsp, buf);
 	if (read < 0) {
 		printf("erofs: failed to load: %s\n", dsp->firmware_name);
 		return read;
 	}
-#endif
-
-	dsp->state = QCOM_DSP_STATE_INITIALIZED;
 
 	chip_id = 0;
 
@@ -241,10 +246,47 @@ static int qcom_dsp_init(struct udevice *dev)
 	return 0;
 }
 
+static int qcom_dsp_reset(struct udevice *dev)
+{
+	struct qcom_dsp *dsp = dev_get_priv(dev);
+	int ret;
+
+	if (dsp->state != QCOM_DSP_STATE_STOPED) {
+		ret = qcom_dsp_stop(dev);
+		if (ret < 0)
+			return ret;
+	}
+
+	ret = qcom_dsp_load_elf(dsp);
+	if (ret < 0)
+		return ret;
+
+	ret = qcom_dsp_start(dev);
+	if (ret < 0)
+		return ret;
+
+	return 0;
+}
+
+static int qcom_dsp_init(struct udevice *dev)
+{
+	struct qcom_dsp *dsp = dev_get_priv(dev);
+	int ret;
+
+	dsp->state = QCOM_DSP_STATE_INITIALIZED;
+
+	ret = qcom_dsp_load_elf(dsp);
+	if (ret < 0)
+		return ret;
+
+	return 0;
+}
+
 static const struct dm_rproc_ops qcom_dsp_ops = {
 	.init = qcom_dsp_init,
 	.stop = qcom_dsp_stop,
 	.load = qcom_dsp_load,
+	.reset = qcom_dsp_reset,
 	.start = qcom_dsp_start,
 	.start_with_param = qcom_dsp_start_with_param,
 };
