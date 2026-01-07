@@ -918,15 +918,11 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 	int deckard_shutdown_loop_counter = 1;
 	static const int k_nBatteryImageCount = 10 * 3; // 100ms * 10 * 5 = 3s
 	int deckard_display_off_counter = k_nBatteryImageCount;
-	bool adsp_loaded = 0;
 	bool in_shutdown = 0;
 
 	// This default allows for a launch on a subsequent power button
 	// release, if the user happens to enter the loop with it held
 	int power_button_down = ( button_get_state( pdevices->btn_power ) == BUTTON_ON );
-
-	// This is ok (and in fact appropriate) to do before adsp is loaded
-	deckard_uboot_out_write_clear();
 
 	// WARNING: Do not set LED color in the following loop when the ADSP is loaded
 	// The ADSP sets LED colors when active based on state only it is aware of
@@ -940,28 +936,110 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 	// TODO: also do not use the i2c bus that the ADSP is on.  It needs it for
 	// power negotiation
 
+	ADSPLite_RunState_t adsp_runstate = RUNSTATE_UNKNOWN; // reported from ADSP
+	int adsp_sequence_count = 0; // reported from ADSP
+	ulong adsp_start_time = 0;
+	ulong adsp_running_heartbeat_time = 0;
+
+	// adsp_started is distinct from adsp_runstate == RUNSTATE_STARTING
+	// RUNSTATE_STARTING means that the ADSP is running, and in its
+	// internal initialization.
+	// adsp_started represents that uboot is attempting to start it
+	// but if ADSP does not report back runstate can stay UNKNOWN
+	bool adsp_started = false; // our local state
+
+	// Set this to false if you dont care about adsp's health
+	// This should be true for users, but is helpful for debugging...
+	static const bool k_do_adsp_healthchecks = true;
+
+	// Health check timeouts
+	static const int k_ADSP_MaxUnknownWaitMS = 500; // 500 ms
+	static const int k_ADSP_MaxStartWaitMS = 10 * 1000; // 10s
+	static const int k_ADSP_MaxHeartbeatWaitMS = 1000; // 1s
+	static const int k_ADSP_RestartIntervalMS = 30 * 1000; // 30s. should be > k_ADSP_MaxStartWaitMS
+
 	while ( true )
 	{
-		// Start the ADSP to allow charging
-		// TODO: throttle this, if for some reason we cant start?
-		if ( !adsp_loaded && deckard_battery_ok_for_dsp( pdevices->max17320 ) )
+		// Start the ADSP_lite (to allow charging) if needed, and if we're allowed (both time and battery)
+		// Note that deckard_battery_ok_for_dsp can only be called if adsp is not started (i2c)
+		bool try_start_adsp = ( !adsp_started && 
+			( !adsp_start_time || get_timer( adsp_start_time ) > k_ADSP_RestartIntervalMS ) &&
+			deckard_battery_ok_for_dsp( pdevices->max17320 ) );
+
+		if ( try_start_adsp )
 		{
-			deckard_setledcolor( LED_COLOR_OFF, &g_deckard_devices );
-			adsp_loaded = ( deckard_adsp_start() == 0 );
+			deckard_log( "Starting ADSP...\n" );
+
+			// Initial startup state (important to set dsp_exit_request to false)
+			deckard_adsp_write( false,
+				( button_get_state( pdevices->btn_power ) == BUTTON_ON ),
+				( button_get_state( pdevices->btn_select ) == BUTTON_ON ),
+				( button_get_state( pdevices->btn_vol_down ) == BUTTON_ON ),
+				( button_get_state( pdevices->btn_vol_up ) == BUTTON_ON ) );
+
+			adsp_runstate = RUNSTATE_UNKNOWN;
+			adsp_started = true;
+			adsp_start_time = get_timer( 0 );
+			deckard_adsp_start();
 		}
 
 		int latest_power_button_down = ( button_get_state( pdevices->btn_power ) == BUTTON_ON );
 
-		// TODO: should we do this even if adsp is not loaded?
-		// It doesn't hurt.
-		if ( adsp_loaded )
 		{
-			// If the adsp is loaded, tell it about our button state
-			deckard_uboot_out_write( (bool) latest_power_button_down,
-				( button_get_state( pdevices->btn_select ) == BUTTON_ON ),
-				( button_get_state( pdevices->btn_vol_down ) == BUTTON_ON ),
-				( button_get_state( pdevices->btn_vol_up ) == BUTTON_ON ) );
+			ADSPLite_RunState_t adsp_runstate_new = RUNSTATE_UNKNOWN;
+			int adsp_sequence_count_new = 0;
+			deckard_adsp_read( &adsp_runstate_new, &adsp_sequence_count_new );
+
+			if ( adsp_runstate_new != adsp_runstate )
+			{
+				deckard_log( "ADSP runstate change %d -> %d\n", adsp_runstate, adsp_runstate_new );
+			}
+
+			if ( adsp_sequence_count_new != adsp_sequence_count )
+			{
+				adsp_running_heartbeat_time = get_timer( 0 );
+			}
+
+			adsp_runstate = adsp_runstate_new;
+			adsp_sequence_count = adsp_sequence_count_new;
 		}
+
+		// ADSP health checks
+		if ( k_do_adsp_healthchecks && adsp_started )
+		{
+			// Is the ADSP RUNSTATE_UNKNOWN taking too long?
+			if ( adsp_runstate == RUNSTATE_UNKNOWN && get_timer( adsp_start_time ) > k_ADSP_MaxUnknownWaitMS )
+			{
+				deckard_log( "ADSP taking too long to transition from RUNSTATE_UNKNOWN (max time %d ms exceeded) Stopping\n", k_ADSP_MaxUnknownWaitMS );
+				deckard_adsp_stop(); // hard shutdown
+				adsp_started = false;
+				adsp_runstate = RUNSTATE_UNKNOWN;
+			}
+
+			// Is the ADSP RUNSTATE_STARTING taking too long?
+			if ( adsp_runstate == RUNSTATE_STARTING && get_timer( adsp_start_time ) > k_ADSP_MaxStartWaitMS )
+			{
+				deckard_log( "ADSP taking too long to transition from RUNSTATE_STARTING (max time %d ms exceeded) Stopping\n", k_ADSP_MaxStartWaitMS );
+				deckard_adsp_stop(); // hard shutdown
+				adsp_started = false;
+				adsp_runstate = RUNSTATE_UNKNOWN;
+			}
+
+			// Is the ADSP RUNSTATE_RUNNING taking too long? (without a heartbeat)
+			if ( adsp_runstate == RUNSTATE_RUNNING && get_timer( adsp_running_heartbeat_time ) > k_ADSP_MaxHeartbeatWaitMS )
+			{
+				deckard_log( "ADSP taking too long to provide heartbeat (max time %d ms exceeded) Stopping\n", k_ADSP_MaxHeartbeatWaitMS );
+				deckard_adsp_stop(); // hard shutdown
+				adsp_started = false;
+				adsp_runstate = RUNSTATE_UNKNOWN;
+			}
+		}
+
+		deckard_adsp_write( false,
+				(bool) latest_power_button_down,
+			( button_get_state( pdevices->btn_select ) == BUTTON_ON ),
+			( button_get_state( pdevices->btn_vol_down ) == BUTTON_ON ),
+			( button_get_state( pdevices->btn_vol_up ) == BUTTON_ON ) );
 
 		// Watch for power button RELEASE to trigger
 		{
@@ -970,10 +1048,10 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 				// Update our boot intention on a click
 				boot_intention = calc_boot_intention( pdevices, 1 );
 				deckard_log( "User power button pressed. boot_intention:%d\n", boot_intention );
-				
+
 				if ( boot_intention == BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY )
 				{
-					if ( !adsp_loaded )
+					if ( !adsp_started )
 					{
 						deckard_setledcolor( get_led_color_for_boot_intention( boot_intention ), &g_deckard_devices );
 					}
@@ -987,6 +1065,7 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 				// Is it time to exit our loop?
 				if ( !deckard_should_wait_for_button_to_boot( boot_intention ) )
 				{
+					// EXIT THE PRIMARY CHARGING LOOP.
 					break;
 				}
 			}
@@ -1006,10 +1085,12 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 		//check every 10 loops to avoid spamming the SPMI bus
 		if ( !in_shutdown && deckard_shutdown_loop_counter-- == 0 )
 		{
+			// TODO: move this to adsp
 			int soc = deckard_battery_get_capacity(pdevices->max17320);
 			int avg_vcell = deckard_battery_get_avg_vcell(pdevices->max17320);
 			int avg_current = deckard_battery_get_avg_current(pdevices->max17320);
-			deckard_log("\r" ANSI_CLEAR_LINE "Battery: %d%%, %dmV, %dmA", soc,avg_vcell,avg_current); fflush(stdout);
+			// TODO: Replace with inf from dsp state, when dsp is loaded
+			// deckard_log("\r" ANSI_CLEAR_LINE "Battery: %d%%, %dmV, %dmA", soc,avg_vcell,avg_current); fflush(stdout);
 
 			deckard_shutdown_loop_counter = 10;
 			if( deckard_shutdown_condition( pdevices->pm8550b ) )
@@ -1038,7 +1119,7 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 		if ( deckard_display_off_counter >= 0 && ( deckard_display_off_counter-- == 0 ) )
 		{
 			display_turn_off();
-			if ( !adsp_loaded )
+			if ( !adsp_started )
 			{
 				deckard_setledcolor( LED_COLOR_OFF, &g_deckard_devices );
 			}
@@ -1049,8 +1130,33 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 		mdelay(100);
 	}
 
-	if ( adsp_loaded ) deckard_adsp_stop();
-	deckard_log( "deckard_wait_to_boot end\n" );
+
+	// Co-operative shutdown
+	if ( adsp_runstate == RUNSTATE_RUNNING || adsp_runstate == RUNSTATE_STARTING )
+	{
+		// Send an exit request
+		deckard_adsp_write( true, false, false, false, false );
+
+		// And wait to stop
+		// TODO: we need to clean up ADSP charge loop during init to be faster
+		// The user will be impacted in button responsiveness if this time is too long
+		adsp_runstate = deckard_adsp_wait_for_runstate( RUNSTATE_STOPPED, 500 );
+
+		if ( adsp_runstate == RUNSTATE_STOPPED )
+		{
+			deckard_log( "ADSP clean exit\n" );
+		}
+		else
+		{
+			deckard_log( "ERROR: ADSP exit timeout. Killing ADSP\n" );
+		}
+	}
+
+	if ( adsp_started )
+	{
+		deckard_adsp_stop();
+	}
+
 	*p_boot_intention = boot_intention;
 }
 
