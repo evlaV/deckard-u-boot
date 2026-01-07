@@ -597,7 +597,7 @@ int misc_init_r(void)
 	}
 
 	// CALC POWER-ON BOOT INTENTION
-	g_boot_intention = calc_boot_intention( &g_deckard_devices, 0 );
+	g_boot_intention = calc_boot_intention( &g_deckard_devices );
 	deckard_log( "g_boot_intention %d\n", g_boot_intention );
 
 	// Set LED Color
@@ -1035,9 +1035,11 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 			}
 		}
 
+		bool bSelectDown = ( button_get_state( pdevices->btn_select ) == BUTTON_ON );
+
 		deckard_adsp_write( false,
 				(bool) latest_power_button_down,
-			( button_get_state( pdevices->btn_select ) == BUTTON_ON ),
+				bSelectDown,
 			( button_get_state( pdevices->btn_vol_down ) == BUTTON_ON ),
 			( button_get_state( pdevices->btn_vol_up ) == BUTTON_ON ) );
 
@@ -1045,8 +1047,19 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 		{
 			if ( !latest_power_button_down && power_button_down != latest_power_button_down )
 			{
-				// Update our boot intention on a click
-				boot_intention = calc_boot_intention( pdevices, 1 );
+				boot_intention = bSelectDown ? BOOT_INTENTION_BOOT_MENU : BOOT_INTENTION_START_USERSPACE;
+				if ( adsp_started )
+				{
+					// TODO: query deckard_battery_ok_for_userspace
+				}
+				else
+				{
+					if ( !deckard_battery_ok_for_userspace( pdevices->max17320 ) )
+					{
+						boot_intention = BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY;
+					}
+				}
+
 				deckard_log( "User power button pressed. boot_intention:%d\n", boot_intention );
 
 				if ( boot_intention == BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY )
@@ -1085,13 +1098,15 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 		//check every 10 loops to avoid spamming the SPMI bus
 		if ( !in_shutdown && deckard_shutdown_loop_counter-- == 0 )
 		{
-			// TODO: move this to adsp
-			int soc = deckard_battery_get_capacity(pdevices->max17320);
-			int avg_vcell = deckard_battery_get_avg_vcell(pdevices->max17320);
-			int avg_current = deckard_battery_get_avg_current(pdevices->max17320);
-			// TODO: Replace with inf from dsp state, when dsp is loaded
-			// deckard_log("\r" ANSI_CLEAR_LINE "Battery: %d%%, %dmV, %dmA", soc,avg_vcell,avg_current); fflush(stdout);
+			if ( !adsp_started ) // pdevices->max17320 is off limits while adsp is on
+			{
+				int soc = deckard_battery_get_capacity(pdevices->max17320);
+				int avg_vcell = deckard_battery_get_avg_vcell(pdevices->max17320);
+				int avg_current = deckard_battery_get_avg_current(pdevices->max17320);
+				deckard_log("\r" ANSI_CLEAR_LINE "Battery: %d%%, %dmV, %dmA", soc,avg_vcell,avg_current); fflush(stdout);
+			}
 
+			// TODO: Replace with inf from dsp state, when dsp is loaded
 			deckard_shutdown_loop_counter = 10;
 			if( deckard_shutdown_condition( pdevices->pm8550b ) )
 			{
@@ -1351,7 +1366,7 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 	env_set("fdtcontroladdr", DTB_ADDR);
 
 	// check one more time to see if the user has hit select button to go to the menu
-	g_boot_intention = calc_boot_intention( &g_deckard_devices, 0 );
+	g_boot_intention = calc_boot_intention( &g_deckard_devices );
 	if ( g_boot_intention == BOOT_INTENTION_BOOT_MENU )
 	{
 		deckard_do_bootmenu();

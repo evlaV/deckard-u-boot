@@ -61,7 +61,7 @@ typedef struct
 	struct udevice *pmk8550;
 	struct udevice *pm8550vse;
 	struct udevice *pm8550b;
-	struct udevice *max17320;
+	struct udevice *max17320; // fuel gauge over i2c. cant use while adsp is loaded
 	struct udevice *led_red;
 	struct udevice *led_green;
 	struct udevice *led_blue;
@@ -72,7 +72,10 @@ typedef struct
 } deckard_devices_t;
 
 int deckard_setup_devices( deckard_devices_t * pdevices );
-boot_intention_t calc_boot_intention( deckard_devices_t * pdevices, int assume_boot_up_desired );
+
+// Warning: do not call this while adsp is running
+boot_intention_t calc_boot_intention( deckard_devices_t * pdevices );
+
 void deckard_setledcolor( LedColor color, deckard_devices_t * pdevices );
 bool deckard_factory_mode_enabled( void );
 bool deckard_adb_mode_enabled( void );

@@ -39,7 +39,7 @@ static combined_button_state_t deckard_get_button_state( deckard_devices_t * pde
 }
 
 
-boot_intention_t calc_boot_intention( deckard_devices_t * pdevices, int assume_boot_up_desired )
+boot_intention_t calc_boot_intention( deckard_devices_t * pdevices )
 {
 	// These boot-up modes (those which are dev centric) blindly obey "reboot_mode"
 	// Note that in some cases like 'b', they are set from the OS (user-space)
@@ -71,13 +71,7 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices, int assume_b
 
 	// Figure out if boot-up (to kernel, etc) is desired.
 	int boot_up_desired = false;
-	if ( assume_boot_up_desired )
 	{
-		boot_up_desired = true;
-	}
-	else
-	{
-		boot_up_desired = false;
 		/*
 		* check on/off reasons to see if we were booted by a button
 		* push or warm reset (reboot command), in case of unknown reason
