@@ -27,7 +27,7 @@ void deckard_log_with_prefix( const char *prefix, bool overwrite, const char *fm
 	if (!prefix)
 		prefix = "?";
 
-	bool newline = ( g_lastLineIsOverwrite != overwrite && overwrite );
+	bool newline = ( g_lastLineIsOverwrite != overwrite && !overwrite );
 
 	printf("%s%s[%5llu.%06llu] %s: ",
 		newline ?  "\n" : "", overwrite ? "\r" ANSI_CLEAR_LINE : "", s, u, prefix);
