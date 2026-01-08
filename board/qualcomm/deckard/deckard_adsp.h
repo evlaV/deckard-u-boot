@@ -46,12 +46,18 @@ ADSPLite_RunState_t deckard_adsp_wait_for_runstate( ADSPLite_RunState_t expected
 
 static inline const char *ADSPLite_RunState_to_string( ADSPLite_RunState_t s )
 {
-    switch (s) {
-    case RUNSTATE_UNKNOWN:  return "unknown";
-    case RUNSTATE_STARTING: return "starting";
-    case RUNSTATE_RUNNING:  return "running";
-    case RUNSTATE_STOPPED:  return "stopped";
-    default:                return "<invalid>";
+    switch (s)
+    {
+        case RUNSTATE_UNKNOWN:
+            return "Unknown";
+        case RUNSTATE_STARTING:
+            return "Starting";
+        case RUNSTATE_RUNNING:
+            return "Running";
+        case RUNSTATE_STOPPED:
+            return "Stopped";
+        default:
+            return "<Invalid>";
     }
 }
 

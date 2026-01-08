@@ -1092,15 +1092,16 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 		{
 			if ( adsp_started )
 			{
-				deckard_log("\r" ANSI_CLEAR_LINE "fuel (internal): %d%%, fuel (external): %d%%", 
-					adsp_state.fuel_gauge_internal, adsp_state.fuel_gauge_internal ); fflush(stdout);
+				deckard_log_overwrite( "Battery: %d%%", adsp_state.fuel_gauge_internal );
+				fflush(stdout);
 			}
 			else
 			{
 				int soc = deckard_battery_get_capacity(pdevices->max17320);
 				int avg_vcell = deckard_battery_get_avg_vcell(pdevices->max17320);
 				int avg_current = deckard_battery_get_avg_current(pdevices->max17320);
-				deckard_log("\r" ANSI_CLEAR_LINE "Battery: %d%%, %dmV, %dmA", soc,avg_vcell,avg_current); fflush(stdout);
+				deckard_log_overwrite( "Battery: %d%%, %dmV, %dmA", soc,avg_vcell,avg_current );
+				fflush(stdout);
 			}
 
 			// TODO: Replace with inf from dsp state, when dsp is loaded
