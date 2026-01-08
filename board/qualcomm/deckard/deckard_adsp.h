@@ -25,11 +25,34 @@ typedef enum
     RUNSTATE_STOPPED = 3,
 } ADSPLite_RunState_t;
 
+typedef struct ADSP_State_t
+{
+    bool valid;
+    ADSPLite_RunState_t runstate;
+    int sequence_count;
+    bool battery_ok_for_userspace;
+    int fuel_gauge_internal;
+    int fuel_gauge_external; 
+} ADSP_State_t;
+
+void deckard_adsp_state_clear( ADSP_State_t * payload );
+
 // Return uint32_t hash on success, 0 on failure
 // This is just a volatile register read; non-blocking
-uint32_t deckard_adsp_read( ADSPLite_RunState_t * runstate, int * sequence_count, bool * battery_ok_for_userspace );
+void deckard_adsp_read( ADSP_State_t * payload );
 
 // wait up to max_wait_ms for the specified adsp_state
 ADSPLite_RunState_t deckard_adsp_wait_for_runstate( ADSPLite_RunState_t expected_runstate, int max_wait_ms );
+
+static inline const char *ADSPLite_RunState_to_string( ADSPLite_RunState_t s )
+{
+    switch (s) {
+    case RUNSTATE_UNKNOWN:  return "unknown";
+    case RUNSTATE_STARTING: return "starting";
+    case RUNSTATE_RUNNING:  return "running";
+    case RUNSTATE_STOPPED:  return "stopped";
+    default:                return "<invalid>";
+    }
+}
 
 #endif /* __DECKARD_ADSP_H__ */

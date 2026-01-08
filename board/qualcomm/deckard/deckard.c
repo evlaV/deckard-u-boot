@@ -936,8 +936,8 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 	// TODO: also do not use the i2c bus that the ADSP is on.  It needs it for
 	// power negotiation
 
-	ADSPLite_RunState_t adsp_runstate = RUNSTATE_UNKNOWN; // reported from ADSP
-	int adsp_sequence_count = 0; // reported from ADSP
+	ADSP_State_t adsp_state = { 0 };
+	deckard_adsp_state_clear( &adsp_state );
 	ulong adsp_start_time = 0;
 	ulong adsp_running_heartbeat_time = 0;
 
@@ -971,11 +971,12 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 		if ( try_start_adsp )
 		{
 			deckard_log( "Starting ADSP...\n" );
-
+		
 			// Initial startup state (important to set dsp_exit_request to false)
 			deckard_adsp_write( false, ( button_get_state( pdevices->btn_power ) == BUTTON_ON ) );
 
-			adsp_runstate = RUNSTATE_UNKNOWN;
+			deckard_adsp_state_clear( &adsp_state );
+
 			adsp_started = true;
 			adsp_start_time = get_timer( 0 );
 			deckard_adsp_start();
@@ -984,54 +985,55 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 		int latest_power_button_down = ( button_get_state( pdevices->btn_power ) == BUTTON_ON );
 
 		{
-			ADSPLite_RunState_t adsp_runstate_new = RUNSTATE_UNKNOWN;
-			int adsp_sequence_count_new = 0;
-			deckard_adsp_read( &adsp_runstate_new, &adsp_sequence_count_new, &adsp_battery_ok_for_userspace );
+			ADSP_State_t adsp_state_new = { 0 };
+			deckard_adsp_read( &adsp_state_new );
 
-			if ( adsp_runstate_new != adsp_runstate )
+			if ( adsp_state_new.runstate != adsp_state.runstate )
 			{
-				deckard_log( "ADSP runstate change %d -> %d\n", adsp_runstate, adsp_runstate_new );
+				deckard_log( "ADSP runstate %s -> %s\n",
+					ADSPLite_RunState_to_string( adsp_state.runstate ),
+					ADSPLite_RunState_to_string( adsp_state_new.runstate ) );
 			}
 
-			if ( adsp_sequence_count_new != adsp_sequence_count )
+			if ( adsp_state_new.sequence_count != adsp_state.sequence_count )
 			{
 				adsp_running_heartbeat_time = get_timer( 0 );
 			}
 
-			adsp_runstate = adsp_runstate_new;
-			adsp_sequence_count = adsp_sequence_count_new;
+			adsp_state = adsp_state_new;
 		}
 
 		// ADSP health checks
 		if ( k_do_adsp_healthchecks && adsp_started )
 		{
 			// Is the ADSP RUNSTATE_UNKNOWN taking too long?
-			if ( adsp_runstate == RUNSTATE_UNKNOWN && get_timer( adsp_start_time ) > k_ADSP_MaxUnknownWaitMS )
+			if ( adsp_state.runstate == RUNSTATE_UNKNOWN && get_timer( adsp_start_time ) > k_ADSP_MaxUnknownWaitMS )
 			{
 				deckard_log( "ADSP taking too long to transition from RUNSTATE_UNKNOWN (max time %d ms exceeded) Stopping\n", k_ADSP_MaxUnknownWaitMS );
 				deckard_adsp_stop(); // hard shutdown
+				deckard_adsp_state_clear( &adsp_state );
 				adsp_started = false;
-				adsp_runstate = RUNSTATE_UNKNOWN;
 			}
 
 			// Is the ADSP RUNSTATE_STARTING taking too long?
-			if ( adsp_runstate == RUNSTATE_STARTING && get_timer( adsp_start_time ) > k_ADSP_MaxStartWaitMS )
+			if ( adsp_state.runstate == RUNSTATE_STARTING && get_timer( adsp_start_time ) > k_ADSP_MaxStartWaitMS )
 			{
 				deckard_log( "ADSP taking too long to transition from RUNSTATE_STARTING (max time %d ms exceeded) Stopping\n", k_ADSP_MaxStartWaitMS );
 				deckard_adsp_stop(); // hard shutdown
+				deckard_adsp_state_clear( &adsp_state );
 				adsp_started = false;
-				adsp_runstate = RUNSTATE_UNKNOWN;
 			}
 
 			// Is the ADSP RUNSTATE_RUNNING taking too long? (without a heartbeat)
-			if ( adsp_runstate == RUNSTATE_RUNNING && get_timer( adsp_running_heartbeat_time ) > k_ADSP_MaxHeartbeatWaitMS )
+			if ( adsp_state.runstate == RUNSTATE_RUNNING && get_timer( adsp_running_heartbeat_time ) > k_ADSP_MaxHeartbeatWaitMS )
 			{
 				deckard_log( "ADSP taking too long to provide heartbeat (max time %d ms exceeded) Stopping\n", k_ADSP_MaxHeartbeatWaitMS );
 				deckard_adsp_stop(); // hard shutdown
+				deckard_adsp_state_clear( &adsp_state );
 				adsp_started = false;
-				adsp_runstate = RUNSTATE_UNKNOWN;
 			}
 		}
+
 		deckard_adsp_write( false,
 				(bool) latest_power_button_down  );
 
@@ -1088,7 +1090,12 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 		//check every 10 loops to avoid spamming the SPMI bus
 		if ( !in_shutdown && deckard_shutdown_loop_counter-- == 0 )
 		{
-			if ( !adsp_started ) // pdevices->max17320 is off limits while adsp is on
+			if ( adsp_started )
+			{
+				deckard_log("\r" ANSI_CLEAR_LINE "fuel (internal): %d%%, fuel (external): %d%%", 
+					adsp_state.fuel_gauge_internal, adsp_state.fuel_gauge_internal ); fflush(stdout);
+			}
+			else
 			{
 				int soc = deckard_battery_get_capacity(pdevices->max17320);
 				int avg_vcell = deckard_battery_get_avg_vcell(pdevices->max17320);
@@ -1138,16 +1145,16 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 
 
 	// Co-operative shutdown
-	if ( adsp_runstate == RUNSTATE_RUNNING || adsp_runstate == RUNSTATE_STARTING )
+	if ( adsp_started )
 	{
 		// Send an exit request
 		deckard_adsp_write( true, ( button_get_state( pdevices->btn_power ) == BUTTON_ON ) );
 
 		// And wait to stop
 		// The user will be impacted in button responsiveness if this time is too long
-		adsp_runstate = deckard_adsp_wait_for_runstate( RUNSTATE_STOPPED, 500 );
+		adsp_state.runstate = deckard_adsp_wait_for_runstate( RUNSTATE_STOPPED, 500 );
 
-		if ( adsp_runstate == RUNSTATE_STOPPED )
+		if ( adsp_state.runstate == RUNSTATE_STOPPED )
 		{
 			deckard_log( "ADSP clean exit\n" );
 		}
@@ -1155,10 +1162,7 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 		{
 			deckard_log( "ERROR: ADSP exit timeout. Killing ADSP\n" );
 		}
-	}
 
-	if ( adsp_started )
-	{
 		deckard_adsp_stop();
 	}
 
