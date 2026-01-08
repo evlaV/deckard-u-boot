@@ -36,10 +36,11 @@ typedef union ADSP_PayloadOut_t {
         uint32_t sequence_count : 4; // sequence counter.  increments on each update
 		uint32_t run_state : 2; // ADSPLite_RunState_t
 		uint32_t fuel_gauge_internal : 8;  // 255 is invalid
-		uint32_t fuel_gauge_external : 8;  // 255 is invalid
 		uint32_t battery_ok_for_userspace : 1;
+		uint32_t inhibit_poweroff : 1; // inhibit poweroff?
     } bits;
 } ADSP_PayloadOut_t;
+
 
 static_assert( sizeof( ADSP_PayloadOut_t ) == 4 );
 static_assert( sizeof( UBOOT_PayloadOut_t ) == 4 );
@@ -119,9 +120,10 @@ void deckard_adsp_state_clear( ADSP_State_t * payload )
 	payload->runstate = RUNSTATE_UNKNOWN;
 	payload->sequence_count = 0;
 	payload->battery_ok_for_userspace = true; // fail safe
+	payload->inhibit_poweroff = true;
 	payload->fuel_gauge_internal = 255; // invalid
-	payload->fuel_gauge_external = 255; // invalid
 }
+
 void deckard_adsp_read( ADSP_State_t * payload )
 {
 	ADSP_PayloadOut_t data;
@@ -133,8 +135,8 @@ void deckard_adsp_read( ADSP_State_t * payload )
 		payload->runstate = data.bits.run_state;
 		payload->sequence_count = ( data.bits.sequence_count ) + 1; // to not overlap with 0
 		payload->battery_ok_for_userspace = data.bits.battery_ok_for_userspace;
+		payload->inhibit_poweroff = data.bits.inhibit_poweroff;
 		payload->fuel_gauge_internal = data.bits.fuel_gauge_internal;
-		payload->fuel_gauge_external = data.bits.fuel_gauge_external;
 	}
 	else
 	{

@@ -31,8 +31,8 @@ typedef struct ADSP_State_t
     ADSPLite_RunState_t runstate;
     int sequence_count;
     bool battery_ok_for_userspace;
+    bool inhibit_poweroff;
     int fuel_gauge_internal;
-    int fuel_gauge_external; 
 } ADSP_State_t;
 
 void deckard_adsp_state_clear( ADSP_State_t * payload );

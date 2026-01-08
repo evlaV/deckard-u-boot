@@ -810,33 +810,6 @@ int deckard_check_for_key_press()
 	return 0;
 }
 
-static bool deckard_shutdown_condition(struct udevice *pmic)
-{
-	static unsigned long timeout;
-
-	if (!pmic)
-		return false;
-
-	if (deckard_battery_is_charging_enabled(pmic)) {
-		if(timeout > 0)
-			deckard_log("[charging enabled]\n");
-
-		timeout = 0;
-		return false;
-	}
-
-	if (!timeout)
-	{
-		deckard_log("[charging disabled]\n");
-		timeout = timer_get_us() + DECKARD_SHUTDOWN_TIMEOUT_US;
-	}
-
-	if (time_after(timer_get_us(), timeout))
-		return true;
-
-	return false;
-}
-
 #if defined(CONFIG_SYS_CONSOLE_IS_IN_ENV) && \
 defined(CONFIG_SYS_CONSOLE_OVERWRITE_ROUTINE)
 int overwrite_console(void)
@@ -915,7 +888,9 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 		return;
 	}
 
-	int deckard_shutdown_loop_counter = 1;
+
+	int deckard_infrequent_loop_counter = 1;
+	ulong auto_poweroff_time = 0;
 	static const int k_nBatteryImageCount = 10 * 3; // 100ms * 10 * 5 = 3s
 	int deckard_display_off_counter = k_nBatteryImageCount;
 	bool in_shutdown = 0;
@@ -957,6 +932,8 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 	static const int k_ADSP_MaxStartWaitMS = 2000; // 2s (measured: ~400 ms nominal)
 	static const int k_ADSP_MaxHeartbeatWaitMS = 1000; // 1s (measured: ~20-50ms nominal )
 	static const int k_ADSP_RestartIntervalMS = 30 * 1000; // 30s. should be > k_ADSP_MaxStartWaitMS
+
+	static const int k_AutoPowerOffDelayMS = 30 * 1000; // 30s.
 
 	bool adsp_battery_ok_for_userspace = true;
 
@@ -1078,6 +1055,15 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 			power_button_down = latest_power_button_down;
 		}
 
+		if ( deckard_display_off_counter >= 0 && ( deckard_display_off_counter-- == 0 ) )
+		{
+			display_turn_off();
+			if ( !adsp_started )
+			{
+				deckard_setledcolor( LED_COLOR_OFF, &g_deckard_devices );
+			}
+		}
+
 #if 0
 		//may want to check for keyboard press for some reason or another here
 		if(deckard_check_for_key_press())
@@ -1087,9 +1073,14 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 		}
 #endif
 
-		//check every 10 loops to avoid spamming the SPMI bus
-		if ( !in_shutdown && deckard_shutdown_loop_counter-- == 0 )
+		// Some work is only done on a more infrequent basis (check every 10 loops)
+		// to avoid spamming the SPMI bus and the stdout
+
+		if ( !in_shutdown && deckard_infrequent_loop_counter-- <= 0 )
 		{
+			deckard_infrequent_loop_counter = 10;
+
+			// Print out battery status
 			if ( adsp_started )
 			{
 				deckard_log_overwrite( "Battery: %d%%", adsp_state.fuel_gauge_internal );
@@ -1104,43 +1095,53 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 				fflush(stdout);
 			}
 
-			// TODO: Replace with inf from dsp state, when dsp is loaded
-			//
-			deckard_shutdown_loop_counter = 10;
-			if( deckard_shutdown_condition( pdevices->pm8550b ) )
+			// Check Auto-Poweroff condition
+			bool wantsPoweroff;
+			if ( adsp_started )
+				wantsPoweroff = ( adsp_state.valid && !adsp_state.inhibit_poweroff );
+			else
+				wantsPoweroff = !deckard_battery_is_charging_enabled( pdevices->pm8550b );
+
+			if ( wantsPoweroff )
 			{
-				deckard_log("Device not charging for %d seconds, Shutdown\n", DECKARD_SHUTDOWN_TIMEOUT_S);
-				run_command("splctl set-uboot-poweroff-reason battery", 0); //inform the spl that we are shutting down due to low battery
-
-				deckard_log("SYSRESET_POWER_OFF\n" );
-				int ret = sysreset_walk(SYSRESET_POWER_OFF);
-				if ( ret )
+				if ( auto_poweroff_time && get_timer( auto_poweroff_time ) > k_AutoPowerOffDelayMS )
 				{
-					deckard_log("WARNING: SYSRESET_POWER_OFF returned error code %d\n", ret );
+					deckard_log("Auto Power-Off Initiated\n ");
+					run_command("splctl set-uboot-poweroff-reason battery", 0); //inform the spl that we are shutting down due to low battery
 
-					// Note: SYSRESET_POWER_OFF can take time, so if the first call to SYSRESET_POWER_OFF succeeds
-					// we want to give it time to take effect and not attempt a subsequent immediate call
-					// But at the same time, we don't want to just return from this wait loop (which would
-					// have the effect of beginning to start the kernel).
+					deckard_log("Sysreset Poweroff...\n" );
+					int ret = sysreset_walk(SYSRESET_POWER_OFF);
+					if ( ret )
+					{
+						deckard_log("WARNING: SYSRESET_POWER_OFF returned error code %d\n", ret );
+
+						// Note: SYSRESET_POWER_OFF can take time, so if the first call to SYSRESET_POWER_OFF succeeds
+						// we want to give it time to take effect and not attempt a subsequent immediate call
+						// But at the same time, we don't want to just return from this wait loop (which would
+						// have the effect of beginning to start the kernel).
+					}
+					else
+					{
+						in_shutdown = true;
+					}
 				}
-				else
+				else if ( !auto_poweroff_time )
 				{
-					in_shutdown = true;
+					deckard_log("Started auto-poweroff timer (%d s)\n", k_AutoPowerOffDelayMS / 1000);
+					auto_poweroff_time = get_timer( 0 );
+				}
+			}
+			else // !wantsPoweroff
+			{
+				if ( auto_poweroff_time )
+				{
+					auto_poweroff_time = 0;
+					deckard_log("Cancelled auto-poweroff timer\n" );
 				}
 			}
 		}
 
-		if ( deckard_display_off_counter >= 0 && ( deckard_display_off_counter-- == 0 ) )
-		{
-			display_turn_off();
-			if ( !adsp_started )
-			{
-				deckard_setledcolor( LED_COLOR_OFF, &g_deckard_devices );
-			}
-		}
-
-		// polling loop
-		// TODO : maybe be interrupt driven somehow?
+		// Throttle loop to 10 hz
 		mdelay(100);
 	}
 
