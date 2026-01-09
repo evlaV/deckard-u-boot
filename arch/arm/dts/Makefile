@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0+
 
 dtb-$(CONFIG_ARCH_SNAPDRAGON) += sm8650-el2-hdk.dtb \
-	sm8650-ev1.dtb
+	sm8650-deckard.dtb
 
 ifdef CONFIG_ARCH_SNAPDRAGON
 DTC_FLAGS += -p 0x1000
