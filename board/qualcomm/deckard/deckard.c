@@ -598,7 +598,7 @@ int misc_init_r(void)
 
 	// CALC POWER-ON BOOT INTENTION
 	g_boot_intention = calc_boot_intention( &g_deckard_devices );
-	deckard_log( "g_boot_intention %d\n", g_boot_intention );
+	deckard_log( "boot_intention: %s\n", boot_intention_to_string( g_boot_intention ) );
 
 	// Set LED Color
 	LedColor ledColor = get_led_color_for_boot_intention( g_boot_intention );
@@ -869,7 +869,7 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 {
 	printf("\n");
 	deckard_log("********** deckard_wait_to_boot **********\n");
-	deckard_log("boot_intention: %d\n", *p_boot_intention );
+	deckard_log("boot_intention: %s\n", boot_intention_to_string( *p_boot_intention ) );
 
 	boot_intention_t boot_intention = *p_boot_intention;
 
@@ -1029,7 +1029,7 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 					boot_intention = BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY;
 				}
 
-				deckard_log( "User power button pressed. boot_intention:%d\n", boot_intention );
+				deckard_log( "User power button pressed. boot_intention: %s\n", boot_intention_to_string( boot_intention ) );
 
 				if ( boot_intention == BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY )
 				{

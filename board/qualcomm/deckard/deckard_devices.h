@@ -51,6 +51,7 @@ typedef enum
 	BOOT_INTENTION_EDL
 } boot_intention_t;
 
+const char *boot_intention_to_string( boot_intention_t v );
 bool deckard_should_wait_for_button_to_boot( boot_intention_t boot_intention );
 LedColor get_led_color_for_boot_intention( boot_intention_t boot_intention );
 const char * get_image_filename_for_boot_intention( boot_intention_t boot_intention );

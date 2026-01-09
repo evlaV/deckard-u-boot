@@ -38,6 +38,22 @@ static combined_button_state_t deckard_get_button_state( deckard_devices_t * pde
 	return ( combined_button_state_t ) mask;
 }
 
+const char *boot_intention_to_string(boot_intention_t v)
+{
+    switch (v)
+    {
+        case BOOT_INTENTION_START_USERSPACE:              return "Start userspace";
+        case BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY:return "Cannot boot: battery not ready";
+        case BOOT_INTENTION_CHARGE_AND_WAIT:              return "Charge and wait";
+        case BOOT_INTENTION_BOOT_MENU:                    return "Boot menu";
+        case BOOT_INTENTION_BOOT_FROM_USB:                return "Boot from USB";
+        case BOOT_INTENTION_FASTBOOT:                     return "Fastboot";
+        case BOOT_INTENTION_CONSOLE_WAIT:                 return "Console wait";
+        case BOOT_INTENTION_BOOTLOADER:                   return "Bootloader (hold)";
+        case BOOT_INTENTION_EDL:                          return "EDL (emergency download)";
+        default:                                          return "Unknown boot intention";
+    }
+}
 
 boot_intention_t calc_boot_intention( deckard_devices_t * pdevices )
 {
