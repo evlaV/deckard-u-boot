@@ -240,6 +240,7 @@ int board_usb_cleanup(int index, enum usb_init_type init);
 #define USB_MAX_STOR_DEV 7
 int usb_stor_scan(int mode);
 int usb_stor_info(void);
+int usb_stor_device_get_info(int target_idx, int maxstrlen, int * device_count, char * vendor_str, char * product_str, char * serialnum_str, int * storage_size_megabytes);
 
 #endif
 

@@ -412,6 +412,32 @@ fail:
 	return ret;
 }
 
+int splctl_force_usb_set_boot_target(char * vendor_var, char * product_var, char * serial_var)
+{
+	int ret = 0;
+	ret = env_spl_scsi_load();
+	if(ret)	goto fail;
+
+	ret = env_spl_set("BOOT_FORCE_USB_VENDOR",env_get(vendor_var));
+	if(ret)	goto fail;
+
+	ret = env_spl_set("BOOT_FORCE_USB_PRODUCT",env_get(product_var));
+	if(ret)	goto fail;
+
+	ret = env_spl_set("BOOT_FORCE_USB_SERIAL",env_get(serial_var));
+	if(ret)	goto fail;
+
+	ret = env_scsi_save();
+	if(ret)	goto fail;
+
+	//no error, don't print anything
+	return ret;
+
+fail:
+	printf("err %d\n",ret);
+	return ret;
+}
+
 static int do_force_slot(struct cmd_tbl *cmdtp, int flag, int argc,
 			      char *const argv[])
 {

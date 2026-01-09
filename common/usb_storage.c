@@ -133,6 +133,44 @@ static void usb_show_progress(void)
 	debug(".");
 }
 
+int usb_stor_device_get_info(int target_idx, int maxstrlen, int * device_count, char * vendor_str, char * product_str, char * serialnum_str, int * storage_size_megabytes)
+{
+	int count = 0;
+#if CONFIG_IS_ENABLED(BLK)
+	struct udevice *dev;
+
+	for (blk_first_device(UCLASS_USB, &dev);
+	     dev;
+	     blk_next_device(&dev)) {
+		struct blk_desc *desc = dev_get_uclass_plat(dev);
+		struct usb_device *udev = dev_get_parent_priv(dev_get_parent(dev));
+
+		//if (udev && strlen(udev->mf) || strlen(udev->prod) || strlen(udev->serial))
+		//	printf("[%d] %s %s %s\n", count, udev->mf, udev->prod, udev->serial);
+
+		if(target_idx == count)
+		{
+		  //printf("  Device %d: ", desc->devnum);
+		  //dev_print(desc);
+		  if(vendor_str && udev && strlen(udev->mf)) snprintf(vendor_str,maxstrlen,"%s",udev->mf);
+		  if(product_str && udev && strlen(udev->prod)) snprintf(product_str,maxstrlen,"%s",udev->prod);
+		  if(serialnum_str && udev && strlen(udev->serial)) snprintf(serialnum_str,maxstrlen,"%s",udev->serial);
+		  if(storage_size_megabytes) *storage_size_megabytes = part_get_storage_size_megabytes(desc);
+		}
+		count++;
+	}
+#endif
+
+	if(device_count) *device_count = count;
+
+	if (!count) {
+		//printf("No storage devices, perhaps not 'usb start'ed..?\n");
+		return 1;
+	}
+
+	return 0;
+}
+
 /*******************************************************************************
  * show info on storage devices; 'usb start/init' must be invoked earlier
  * as we only retrieve structures populated during devices initialization
@@ -166,6 +204,21 @@ int usb_stor_info(void)
 	if (!count) {
 		printf("No storage devices, perhaps not 'usb start'ed..?\n");
 		return 1;
+	}
+
+	int devcount = -1;
+	char vendorstr[256];
+	char productstr[256];
+	char serialnumstr[256];
+	int stor_size_megabytes;
+	usb_stor_device_get_info(-1, 256, &devcount, NULL, NULL, NULL, NULL);
+	if(devcount > 0)
+	{
+		for(int i=0; i<devcount; i++)
+		{
+			usb_stor_device_get_info(i, 256, NULL, vendorstr, productstr, serialnumstr, &stor_size_megabytes);
+			printf("[%d] %s %s %s [%d GB]\n",i,vendorstr,productstr,serialnumstr,stor_size_megabytes/1024);
+		}
 	}
 
 	return 0;

@@ -13,6 +13,8 @@
 #include <errno.h>
 #include <usb.h>
 #include <fat.h>
+#include <dm/device.h>
+
 
 static int usb_stor_curr_dev = -1; /* current device */
 
@@ -70,6 +72,9 @@ int spl_usb_load(struct spl_image_info *spl_image,
 	int err = 0;
 	struct blk_desc *stor_dev;
 	static bool usb_init_pending = true;
+	struct blk_desc *desc;
+	struct usb_device *udev;
+	struct udevice *dev;
 
 	if (usb_init_pending) {
 		usb_stop();
@@ -86,7 +91,46 @@ int spl_usb_load(struct spl_image_info *spl_image,
 
 	/* try to recognize storage devices immediately */
 	usb_stor_curr_dev = usb_stor_scan(1);
-	stor_dev = blk_get_devnum_by_uclass_id(UCLASS_USB, usb_stor_curr_dev);
+
+	int found_match = 0;
+	int count = 0;
+	for (blk_first_device(UCLASS_USB, &dev); dev; blk_next_device(&dev)) 
+	{
+		desc = dev_get_uclass_plat(dev);
+		udev = dev_get_parent_priv(dev_get_parent(dev));
+		if(udev)
+		{
+			if (strlen(udev->mf) || strlen(udev->prod) || strlen(udev->serial))
+				printf("[%d] %s %s %s\n", count, udev->mf, udev->prod, udev->serial);
+
+			int vendor_match  = ( strncmp(udev->mf,     env_get("BOOT_FORCE_USB_VENDOR"),  64) == 0);
+			int product_match = ( strncmp(udev->prod,   env_get("BOOT_FORCE_USB_PRODUCT"), 64) == 0);
+			int serial_match  = ( strncmp(udev->serial, env_get("BOOT_FORCE_USB_SERIAL"),  64) == 0);
+			if(vendor_match && product_match && serial_match)
+			{
+				found_match = 1;
+				break;
+			}
+		}
+
+		count++;
+	}
+
+	if(found_match)
+	{
+		printf("%s: usb: FOUND MATCH [%s %s %s]\n", __func__, env_get("BOOT_FORCE_USB_VENDOR"), env_get("BOOT_FORCE_USB_PRODUCT"), env_get("BOOT_FORCE_USB_SERIAL"));
+		stor_dev = desc;
+	}
+	else
+	{
+		stor_dev = blk_get_devnum_by_uclass_id(UCLASS_USB, usb_stor_curr_dev);
+	}
+
+	//clear these vars now that we are done with them
+	env_set("BOOT_FORCE_USB_VENDOR",NULL);
+	env_set("BOOT_FORCE_USB_PRODUCT",NULL);
+	env_set("BOOT_FORCE_USB_SERIAL",NULL);
+
 	if (!stor_dev)
 		return -ENODEV;
 
