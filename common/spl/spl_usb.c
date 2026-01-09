@@ -126,11 +126,6 @@ int spl_usb_load(struct spl_image_info *spl_image,
 		stor_dev = blk_get_devnum_by_uclass_id(UCLASS_USB, usb_stor_curr_dev);
 	}
 
-	//clear these vars now that we are done with them
-	env_set("BOOT_FORCE_USB_VENDOR",NULL);
-	env_set("BOOT_FORCE_USB_PRODUCT",NULL);
-	env_set("BOOT_FORCE_USB_SERIAL",NULL);
-
 	if (!stor_dev)
 		return -ENODEV;
 

@@ -180,14 +180,16 @@ void spl_perform_fixups(struct spl_image_info *spl_image)
 	}
 
 	if (spl_image->boot_device == BOOT_DEVICE_UFS_A)
-		ret = fdt_setprop_string(blob, chosen,
-				"u-boot,spl-boot-device", "A");
+		ret = fdt_setprop_string(blob, chosen, "u-boot,spl-boot-device", "A");
 	else if (spl_image->boot_device == BOOT_DEVICE_UFS_B)
-		ret = fdt_setprop_string(blob, chosen,
-				"u-boot,spl-boot-device", "B");
+		ret = fdt_setprop_string(blob, chosen, "u-boot,spl-boot-device", "B");
 	else if (spl_image->boot_device == BOOT_DEVICE_USB)
-		ret = fdt_setprop_string(blob, chosen,
-				"u-boot,spl-boot-device", "U");
+	{
+		ret = fdt_setprop_string(blob, chosen, "u-boot,spl-boot-device", "U");
+		if(ret == 0) ret = fdt_setprop_string(blob, chosen, "u-boot,spl-usb-boot-product", env_get("BOOT_FORCE_USB_VENDOR"));
+		if(ret == 0) ret = fdt_setprop_string(blob, chosen, "u-boot,spl-usb-boot-vendor",  env_get("BOOT_FORCE_USB_PRODUCT"));
+		if(ret == 0) ret = fdt_setprop_string(blob, chosen, "u-boot,spl-usb-boot-serial",  env_get("BOOT_FORCE_USB_SERIAL"));
+	}
 	else
 	{
 		ret = fdt_setprop_string(blob, chosen,
@@ -847,6 +849,9 @@ void qcom_spl_board_init(void)
 	int power_button_release_rtc_time_since_pon  = 0;
 	uint16_t battery_voltage;
 	int skip_iterate_boot_count = 0;
+	char force_usb_vendor_str[64];
+	char force_usb_product_str[64];
+	char force_usb_serial_str[64];
 
 	/* enable dcache */
 	gd->relocaddr =  0xb00000000;
@@ -1021,6 +1026,14 @@ void qcom_spl_board_init(void)
 		deckard_log("BOOT_FORCE_USB set in environment, going to try to boot from USB\n");
 		go_to_usb = 1;
 		env_set("BOOT_FORCE_USB",NULL);
+		//save these env vars so we can nuke them in on-disk environment, 
+		//then we can put back in environment for later processing
+		strncpy(force_usb_vendor_str,env_get("BOOT_FORCE_USB_VENDOR"),64);
+		strncpy(force_usb_product_str,env_get("BOOT_FORCE_USB_PRODUCT"),64);
+		strncpy(force_usb_serial_str,env_get("BOOT_FORCE_USB_SERIAL"),64);
+		env_set("BOOT_FORCE_USB_VENDOR",NULL);
+		env_set("BOOT_FORCE_USB_PRODUCT",NULL);
+		env_set("BOOT_FORCE_USB_SERIAL",NULL);
 	}
 
 	char *boot_force_slot = env_get("BOOT_FORCE_SLOT");
@@ -1056,6 +1069,9 @@ void qcom_spl_board_init(void)
 	if (go_to_usb) {
 		deckard_log("Forcing USB boot\n");
 		env_set_ulong("BOOT_FORCE_USB", 1);
+		env_set("BOOT_FORCE_USB_VENDOR",force_usb_vendor_str);
+		env_set("BOOT_FORCE_USB_PRODUCT",force_usb_product_str);
+		env_set("BOOT_FORCE_USB_SERIAL",force_usb_serial_str);
 	}
 }
 
