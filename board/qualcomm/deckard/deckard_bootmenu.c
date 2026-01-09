@@ -14,9 +14,13 @@
 #include <string.h>
 #include <vsprintf.h>
 #include <fs.h>
+#include <usb.h>
 
 
 static int deckard_build_slot_menu_items(char * current_slot_menu_str, int current_slot_menu_str_sz, char * previous_slot_menu_str, int previous_slot_menu_str_sz);
+
+int splctl_force_usb_set_boot_target(char * vendor_var, char * product_var, char * serial_var);
+int deckard_set_spl_usb_boot_target(void);
 
 static void trim_quotes(char *s)
 {
@@ -71,6 +75,100 @@ static int parse_os_info(char *buf, size_t bufsz,
 	return 1;
 }
 
+int deckard_bootmenu_set_entry(int * bootmenu_idx, char * str)
+{
+	char tmpstr[16]; 
+
+	if(!bootmenu_idx) 
+		return 1;
+
+	snprintf(tmpstr,16,"bootmenu_%d",*bootmenu_idx);
+	env_set(tmpstr, str);
+	*bootmenu_idx = *bootmenu_idx + 1;
+
+	return 0;
+}
+		
+int deckard_bootmenu_set_usb_info_env_var(int usb_dev_idx, int maxstrlen, char * vendor_str, char * product_str, char * serialnum_str)
+{
+	char tmpstr[32]; 
+	char usb_bootable_dev_unique_id[256];
+
+	snprintf(tmpstr,32,"usb_boot_vendor_%d",usb_dev_idx);
+	env_set(tmpstr, vendor_str);
+
+	snprintf(tmpstr,32,"usb_boot_product_%d",usb_dev_idx);
+	env_set(tmpstr, product_str);
+
+	snprintf(tmpstr,32,"usb_boot_serial_%d",usb_dev_idx);
+	env_set(tmpstr, serialnum_str);
+
+	return 0;
+}
+
+int deckard_set_spl_usb_boot_target()
+{
+	int ret= 0;
+	const char * usbboottarget = env_get("usbboottarget");
+	char vendor_env_var_str[32]; 
+	char product_env_var_str[32]; 
+	char serial_env_var_str[32]; 
+
+	if(usbboottarget)
+	{
+		int usb_dev_idx = simple_strtoul(usbboottarget, NULL, 10);
+
+		snprintf(vendor_env_var_str,32,"usb_boot_vendor_%d",usb_dev_idx);
+		snprintf(product_env_var_str,32,"usb_boot_product_%d",usb_dev_idx);
+		snprintf(serial_env_var_str,32,"usb_boot_serial_%d",usb_dev_idx);
+		
+		splctl_force_usb_set_boot_target( vendor_env_var_str, product_env_var_str, serial_env_var_str );
+	}
+	
+	return 0;
+}
+
+
+int deckard_bootmenu_create_usb_entries(int * bootmenu_entry_idx)
+{
+	int devcount = -1;
+	char vendorstr[64];
+	char productstr[64];
+	char serialnumstr[64];
+	char menu_item_str[256];
+	int curr_bootmenu_idx = 0;
+
+	#define BOOTMENUMAXUSBDEVS 4
+
+	if(!bootmenu_entry_idx)
+		return -2;
+
+		
+	usb_stor_device_get_info(-1, 256, &devcount, NULL, NULL, NULL, NULL);
+
+	if(devcount > BOOTMENUMAXUSBDEVS)
+		devcount = BOOTMENUMAXUSBDEVS;
+
+	if(devcount > 0)
+	{
+		for(int i=0; i<devcount; i++)
+		{
+			int storage_size_megabytes = 0;
+			usb_stor_device_get_info(i, 64, NULL, vendorstr, productstr, serialnumstr, &storage_size_megabytes);
+			printf("[%d] %s %s %s\n",i,vendorstr,productstr,serialnumstr);
+			snprintf(menu_item_str,256,"USB: %s %s [%d GB]=setenv slottarget usb && setenv usbboottarget %d",vendorstr,productstr,storage_size_megabytes/1024,i);
+			deckard_bootmenu_set_entry(bootmenu_entry_idx,menu_item_str);
+			deckard_bootmenu_set_usb_info_env_var(i,64,vendorstr,productstr,serialnumstr);
+		}
+	}
+	else
+	{
+		deckard_bootmenu_set_entry(bootmenu_entry_idx,"Boot from USB=setenv slottarget usb");
+	}
+
+	return devcount;
+}
+
 int deckard_bootmenu_populate(void)
 {
 	char current_slot_menu_str[256] = {0};
@@ -95,10 +193,12 @@ int deckard_bootmenu_populate(void)
 
 		//normal boot
 		env_set("bootmenu_title", "SteamOS");
-		env_set("bootmenu_0", current_slot_menu_str);
-		env_set("bootmenu_1", previous_slot_menu_str);
-		env_set("bootmenu_2", "Boot from USB=setenv slottarget usb");
-		env_set("bootmenu_3", "  -- ERASE USER DATA FROM FRAME --=setenv slottarget current && setenv factoryreset 1");
+		//add new entries and function will increment 
+		int bootmenu_entry_idx = 0;
+		deckard_bootmenu_set_entry(&bootmenu_entry_idx,current_slot_menu_str);
+		deckard_bootmenu_set_entry(&bootmenu_entry_idx,previous_slot_menu_str);
+		deckard_bootmenu_create_usb_entries(&bootmenu_entry_idx); 
+		deckard_bootmenu_set_entry(&bootmenu_entry_idx,"  -- ERASE USER DATA FROM FRAME --=setenv slottarget current && setenv factoryreset 1");
 	}
 
 	// TODO: add advanced option to add fastboot
@@ -181,6 +281,9 @@ int deckard_bootmenu_handle_actions(void)
 
 			deckard_log("splctl force-usb\n");
 			run_command("splctl force-usb",0);
+			
+			deckard_set_spl_usb_boot_target();
+
 			reset_needed = 1;
 		}
 	}

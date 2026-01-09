@@ -1174,6 +1174,7 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 static void deckard_do_bootmenu(void)
 {
 	deckard_log("populate bootmenu\n");
+	usb_setup();
 	deckard_bootmenu_populate();
 
 	// Turn on the display

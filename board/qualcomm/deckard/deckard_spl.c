@@ -1009,6 +1009,9 @@ void qcom_spl_board_init(void)
 	deckard_log("- BOOT_VALID_A = '%s'\n", env_get("BOOT_VALID_A"));
 	deckard_log("- BOOT_VALID_B = '%s'\n", env_get("BOOT_VALID_B"));
 	deckard_log("- BOOT_FORCE_USB = '%s'\n", env_get("BOOT_FORCE_USB"));
+	deckard_log("- BOOT_FORCE_USB_VENDOR = '%s'\n", env_get("BOOT_FORCE_USB_VENDOR"));
+	deckard_log("- BOOT_FORCE_USB_PRODUCT = '%s'\n", env_get("BOOT_FORCE_USB_PRODUCT"));
+	deckard_log("- BOOT_FORCE_USB_SERIAL = '%s'\n", env_get("BOOT_FORCE_USB_SERIAL"));
 	deckard_log("- BOOT_FORCE_SLOT = '%s'\n", env_get("BOOT_FORCE_SLOT"));
 	deckard_log("- BOOTED_FW_SLOT = '%s'\n", env_get("BOOTED_FW_SLOT"));
 
