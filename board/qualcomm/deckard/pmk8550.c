@@ -306,16 +306,15 @@ int pmk8550_get_on_off_reason(struct pon_on_off_reason *reason)
 	// READ REGISTERS
 	// These should be consistent with the data parsed from the logs above
 	reason->pon_reason = pmk8550_get_pon_reason(pmic);
-
 	reason->pon_boot1_poff_reason = pmk8550_get_boot1_poff_reason1(pmic);
-
 	reason->pon_boot1_off_reason = pmk8550_get_boot1_off_reason(pmic);
-
 	reason->pon_rtc_time = pmk8550_get_pon_rtc_time(pmic);
-
 	reason->power_button_release_rtc_time = pmk8550_get_power_button_release_rtc_time(pmic);
-
 	reason->reboot_command_reason = pmk8550_get_reboot_command_reason(pmic);
+
+	deckard_log("register pon_reason 0x%x: 0x%02X\n", PON_AOP_PON_REASON1, reason->pon_reason );
+	deckard_log("register pon_boot1_poff_reason 0x%X: 0x%02X\n", PON_AOP_BOOT1_POFF_REASON1, reason->pon_boot1_poff_reason );
+	deckard_log("register pon_boot1_off_reason 0x%X: 0x%02X\n", PON_AOP_BOOT1_OFF_REASON, reason->pon_boot1_off_reason );
 
 	if (!IS_ENABLED(CONFIG_SPL_BUILD))
 	{
