@@ -172,6 +172,35 @@ static lba512_t lba512_muldiv(lba512_t block_count, lba512_t mul_by,
 	return bc_quot * mul_by + ((bc_rem * mul_by) >> right_shift);
 }
 
+int part_get_storage_size_megabytes(struct blk_desc *desc)
+{
+	lba512_t lba512; /* number of blocks if 512bytes block size */
+	if (desc->lba > 0L && desc->blksz > 0L) 
+	{
+		ulong mb, mb_quot, mb_rem, gb, gb_quot, gb_rem;
+		lbaint_t lba;
+
+		lba = desc->lba;
+
+		lba512 = lba * (desc->blksz / 512);
+		/* round to 1 digit */
+		/* 2048 = (1024 * 1024) / 512 MB */
+		mb = lba512_muldiv(lba512, 10, 11);
+
+		mb_quot	= mb / 10;
+		mb_rem	= mb - (10 * mb_quot);
+
+		gb = mb / 1024;
+		gb_quot	= gb / 10;
+		gb_rem	= gb - (10 * gb_quot);
+	
+		return mb_quot;
+
+	} else {
+		return 0;
+	}
+}
+
 void dev_print(struct blk_desc *desc)
 {
 	lba512_t lba512; /* number of blocks if 512bytes block size */

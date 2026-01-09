@@ -699,6 +699,8 @@ int part_get_type_by_name(const char *name);
  */
 int part_get_bootable(struct blk_desc *desc);
 
+int part_get_storage_size_megabytes(struct blk_desc *desc);
+
 #else
 static inline int part_driver_get_count(void)
 { return 0; }
