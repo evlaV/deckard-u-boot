@@ -108,8 +108,6 @@ static ulong boot_wrapper_version __section(".data");
 
 static char *name = "uboot_a";
 static char *ifname = "scsi";
-
-static struct pon_on_off_reason pon_poff_reason;
 static int go_to_usb;
 static char force_boot_slot;
 
@@ -831,6 +829,13 @@ static int set_booted_fw_slot(void)
 	return ret;
 }
 
+static bool show_led( struct pon_on_off_reason pon_poff_reason )
+{
+	if ( pon_poff_reason.type == PON_RESET_TYPE_SHUTDOWN || pon_poff_reason.type == PON_RESET_TYPE_UNKNOWN )
+		return false;
+	return true;
+}
+
 void qcom_spl_board_init(void)
 {
 	struct udevice *dev;
@@ -863,6 +868,8 @@ void qcom_spl_board_init(void)
 	deckard_log( "********** qcom_spl_board_init **********\n" );
 	deckard_log("boot wrapper version %ld\n", boot_wrapper_version);
 
+
+	struct pon_on_off_reason pon_poff_reason;
 	ret = pmk8550_get_on_off_reason(&pon_poff_reason);
 	if (ret == 0) {
 		if (pon_poff_reason.trigger == PON_RESET_TRIGGER_OTHER)
@@ -945,7 +952,13 @@ void qcom_spl_board_init(void)
 	}
 
 	//this needs to be after we check if we are currently holding the button down for a power button hard shutdown
-	deckard_spl_leds_set();
+
+	// TODO: even better would be to speculatively show the proper color, including dim green and dim white
+	// But until that's possible, at least show white or non-white based on if we're shutting down.
+	if ( show_led( pon_poff_reason ) )
+	{
+		deckard_spl_leds_set();
+	}
 
 	deckard_spl_battery_charging_setup(&battery_voltage);
 
