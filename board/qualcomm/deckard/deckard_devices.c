@@ -38,6 +38,19 @@ static combined_button_state_t deckard_get_button_state( deckard_devices_t * pde
 	return ( combined_button_state_t ) mask;
 }
 
+const char *led_color_to_string(LedColor v)
+{
+    switch (v)
+    {
+        case LED_COLOR_OFF:     return "Off";
+        case LED_COLOR_WHITE:   return "White";
+        case LED_COLOR_YELLOW:  return "Yellow";
+        case LED_COLOR_RED:     return "Red";
+        case LED_COLOR_MAGENTA: return "Magenta";
+        default:                return "Unknown LED color";
+    }
+}
+
 const char *boot_intention_to_string(boot_intention_t v)
 {
     switch (v)
@@ -202,8 +215,15 @@ bool deckard_should_wait_for_button_to_boot( boot_intention_t boot_intention )
 }
 
 
-LedColor get_led_color_for_boot_intention( boot_intention_t boot_intention )
+LedColor get_led_color_for_boot_intention( deckard_devices_t * pdevices, boot_intention_t boot_intention )
 {
+	if ( boot_intention == BOOT_INTENTION_CHARGE_AND_WAIT )
+	{
+		// TODO: make a determination based on if we're connected
+		// if ( deckard_battery_is_charging_enabled( pdevices->pm8550b ) )
+		return LED_COLOR_OFF;
+	}
+
 	switch ( boot_intention )
 	{
 		case BOOT_INTENTION_START_USERSPACE:
@@ -217,7 +237,6 @@ LedColor get_led_color_for_boot_intention( boot_intention_t boot_intention )
 		case BOOT_INTENTION_BOOTLOADER:
 		case BOOT_INTENTION_EDL:
 			return LED_COLOR_MAGENTA;
-		case BOOT_INTENTION_CHARGE_AND_WAIT:
 		default:
 			return LED_COLOR_OFF;
 	}

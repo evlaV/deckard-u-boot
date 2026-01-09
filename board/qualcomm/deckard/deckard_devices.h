@@ -18,8 +18,9 @@ typedef enum
     LED_COLOR_MAGENTA,
 } LedColor;
 
+const char *led_color_to_string(LedColor v);
 
-// TODO: Major bootloader bug: You cannot charge with DSP in the current bootloader implementation
+// TODO: You cannot charge with DSP in the current bootloader implementation
 // We drop to a shell before charge and wait completes, so we dont have charging!
 // Refactor misc_init_r and deckard boot so that charging is enabled during console_wait?
 // TODO: We also (likely) want the same charge behavior in BOOT_INTENTION_FASTBOOT
@@ -53,7 +54,6 @@ typedef enum
 
 const char *boot_intention_to_string( boot_intention_t v );
 bool deckard_should_wait_for_button_to_boot( boot_intention_t boot_intention );
-LedColor get_led_color_for_boot_intention( boot_intention_t boot_intention );
 const char * get_image_filename_for_boot_intention( boot_intention_t boot_intention );
 
 
@@ -74,6 +74,8 @@ typedef struct
 
 int deckard_setup_devices( deckard_devices_t * pdevices );
 
+// Warning: do not call this while adsp is running
+LedColor get_led_color_for_boot_intention( deckard_devices_t * pdevices, boot_intention_t boot_intention );
 // Warning: do not call this while adsp is running
 boot_intention_t calc_boot_intention( deckard_devices_t * pdevices );
 

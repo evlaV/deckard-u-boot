@@ -556,9 +556,6 @@ int misc_init_r(void)
 	// TODO: pull out the prep battery for boot into a separate function
 	int nsetuperror = deckard_setup_devices( &g_deckard_devices );
 
-	deckard_log( "set led white\n" );
-	deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices );
-
 	if( booted_from_usb() )
 	{
 		deckard_log( "usb_setup\n" );
@@ -601,9 +598,9 @@ int misc_init_r(void)
 	deckard_log( "boot_intention: %s\n", boot_intention_to_string( g_boot_intention ) );
 
 	// Set LED Color
-	LedColor ledColor = get_led_color_for_boot_intention( g_boot_intention );
+	LedColor ledColor = get_led_color_for_boot_intention( &g_deckard_devices, g_boot_intention );
 	deckard_setledcolor( ledColor, &g_deckard_devices );
-	deckard_log( "set led to boot intention color %d\n", (int) ledColor );
+	deckard_log( "set boot intent led: %s\n", led_color_to_string ( ledColor ) );
 
 	// SHOW BOOT IMAGE
 	if ( g_boot_intention == BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY )
@@ -1035,7 +1032,9 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 				{
 					if ( !adsp_started )
 					{
-						deckard_setledcolor( get_led_color_for_boot_intention( boot_intention ), &g_deckard_devices );
+						LedColor ledColor = LED_COLOR_RED;
+						deckard_setledcolor( ledColor, &g_deckard_devices );
+						deckard_log( "set wait_to_boot led color: %s\n", led_color_to_string ( ledColor ) );
 					}
 
 					// We can be a bit less conservative showing the out of battery image on a click.
@@ -1060,6 +1059,7 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 			display_turn_off();
 			if ( !adsp_started )
 			{
+				// TODO: set LED color based on charge state in this case
 				deckard_setledcolor( LED_COLOR_OFF, &g_deckard_devices );
 			}
 		}
@@ -1286,6 +1286,7 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 	}
 
 	// We're booting!
+	deckard_log("Booting! Set color to white.\n");
 	deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices );
 	deckard_display_image( get_image_filename_for_boot_intention( g_boot_intention ) );
 
