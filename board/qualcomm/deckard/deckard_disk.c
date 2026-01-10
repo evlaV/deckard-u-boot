@@ -195,8 +195,6 @@ const char *deckard_get_booted_firmware_slotname(void)
 	{
 		case 'B':
 			return DECKARD_UBOOT_FW_SLOT_B;
-		case 'U':
-			return DECKARD_UBOOT_FW_SLOT_U;
 		case 'A':
 		default:
 			return DECKARD_UBOOT_FW_SLOT_A;
@@ -223,6 +221,12 @@ const char *fs_firmware_get_partition(void)
 	// TODO: we could rotate through multiple buffers if more than one of these need
 	// to be in flight, concurrently
 	static char s_firmware_partition[DEVPARTMAXLEN] = { 0 };
+
+	if( booted_from_usb() )
+	{
+		deckard_get_booted_esp_part(s_firmware_partition,DEVPARTMAXLEN);
+		return s_firmware_partition;
+	}
 
 	const char * slotname = deckard_get_booted_firmware_slotname();
 	if ( slotname && deckard_get_dev_part_str_buf( slotname, &s_firmware_partition[0], sizeof(s_firmware_partition ) ) == 0 )

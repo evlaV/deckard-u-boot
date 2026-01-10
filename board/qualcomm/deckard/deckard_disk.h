@@ -22,15 +22,6 @@ enum disk_interface_t {
 #define DECKARD_ROOTFS_SLOT_B "rootfs-B"
 #define DECKARD_UBOOT_SLOT_B "uboot_b"
 
-//USB boot disk has its own names in order to disambiguate
-#define DECKARD_ESP_NAME_SLOT_U "usbesp"
-#define DECKARD_ESP_SLOT_U "0:1"
-#define DECKARD_EFI_NAME_SLOT_U "usbefi"
-#define DECKARD_EFI_SLOT_U "0:2"
-#define DECKARD_ROOTFS_SLOT_U "usbrootfs"
-#define DECKARD_UBOOT_FW_SLOT_U "usbubootfw"
-#define DECKARD_UBOOT_ENV_SLOT_U "usbubootenv"
-
 //add these names as alternatives for supporting old ev2 layouts -- delete once we stop using ev2's
 #define ALLOW_OLD_ROOTFS_NAME_FALLBACK
 #ifdef ALLOW_OLD_ROOTFS_NAME_FALLBACK
