@@ -9,8 +9,6 @@
 #include "deckard_disk.h"
 #include "deckard_log.h"
 
-char g_esp_part[DEVPARTMAXLEN] = { 0 };  //e.g. "1:d"
-
 struct deckard_esp_info {
 	bool valid;
 	int devnum;
@@ -47,7 +45,7 @@ int deckard_find_efi_var_store(void)
 	{
 		disk_interface = DISK_INTERFACE_USB;
 		devnum_restrict = -1; //allow finding efi var store on any USB disk device -- TODO is this right?
-		strlcat(partname, DECKARD_EFI_NAME_SLOT_U, 16);
+		strlcat(partname, DECKARD_EFI_NAME_SLOT_A, 16);
 	}
 	else if(get_booted_slot() == 'A')
 	{
@@ -101,18 +99,6 @@ int init_steamos_efi_uuid_part_arg(char * efi_part_uuid_arg)
 	}
 
 	return 1;
-}
-
-void init_esp(void)
-{
-	if( booted_from_usb() )
-	{
-		snprintf(g_esp_part, DEVPARTMAXLEN, DECKARD_ESP_SLOT_U);
-	}
-	else
-	{
-		snprintf(g_esp_part, DEVPARTMAXLEN, DECKARD_ESP_PARTITION);
-	}
 }
 
 /* EFI booting with EFI vars on a custom partition */
@@ -217,9 +203,18 @@ const char *deckard_get_booted_firmware_slotname(void)
 	}
 }
 
-const char *deckard_get_booted_esp_part(void)
+void deckard_get_booted_esp_part(char * disk_part_str, int disk_part_str_len)
 {
-	return booted_from_usb() ? DECKARD_ESP_SLOT_U : DECKARD_ESP_PARTITION;
+	if(booted_from_usb() && g_efivar_store.valid)
+	{
+		snprintf(disk_part_str,disk_part_str_len, "%d:%d", g_efivar_store.devnum,  g_efivar_store.partnum);
+	}
+	else
+	{
+		snprintf(disk_part_str,disk_part_str_len, "%s", DECKARD_ESP_PARTITION);
+	}
+
+	return;
 }
 
 const char *fs_firmware_get_partition(void)
@@ -242,6 +237,12 @@ const char *fs_firmware_get_partition(void)
 	return s_firmware_partition;
 }
 
+
+const char *fs_firmware_get_interface(void)
+{
+	return booted_from_usb() ? "usb" : "scsi";
+}
+
 /* Get the devnum/partnum for a partition from its GPT partlabel */
 int deckard_find_part_by_label(enum disk_interface_t disk_interface, int devnum_restrict, const char *partname, int *devnum, int *partnum)
 {
@@ -252,13 +253,49 @@ int deckard_find_part_by_label(enum disk_interface_t disk_interface, int devnum_
 	struct disk_partition part;
 	enum uclass_id target_uclass_id = UCLASS_SCSI;
 	uclass_get(UCLASS_BLK, &blk_class);
+	struct blk_desc *stor_dev;
+	struct usb_device *udev;
+	struct udevice *dev;
 
 	if(disk_interface == DISK_INTERFACE_USB) 
 	{
-		target_uclass_id = UCLASS_USB;
 		/* try to recognize storage devices immediately */
 		int usb_stor_curr_dev = usb_stor_scan(1);
-		desc = blk_get_devnum_by_uclass_id(UCLASS_USB, usb_stor_curr_dev);
+
+		int found_match = 0;
+		int count = 0;
+		for (blk_first_device(UCLASS_USB, &dev); dev; blk_next_device(&dev)) 
+		{
+			desc = dev_get_uclass_plat(dev);
+			udev = dev_get_parent_priv(dev_get_parent(dev));
+			if(udev)
+			{
+				if (strlen(udev->mf) || strlen(udev->prod) || strlen(udev->serial))
+					printf("[%d] %s %s %s\n", count, udev->mf, udev->prod, udev->serial);
+
+				int vendor_match  = ( strncmp(udev->mf,     env_get("BOOT_FORCE_USB_VENDOR"),  64) == 0);
+				int product_match = ( strncmp(udev->prod,   env_get("BOOT_FORCE_USB_PRODUCT"), 64) == 0);
+				int serial_match  = ( strncmp(udev->serial, env_get("BOOT_FORCE_USB_SERIAL"),  64) == 0);
+				if(vendor_match && product_match && serial_match)
+				{
+					found_match = 1;
+					break;
+				}
+			}
+
+			count++;
+		}
+
+		if(found_match)
+		{
+			printf("%s: usb: FOUND MATCH [%s %s %s]\n", __func__, env_get("BOOT_FORCE_USB_VENDOR"), env_get("BOOT_FORCE_USB_PRODUCT"), env_get("BOOT_FORCE_USB_SERIAL"));
+			stor_dev = desc;
+		}
+		else
+		{
+			desc = blk_get_devnum_by_uclass_id(UCLASS_USB, usb_stor_curr_dev);
+		}
+		
 		if (!desc) return -ENODEV;
 
 		for (*partnum = 1;; (*partnum)++) {

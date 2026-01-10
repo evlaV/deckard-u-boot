@@ -45,12 +45,11 @@ int deckard_find_part_by_label(enum disk_interface_t disk_interface, int devnum_
 int do_load_helper(enum disk_interface_t disk_interface, char * partition, char * addr, char * path);
 int deckard_load_dtb(enum disk_interface_t disk_interface, char * partition, char * addr);
 int deckard_find_efi_var_store(void);
-void init_esp(void);
 int init_steamos_efi_uuid_part_arg(char * efi_part_uuid_arg);
 
 // gets dev:part string for partition name.  return 0 on success
 int deckard_get_dev_part_str_buf( const char *part_name, char *out, int outsize );
 const char *deckard_get_booted_firmware_slotname(void);
-const char *deckard_get_booted_esp_part(void);
+void deckard_get_booted_esp_part(char * disk_part_str, int disk_part_str_len);
 
 #endif

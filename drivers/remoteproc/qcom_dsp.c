@@ -25,6 +25,7 @@
 
 #define FIRMWARE_INTERFACE "scsi"
 #define FIRMWARE_PATH_PREFIX "/lib/firmware/"
+#define FIRMWARE_PATH_PREFIX_USB "/uboot/ubootfw"
 
 #define QDSP6SS_RST_EVB 0x10
 #define QDSP6SS_BOOT_PARAMS0 0x60
@@ -142,29 +143,37 @@ static int qcom_dsp_load_ext4fs(struct qcom_dsp *dsp, char *buf)
 	return len_read;
 }
 
-
-static int qcom_dsp_load_erofs(struct qcom_dsp *dsp, char *buf)
+static int qcom_dsp_load_any(struct qcom_dsp *dsp, char *buf)
 {
 	const char *dev_and_part = fs_firmware_get_partition();
-	const char *ifname = FIRMWARE_INTERFACE;
+	const char *ifname = fs_firmware_get_interface();
 	loff_t len_read = 0;
 	int ret;
 
-	printf("Loading firmware from partition: %s\n", dev_and_part);
+	printf("Loading firmware from %s partition: %s:\n", ifname, dev_and_part);
 
 	scsi_scan(false);
 
-	ret = fs_set_blk_dev(ifname, dev_and_part, FS_TYPE_EROFS);
+	ret = fs_set_blk_dev(ifname, dev_and_part, FS_TYPE_ANY);
 	if (ret < 0) {
-		printf("firmware_erofs_load: Unable to set blkdev %s %s\n", ifname,
+		printf("firmware_load: Unable to set blkdev %s %s\n", ifname,
 			dev_and_part);
 		return ret;
 	}
 
-	ret = fs_read(dsp->firmware_name, (ulong)buf, 0, CONFIG_REMOTEPROC_MAX_FW_SIZE,
-			&len_read);
+	if( strcmp(ifname,"usb") == 0 )
+	{
+		char tmpstr[256];
+		snprintf(tmpstr,256,"%s/%s", FIRMWARE_PATH_PREFIX_USB, dsp->firmware_name);
+		ret = fs_read(tmpstr, (ulong)buf, 0, CONFIG_REMOTEPROC_MAX_FW_SIZE, &len_read);
+	}
+	else
+	{
+		ret = fs_read(dsp->firmware_name, (ulong)buf, 0, CONFIG_REMOTEPROC_MAX_FW_SIZE, &len_read);
+	}
+
 	if (ret < 0) {
-		printf("firmware_erofs_load: fail to read %s %s\n", ifname,
+		printf("firmware_load: fail to read %s %s\n", ifname,
 			dev_and_part);
 		return ret;
 	}
@@ -214,7 +223,7 @@ static int qcom_dsp_init(struct udevice *dev)
 		return read;
 	}
 #else
-	read = qcom_dsp_load_erofs(dsp, buf);
+	read = qcom_dsp_load_any(dsp, buf);
 	if (read < 0) {
 		printf("erofs: failed to load: %s\n", dsp->firmware_name);
 		return read;

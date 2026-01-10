@@ -198,7 +198,10 @@ static int deckard_load_image(const char * logo_name, ulong addr )
 		char filename[LOGO_PATHMAX + 1] = { 0 };
 		snprintf(filename, LOGO_PATHMAX, "/steamos/%s", logo_name); // beware case 
 
-		char *argv[] = { "", interface_str, (char *) deckard_get_booted_esp_part(), loadaddr_arg, filename };
+		char diskpart[16] = { 0 };
+		deckard_get_booted_esp_part(diskpart,16);
+
+		char *argv[] = { "", interface_str, diskpart, loadaddr_arg, filename };
 		int argc = 5;
 
 		if ( !do_load(NULL, 0, argc, argv, FS_TYPE_ANY ) )
@@ -496,6 +499,31 @@ void setup_boot_intention_global_state( boot_intention_t boot_intention )
 	}
 }
 
+void set_usb_boot_target_env_vars_from_of_node(ofnode node)
+{
+	int ret = 0;
+
+	if( booted_from_usb() )
+	{
+		const char *usb_boot_target_product = ofnode_read_string(node, "u-boot,spl-usb-boot-product");
+		const char *usb_boot_target_vendor = ofnode_read_string(node, "u-boot,spl-usb-boot-vendor");
+		const char *usb_boot_target_serial = ofnode_read_string(node, "u-boot,spl-usb-boot-serial");
+		
+		if (usb_boot_target_product && usb_boot_target_vendor && usb_boot_target_serial) 
+		{
+			deckard_log("Setting usb boot target to: %s %s %s\n",usb_boot_target_product,usb_boot_target_vendor,usb_boot_target_serial);
+			env_set("BOOT_FORCE_USB_VENDOR",usb_boot_target_product);
+			env_set("BOOT_FORCE_USB_PRODUCT",usb_boot_target_vendor);
+			env_set("BOOT_FORCE_USB_SERIAL",usb_boot_target_serial);
+		}
+		else 
+		{
+			deckard_log("USB boot target info not found\n");
+		}
+	}
+	return;
+}
+
 /* EARLY ENTRY POINT */
 int misc_init_r(void)
 {
@@ -538,13 +566,11 @@ int misc_init_r(void)
 			env_set_ulong("boot_wrapper_version", boot_wrapper_version);
 		}
 
+		set_usb_boot_target_env_vars_from_of_node(node);
+
 	} else {
 		panic("No chosen node !\n");
 	}
-
-	deckard_log( "init_esp\n" );
-	// TODO: This does set esp_part, but nobody uses it!
-	init_esp();
 
 	deckard_log( "deckard_disable_watchdog\n" );
 	deckard_disable_watchdog();
@@ -1217,7 +1243,6 @@ static const char * get_booted_rootfs_slotname( void )
 		case 'B':
 			return DECKARD_ROOTFS_SLOT_B;
 		case 'U':
-			return DECKARD_ROOTFS_SLOT_U;
 		case 'A':
 		default:
 			return DECKARD_ROOTFS_SLOT_A;
