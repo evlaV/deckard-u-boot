@@ -68,6 +68,28 @@ const char *boot_intention_to_string(boot_intention_t v)
     }
 }
 
+
+bool deckard_boot_desired( struct pon_on_off_reason pon_poff_reason )
+{
+	if( pon_poff_reason.pon_reason & 0x80 )
+	{
+		deckard_log("pon_reason includes button press, continuing to boot\n");
+		return true;
+	}
+	else if( pon_poff_reason.pon_reason & 0x01 )
+	{
+		deckard_log("pon_reason includes reset, continuing to boot\n");
+		return true;
+	}
+	else if( pon_poff_reason.type == PON_RESET_TYPE_WARM )
+	{
+		deckard_log("pon_reason includes warm reset, continuing to boot\n");
+		return true;
+	}
+
+	return false;
+}
+
 boot_intention_t calc_boot_intention( deckard_devices_t * pdevices )
 {
 	// These boot-up modes (those which are dev centric) blindly obey "reboot_mode"
@@ -119,22 +141,8 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices )
 			pmk8550_get_pon_trigger_str(pon_poff_reason.trigger),
 			pon_poff_reason.trigger,
 			pon_poff_reason.pon_reason);
-		
-		if(pon_poff_reason.pon_reason & 0x80)
-		{
-			deckard_log("pon_reason includes button press, continuing to boot\n");
-			boot_up_desired = true;
-		}
-		else if(pon_poff_reason.pon_reason & 0x01)
-		{
-			deckard_log("pon_reason includes reset, continuing to boot\n");
-			boot_up_desired = true;
-		}
-		else if(pon_poff_reason.type == PON_RESET_TYPE_WARM )
-		{
-			deckard_log("pon_reason includes warm reset, continuing to boot\n");
-			boot_up_desired = true;
-		}
+
+		boot_up_desired = deckard_boot_desired( pon_poff_reason );
 		
 		//TODO: integrate with above logic potentially?
 		if( pon_poff_reason.reboot_command_reason == REBOOT_COMMAND_REASON_BOOTLOADER )

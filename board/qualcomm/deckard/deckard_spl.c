@@ -829,12 +829,24 @@ static int set_booted_fw_slot(void)
 	return ret;
 }
 
-static bool show_led( struct pon_on_off_reason pon_poff_reason )
+static bool deckard_boot_desired( struct pon_on_off_reason pon_poff_reason )
 {
-	if ( pon_poff_reason.type == PON_RESET_TYPE_SHUTDOWN || pon_poff_reason.type == PON_RESET_TYPE_UNKNOWN )
-		return false;
-	return true;
+	if( pon_poff_reason.pon_reason & 0x80 )
+	{
+		return true;
+	}
+	else if( pon_poff_reason.pon_reason & 0x01 )
+	{
+		return true;
+	}
+	else if( pon_poff_reason.type == PON_RESET_TYPE_WARM )
+	{
+		return true;
+	}
+
+	return false;
 }
+
 
 void qcom_spl_board_init(void)
 {
@@ -954,8 +966,8 @@ void qcom_spl_board_init(void)
 	//this needs to be after we check if we are currently holding the button down for a power button hard shutdown
 
 	// TODO: even better would be to speculatively show the proper color, including dim green and dim white
-	// But until that's possible, at least show white or non-white based on if we're shutting down.
-	if ( show_led( pon_poff_reason ) )
+	// But until that's possible, at least show white or non-white based on if boot is desired
+	if ( deckard_boot_desired( pon_poff_reason ) )
 	{
 		deckard_spl_leds_set();
 	}
