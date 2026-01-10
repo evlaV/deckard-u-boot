@@ -866,9 +866,6 @@ void qcom_spl_board_init(void)
 	int power_button_release_rtc_time_since_pon  = 0;
 	uint16_t battery_voltage;
 	int skip_iterate_boot_count = 0;
-	char force_usb_vendor_str[64];
-	char force_usb_product_str[64];
-	char force_usb_serial_str[64];
 
 	/* enable dcache */
 	gd->relocaddr =  0xb00000000;
@@ -1047,15 +1044,25 @@ void qcom_spl_board_init(void)
 
 	determine_boot_target(); //sets BOOT_TARGET env var
 
+	char force_usb_vendor_str[64];
+	char force_usb_product_str[64];
+	char force_usb_serial_str[64];
+
 	if (env_get("BOOT_FORCE_USB")) {
 		deckard_log("BOOT_FORCE_USB set in environment, going to try to boot from USB\n");
 		go_to_usb = 1;
 		env_set("BOOT_FORCE_USB",NULL);
 		//save these env vars so we can nuke them in on-disk environment, 
 		//then we can put back in environment for later processing
-		strncpy(force_usb_vendor_str,env_get("BOOT_FORCE_USB_VENDOR"),64);
-		strncpy(force_usb_product_str,env_get("BOOT_FORCE_USB_PRODUCT"),64);
-		strncpy(force_usb_serial_str,env_get("BOOT_FORCE_USB_SERIAL"),64);
+		if(env_get("BOOT_FORCE_USB_VENDOR"))
+			strncpy(force_usb_vendor_str,env_get("BOOT_FORCE_USB_VENDOR"),64);
+		
+		if(env_get("BOOT_FORCE_USB_PRODUCT"))
+			strncpy(force_usb_product_str,env_get("BOOT_FORCE_USB_PRODUCT"),64);
+		
+		if(env_get("BOOT_FORCE_USB_SERIAL"))
+			strncpy(force_usb_serial_str,env_get("BOOT_FORCE_USB_SERIAL"),64);
+
 		env_set("BOOT_FORCE_USB_VENDOR",NULL);
 		env_set("BOOT_FORCE_USB_PRODUCT",NULL);
 		env_set("BOOT_FORCE_USB_SERIAL",NULL);
