@@ -74,4 +74,14 @@ int get_fs_loader(struct udevice **dev);
  * Return: string of device and partition
  */
 const char *fs_firmware_get_partition(void);
+
+/**
+ * fs_firmware_get_interface() - Get interface of disk for firmware to be loaded
+ *
+ * It is a weak function allowing board to overidde the default device
+ * and partition used to fetch firmware.
+ *
+ * Return: string of interface such as scsi or usb
+ */
+const char *fs_firmware_get_interface(void);
 #endif

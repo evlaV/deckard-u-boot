@@ -305,6 +305,11 @@ __weak const char *fs_firmware_get_partition(void)
 	return (const char *)CONFIG_FS_LOADER_FIRMWARE_PARTITION;
 }
 
+__weak const char *fs_firmware_get_interface(void)
+{
+	return "scsi";
+}
+
 int get_fs_loader(struct udevice **dev)
 {
 	int ret;
