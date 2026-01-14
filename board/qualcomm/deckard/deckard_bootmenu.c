@@ -259,6 +259,12 @@ int deckard_bootmenu_handle_actions(void)
 		if ( !strcmp( slottarget, "current") )
 		{
 			deckard_log( "Selected current target. do nothing\n" );
+			if( ! booted_from_usb() )
+			{
+				 //usb stop is called to ensure vbus is not left in a high state before starting the kernel
+				deckard_log( "Stopping USB before booting kernel\n" );
+				run_command("usb stop",0);
+			}
 		}
 		else if ( !strcmp( slottarget, "previous") )
 		{
