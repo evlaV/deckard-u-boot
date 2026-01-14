@@ -1390,6 +1390,7 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 		snprintf(rootfs_label,128,"root=PARTLABEL=%s",label);
 	}
 
+	//TODO:gaber: can we get rid of noresume rootwait earlycon ?
 	snprintf(bootargs, PATHMAXLEN, "%s %s %s init=/sbin/init rauc.slot=%c noresume rootwait earlycon %s",
 												default_bootargs ? default_bootargs : "", 
 												temp_bootargs ? temp_bootargs : "", 
