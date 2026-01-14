@@ -1374,11 +1374,31 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 	char * temp_bootargs = env_get("temp_bootargs");
 	char bootargs[PATHMAXLEN] = { 0 }; // how long can this be?
 	char steamos_efi_arg[128] = { 0 }; // should be something like: steamos.efi=PARTUUID=886aefa6-96a5-4693-bc09-02b9ad5a288e
+	char rootfs_label[128] = { 0 }; //should be something like rootfs=PARTLABEL=rootfs-A
+	bool force_include_rootfs_partlabel_arg = true; //keep this around for compatibility until we switch to partsets fully
 
-	ret = init_steamos_efi_uuid_part_arg(steamos_efi_arg);
+	if(booted_from_usb())
+	{
+		force_include_rootfs_partlabel_arg = false;
+	}
 
-	snprintf(bootargs, PATHMAXLEN, "%s %s root=PARTLABEL=%s init=/sbin/init rauc.slot=%c noresume rootwait earlycon %s",
-									default_bootargs ? default_bootargs : "", temp_bootargs ? temp_bootargs : "", label, get_booted_slot(), steamos_efi_arg );
+	ret = init_steamos_efi_uuid_part_arg(steamos_efi_arg); //returns 0 on success
+	
+	if(ret || force_include_rootfs_partlabel_arg)
+	{	
+		//fallback in case we can't generate the steamos.efi=PARTUUID=... arg
+		snprintf(rootfs_label,128,"root=PARTLABEL=%s",label);
+	}
+
+	snprintf(bootargs, PATHMAXLEN, "%s %s %s init=/sbin/init rauc.slot=%c noresume rootwait earlycon %s",
+												default_bootargs ? default_bootargs : "", 
+												temp_bootargs ? temp_bootargs : "", 
+												rootfs_label,
+												get_booted_slot(), 
+												steamos_efi_arg );
+					
+	deckard_log("kernel command line: \n[ %s ]\n",bootargs);
+
 	env_set("bootargs", bootargs);
 
 	// erase temp bootargs which is used for Testing
