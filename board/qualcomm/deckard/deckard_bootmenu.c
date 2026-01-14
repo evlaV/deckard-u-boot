@@ -316,6 +316,7 @@ static int deckard_build_slot_menu_items(char * CURRENT_slot_menu_str, int CURRE
 	enum disk_interface_t disk_interface = DISK_INTERFACE_SCSI;
 	int ret;
 	int osreleasefilefound;
+	char * slot_partition;
 
 	char partition_A[DEVPARTMAXLEN] = { 0 };
 	if ( deckard_get_dev_part_str_buf( DECKARD_ROOTFS_SLOT_A, &partition_A[0], sizeof(partition_A ) ) != 0 )
@@ -346,10 +347,11 @@ static int deckard_build_slot_menu_items(char * CURRENT_slot_menu_str, int CURRE
 	}
 
 ///////////////////////////////////
+	slot_partition = ( CURRENT_slot  == 'B' ) ? partition_B : partition_A; //default to A unless slot is set to B
 	osreleasefilefound=0;
-	if( file_exists(disk_interface_to_str(disk_interface), partition_A, "/etc/os-release", FS_TYPE_ANY) )
+	if( file_exists(disk_interface_to_str(disk_interface), slot_partition, "/etc/os-release", FS_TYPE_ANY) )
 	{
-		ret = run_commandf("load %s %s 0x%x /etc/os-release -1", disk_interface_to_str(disk_interface), partition_A, CONFIG_SYS_LOAD_ADDR) ;
+		ret = run_commandf("load %s %s 0x%x /etc/os-release -1", disk_interface_to_str(disk_interface), slot_partition, CONFIG_SYS_LOAD_ADDR) ;
 		if ( ret == 0 ) {
 			filecontents = (char *)map_sysmem(CONFIG_SYS_LOAD_ADDR, 0);
 			filesize = (size_t) hextoul(env_get("filesize"), NULL);
@@ -368,11 +370,13 @@ static int deckard_build_slot_menu_items(char * CURRENT_slot_menu_str, int CURRE
 
 	snprintf(CURRENT_slot_menu_str, CURRENT_slot_menu_str_sz, "Current   %s-%c-%s-%s=setenv slottarget current", name, CURRENT_slot, version_id, build_id);
 ///////////////////////////////////
+
 ///////////////////////////////////
+	slot_partition = ( PREVIOUS_slot  == 'B' ) ? partition_B : partition_A; //default to A unless slot is set to B
 	osreleasefilefound=0;
-	if( file_exists(disk_interface_to_str(disk_interface), partition_B, "/etc/os-release", FS_TYPE_ANY) )
+	if( file_exists(disk_interface_to_str(disk_interface), slot_partition, "/etc/os-release", FS_TYPE_ANY) )
 	{
-		ret = run_commandf("load %s %s 0x%x /etc/os-release -1", disk_interface_to_str(disk_interface), partition_B, CONFIG_SYS_LOAD_ADDR) ;
+		ret = run_commandf("load %s %s 0x%x /etc/os-release -1", disk_interface_to_str(disk_interface), slot_partition, CONFIG_SYS_LOAD_ADDR) ;
 		if ( ret == 0 ) {
 			filecontents = (char *)map_sysmem(CONFIG_SYS_LOAD_ADDR, 0);
 			filesize = (size_t) hextoul(env_get("filesize"), NULL);
