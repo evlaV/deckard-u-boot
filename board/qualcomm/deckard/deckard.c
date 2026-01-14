@@ -821,6 +821,20 @@ int ft_board_setup(void *fdt, struct bd_info *bd)
 		}
 	}
 
+	if(booted_from_usb())
+	{
+		//if this fails, don't return a non-zero value since this should not be a fatal error
+		int offset = fdt_node_offset_by_compatible(fdt, -1, "qcom,pm8550b-vbus-reg");
+		if (offset < 0) deckard_log("WARNING: fdt: could not find qcom,pm8550b-vbus-reg node\n");
+		else
+		{
+			//deckard_log("fdt: Adding regulator-always-on property to qcom,pm8550b-vbus-reg\n");
+			//need to turn this property on to ensure kernel refcounts this regulator properly
+			ret = fdt_setprop(fdt, offset, "regulator-always-on", NULL, 0);
+			if (ret < 0) deckard_log("WARNING: fdt: could not set property for pm8550b_vbus node %s.\n", fdt_strerror(ret));
+		}
+	}
+
 	return 0;
 }
 
