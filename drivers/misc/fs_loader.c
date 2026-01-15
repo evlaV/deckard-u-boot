@@ -300,6 +300,11 @@ U_BOOT_DRIVER(fs_loader) = {
 
 static struct device_plat default_plat = { 0 };
 
+__weak const char *fs_firmware_get_file_path_prefix(void)
+{
+	return "";
+}
+
 __weak const char *fs_firmware_get_partition(void)
 {
 	return (const char *)CONFIG_FS_LOADER_FIRMWARE_PARTITION;

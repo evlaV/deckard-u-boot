@@ -84,4 +84,15 @@ const char *fs_firmware_get_partition(void);
  * Return: string of interface such as scsi or usb
  */
 const char *fs_firmware_get_interface(void);
+
+/**
+ * fs_firmware_get_file_path_prefix() - Get path prefix to use 
+ *  when constructing full filename path
+ *
+ * It is a weak function allowing board to overidde the default device
+ * and partition used to fetch firmware.
+ *
+ * Return: string of interface such as /uboot/ubootfw
+ */
+const char *fs_firmware_get_file_path_prefix(void);
 #endif
