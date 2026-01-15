@@ -163,38 +163,27 @@ int consolevr_simple_select_font(struct udevice *dev, const char *name, uint siz
 	return 0;
 }
 
-
-#define FIRMWARE_INTERFACE "scsi"
 #define FIRMWARE_MAX_SIZE (1024 * 1024)
-
-// TODO: find a better place to land global deckard utils that makes these not needed
-// (and probably not deckard specific)
-int deckard_get_dev_part_str_buf( const char *part_name, char *out, int outsize );
-const char *deckard_get_booted_firmware_slotname(void);
-
-static int vrconsole_load_erofs(const char *filename)
+static int vrconsole_load_from_fs(const char *filename)
 {
 	#define DEVPARTMAXLEN 16
 	#define LOADADDRMAXLEN 20
 	#define LOGO_PATHMAX 256
 
-	const char * deckard_firmware_slotname = deckard_get_booted_firmware_slotname();
-	char deckard_firmware_part[DEVPARTMAXLEN] = { 0 };
-	if ( deckard_get_dev_part_str_buf( deckard_firmware_slotname, &deckard_firmware_part[0], sizeof(deckard_firmware_part ) ) != 0 )
-	{
-		return 1;
-	}
-
+	const char *dev_and_part = fs_firmware_get_partition();
+	const char *ifname = fs_firmware_get_interface();
+	loff_t len_read = 0;
 	char loadaddr_arg[LOADADDRMAXLEN] = { 0 }; //e.g. "0xa7000000"
 	char file_arg[LOGO_PATHMAX + 1] = { 0 };
 	int ret = 0;
 
 	/* Setup load address */
 	snprintf(loadaddr_arg, LOADADDRMAXLEN, "0x%x", CONFIG_SYS_LOAD_ADDR);
-	snprintf(file_arg, LOGO_PATHMAX, "/%s", filename);
 
+	snprintf(file_arg, LOGO_PATHMAX, "%s/%s", fs_firmware_get_file_path_prefix(), filename);
+	
 	int argc = 5;
-	char * argv[5] = { "do_the_dew", "scsi", deckard_firmware_part, loadaddr_arg, file_arg };
+	char * argv[5] = { "do_the_dew", ifname, dev_and_part, loadaddr_arg, file_arg };
 	ret = do_load(NULL, 0, argc, argv, FS_TYPE_ANY);
 	
 	log_debug("[%s] read=%ld addr=0x%0lx\n",
@@ -210,9 +199,9 @@ static int vrconsole_load_erofs(const char *filename)
 
 uint8_t * load_data_fromdisk( const char * pchFilename, uint32_t *pBytes, uint32_t n_max_size )
 {
-	int ret = vrconsole_load_erofs(pchFilename);
+	int ret = vrconsole_load_from_fs(pchFilename);
 
-	//side effect of this vrconsole_load_erofs() is to set these env vars
+	//side effect of this vrconsole_load_from_fs() is to set these env vars
 	int filesize = env_get_hex("filesize", -1);
 	int fileaddr = env_get_hex("fileaddr", -1);
 	char * datamap = (void*) map_sysmem(CONFIG_SYS_LOAD_ADDR, 0);
