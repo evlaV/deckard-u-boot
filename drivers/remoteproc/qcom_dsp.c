@@ -23,9 +23,7 @@
 #include <scsi.h>
 #include <linux/delay.h>
 
-#define FIRMWARE_INTERFACE "scsi"
 #define FIRMWARE_PATH_PREFIX "/lib/firmware/"
-#define FIRMWARE_PATH_PREFIX_USB "/uboot/ubootfw"
 
 #define QDSP6SS_RST_EVB 0x10
 #define QDSP6SS_BOOT_PARAMS0 0x60
@@ -113,7 +111,7 @@ static int qcom_dsp_start(struct udevice *dev)
 static int qcom_dsp_load_ext4fs(struct qcom_dsp *dsp, char *buf)
 {
 	const char *dev_and_part = fs_firmware_get_partition();
-	const char *ifname = FIRMWARE_INTERFACE;
+	const char *ifname = fs_firmware_get_interface();
 	struct blk_desc *dev_desc = NULL;
 	struct disk_partition info;
 	loff_t len_read = 0;
@@ -164,7 +162,7 @@ static int qcom_dsp_load_any(struct qcom_dsp *dsp, char *buf)
 	if( strcmp(ifname,"usb") == 0 )
 	{
 		char tmpstr[256];
-		snprintf(tmpstr,256,"%s/%s", FIRMWARE_PATH_PREFIX_USB, dsp->firmware_name);
+		snprintf(tmpstr,256,"%s/%s", fs_firmware_get_file_path_prefix(), dsp->firmware_name);
 		ret = fs_read(tmpstr, (ulong)buf, 0, CONFIG_REMOTEPROC_MAX_FW_SIZE, &len_read);
 	}
 	else
@@ -289,7 +287,7 @@ static int qcom_dsp_probe(struct udevice *dev)
 	if (ret < 0)
 		return ret;
 
-	dsp->firmware_name = FIRMWARE_PATH_PREFIX;
+	dsp->firmware_name = FIRMWARE_PATH_PREFIX; //TODO: replace this with generic function
 
 	strncat(dsp->firmware_name, firmware_name, EXT2_PATH_MAX);
 
