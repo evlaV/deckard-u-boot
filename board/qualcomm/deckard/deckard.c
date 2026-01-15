@@ -54,13 +54,6 @@ enum boot_priority {
 #define DECKARD_DUMMY_SERIAL_NUMB "123456789"
 #define TCSR_BOOT_MISC_DETECT 0x01fd9000
 
-enum full_screen_images_t 
-{
-	IMAGE_BOOT_LOGO,
-	IMAGE_BATTERY_DEAD,
-	IMAGE_ERROR
-};
-
 // TODO: make these globals all static
 bool g_display_enabled = false;
 bool g_factory_mode = false;
@@ -186,47 +179,40 @@ static void deckard_log_argv(const char *tag, int argc, char *const argv[])
 	}
 }
 
-static int deckard_load_image(const char * logo_name, ulong addr )
+
+typedef enum 
 {
-	char loadaddr_arg[LOADADDRMAXLEN] = { 0 }; //e.g. "0xa7000000"
-	snprintf(loadaddr_arg, LOADADDRMAXLEN, "0x%lx", addr);
+	LOAD_SOURCE_ESP_PARTITION = 0,
+	LOAD_SOURCE_FIRMWARE,
+	LOAD_SOURCE_COUNT,
+} load_source_t;
 
-	char * interface_str = disk_interface_to_str( booted_from_usb() ? DISK_INTERFACE_USB : DISK_INTERFACE_SCSI );
+static int deckard_load_image(const char * logo_name, ulong addr, load_source_t load_source )
+{
+	char filename[LOGO_PATHMAX + 1] = { 0 };
+	char diskpart[DEVPARTMAXLEN + 1] = { 0 };
 
-	// Attempt to load the image from the ESP partition
+	// Calc the filename and disk partition
+	if ( load_source == LOAD_SOURCE_ESP_PARTITION )
 	{
-		char filename[LOGO_PATHMAX + 1] = { 0 };
 		snprintf(filename, LOGO_PATHMAX, "/steamos/%s", logo_name); // beware case 
-
-		char diskpart[16] = { 0 };
-		deckard_get_booted_esp_part(diskpart,16);
-
-		char *argv[] = { "", interface_str, diskpart, loadaddr_arg, filename };
-		int argc = 5;
-
-		if ( !do_load(NULL, 0, argc, argv, FS_TYPE_ANY ) )
-		{
-			deckard_log("deckard_load_image: loaded splash from ESP!\n");
-			return 0;
-		}
+		deckard_get_booted_esp_part( diskpart, sizeof( diskpart) );
 	}
-
-	deckard_log( "deckard_load_image: could not find image %s on ESP, falling back to firmware partition\n", logo_name );
-
-	// Fall back to firmware partition
+	else if ( load_source == LOAD_SOURCE_FIRMWARE )
 	{
 		// 'j' during boot to get shell, then...
 		//  ls scsi 2:5   (or whatever fs_firmware_get_partition() is to see files)
-
-		char filename[LOGO_PATHMAX + 1] = { 0 };
 		snprintf(filename, LOGO_PATHMAX, "/%s", logo_name); // beware case
-	
-		char *argv[] = { "", interface_str, (char * ) fs_firmware_get_partition(), loadaddr_arg, filename };
-		int argc = 5;
-
-		return do_load(NULL, 0, argc, argv, FS_TYPE_ANY);
+		strncpy( diskpart, fs_firmware_get_partition(), sizeof( diskpart) );
 	}
 
+	char * interface_str = disk_interface_to_str( booted_from_usb() ? DISK_INTERFACE_USB : DISK_INTERFACE_SCSI );
+	char loadaddr_arg[LOADADDRMAXLEN] = { 0 }; //e.g. "0xa7000000"
+	snprintf(loadaddr_arg, LOADADDRMAXLEN, "0x%lx", addr);
+
+	char *argv[] = { "", interface_str, diskpart, loadaddr_arg, filename };
+	int argc = 5;
+	return do_load( NULL, 0, argc, argv, FS_TYPE_ANY );
 }
 
 static void deckard_display_image( boot_intention_t boot_intention )
@@ -235,53 +221,57 @@ static void deckard_display_image( boot_intention_t boot_intention )
 		return;
 
 	const char * filename = NULL;
-	const char * fallback = NULL;
+	const char * fallbackFilename = NULL;
 
 	switch( boot_intention )
 	{
 		case BOOT_INTENTION_START_USERSPACE:
 			filename = "logo.bmp.gz";
-			fallback = NULL;
 			break;
 		case BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY:
 			filename = "logo_battery_low.bmp.gz";
-			fallback = NULL;
 			break;
 		case BOOT_INTENTION_BOOT_MENU:
-			fallback = "logo_console.bmp.gz";;
-			filename = "logo_error.bmp.gz";
+			filename = "logo_console.bmp.gz";
+			fallbackFilename = "logo_error.bmp.gz";
 			break;
 		case BOOT_INTENTION_BOOT_FROM_USB:
 			filename = "logo_usb.bmp.gz";
-			fallback = "logo.bmp.gz";
+			fallbackFilename = "logo.bmp.gz";
 			break;
 		default:
-			break;
+			return; // Don't attempt to show "no image"
 	}
-
-	// Don't attempt to show "no image"
-	if ( filename == NULL )
-		return;
 
 	deckard_log( "showing image for: %s\n", boot_intention_to_string( boot_intention ) );
 
-	int ret = deckard_load_image( filename, CONFIG_SYS_LOAD_ADDR );
-	if ( ret != 0 )
+	// Try the primary image name for all load sources (partitions)
+	for ( load_source_t load_source = 0; load_source < LOAD_SOURCE_COUNT; ++load_source )
 	{
-		deckard_log("Unable to load %s, err: %d\n", filename, ret );
-		if ( fallback )
+		int ret = deckard_load_image( filename, CONFIG_SYS_LOAD_ADDR, load_source );
+		if ( ret == 0 )
 		{
-			ret = deckard_load_image( fallback, CONFIG_SYS_LOAD_ADDR );
-			if ( ret != 0 )
-			{
-				deckard_log("ERROR: Unable to load fallback image %s, err: %d\n", filename, ret );
-				return;
-			}
+			deckard_log("Found primary image %s, in load_source %d\n", filename, load_source );
+			bmp_info(CONFIG_SYS_LOAD_ADDR);
+			bmp_display(CONFIG_SYS_LOAD_ADDR, 0,0);
+			return;
 		}
 	}
 
-	bmp_info(CONFIG_SYS_LOAD_ADDR);
-	bmp_display(CONFIG_SYS_LOAD_ADDR, 0,0);
+	// Try the fallback image for all load sources
+	for ( load_source_t load_source = 0; load_source < LOAD_SOURCE_COUNT; ++load_source )
+	{
+		int ret = deckard_load_image( fallbackFilename, CONFIG_SYS_LOAD_ADDR, load_source );
+		if ( ret == 0 )
+		{
+			deckard_log("Found fallback image %s, in load_source %d\n", fallbackFilename, load_source );
+			bmp_info(CONFIG_SYS_LOAD_ADDR);
+			bmp_display(CONFIG_SYS_LOAD_ADDR, 0,0);
+			return;
+		}
+	}
+
+	deckard_log("ERROR: Unable to find image\n" );
 }
 
 int console_state_handler(void) 
