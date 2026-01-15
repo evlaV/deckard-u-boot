@@ -229,14 +229,57 @@ static int deckard_load_image(const char * logo_name, ulong addr )
 
 }
 
-static void deckard_display_image( const char * filename )
+static void deckard_display_image( boot_intention_t boot_intention )
 {
-	if (!g_display_enabled || !filename)
+	if ( !g_display_enabled )
 		return;
+
+	const char * filename = NULL;
+	const char * fallback = NULL;
+
+	switch( boot_intention )
+	{
+		case BOOT_INTENTION_START_USERSPACE:
+			filename = "logo.bmp.gz";
+			fallback = NULL;
+			break;
+		case BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY:
+			filename = "logo_battery_low.bmp.gz";
+			fallback = NULL;
+			break;
+		case BOOT_INTENTION_BOOT_MENU:
+			fallback = "logo_console.bmp.gz";;
+			filename = "logo_error.bmp.gz";
+			break;
+		case BOOT_INTENTION_BOOT_FROM_USB:
+			filename = "logo_usb.bmp.gz";
+			fallback = "logo.bmp.gz";
+			break;
+		default:
+			break;
+	}
+
+	// Don't attempt to show "no image"
+	if ( filename == NULL )
+		return;
+
+	deckard_log( "showing image for: %s\n", boot_intention_to_string( boot_intention ) );
 
 	int ret = deckard_load_image( filename, CONFIG_SYS_LOAD_ADDR );
 	if ( ret != 0 )
-		return;
+	{
+		deckard_log("Unable to load %s, err: %d\n", filename, ret );
+		if ( fallback )
+		{
+			ret = deckard_load_image( fallback, CONFIG_SYS_LOAD_ADDR );
+			if ( ret != 0 )
+			{
+				deckard_log("ERROR: Unable to load fallback image %s, err: %d\n", filename, ret );
+				return;
+			}
+		}
+	}
+
 	bmp_info(CONFIG_SYS_LOAD_ADDR);
 	bmp_display(CONFIG_SYS_LOAD_ADDR, 0,0);
 }
@@ -663,9 +706,7 @@ int misc_init_r(void)
 	}
 	else
 	{
-		const char * image = get_image_filename_for_boot_intention( g_boot_intention );
-		deckard_log( "showing image for boot intention %s\n", image ? image : "no image" );
-		deckard_display_image( image );
+		deckard_display_image( g_boot_intention );
 	}
 
 	// SETUP CUSTOM STATE TO EXECUTE ON BOOT INTENTION
@@ -1084,7 +1125,7 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 
 					// We can be a bit less conservative showing the out of battery image on a click.
 					// It's on a user interaction, so no chance of bootloop.
-					deckard_display_image( get_image_filename_for_boot_intention( boot_intention ) );
+					deckard_display_image( boot_intention );
 					deckard_display_off_counter = k_nBatteryImageCount;
 				}
 
@@ -1332,7 +1373,7 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 	// We're booting!
 	deckard_log("Booting! Set color to white.\n");
 	deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices );
-	deckard_display_image( get_image_filename_for_boot_intention( g_boot_intention ) );
+	deckard_display_image( g_boot_intention );
 
 	// FIXME: eventually invert this so we try EFI first, maybe find a less hacky way to do this?
 	if (g_deckard_efi_mode) {
@@ -1446,7 +1487,7 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 	console_state_handler();
 
 	// TODO: would be really nice to be able to load image without turning display on/off
-	deckard_display_image( get_image_filename_for_boot_intention( BOOT_INTENTION_START_USERSPACE ) ); //switch to booting logo before we boot up
+	deckard_display_image( BOOT_INTENTION_START_USERSPACE ); //switch to booting logo before we boot up
 
 	// This is to workaround an incomplete hand-off implementation, where we (as of 12/11/25)
 	// need to allow the kernel to turn the display on itself (vs a 'hot transfer')
@@ -1477,7 +1518,7 @@ U_BOOT_CMD(
 
 int deckard_logo_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
-	deckard_display_image( get_image_filename_for_boot_intention( BOOT_INTENTION_START_USERSPACE ) );
+	deckard_display_image( BOOT_INTENTION_START_USERSPACE );
 	return 0;
 }
 

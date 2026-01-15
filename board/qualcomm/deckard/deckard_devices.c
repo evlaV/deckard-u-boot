@@ -250,30 +250,6 @@ LedColor get_led_color_for_boot_intention( deckard_devices_t * pdevices, boot_in
 	}
 }
 
-const char * get_image_filename_for_boot_intention( boot_intention_t boot_intention )
-{
-	switch( boot_intention )
-	{
-		case BOOT_INTENTION_START_USERSPACE:
-			return "logo.bmp.gz";
-		case BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY:
-			return "logo_battery_low.bmp.gz";
-		case BOOT_INTENTION_BOOT_MENU:
-		case BOOT_INTENTION_BOOT_FROM_USB:
-			return "logo_error.bmp.gz"; // TODO: show something better
-		case BOOT_INTENTION_FASTBOOT:
-		case BOOT_INTENTION_CONSOLE_WAIT:
-		case BOOT_INTENTION_BOOTLOADER:
-		case BOOT_INTENTION_EDL:
-		case BOOT_INTENTION_CHARGE_AND_WAIT:
-		default:
-			return NULL;
-	}
-}
-
-////////////////////////////////////////////////////////
-
-
 
 // TODO: return richer error codes / bitmask for display, including fatal/non-fatal
 int deckard_setup_devices( deckard_devices_t * pdevices )
