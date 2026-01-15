@@ -11,7 +11,7 @@ You should then create a symlink from fw_setenv to fw_printenv. They use
 the same program and its function depends on its basename.
 
 For the run-time utility configuration uncomment the line
-#define CONFIG_FILE  "/etc/fw_env.config"
+#define CONFIG_FILE  "/run/fw_env.config"
 in fw_env.h.
 
 For building against older versions of the MTD headers (meaning before
