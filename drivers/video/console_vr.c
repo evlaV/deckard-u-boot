@@ -217,7 +217,6 @@ static int vrconsole_load_from_fs(const char *filename)
 
 	const char *dev_and_part = fs_firmware_get_partition();
 	const char *ifname = fs_firmware_get_interface();
-	loff_t len_read = 0;
 	char loadaddr_arg[LOADADDRMAXLEN] = { 0 }; //e.g. "0xa7000000"
 	char file_arg[LOGO_PATHMAX + 1] = { 0 };
 	int ret = 0;

@@ -221,6 +221,41 @@ static int deckard_load_image(const char * logo_name, ulong addr, load_source_t 
 	return do_load( NULL, 0, argc, argv, FS_TYPE_ANY );
 }
 
+
+#define ENV_GET_MAX_SIZE 64
+static char s_stdout_env[ENV_GET_MAX_SIZE];
+
+void push_console_state_vid_enable(void) 
+{
+	fflush(stdout); //needed to make things not explode
+	fflush(stderr); //needed to make things not explode
+
+	char * stdout_env = env_get("stdout");
+	if ( stdout_env )
+	{
+		strncpy( s_stdout_env, stdout_env, sizeof(s_stdout_env) );
+		s_stdout_env[ENV_GET_MAX_SIZE-1] = 0; // force null termination
+	}
+	else
+	{
+		memset( s_stdout_env, 0, sizeof(s_stdout_env) );
+	}
+
+	env_set("stdout","vidconsole");
+}
+
+void pop_console_state_vid_enable(void) 
+{
+	fflush(stdout); //needed to make things not explode
+	fflush(stderr); //needed to make things not explode
+
+	if ( s_stdout_env[0] )
+	{
+		env_set("stdout", s_stdout_env );
+		memset( s_stdout_env, 0, sizeof(s_stdout_env) );
+	}
+}
+
 static void deckard_display_image( boot_intention_t boot_intention )
 {
 	if ( !g_display_enabled )
@@ -251,6 +286,8 @@ static void deckard_display_image( boot_intention_t boot_intention )
 
 	deckard_log( "showing image for: %s\n", boot_intention_to_string( boot_intention ) );
 
+	bool displayed_image = false;
+
 	// Try the primary image name for all load sources (partitions)
 	for ( load_source_t load_source = 0; load_source < LOAD_SOURCE_COUNT; ++load_source )
 	{
@@ -260,25 +297,51 @@ static void deckard_display_image( boot_intention_t boot_intention )
 			deckard_log("Found primary image %s, in load_source %d\n", filename, load_source );
 			bmp_info(CONFIG_SYS_LOAD_ADDR);
 			bmp_display(CONFIG_SYS_LOAD_ADDR, 0,0);
-			return;
+			displayed_image = true;
+			break;
 		}
 	}
 
 	// Try the fallback image for all load sources
-	for ( load_source_t load_source = 0; load_source < LOAD_SOURCE_COUNT; ++load_source )
+	if ( !displayed_image )
 	{
-		int ret = deckard_load_image( fallbackFilename, CONFIG_SYS_LOAD_ADDR, load_source );
-		if ( ret == 0 )
+		for ( load_source_t load_source = 0; load_source < LOAD_SOURCE_COUNT; ++load_source )
 		{
-			deckard_log("Found fallback image %s, in load_source %d\n", fallbackFilename, load_source );
-			bmp_info(CONFIG_SYS_LOAD_ADDR);
-			bmp_display(CONFIG_SYS_LOAD_ADDR, 0,0);
-			return;
+			int ret = deckard_load_image( fallbackFilename, CONFIG_SYS_LOAD_ADDR, load_source );
+			if ( ret == 0 )
+			{
+				deckard_log("Found fallback image %s, in load_source %d\n", fallbackFilename, load_source );
+				bmp_info(CONFIG_SYS_LOAD_ADDR);
+				bmp_display(CONFIG_SYS_LOAD_ADDR, 0,0);
+				displayed_image = true;
+				break;
+			}
 		}
 	}
 
-	deckard_log("ERROR: Unable to find image\n" );
+	if ( !displayed_image )
+	{
+		deckard_log("ERROR: Unable to find image\n" );
+		return;
+	}
+
+	if ( boot_intention == BOOT_INTENTION_BOOT_MENU )
+	{
+		consolevr_save_background_image();
+		consolevr_set_background_image_enabled( true );
+
+		push_console_state_vid_enable();
+
+		const char *text = "Boot Menu Starting...";
+		int col = ( ( 80 - (int) strlen( text ) ) / 2 ) + 1;
+
+		// save cursor, draw text, restore cursor
+		printf("\0337\033[1;1H\033[2K\033[1;%dH%s\0338", col, text);
+
+		pop_console_state_vid_enable();
+	}
 }
+
 
 int console_state_handler(void) 
 {
@@ -1354,22 +1417,25 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 
 	if ( deckard_should_wait_for_button_to_boot( g_boot_intention ) )
 	{
+		deckard_log("Waiting to boot...\n");
+
 		// This may be minutes ... hours ... days...
 		// We will stay in this function until the user clicks on the power
 		// button with the intention to boot the device
 
 		deckard_wait_to_boot( &g_boot_intention, &g_deckard_devices );
 
+		deckard_log("Returned from wait to boot.\n");
+
 		// The boot intention has changed. Re setup the needed state
 		// TODO: This is no longer needed, now that we cannot transition
 		// to these particular boot intentions out of wait_to_boot
 		setup_boot_intention_global_state( g_boot_intention );
-	}
 
-	// We're booting!
-	deckard_log("Booting! Set color to white.\n");
-	deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices );
-	deckard_display_image( g_boot_intention );
+		// We're booting!
+		deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices );
+		deckard_display_image( g_boot_intention );
+	}
 
 	// FIXME: eventually invert this so we try EFI first, maybe find a less hacky way to do this?
 	if (g_deckard_efi_mode) {
@@ -1468,12 +1534,12 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 		deckard_setledcolor( ledColor, &g_deckard_devices );
 		deckard_log( "set boot intent led: %s\n", led_color_to_string ( ledColor ) );
 
-		// Set BG image again (in case of late press)
-		deckard_display_image( BOOT_INTENTION_BOOT_MENU );
-
-		// Stash BG image
-		consolevr_set_background_image_enabled( true );
-		consolevr_save_background_image();
+		// only redraw if we need to
+		if ( late_boot_intention != g_boot_intention && late_boot_intention == BOOT_INTENTION_BOOT_MENU )
+		{
+			deckard_log( "switching image to BOOT_INTENTION_BOOT_MENU\n" );
+			deckard_display_image( BOOT_INTENTION_BOOT_MENU );
+		}
 
 		deckard_do_bootmenu();
 	}
