@@ -192,6 +192,8 @@ static int deckard_load_image(const char * logo_name, ulong addr, load_source_t 
 	char filename[LOGO_PATHMAX + 1] = { 0 };
 	char diskpart[DEVPARTMAXLEN + 1] = { 0 };
 
+	if(!logo_name) return -1; //user passed in a null logo_name, do not proceed further
+
 	// Calc the filename and disk partition
 	if ( load_source == LOAD_SOURCE_ESP_PARTITION )
 	{
