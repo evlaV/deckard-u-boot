@@ -253,8 +253,8 @@ int consolevr_probe(struct udevice *dev)
 	struct video_fontdata *fontdata = fonts; //delete when we no longer need this
 	// int ret;
 	
-	char vrfontfilename[] = "RobotoMono-Bold.vrfont";
-	char vrterminalfilename[] = "terminal_80x24.vrterminal";
+	char vrfontfilename[] = "default.vrfont";
+	char vrterminalfilename[] = "default.vrterminal";
 
 	log_debug("consolevr probe\n");
 
@@ -270,20 +270,34 @@ int consolevr_probe(struct udevice *dev)
 		vc_priv->rows = vid_priv->ysize / fontdata->height;
 	}
 	
-	// Load the font from disk/memory
+	// Load the font (and a fallback) from disk/memory
 	priv->vrfont.pData = load_data_fromdisk( vrfontfilename, &priv->vrfont.size, FIRMWARE_MAX_SIZE );
 	if ( !priv->vrfont.pData )
 	{
-		printf("Cannot load font %s\n", vrfontfilename );
-		goto out_close;
+		// TODO(JS): can delete the fallback once the build change has percolated out.
+		char vrfontfilename_fallback[] = "RobotoMono-Bold.vrfont";
+		printf("Cannot load font %s, trying fallback %s\n", vrfontfilename, vrfontfilename_fallback );
+		priv->vrfont.pData = load_data_fromdisk( vrfontfilename_fallback, &priv->vrfont.size, FIRMWARE_MAX_SIZE );
+		if ( !priv->vrfont.pData )
+		{
+			printf("Cannot load font fallback %s\n", vrfontfilename_fallback );
+			goto out_close;
+		}
 	}
 
 	// Load the terminal from disk/memory
 	priv->vrterminal.pData = load_data_fromdisk( vrterminalfilename, &priv->vrterminal.size, FIRMWARE_MAX_SIZE );
 	if ( !priv->vrterminal.pData )
 	{
-		printf("Cannot load terminal %s\n", vrterminalfilename );
-		goto out_close;
+		// TODO(JS): can delete the fallback once the build change has percolated out.
+		char vrterminalfilename_fallback[] = "terminal_80x24.vrterminal";
+		printf("Cannot load terminal %s, trying fallback %s\n", vrterminalfilename, vrterminalfilename_fallback );
+		priv->vrterminal.pData = load_data_fromdisk( vrterminalfilename_fallback, &priv->vrterminal.size, FIRMWARE_MAX_SIZE );
+		if ( !priv->vrfont.pData )
+		{
+			printf("Cannot load terminal fallback %s\n", vrterminalfilename_fallback );
+			goto out_close;
+		}
 	}
 
 	// Init the font and the terminal
