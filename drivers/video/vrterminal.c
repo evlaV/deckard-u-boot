@@ -422,6 +422,11 @@ void vrterminal_update_reset( TerminalUpdate_t * pUpdate )
 	pUpdate->update_count = 0;
 }
 
+static inline int clamp_int(int v, int lo, int hi)
+{
+	return (v < lo) ? lo : (v > hi) ? hi : v;
+}
+
 void handle_escape_char( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, char ch )
 {
 #if defined(CONFIG_CONSOLE_VR)
@@ -514,14 +519,15 @@ void handle_escape_char( TerminalUpdate_t * pUpdate, VRTerminal_t * pTerminal, c
 	case 'f':
 	{
 		// Set cursor position: [%d;%df or [%d;%dH
-		int row, col;
+		int row = 1, col = 1;
 		char *s = pTerminal->escape_buf;
 		s++;    /* [ */
 		s = parsenum( s, &row );
 		s++;    /* ; */
 		s = parsenum( s, &col );
-		pTerminal->cursor_x = col;
-		pTerminal->cursor_y = row;
+		// ANSI assumes 1-based indexing!
+		pTerminal->cursor_x = clamp_int(col - 1, 0, (int)pTerminal->width  - 1);
+		pTerminal->cursor_y = clamp_int(row - 1, 0, (int)pTerminal->height - 1);
 		break;
 	}
 	case 'J':
