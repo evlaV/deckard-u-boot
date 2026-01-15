@@ -210,27 +210,21 @@ static int vrconsole_load_erofs(const char *filename)
 
 uint8_t * load_data_fromdisk( const char * pchFilename, uint32_t *pBytes, uint32_t n_max_size )
 {
-	int ret = 0;
-	int filesize = -1;
-	int fileaddr = -1;
-	char *datamap;
-	uint8_t * pData;
+	int ret = vrconsole_load_erofs(pchFilename);
 
-	/////////////////////////////////////////////
-	ret = vrconsole_load_erofs(pchFilename);
 	//side effect of this vrconsole_load_erofs() is to set these env vars
-	filesize = env_get_hex("filesize", -1);
-	fileaddr = env_get_hex("fileaddr", -1);
-	datamap = (void*) map_sysmem(CONFIG_SYS_LOAD_ADDR, 0);
-	log_debug("vrconsole: filesize = %d, fileaddr = 0x%0x\n",filesize,fileaddr);
+	int filesize = env_get_hex("filesize", -1);
+	int fileaddr = env_get_hex("fileaddr", -1);
+	char * datamap = (void*) map_sysmem(CONFIG_SYS_LOAD_ADDR, 0);
 	/////////////////////////////////////////////
 
-	if ( filesize < 0 || filesize > n_max_size )
+	if ( filesize < 0 || filesize > n_max_size || ret )
     {
+		printf("load_data_fromdisk fail: filesize = %d, fileaddr = 0x%0x, ret= %d \n",filesize,fileaddr, ret );
 		return NULL;
     }
 
-	pData = (unsigned char *) malloc( filesize ); //for consistency, maybe we should always malloc the same max size?
+	uint8_t * pData = (unsigned char *) malloc( filesize ); //for consistency, maybe we should always malloc the same max size?
 	if ( !pData ) 
 	{
 		return NULL;
