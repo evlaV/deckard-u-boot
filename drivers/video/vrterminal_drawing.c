@@ -27,6 +27,20 @@ void clear_pixbuf(Pixbuf *pb, int width, int height)
 	}
 }
 
+void copy_pixbuf( Pixbuf *pb_dst, Pixbuf *pb_src )
+{
+	// Confirm pixel buffers exist
+	if ( !pb_dst || !pb_src || !pb_dst->px || !pb_src->px )
+		return;
+
+	// confirm sizes match
+	if ( pb_dst->h != pb_src->h || 
+		pb_dst->w != pb_src->w || pb_dst->stride != pb_src->stride )
+		return;
+
+	memcpy( pb_dst->px, pb_src->px, pb_src->h * pb_src->stride );
+}
+
 void clear_stereo_bounds( Pixbuf *pb, VRStereoBounds_t *bounds )
 {
 	for ( int neye=0; neye<2; ++neye )
@@ -51,6 +65,43 @@ void clear_stereo_bounds( Pixbuf *pb, VRStereoBounds_t *bounds )
 		}
 	}
 }
+
+
+void copy_stereo_bounds( Pixbuf *pb_dst, Pixbuf *pb_src, VRStereoBounds_t *bounds )
+{
+	// Confirm pixel buffers exist
+	if ( !pb_dst || !pb_src || !pb_dst->px || !pb_src->px )
+		return;
+
+	// confirm sizes match
+	if ( pb_dst->h != pb_src->h || 
+		pb_dst->w != pb_src->w || pb_dst->stride != pb_src->stride )
+		return;
+
+	for ( int neye=0; neye<2; ++neye )
+	{
+		// Check for valid bounds
+		if ( bounds->max_x[neye] <= bounds->min_x[neye] ||
+			bounds->max_y[neye] <= bounds->min_y[neye] )
+		{
+			continue;
+		}
+
+		int xmin = clamp_int( bounds->min_x[neye]/10, 0, pb_dst->w );
+		int xmax = clamp_int( bounds->max_x[neye]/10 + 1, 0, pb_dst->w );
+		int ymin = clamp_int( bounds->min_y[neye]/10, 0, pb_dst->h );
+		int ymax = clamp_int( bounds->max_y[neye]/10 + 1, 0, pb_dst->h );
+		int xwidth = xmax - xmin;
+
+		for(int y=ymin; y < ymax; y++)
+		{
+			uint8_t *dst_row = ( pb_dst->px + 4 * xmin + y * pb_dst->stride);
+			uint8_t *src_row = ( pb_src->px + 4 * xmin + y * pb_src->stride);
+			memcpy( dst_row, src_row, xwidth * 4 );
+		}
+	}
+}
+
 
 //#define DEBUG_RENDER
 

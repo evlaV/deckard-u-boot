@@ -54,6 +54,10 @@ enum boot_priority {
 #define DECKARD_DUMMY_SERIAL_NUMB "123456789"
 #define TCSR_BOOT_MISC_DETECT 0x01fd9000
 
+// From console_vr
+extern void consolevr_save_background_image( void );
+extern void consolevr_set_background_image_enabled( bool enable );
+
 // TODO: make these globals all static
 bool g_display_enabled = false;
 bool g_factory_mode = false;
@@ -1459,11 +1463,18 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 	boot_intention_t late_boot_intention = calc_boot_intention( &g_deckard_devices );
 	if ( ( late_boot_intention == BOOT_INTENTION_BOOT_MENU ) || ( g_boot_intention == BOOT_INTENTION_BOOT_MENU ) )
 	{
-
-		// Set LED Color
+		// Set LED Color (in case of late press)
 		LedColor ledColor = get_led_color_for_boot_intention( &g_deckard_devices, BOOT_INTENTION_BOOT_MENU );
 		deckard_setledcolor( ledColor, &g_deckard_devices );
 		deckard_log( "set boot intent led: %s\n", led_color_to_string ( ledColor ) );
+
+		// Set BG image again (in case of late press)
+		deckard_display_image( BOOT_INTENTION_BOOT_MENU );
+
+		// Stash BG image
+		consolevr_set_background_image_enabled( true );
+		consolevr_save_background_image();
+
 		deckard_do_bootmenu();
 	}
 

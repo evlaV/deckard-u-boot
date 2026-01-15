@@ -10,7 +10,9 @@ typedef struct {
 } Pixbuf;
 
 void clear_pixbuf( Pixbuf *pb, int width, int height );
+void copy_pixbuf( Pixbuf *pb_dst, Pixbuf *pb_src );
 void clear_stereo_bounds( Pixbuf *pb, VRStereoBounds_t *bounds );
+void copy_stereo_bounds( Pixbuf *pb_dst, Pixbuf *pb_src, VRStereoBounds_t *bounds );
 void draw_glyph( Pixbuf *pb, VRTerminalPoint_t * pTerminalPoint, VRFont_t * pFont, char codepoint );
 
 #endif

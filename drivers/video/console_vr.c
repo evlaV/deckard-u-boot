@@ -10,6 +10,7 @@
 #include <video_console.h>
 #include <video_font.h>		/* Get font data, width and height */
 #include <malloc.h>
+#include <memalign.h>
 #include <scsi.h>
 #include <fs_loader.h>
 #include <fs.h>
@@ -44,6 +45,18 @@ reset
 setenv stdout serial,vidconsole
 */
 
+static bool s_bgimage_pending_save = false;
+static bool s_bgimage_enable = false;
+
+void consolevr_save_background_image( void )
+{
+	s_bgimage_pending_save = true;
+}
+
+void consolevr_set_background_image_enabled( bool enable )
+{
+	s_bgimage_enable = enable;
+}
 
 static int consolevr_set_row(struct udevice *dev, uint row, int clr)
 {
@@ -70,8 +83,19 @@ static int consolevr_puts(struct udevice *dev, const char * str)
 
 	static TerminalUpdate_t terminalUpdate;
 	static VRStereoBounds_t terminalBounds;
+	static Pixbuf cached_background_image;
 
 	vrterminal_update_reset( &terminalUpdate );
+
+	// Allocate our cached bg image
+	if ( cached_background_image.px == NULL )
+	{
+		cached_background_image.w = pb.w;
+		cached_background_image.h = pb.h;
+		cached_background_image.stride = pb.stride;
+		cached_background_image.px = malloc_cache_aligned( pb.stride * pb.h );
+		memset( cached_background_image.px, 0, pb.stride * pb.h );
+	}
 
 	static int first_draw = 1;
 	if ( first_draw )
@@ -87,15 +111,36 @@ static int consolevr_puts(struct udevice *dev, const char * str)
 			( (int) pFont->maxGlyphWidth ) * 10, ( (int) pFont->maxGlyphWidth ) * 10,
 			( (int) pFont->maxGlyphHeight ) * 10, ( (int) pFont->maxGlyphHeight ) * 10 );
 
-		// clear the full frame on first draw
-		clear_pixbuf( &pb, W, H );
+		// Either preserve, or clear, the bg image on first draw
+		if ( s_bgimage_enable )
+		{
+			copy_pixbuf( &cached_background_image, &pb );
+		}
+		else
+		{
+			clear_pixbuf( &pb, W, H );
+		}
+	}
+
+	if ( s_bgimage_pending_save )
+	{
+		s_bgimage_pending_save = false;
+		copy_pixbuf( &cached_background_image, &pb );
 	}
 
 	vrterminal_feed( &terminalUpdate, pTerminal, str, strlen( str ) );
 
 	if ( terminalUpdate.full_update )
 	{
-		clear_stereo_bounds( &pb, &terminalBounds );
+		if ( s_bgimage_enable )
+		{
+			copy_stereo_bounds( &pb, &cached_background_image, &terminalBounds );
+		}
+		else
+		{
+			clear_stereo_bounds( &pb, &terminalBounds );
+		}
+
 		for ( int row = 0; row < nTerminalSizeY ; ++row )
 		{
 			for ( int col = 0; col < nTerminalSizeX; ++col )
