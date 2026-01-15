@@ -220,7 +220,7 @@ uint8_t * load_data_fromdisk( const char * pchFilename, uint32_t *pBytes, uint32
 
 	if ( filesize < 0 || filesize > n_max_size || ret )
     {
-		printf("load_data_fromdisk fail: filesize = %d, fileaddr = 0x%0x, ret= %d \n",filesize,fileaddr, ret );
+		printf("load_data_fromdisk fail %s: filesize = %d, fileaddr = 0x%0x, ret= %d\n", pchFilename, filesize, fileaddr, ret );
 		return NULL;
     }
 
