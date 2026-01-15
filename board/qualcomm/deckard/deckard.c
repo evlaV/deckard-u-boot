@@ -499,6 +499,28 @@ void setup_boot_intention_global_state( boot_intention_t boot_intention )
 	}
 }
 
+void deckard_fastboot_enable(void)
+{
+	// TODO: make this consistent with the other user of kernel_addr_r, which has a leading 0x prefix
+	env_set("kernel_addr_r","90000000");
+	/*
+		* serial# is a special var, like ethaddr, they are defined as
+		* write-once as a protection, we want to maintain that protection
+		* writing it only once here, if not before, and avoid error after.
+		*/
+	if (!env_get("serial#")) {
+		deckard_log("setting dummy serial number: %s\n", DECKARD_DUMMY_SERIAL_NUMB);
+		env_update("serial#", DECKARD_DUMMY_SERIAL_NUMB);
+	}
+
+	deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices );
+
+	/* disable display (logo off) when idle in fastboot mode */
+	display_turn_off();
+
+	run_command("fastboot -l 0x880000000 -s 0x10000000 usb 0", 0);
+}
+
 void set_usb_boot_target_env_vars_from_of_node(ofnode node)
 {
 	int ret = 0;
@@ -680,24 +702,7 @@ int misc_init_r(void)
 	/* Check if special boot mode (fastboot, bootloader, edl) was setup */
 	if( g_boot_intention == BOOT_INTENTION_FASTBOOT ) {
 		deckard_log("Starting fastboot mode...\n");
-		// TODO: make this consistent with the other user of kernel_addr_r, which has a leading 0x prefix
-		env_set("kernel_addr_r","90000000");
-		/*
-		 * serial# is a special var, like ethaddr, they are defined as
-		 * write-once as a protection, we want to maintain that protection
-		 * writing it only once here, if not before, and avoid error after.
-		 */
-		if (!env_get("serial#")) {
-			deckard_log("setting dummy serial number: %s\n", DECKARD_DUMMY_SERIAL_NUMB);
-			env_update("serial#", DECKARD_DUMMY_SERIAL_NUMB);
-		}
-
-		deckard_setledcolor( LED_COLOR_WHITE, &g_deckard_devices );
-
-		/* disable display (logo off) when idle in fastboot mode */
-		display_turn_off();
-
-		run_command("fastboot -l 0x880000000 -s 0x10000000 usb 0", 0);
+		deckard_fastboot_enable();
 	}
 
 	if ( g_boot_intention == BOOT_INTENTION_EDL )
