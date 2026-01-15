@@ -1429,9 +1429,14 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 	env_set("fdtcontroladdr", DTB_ADDR);
 
 	// check one more time to see if the user has hit select button to go to the menu
-	g_boot_intention = calc_boot_intention( &g_deckard_devices );
-	if ( g_boot_intention == BOOT_INTENTION_BOOT_MENU )
+	boot_intention_t late_boot_intention = calc_boot_intention( &g_deckard_devices );
+	if ( ( late_boot_intention == BOOT_INTENTION_BOOT_MENU ) || ( g_boot_intention == BOOT_INTENTION_BOOT_MENU ) )
 	{
+
+		// Set LED Color
+		LedColor ledColor = get_led_color_for_boot_intention( &g_deckard_devices, BOOT_INTENTION_BOOT_MENU );
+		deckard_setledcolor( ledColor, &g_deckard_devices );
+		deckard_log( "set boot intent led: %s\n", led_color_to_string ( ledColor ) );
 		deckard_do_bootmenu();
 	}
 
