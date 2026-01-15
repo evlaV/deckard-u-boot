@@ -215,6 +215,18 @@ void deckard_get_booted_esp_part(char * disk_part_str, int disk_part_str_len)
 	return;
 }
 
+const char *fs_firmware_get_file_path_prefix(void)
+{
+	if( booted_from_usb() )
+	{
+		return FIRMWARE_PATH_PREFIX_USB;
+	}
+	else
+	{
+		return "";
+	}
+}
+
 const char *fs_firmware_get_partition(void)
 {
 	// We cannot change this signature, so we have to store it in static memory for return

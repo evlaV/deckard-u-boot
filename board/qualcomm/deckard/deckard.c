@@ -204,7 +204,7 @@ static int deckard_load_image(const char * logo_name, ulong addr, load_source_t 
 	{
 		// 'j' during boot to get shell, then...
 		//  ls scsi 2:5   (or whatever fs_firmware_get_partition() is to see files)
-		snprintf(filename, LOGO_PATHMAX, "/%s", logo_name); // beware case
+		snprintf(filename, LOGO_PATHMAX, "%s/%s", fs_firmware_get_file_path_prefix(), logo_name); // beware case
 		strncpy( diskpart, fs_firmware_get_partition(), sizeof( diskpart) );
 	}
 

@@ -29,6 +29,8 @@ enum disk_interface_t {
   #define DECKARD_ROOTFS_SLOT_OLD_B "system1"
 #endif
 
+#define FIRMWARE_PATH_PREFIX_USB "/uboot/ubootfw"
+
 char * disk_interface_to_str( enum disk_interface_t disk_interface );
 int booted_from_usb(void);
 char get_booted_slot(void);
