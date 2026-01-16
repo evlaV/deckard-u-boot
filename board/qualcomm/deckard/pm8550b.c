@@ -1,6 +1,7 @@
 #include "pm8550b.h"
 
 #include <power/pmic.h>
+#include <linux/delay.h>
 
 #define PM8550B_CHGR_BASE                                       0x2600
 #define PM8550B_SCSCPQ_PK_CHGR2_ADDR                            (PM8550B_CHGR_BASE + 0x25)
@@ -36,6 +37,9 @@
 #define PM8550B_TYPEC_PHY_BASE                                  0x2D00
 #define PM8550B_USB_PDPHY_TX_CONTROL_REG                        (PM8550B_TYPEC_PHY_BASE + 0x44)
 #define USB_PDPHY_FRAME_FILTER_REG                        		(PM8550B_TYPEC_PHY_BASE + 0x4C)
+
+#define PM8550B_USB_BASE               							0x2900
+#define PM8550B_USB_SUSPEND										(PM8550B_USB_BASE + 0x54)
 
 #define PM8550B_BATIF_BASE               0x2800
 #define PM8550B_BATIF_JEITA_EN           (BATIF_BASE + 0x7F)
@@ -342,9 +346,16 @@ int pm8550b_disable_typec_charging(struct udevice *pmic)
 	ret = pmic_reg_write(pm8550b, PM8550B_TYPEC_VCONN_CONTROL_REG, 0);
 	if(ret != 0) goto fail;
 
+	//toggle the USBIN_SUSPEND bit 0,1,0 to cause the port to reset basically
+	ret = pmic_reg_write(pm8550b, PM8550B_USB_SUSPEND, 0);
+	mdelay(20); //todo, check if we need this or not
+	ret = pmic_reg_write(pm8550b, PM8550B_USB_SUSPEND, 1);
+	mdelay(20); //todo, check if we need this or not
+	ret = pmic_reg_write(pm8550b, PM8550B_USB_SUSPEND, 0);
+
 
 	if(ret == 0) return 0;
-	
+
 fail:
 	if (ret != 0) {
 		printf("Failed to disable typec charging\n");
