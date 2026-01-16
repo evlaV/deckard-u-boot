@@ -29,6 +29,12 @@
 #define PM8550B_TYPEC_PORT_BASE                                 0x2B00
 #define PM8550B_TYPEC_MISC_STATUS                               (PM8550B_TYPEC_PORT_BASE + 0x0B)
 #define PM8550B_TYPEC_VBUS_DETECT                               BIT(5)
+#define PM8550B_TYPEC_MODE_CFG_REG                         		(PM8550B_TYPEC_PORT_BASE + 0x44)
+#define TYPEC_DISABLE_CMD                               		BIT(0)
+
+#define PM8550B_TYPEC_PHY_BASE                                  0x2D00
+#define PM8550B_USB_PDPHY_TX_CONTROL_REG                        (PM8550B_TYPEC_PHY_BASE + 0x44)
+#define USB_PDPHY_FRAME_FILTER_REG                        		(PM8550B_TYPEC_PHY_BASE + 0x4C)
 
 #define PM8550B_BATIF_BASE               0x2800
 #define PM8550B_BATIF_JEITA_EN           (BATIF_BASE + 0x7F)
@@ -307,7 +313,38 @@ int pm8550b_enable_charging(struct udevice *pmic, bool enable)
 	return 0;
 }
 
+int pm8550b_disable_typec_charging(struct udevice *pmic)
+{
+	int ret;
+	
+	struct udevice *pm8550b  = pmic;
 
+	if(!pm8550b)
+	{
+		// Find the PM8550B
+		ret = pmic_get("pmic@7", &pm8550b);
+		if (ret != 0) {
+			printf("Failed to Find PM8550B\n");
+			return ret;
+		}
+	}
+
+	ret = pmic_reg_write(pm8550b, PM8550B_TYPEC_MODE_CFG_REG, TYPEC_DISABLE_CMD); //just set this one bit and set rest of register to 0
+	if(ret != 0) goto fail;
+	ret = pmic_reg_write(pm8550b, PM8550B_USB_PDPHY_TX_CONTROL_REG, 0);
+	if(ret != 0) goto fail;
+	ret = pmic_reg_write(pm8550b, USB_PDPHY_FRAME_FILTER_REG, 0);
+
+	if(ret == 0) return 0;
+
+fail:
+	if (ret != 0) {
+		printf("Failed to disable typec charging\n");
+		return ret;
+	}
+
+	return 0;
+}
 
 int pm8550b_test(struct udevice *pmic, bool enable)
 {
