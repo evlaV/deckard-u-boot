@@ -19,6 +19,7 @@
 #include <asm/armv8/mmu.h>
 #include <command.h>
 #include "pmk8550.h"
+#include "pm8550b.h"
 #include "deckard_battery.h"
 #include "deckard_log.h"
 #include <sysreset.h>
@@ -953,6 +954,8 @@ void qcom_spl_board_init(void)
 
 			if(power_button_released_since_boot)
 			{
+				deckard_log("disabling typec port to allow auto-on trigger...\n");
+				pm8550b_disable_typec_charging(NULL);
 				deckard_log("shutting down...\n");
 				ret = sysreset_walk(SYSRESET_POWER_OFF);
 			}

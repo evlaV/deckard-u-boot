@@ -24,4 +24,5 @@ int pm8550b_enable_watchdog(struct udevice *pmic, bool enable);
 bool pm8550b_is_charging_enabled(struct udevice *pmic);
 int pm8550b_enable_charging(struct udevice *pmic, bool enable);
 int pm8550b_test(struct udevice *pmic, bool enable);
+int pm8550b_disable_typec_charging(struct udevice *pmic);
 #endif /* __PM8550B_H */
