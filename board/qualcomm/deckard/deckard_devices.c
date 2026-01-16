@@ -62,7 +62,8 @@ extern void consolevr_set_background_image_enabled( bool enable );
 
 bool g_display_enabled = false;
 
-enum combined_serial_console_state_t g_total_console_state = 0;
+static enum combined_serial_console_state_t g_console_state = 0;
+static enum combined_serial_console_state_t g_console_state_active = 0;
 
 #if IS_ENABLED(CONFIG_SYSRESET_CMD_RESET)
 void sysreset_board_reset_prepare(int argc, char *const argv[], enum sysreset_t *reset_type);
@@ -517,7 +518,7 @@ void pop_console_state_vid_enable(void)
 	}
 }
 
-static int console_state_handler(enum combined_serial_console_state_t total_console_state) 
+static void apply_console_state_update( enum combined_serial_console_state_t total_console_state ) 
 {
 	fflush(stdout); //needed to make things not explode
 	fflush(stderr); //needed to make things not explode
@@ -568,23 +569,23 @@ static int console_state_handler(enum combined_serial_console_state_t total_cons
 		default:
 			break;
 	}
-
-	return 0;
 }
 
 void console_state_activate(void)
 {
-	console_state_handler(g_total_console_state);
+	// TODO: gaber should we early exit if g_console_state_active == g_console_state?
+	apply_console_state_update( g_console_state );
+	g_console_state_active = g_console_state;
 }
 
 void console_state_set_flags(uint8_t console_mask)
 {
-	g_total_console_state |= console_mask;
+	g_console_state |= console_mask;
 }
 
 void console_state_clear_flags(uint8_t console_mask)
 {
-	g_total_console_state &= ~console_mask;
+	g_console_state &= ~console_mask;
 }
 
 int enable_ramoops_serial_console(void)
@@ -903,15 +904,25 @@ void deckard_display_image( boot_intention_t boot_intention )
 		consolevr_save_background_image();
 		consolevr_set_background_image_enabled( true );
 
-		push_console_state_vid_enable();
+		if ( ( VIDEO_CONSOLE_MASK & g_console_state_active ) != 0 )
+		{
+			console_state_set_flags( VIDEO_CONSOLE_MASK );
+			console_state_activate();
+		}
 
-		const char *text = "Boot Menu Starting...";
-		int col = ( ( 80 - (int) strlen( text ) ) / 2 ) + 1;
-
-		// save cursor, draw text, restore cursor
-		printf("\0337\033[1;1H\033[2K\033[1;%dH%s\0338", col, text);
-
-		pop_console_state_vid_enable();
+		struct stdio_dev *vc = stdio_get_by_name("vidconsolevr1");
+		if ( vc && vc->puts )
+		{
+			const char *text = "Boot Menu Starting...";
+			int col = ( ( 80 - (int) strlen( text ) ) / 2 ) + 1;
+			char buffer[128] = { 0 };
+			snprintf( buffer, sizeof(buffer) - 1, "\0337\033[1;1H\033[2K\033[1;%dH%s\0338", col, text);
+			vc->puts( vc, buffer );
+		}
+		else
+		{
+			deckard_log( "cannot find vidconsolevr1 directly, skipping display image text\n" );
+		}
 	}
 }
 
