@@ -466,7 +466,7 @@ int deckard_load_image(const char * logo_name, ulong addr, load_source_t load_so
 	// Calc the filename and disk partition
 	if ( load_source == LOAD_SOURCE_ESP_PARTITION )
 	{
-		snprintf(filename, LOGO_PATHMAX, "/steamos/%s", logo_name); // beware case 
+		snprintf(filename, LOGO_PATHMAX, "/efi/steamos/%s", logo_name); // beware case 
 		deckard_get_booted_esp_part( diskpart, sizeof( diskpart) );
 	}
 	else if ( load_source == LOAD_SOURCE_FIRMWARE )
