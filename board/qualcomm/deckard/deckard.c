@@ -428,6 +428,8 @@ int ft_board_setup(void *fdt, struct bd_info *bd)
 		}
 	}
 
+#if 0
+	//TODO: gaber: figure out if we actually need this!
 	if(booted_from_usb())
 	{
 		//if this fails, don't return a non-zero value since this should not be a fatal error
@@ -441,6 +443,7 @@ int ft_board_setup(void *fdt, struct bd_info *bd)
 			if (ret < 0) deckard_log("WARNING: fdt: could not set property for pm8550b_vbus node %s.\n", fdt_strerror(ret));
 		}
 	}
+#endif
 
 	return 0;
 }
