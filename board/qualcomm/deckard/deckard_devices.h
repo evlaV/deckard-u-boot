@@ -8,6 +8,8 @@
 #define __DECKARD_DEVICES_H
 
 #include <stdbool.h>
+#include <linux/types.h>
+#include <stdint.h>
 
 typedef enum
 {
@@ -71,6 +73,28 @@ typedef struct
 	struct udevice *btn_select;
 } deckard_devices_t;
 
+// Normal physical uart serial port
+#define SERIAL_CONSOLE_MASK 0b100
+// USB_CONSOLE_MASK emulates a serial port device over type-c
+#define USB_CONSOLE_MASK 0b010
+// VIDEO_CONSOLE_MASK is the VR specific console (when enabled)
+// requires the display to be enabled
+#define VIDEO_CONSOLE_MASK 0b001
+enum combined_serial_console_state_t {
+	SERIAL_OFF__USB_OFF__VID_OFF = 0,
+	SERIAL_OFF__USB_OFF__VID_ON  = 1,
+	SERIAL_OFF__USB_ON__VID_OFF  = 2,
+	SERIAL_OFF__USB_ON__VID_ON   = 3,
+	SERIAL_ON__USB_OFF__VID_OFF  = 4,
+	SERIAL_ON__USB_OFF__VID_ON   = 5,
+	SERIAL_ON__USB_ON__VID_OFF   = 6,
+	SERIAL_ON__USB_ON__VID_ON    = 7,
+};
+
+void console_state_set_flags(uint8_t console_mask);
+void console_state_clear_flags(uint8_t console_mask);
+void console_state_activate(void);
+
 int deckard_setup_devices( deckard_devices_t * pdevices );
 
 // Warning: do not call this while adsp is running
@@ -81,5 +105,20 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices );
 void deckard_setledcolor( LedColor color, deckard_devices_t * pdevices );
 bool deckard_factory_mode_enabled( void );
 bool deckard_adb_mode_enabled( void );
+
+int deckard_unbind_usb(void);
+int deckard_reboot_mode_usb(void);
+void deckard_sysreset_prepare_edl(void);
+
+void deckard_fastboot_enable(deckard_devices_t * pdevices);
+
+bool display_enabled(void);
+void set_display_enabled(bool state);
+int display_turn_on(void);
+int display_turn_off(void);
+int display_turn_off_force(void);
+void deckard_display_image( boot_intention_t boot_intention );
+
+void deckard_disable_watchdog(void);
 
 #endif

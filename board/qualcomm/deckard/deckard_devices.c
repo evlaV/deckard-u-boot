@@ -4,13 +4,40 @@
 #include <env.h>
 #include <led.h>
 #include <power/pmic.h>
+#include <linux/delay.h>
+#include <linux/arm-smccc.h>
+#include <usb.h>
+#include <dm.h>
+#include <dm/device-internal.h>
+#include <command.h>
+#include <asm/io.h>
+#include <video.h>
 
 #include "pm8550vs.h"
 #include "smb1510.h"
 #include "pmk8550.h"
 #include "deckard_battery.h"
 #include "deckard_log.h"
+#include <fastboot.h>
+#include <sysreset.h>
+#include <fs_loader.h>
+#include <fs.h>
 
+#include "deckard_disk.h"
+
+#define DECKARD_FASTBOOT_DUMMY_SERIAL_NUMB "123456789"
+
+#define TCSR_BOOT_MISC_DETECT 0x01fd9000
+
+#define QCOM_SCM_SMCCC_64 0x42000000
+#define QCOM_SCM_SVC_BOOT 0x01
+#define QCOM_SCM_BOOT_SDI_CONFIG 0x09
+#define QCOM_SCM_BOOT_SET_DLMODE 0x10
+
+#define QCOM_SCM_BOOT_DISABLE_SDI (QCOM_SCM_SMCCC_64 | QCOM_SCM_SVC_BOOT << 8 | \
+					QCOM_SCM_BOOT_SDI_CONFIG)
+#define QCOM_SCM_BOOT_ENABLE_DLMODE (QCOM_SCM_SMCCC_64 | QCOM_SCM_SVC_BOOT << 8 | \
+					QCOM_SCM_BOOT_SET_DLMODE)
 
 //these are set as a bit-mask typically when we detect a button is enabled
 #define VOLUP_BUTTON_MASK 0b100
@@ -28,6 +55,46 @@ typedef enum
 	VOLUP_ON__VOLDN_ON__SELECT_OFF   = 6,
 	VOLUP_ON__VOLDN_ON__SELECT_ON    = 7,
 } combined_button_state_t;
+
+// From console_vr
+extern void consolevr_save_background_image( void );
+extern void consolevr_set_background_image_enabled( bool enable );
+
+bool g_display_enabled = false;
+
+enum combined_serial_console_state_t g_total_console_state = 0;
+
+#if IS_ENABLED(CONFIG_SYSRESET_CMD_RESET)
+void sysreset_board_reset_prepare(int argc, char *const argv[], enum sysreset_t *reset_type);
+#endif
+#if IS_ENABLED(CONFIG_FASTBOOT) && !CONFIG_IS_ENABLED(ENV_IS_NOWHERE)
+int fastboot_set_reboot_flag(enum fastboot_reboot_reason reason);
+#endif
+
+extern int dwc3_glue_bind(struct udevice *parent);
+
+static inline void write32(unsigned long addr, u32 value)
+{
+	*(volatile u32 *) addr = value;
+}
+
+static inline u32 read32(unsigned long addr)
+{
+	return *(volatile u32 *) addr;
+}
+
+// see BOOT.MXF.2.1/boot_images/boot/QcomPkg/SocPkg/Lanai/Include/HALbootHWIO.h
+// for watchdog register defines
+#define HWIO_APSS_WDT_TMR1_WDOG_CTL_ADDR  0x17410008
+#define HWIO_APSS_WDT_TMR2_WDOG_CTL_ADDR  0x17411008
+void deckard_disable_watchdog(void)
+{
+	// disable watchdog 1
+	write32(HWIO_APSS_WDT_TMR1_WDOG_CTL_ADDR, 0);
+
+	// disable watchdog 2
+	write32(HWIO_APSS_WDT_TMR2_WDOG_CTL_ADDR, 0);
+}
 
 static combined_button_state_t deckard_get_button_state( deckard_devices_t * pdevices )
 {
@@ -233,6 +300,43 @@ LedColor get_led_color_for_boot_intention( deckard_devices_t * pdevices, boot_in
 	}
 }
 
+// #define CHECK_PMICS
+#ifdef CHECK_PMICS
+void check_pmic(const char *const pmic_dts, const char *const pmic_name)
+{
+	int             ret;
+	struct udevice *pmic = NULL;
+
+	ret = pmic_get(pmic_dts, &pmic);
+	if (ret != 0) {
+		deckard_log("Failed to Find %s - %s, ret: %d\n", pmic_dts, pmic_name, ret);
+		return;
+	}
+
+	ret = pmic_reg_read(pmic, 0x0105);
+	if (ret < 0) {
+		deckard_log("%s failed: %d\n", pmic_name, ret);
+	}
+	// else
+	// {
+	// 	deckard_log("%s subtype: 0x%02X\n", pmic_name, ret);
+	// }
+}
+
+void check_pmics_comms(void)
+{
+	check_pmic("pmic@0", "PMK8550");
+	check_pmic("pmic@1", "PM8550");
+	check_pmic("pmic@2", "PM8550VS_c");
+	check_pmic("pmic@3", "PM8550VS_d");
+	check_pmic("pmic@4", "PM8550VS_e");
+	check_pmic("pmic@6", "PM8550VS_g");
+	check_pmic("pmic@7", "PM8550BHS");
+	check_pmic("pmic@8", "PM8550VE");
+	check_pmic("pmic@c", "PM8010_m");
+	check_pmic("pmic@d", "PM8010_n");
+}
+#endif
 
 // TODO: return richer error codes / bitmask for display, including fatal/non-fatal
 int deckard_setup_devices( deckard_devices_t * pdevices )
@@ -377,3 +481,438 @@ bool deckard_adb_mode_enabled( void )
 {
 	return ( env_get_ulong( "adb-mode", 10, 0 ) != 0 ); // defaults to off
 }
+
+#define ENV_GET_MAX_SIZE 64
+static char s_stdout_env[ENV_GET_MAX_SIZE];
+
+//TODO: jeremys save and restore instead of push and pop
+void push_console_state_vid_enable(void) 
+{
+	fflush(stdout); //needed to make things not explode
+	fflush(stderr); //needed to make things not explode
+
+	char * stdout_env = env_get("stdout");
+	if ( stdout_env )
+	{
+		strncpy( s_stdout_env, stdout_env, sizeof(s_stdout_env) );
+		s_stdout_env[ENV_GET_MAX_SIZE-1] = 0; // force null termination
+	}
+	else
+	{
+		memset( s_stdout_env, 0, sizeof(s_stdout_env) );
+	}
+
+	env_set("stdout","vidconsole");
+}
+
+void pop_console_state_vid_enable(void) 
+{
+	fflush(stdout); //needed to make things not explode
+	fflush(stderr); //needed to make things not explode
+
+	if ( s_stdout_env[0] )
+	{
+		env_set("stdout", s_stdout_env );
+		memset( s_stdout_env, 0, sizeof(s_stdout_env) );
+	}
+}
+
+static int console_state_handler(enum combined_serial_console_state_t total_console_state) 
+{
+	fflush(stdout); //needed to make things not explode
+	fflush(stderr); //needed to make things not explode
+
+	//note: we need to have some console, so no console on at all is not valid, so we handle that below
+	switch(total_console_state)
+	{
+		case SERIAL_OFF__USB_OFF__VID_OFF:
+			env_set("stdin", "serial");
+			env_set("stderr","serial");
+			env_set("stdout","serial");
+			break;
+		case SERIAL_OFF__USB_OFF__VID_ON:
+			env_set("stdin", "serial");
+			env_set("stderr","serial");
+			env_set("stdout","serial,vidconsole");
+			break;
+		case SERIAL_OFF__USB_ON__VID_OFF:
+			env_set("stdin", "usbacm");
+			env_set("stderr","usbacm");
+			env_set("stdout","usbacm");
+			break;
+		case SERIAL_OFF__USB_ON__VID_ON:
+			env_set("stdin", "usbacm");
+			env_set("stderr","usbacm");
+			env_set("stdout","usbacm,vidconsole");
+			break;
+		case SERIAL_ON__USB_OFF__VID_OFF:
+			env_set("stdin", "serial");
+			env_set("stderr","serial");
+			env_set("stdout","serial");
+			break;
+		case SERIAL_ON__USB_OFF__VID_ON:
+			env_set("stdin", "serial");
+			env_set("stderr","serial");
+			env_set("stdout","serial,vidconsole");
+			break;
+		case SERIAL_ON__USB_ON__VID_OFF:
+			env_set("stdin", "serial,usbacm");
+			env_set("stderr","serial,usbacm");
+			env_set("stdout","serial,usbacm");
+			break;
+		case SERIAL_ON__USB_ON__VID_ON:
+			env_set("stdin", "serial,usbacm");
+			env_set("stderr","serial,usbacm");
+			env_set("stdout","serial,usbacm,vidconsole");
+			break;
+		default:
+			break;
+	}
+
+	return 0;
+}
+
+void console_state_activate(void)
+{
+	console_state_handler(g_total_console_state);
+}
+
+void console_state_set_flags(uint8_t console_mask)
+{
+	g_total_console_state |= console_mask;
+}
+
+void console_state_clear_flags(uint8_t console_mask)
+{
+	g_total_console_state &= ~console_mask;
+}
+
+int enable_ramoops_serial_console(void)
+{
+	env_set("stdin","serial,usbacm");
+	env_set("stderr","serial,ramoops,usbacm");
+	env_set("stdout","serial,ramoops,usbacm");
+	return 0;
+}
+
+int display_turn_on(void)
+{
+	struct udevice *dev;
+
+	if( ! display_enabled() ) return 0;
+
+	return uclass_first_device_err(UCLASS_VIDEO, &dev);
+}
+
+int display_turn_off()
+{
+	if( ! display_enabled() ) return 0;
+
+	if (env_get_ulong("keep_display", 10, 0) == 1)
+		return 0;
+
+	return display_turn_off_force();
+}
+
+int display_turn_off_force()
+{
+	console_state_clear_flags(VIDEO_CONSOLE_MASK);
+	console_state_activate();
+	return run_command("mdss stop", 0);
+}
+
+bool display_enabled(void)
+{
+	return g_display_enabled;
+}
+
+void set_display_enabled(bool state)
+{
+	g_display_enabled = state;
+}
+
+int deckard_unbind_usb(void)
+{
+	struct device_node *snps_np = NULL;
+	struct udevice *dev = NULL;
+	ofnode node;
+	int ret;
+
+	snps_np = of_find_compatible_node(snps_np, NULL, "snps,dwc3");
+	if (!snps_np) {
+		log_err("Failed to find snps node\n");
+		return -ENOENT;
+	}
+
+	/* overwrite dr_mode property in child */
+	ret = of_write_prop(snps_np, "dr_mode", strlen("host") + 1, "host");
+	if (ret) {
+		log_err("Failed to overwrite 'dr_mode' property: %d\n", ret);
+		return ret;
+	}
+
+	/* child node */
+	node = ofnode_by_compatible(ofnode_null(), "snps,dwc3");
+	if (!ofnode_valid(node)) {
+		log_err("Failed to find glue node\n");
+		return -ENOENT;
+	}
+
+	ret = device_find_global_by_ofnode(node, &dev);
+	if (ret < 0) {
+		log_err("failed to get device from node\n");
+		return -ENOENT;
+	}
+
+	ret = device_remove(dev, DM_REMOVE_NORMAL);
+	if (ret) {
+		deckard_log("Unable to remove. err:%d\n", ret);
+		return ret;
+	}
+
+	ret = device_unbind(dev);
+	if (ret) {
+		deckard_log("Unable to unbind. err:%d\n", ret);
+		return ret;
+	}
+
+	return 0;
+}
+
+int deckard_reboot_mode_usb(void)
+{
+	struct device_node *dwc3_np = NULL;
+	struct udevice *parent = NULL;
+	ofnode node;
+	int ret;
+
+	/* Find the DWC3 node itself */
+	dwc3_np = of_find_compatible_node(dwc3_np, NULL, "qcom,dwc3");
+	if (!dwc3_np) {
+		log_err("Failed to find dwc3 node\n");
+		return -ENOENT;
+	}
+
+	/* overwrite dr_mode property in parent */
+	ret = of_write_prop(dwc3_np, "dr_mode", strlen("host") + 1, "host");
+	if (ret) {
+		log_err("Failed to overwrite 'dr_mode' property: %d\n", ret);
+		return ret;
+	}
+
+	node = ofnode_by_compatible(ofnode_null(), "qcom,dwc3");
+	if (!ofnode_valid(node)) {
+		log_err("Failed to find glue node\n");
+		return -ENOENT;
+	}
+
+	/*
+	 * Unbind the already bind usb dwc3-generic-host or dwc3_generic_peripheral
+	 * driver to device, and bind our own to make sure everything is setup
+	 * correctly.
+	 */
+	ret = deckard_unbind_usb();
+	if (ret < 0) {
+		log_err("failed to unbind child node\n");
+		return -ENOENT;
+	}
+
+	ret = device_find_global_by_ofnode(node, &parent);
+	if (ret < 0) {
+		log_err("failed to get parent device from node\n");
+		return -ENOENT;
+	}
+
+	ret = dwc3_glue_bind(parent);
+	if (ret < 0) {
+		log_warning("failed to bind\n");
+		return -ENOENT;
+	}
+
+	return 0;
+}
+
+void deckard_sysreset_prepare_edl(void)
+{
+	struct arm_smccc_res res = {0};
+
+	/*
+	 * Disble debug mode,
+	 * a1: num of args
+	 * a2: 1 => Disable watchdog
+	 * a3: 0 => Disable SDI
+	 */
+	arm_smccc_smc(QCOM_SCM_BOOT_DISABLE_SDI, 0x2, 0x1, 0x0, 0, 0, 0, 0, &res);
+	mdelay(100);
+
+	/*
+	 * Setup the boot_misc to 0x1 for EDL, 0x10 is minidump,
+	 * 0x20 is dump. We may need to disalble PMIC watchdog
+	 * also to avoid trigger during EDL transfers, but
+	 * our platform has it disable by default.
+	 */
+	writel(0x1, TCSR_BOOT_MISC_DETECT);
+}
+
+#if IS_ENABLED(CONFIG_SYSRESET_CMD_RESET)
+void sysreset_board_reset_prepare(int argc, char *const argv[], enum sysreset_t *reset_type)
+{
+	if ((argc == 2 && !strncmp(argv[1], "edl", 3)) ||
+		(pmk8550_get_reboot_command_reason(NULL) == REBOOT_COMMAND_REASON_EDL)) {
+		pmk8550_set_reboot_command_reason(REBOOT_COMMAND_REASON_NONE);
+		deckard_sysreset_prepare_edl();
+		*reset_type = SYSRESET_WARM;
+	} else if (argc == 2 && !strncmp(argv[1], "usb", 3)) {
+		pmk8550_set_reboot_command_reason(REBOOT_COMMAND_REASON_USB);
+		run_command("splctl force-usb", 0);
+	} else if (argc == 2 && !strncmp(argv[1], "fastboot", 8)) {
+		pmk8550_set_reboot_command_reason(REBOOT_COMMAND_REASON_FASTBOOT);
+	} else if (argc == 2 && !strncmp(argv[1], "bootloader", 8)) {
+		pmk8550_set_reboot_command_reason(REBOOT_COMMAND_REASON_BOOTLOADER);
+	} else if (argc == 2 && !strncmp(argv[1], "recovery", 8)) {
+		pmk8550_set_reboot_command_reason(REBOOT_COMMAND_REASON_RECOVERY);
+	}
+}
+#endif
+
+#if IS_ENABLED(CONFIG_FASTBOOT) && !CONFIG_IS_ENABLED(ENV_IS_NOWHERE)
+int fastboot_set_reboot_flag(enum fastboot_reboot_reason reason)
+{
+	if ((reason != FASTBOOT_REBOOT_REASON_FASTBOOTD) &&
+			(reason != FASTBOOT_REBOOT_REASON_OEM_EDL) &&
+			(reason != FASTBOOT_REBOOT_REASON_RECOVERY) &&
+			(reason != FASTBOOT_REBOOT_REASON_OEM_USB) &&
+			(reason != FASTBOOT_REBOOT_REASON_BOOTLOADER))
+		return -ENOTSUPP;
+
+	if (reason == FASTBOOT_REBOOT_REASON_FASTBOOTD) {
+		deckard_log("Setting reboot to fastboot flag ...\n");
+		pmk8550_set_reboot_command_reason(REBOOT_COMMAND_REASON_FASTBOOT);
+	} else if (reason == FASTBOOT_REBOOT_REASON_BOOTLOADER) {
+		deckard_log("Rebooting to bootloader mode ...\n");
+		pmk8550_set_reboot_command_reason(REBOOT_COMMAND_REASON_BOOTLOADER);
+	} else if (reason == FASTBOOT_REBOOT_REASON_OEM_EDL) {
+		deckard_log("Rebooting to EDL mode ...\n");
+		pmk8550_set_reboot_command_reason(REBOOT_COMMAND_REASON_EDL);
+	} else if (reason == FASTBOOT_REBOOT_REASON_RECOVERY) {
+		deckard_log("Setting reboot to recovery mode ...\n");
+		pmk8550_set_reboot_command_reason(REBOOT_COMMAND_REASON_RECOVERY);
+	} else if (reason == FASTBOOT_REBOOT_REASON_OEM_USB) {
+		deckard_log("Setting reboot to USB mode ...\n");
+		pmk8550_set_reboot_command_reason(REBOOT_COMMAND_REASON_USB);
+	}
+
+	return 0;
+}
+#endif
+
+void deckard_fastboot_enable(deckard_devices_t * pdevices)
+{
+	// TODO: make this consistent with the other user of kernel_addr_r, which has a leading 0x prefix
+	env_set("kernel_addr_r","90000000");
+	/*
+		* serial# is a special var, like ethaddr, they are defined as
+		* write-once as a protection, we want to maintain that protection
+		* writing it only once here, if not before, and avoid error after.
+		*/
+	if (!env_get("serial#")) {
+		deckard_log("setting dummy serial number: %s\n", DECKARD_FASTBOOT_DUMMY_SERIAL_NUMB);
+		env_update("serial#", DECKARD_FASTBOOT_DUMMY_SERIAL_NUMB);
+	}
+
+	deckard_setledcolor( LED_COLOR_WHITE, pdevices );
+
+	/* disable display (logo off) when idle in fastboot mode */
+	display_turn_off();
+
+	run_command("fastboot -l 0x880000000 -s 0x10000000 usb 0", 0);
+}
+
+
+void deckard_display_image( boot_intention_t boot_intention )
+{
+	if ( ! display_enabled() )
+		return;
+
+	const char * filename = NULL;
+	const char * fallbackFilename = NULL;
+
+	switch( boot_intention )
+	{
+		case BOOT_INTENTION_START_USERSPACE:
+			filename = "logo.bmp.gz";
+			break;
+		case BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY:
+			filename = "logo_battery_low.bmp.gz";
+			break;
+		case BOOT_INTENTION_BOOT_MENU:
+			filename = "logo_console.bmp.gz";
+			fallbackFilename = "logo_error.bmp.gz";
+			break;
+		case BOOT_INTENTION_BOOT_FROM_USB:
+			filename = "logo_usb.bmp.gz";
+			fallbackFilename = "logo.bmp.gz";
+			break;
+		default:
+			return; // Don't attempt to show "no image"
+	}
+
+	deckard_log( "showing image for: %s\n", boot_intention_to_string( boot_intention ) );
+
+	bool displayed_image = false;
+
+	// Try the primary image name for all load sources (partitions)
+	for ( load_source_t load_source = 0; load_source < LOAD_SOURCE_COUNT; ++load_source )
+	{
+		int ret = deckard_load_image( filename, CONFIG_SYS_LOAD_ADDR, load_source );
+		if ( ret == 0 )
+		{
+			deckard_log("Found primary image %s, in load_source %d\n", filename, load_source );
+			bmp_info(CONFIG_SYS_LOAD_ADDR);
+			bmp_display(CONFIG_SYS_LOAD_ADDR, 0,0);
+			displayed_image = true;
+			break;
+		}
+	}
+
+	// Try the fallback image for all load sources
+	if ( !displayed_image )
+	{
+		for ( load_source_t load_source = 0; load_source < LOAD_SOURCE_COUNT; ++load_source )
+		{
+			int ret = deckard_load_image( fallbackFilename, CONFIG_SYS_LOAD_ADDR, load_source );
+			if ( ret == 0 )
+			{
+				deckard_log("Found fallback image %s, in load_source %d\n", fallbackFilename, load_source );
+				bmp_info(CONFIG_SYS_LOAD_ADDR);
+				bmp_display(CONFIG_SYS_LOAD_ADDR, 0,0);
+				displayed_image = true;
+				break;
+			}
+		}
+	}
+
+	if ( !displayed_image )
+	{
+		deckard_log("ERROR: Unable to find image\n" );
+		return;
+	}
+
+	if ( boot_intention == BOOT_INTENTION_BOOT_MENU )
+	{
+		consolevr_save_background_image();
+		consolevr_set_background_image_enabled( true );
+
+		push_console_state_vid_enable();
+
+		const char *text = "Boot Menu Starting...";
+		int col = ( ( 80 - (int) strlen( text ) ) / 2 ) + 1;
+
+		// save cursor, draw text, restore cursor
+		printf("\0337\033[1;1H\033[2K\033[1;%dH%s\0338", col, text);
+
+		pop_console_state_vid_enable();
+	}
+}
+
+

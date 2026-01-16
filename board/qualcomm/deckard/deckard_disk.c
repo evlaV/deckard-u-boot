@@ -1,6 +1,7 @@
 #include <dm.h>
 #include <efi_loader.h>
 #include <env.h>
+#include <fs_loader.h>
 #include <fs.h>
 #include <part.h>
 #include <usb.h>
@@ -453,4 +454,34 @@ int deckard_load_dtb(enum disk_interface_t disk_interface, char * partition, cha
 	// try defualt dtb
 	snprintf(DTB_TARGET, PATHMAXLEN, "/boot/maindtb.dtb");
 	return do_load_helper(disk_interface, partition, addr, DTB_TARGET);
+}
+
+int deckard_load_image(const char * logo_name, ulong addr, load_source_t load_source )
+{
+	char filename[LOGO_PATHMAX + 1] = { 0 };
+	char diskpart[DEVPARTMAXLEN + 1] = { 0 };
+
+	if(!logo_name) return -1; //user passed in a null logo_name, do not proceed further
+
+	// Calc the filename and disk partition
+	if ( load_source == LOAD_SOURCE_ESP_PARTITION )
+	{
+		snprintf(filename, LOGO_PATHMAX, "/steamos/%s", logo_name); // beware case 
+		deckard_get_booted_esp_part( diskpart, sizeof( diskpart) );
+	}
+	else if ( load_source == LOAD_SOURCE_FIRMWARE )
+	{
+		// 'j' during boot to get shell, then...
+		//  ls scsi 2:5   (or whatever fs_firmware_get_partition() is to see files)
+		snprintf(filename, LOGO_PATHMAX, "%s/%s", fs_firmware_get_file_path_prefix(), logo_name); // beware case
+		strncpy( diskpart, fs_firmware_get_partition(), sizeof( diskpart) );
+	}
+
+	char * interface_str = disk_interface_to_str( booted_from_usb() ? DISK_INTERFACE_USB : DISK_INTERFACE_SCSI );
+	char loadaddr_arg[LOADADDRMAXLEN] = { 0 }; //e.g. "0xa7000000"
+	snprintf(loadaddr_arg, LOADADDRMAXLEN, "0x%lx", addr);
+
+	char *argv[] = { "", interface_str, diskpart, loadaddr_arg, filename };
+	int argc = 5;
+	return do_load( NULL, 0, argc, argv, FS_TYPE_ANY );
 }

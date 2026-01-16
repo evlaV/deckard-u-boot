@@ -7,10 +7,20 @@
 #ifndef __DECKARD_DISK_H
 #define __DECKARD_DISK_H
 
+#include <linux/types.h>
+#include <stdint.h>
+
 enum disk_interface_t {
 	DISK_INTERFACE_SCSI = 0,
 	DISK_INTERFACE_USB = 1,
 };
+
+typedef enum 
+{
+	LOAD_SOURCE_ESP_PARTITION = 0,
+	LOAD_SOURCE_FIRMWARE,
+	LOAD_SOURCE_COUNT,
+} load_source_t;
 
 #define DECKARD_UBOOT_ENV_SLOT_A "ubootenv_a"
 #define DECKARD_UBOOT_FW_SLOT_A "ubootfw_a"
@@ -37,6 +47,7 @@ char get_booted_slot(void);
 int deckard_find_part_by_label(enum disk_interface_t disk_interface, int devnum_restrict, const char *partname, int *devnum, int *partnum);
 int do_load_helper(enum disk_interface_t disk_interface, char * partition, char * addr, char * path);
 int deckard_load_dtb(enum disk_interface_t disk_interface, char * partition, char * addr);
+int deckard_load_image(const char * logo_name, ulong addr, load_source_t load_source );
 int deckard_find_efi_var_store(void);
 int init_steamos_efi_uuid_part_arg(char * efi_part_uuid_arg);
 
