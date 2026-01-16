@@ -974,7 +974,7 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 	char rootfs_label[128] = { 0 }; //should be something like rootfs=PARTLABEL=rootfs-A
 	ret = init_steamos_efi_uuid_part_arg(steamos_efi_arg); //returns 0 on success
 	
-	if(ret)
+	if(ret || true)
 	{
 		deckard_log("WARNING: unable to determine steamos_efi_arg!  Falling back to root=PARTLABEL=%s\n",label);
 		//fallback in case we can't generate the steamos.efi=PARTUUID=... arg

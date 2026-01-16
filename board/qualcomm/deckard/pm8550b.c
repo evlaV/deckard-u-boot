@@ -31,6 +31,7 @@
 #define PM8550B_TYPEC_VBUS_DETECT                               BIT(5)
 #define PM8550B_TYPEC_MODE_CFG_REG                         		(PM8550B_TYPEC_PORT_BASE + 0x44)
 #define TYPEC_DISABLE_CMD                               		BIT(0)
+#define PM8550B_TYPEC_VCONN_CONTROL_REG						    (PM8550B_TYPEC_PORT_BASE + 0x46)
 
 #define PM8550B_TYPEC_PHY_BASE                                  0x2D00
 #define PM8550B_USB_PDPHY_TX_CONTROL_REG                        (PM8550B_TYPEC_PHY_BASE + 0x44)
@@ -331,12 +332,19 @@ int pm8550b_disable_typec_charging(struct udevice *pmic)
 
 	ret = pmic_reg_write(pm8550b, PM8550B_TYPEC_MODE_CFG_REG, TYPEC_DISABLE_CMD); //just set this one bit and set rest of register to 0
 	if(ret != 0) goto fail;
+	
 	ret = pmic_reg_write(pm8550b, PM8550B_USB_PDPHY_TX_CONTROL_REG, 0);
 	if(ret != 0) goto fail;
+	
 	ret = pmic_reg_write(pm8550b, USB_PDPHY_FRAME_FILTER_REG, 0);
+	if(ret != 0) goto fail;
+
+	ret = pmic_reg_write(pm8550b, PM8550B_TYPEC_VCONN_CONTROL_REG, 0);
+	if(ret != 0) goto fail;
+
 
 	if(ret == 0) return 0;
-
+	
 fail:
 	if (ret != 0) {
 		printf("Failed to disable typec charging\n");
