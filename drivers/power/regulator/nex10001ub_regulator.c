@@ -54,6 +54,8 @@ static int nex100011ub_regulator_set_value(struct udevice *dev, int uV)
 		return ret;
 	}
 
+	mdelay(2);
+
 	dm_gpio_set_value(&pdata->biasn_gpio, 1);
 	udelay(1000);
 	ret = dm_i2c_write(pdata->i2c, NEX10001UB_REG_VNEG, &regval, 1);
@@ -99,8 +101,9 @@ static int nex100011ub_regulator_set_enable(struct udevice *dev, bool enable)
 	if (!pdata->enabled)
 		return 0;
 
-	dm_gpio_set_value(&pdata->biasp_gpio, 0);
 	dm_gpio_set_value(&pdata->biasn_gpio, 0);
+	mdelay(2);
+	dm_gpio_set_value(&pdata->biasp_gpio, 0);
 
 	pdata->enabled = 0;
 

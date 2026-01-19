@@ -399,7 +399,7 @@ static int deckard_panel_panel_enable_backlight(struct udevice *dev)
 		regulator_set_enable_if_allowed(panels_regs[REGULATOR_LEFT], true);
 		regulator_set_enable_if_allowed(panels_regs[REGULATOR_RIGHT], true);
 
-		mdelay(2);
+		mdelay(5);
 		
 		dm_gpio_set_value(&reset1_gpio, 1);
 		dm_gpio_set_value(&reset2_gpio, 1);
@@ -422,17 +422,21 @@ static int deckard_panel_panel_enable_backlight(struct udevice *dev)
 static void deckard_panel_panel_power_off(void)
 {
 	if (panels_powered_on) {
+		regulator_set_enable_if_allowed(panels_regs[REGULATOR_BACKLIGHT_LEFT], false);
+		regulator_set_enable_if_allowed(panels_regs[REGULATOR_BACKLIGHT_RIGHT], false);
+		regulator_set_enable_if_allowed(panels_regs[REGULATOR_PREBOOST], false);
+
 		dm_gpio_set_value(&reset1_gpio, 0);
 		dm_gpio_set_value(&reset2_gpio, 0);
 
-		mdelay(20);
+		mdelay(30);
 
-		regulator_set_enable_if_allowed(panels_regs[REGULATOR_PREBOOST], false);
-		regulator_set_enable_if_allowed(panels_regs[REGULATOR_BACKLIGHT_LEFT], false);
-		regulator_set_enable_if_allowed(panels_regs[REGULATOR_BACKLIGHT_RIGHT], false);
-		regulator_set_enable_if_allowed(panels_regs[REGULATOR_VDDA], false);
 		regulator_set_enable_if_allowed(panels_regs[REGULATOR_LEFT], false);
 		regulator_set_enable_if_allowed(panels_regs[REGULATOR_RIGHT], false);
+
+		mdelay(2);
+
+		regulator_set_enable_if_allowed(panels_regs[REGULATOR_VDDA], false);
 
 		panels_powered_on = 0;
 	}
