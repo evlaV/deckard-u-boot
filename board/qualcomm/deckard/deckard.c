@@ -808,10 +808,21 @@ static void deckard_do_bootmenu(void)
 	console_state_activate();
 
 	mdelay(500);
-
-	// This blocks until the user returns from the bootmenu
-	// see common/menu.c , bootmenu_loop
-	run_command("bootmenu",0);
+	
+	int bootmenu_run_again = 0;
+	do
+	{
+		// This blocks until the user returns from the bootmenu
+		// see common/menu.c , bootmenu_loop
+		run_command("bootmenu",0); //will set bootmenu_run_again if needed
+		
+		bootmenu_run_again = env_get_ulong("bootmenu_run_again", 10, 0);
+		if(bootmenu_run_again)
+		{
+			env_set("bootmenu_run_again", ""); //clear var
+			deckard_bootmenu_populate();
+		}
+	} while (bootmenu_run_again);
 	
 	// Hides the boot menu upon completion
 	// Otherwise logging in deckard_bootmenu_handle_actions makes it to the screen

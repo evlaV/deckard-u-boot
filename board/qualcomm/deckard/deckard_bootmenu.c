@@ -199,6 +199,16 @@ int deckard_bootmenu_populate(void)
 		deckard_bootmenu_set_entry(&bootmenu_entry_idx,previous_slot_menu_str);
 		deckard_bootmenu_create_usb_entries(&bootmenu_entry_idx); 
 		deckard_bootmenu_set_entry(&bootmenu_entry_idx,"  -- ERASE USER DATA FROM FRAME --=setenv slottarget current && setenv factoryreset 1");
+		if(env_get_ulong("bootmenuadvanced", 10, 0))
+		{
+			env_set("bootmenuadvanced", ""); //clear var
+			deckard_bootmenu_set_entry(&bootmenu_entry_idx,"ADB mode enable=setenv adb-mode 1");
+			//put more stuff here as needed
+		}
+		else
+		{
+			deckard_bootmenu_set_entry(&bootmenu_entry_idx,"Advanced=setenv bootmenuadvanced 1 && setenv bootmenu_run_again 1");
+		}
 	}
 
 	// TODO: add advanced option to add fastboot
