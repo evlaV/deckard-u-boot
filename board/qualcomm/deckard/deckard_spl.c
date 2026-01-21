@@ -756,6 +756,46 @@ void trigger_xblramdump_fault(void) {
 	unmap_sysmem(tmpbuf);
 }
 
+void trigger_uboot_cleanup(void)
+{	
+	//goal is to have a key combo that would nuke any extra env vars that could cause problems
+	deckard_log("uboot cleanup:\n");
+
+	int ret = 0;
+	
+	//1. check we don't have dangerously low battery voltage
+	//TODO
+
+	//2. flash LED in special way
+	int i = 0;
+	while( i++ < 3)
+	{
+		deckard_spl_leds_set_color(LED_COLOR_OFF); udelay(50000);
+		deckard_spl_leds_set_color(LED_COLOR_MAGENTA); udelay(50000);
+	}
+
+	//3. potentially also trigger a memory retrain by nuking the ddr partition?
+	//TODO
+
+	//4. nuke reboot reason to avoid getting into reboot loop
+	deckard_log("reseting reboot reason to none\n");
+	pmk8550_set_reboot_command_reason(REBOOT_COMMAND_REASON_NONE);
+
+	//5. nuke uboot env on current slot (ubootenv_a for example)
+	//TODO
+
+	//6. flash LED again
+	i = 0;
+	while( i++ < 3)
+	{
+		deckard_spl_leds_set_color(LED_COLOR_OFF); udelay(50000);
+		deckard_spl_leds_set_color(LED_COLOR_MAGENTA); udelay(50000);
+	}
+
+	//7. reboot
+	ret = sysreset_walk(SYSRESET_COLD);
+}
+
 enum combined_button_state_t button_state_handler(void) 
 {
 	enum combined_button_state_t total_button_state = 0;
@@ -796,9 +836,6 @@ enum combined_button_state_t button_state_handler(void)
 		case POWER_OFF__VOLUP_OFF__VOLDN_ON__SELECT_ON:
 			break;
 		case POWER_OFF__VOLUP_ON__VOLDN_OFF__SELECT_OFF:
-			deckard_log("reseting reboot reason to none\n");
-			pmk8550_set_reboot_command_reason(REBOOT_COMMAND_REASON_NONE);
-			//trigger_xblramdump_fault();
 			break;
 		case POWER_OFF__VOLUP_ON__VOLDN_OFF__SELECT_ON:
 			deckard_log("Forcing USB boot\n");
@@ -819,6 +856,7 @@ enum combined_button_state_t button_state_handler(void)
 		case POWER_ON__VOLUP_ON__VOLDN_OFF__SELECT_OFF:
 			break;
 		case POWER_ON__VOLUP_ON__VOLDN_OFF__SELECT_ON:
+			trigger_uboot_cleanup();
 			break;
 		case POWER_ON__VOLUP_ON__VOLDN_ON__SELECT_OFF:
 			break;
