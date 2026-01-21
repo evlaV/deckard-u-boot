@@ -485,3 +485,21 @@ int deckard_load_image(const char * logo_name, ulong addr, load_source_t load_so
 	int argc = 5;
 	return do_load( NULL, 0, argc, argv, FS_TYPE_ANY );
 }
+
+int deckard_load_file_from_all_sources(const char *filename, ulong addr)
+{
+	int ret = 0;
+
+	// Try the primary image name for all load sources (partitions)
+	for ( load_source_t load_source = 0; load_source < LOAD_SOURCE_COUNT; ++load_source )
+	{
+		ret = deckard_load_image( filename, addr, load_source );
+		if ( ret == 0 )
+		{
+			deckard_log("Found %s, in load_source %d\n", filename, load_source );
+			break;
+		}
+	}
+
+	return ret;
+}

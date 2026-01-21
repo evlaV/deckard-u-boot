@@ -32,6 +32,11 @@ struct vrconsole_priv {
 #define NULL 0
 #endif
 
+#define DECKARD_FONT_LOADING
+#ifdef DECKARD_FONT_LOADING
+int deckard_load_file_from_all_sources(const char *filename, ulong addr);
+#endif
+
 //#define USE_NON_VR_MODE
 
 /*to enable in console
@@ -243,7 +248,13 @@ static int vrconsole_load_from_fs(const char *filename)
 
 uint8_t * load_data_fromdisk( const char * pchFilename, uint32_t *pBytes, uint32_t n_max_size )
 {
-	int ret = vrconsole_load_from_fs(pchFilename);
+	int ret;
+#ifdef DECKARD_FONT_LOADING
+	ret = deckard_load_file_from_all_sources(pchFilename,CONFIG_SYS_LOAD_ADDR);
+	//side effect of this deckard_load_file_from_all_sources() is to set filesize and fileaddr env vars
+#else
+	ret = vrconsole_load_from_fs(pchFilename);
+#endif
 
 	//side effect of this vrconsole_load_from_fs() is to set these env vars
 	int filesize = env_get_hex("filesize", -1);
