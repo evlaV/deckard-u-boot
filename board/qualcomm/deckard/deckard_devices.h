@@ -11,16 +11,7 @@
 #include <linux/types.h>
 #include <stdint.h>
 
-typedef enum
-{
-    LED_COLOR_OFF,
-    LED_COLOR_WHITE,
-    LED_COLOR_YELLOW,
-    LED_COLOR_RED,
-    LED_COLOR_MAGENTA,
-} LedColor;
-
-const char *led_color_to_string(LedColor v);
+#include "deckard_led.h"
 
 // TODO: You cannot charge with DSP in the current bootloader implementation
 // We drop to a shell before charge and wait completes, so we dont have charging!
