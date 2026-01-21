@@ -649,6 +649,11 @@ static int acm_stdio_start(struct stdio_dev *dev)
 	else
 		return -ENODEV;
 
+	if (!g_dnl_board_usb_cable_connected()) {
+		printf("%s: USB cable not detected.\n", __func__);
+		return 0;
+	}
+
 	while (!acm_connected(dev)) {
 		if (ctrlc())
 			return -ECANCELED;
