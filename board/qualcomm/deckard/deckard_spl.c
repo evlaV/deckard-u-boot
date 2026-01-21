@@ -22,6 +22,7 @@
 #include "pm8550b.h"
 #include "deckard_battery.h"
 #include "deckard_log.h"
+#include "deckard_led.h"
 #include <sysreset.h>
 #include <linux/delay.h>
 
@@ -399,36 +400,50 @@ static enum button_state_t deckard_spl_get_button_state(const char *label)
 	return state;
 }
 
-static void deckard_spl_leds_set(void)
+static void deckard_spl_leds_set_color(LedColor color)
 {
-	deckard_log("Enabling LEDs\n");
-
 	struct udevice *led_red = NULL;
 	struct udevice *led_green = NULL;
 	struct udevice *led_blue = NULL;
-	int ret;
+	int ret_red, ret_green, ret_blue;
 
-	ret = led_get_by_label("red", &led_red);
-	if (ret < 0) {
-		deckard_log("Couldn't find red led!\n");
+	ret_red = led_get_by_label("red", &led_red);
+	ret_green = led_get_by_label("green", &led_green);
+	ret_blue = led_get_by_label("blue", &led_blue);
+
+	if ( (ret_red < 0) || (ret_green < 0) || (ret_blue < 0) ) 
+	{
+		deckard_log("Couldn't set LED's\n");
+		return;
 	}
-	else {
-		led_set_state(led_red, LEDST_ON);
+	
+	enum led_state_t vals[3] = { LEDST_OFF, LEDST_OFF, LEDST_OFF };
+	if ( color == LED_COLOR_WHITE )
+	{
+		vals[0] = LEDST_ON; vals[1] = LEDST_ON; vals[2] = LEDST_ON;
 	}
-	ret = led_get_by_label("green", &led_green);
-	if (ret < 0) {
-		deckard_log("Couldn't find green led!\n");
+	else if ( color == LED_COLOR_YELLOW )
+	{
+		vals[0] = LEDST_ON; vals[1] = LEDST_ON; 
 	}
-	else {
-		led_set_state(led_green, LEDST_ON);
+	else if ( color == LED_COLOR_RED )
+	{
+		vals[0] = LEDST_ON;
 	}
-	ret = led_get_by_label("blue", &led_blue);
-	if (ret < 0) {
-		deckard_log("Couldn't find blue led!\n");
+	else if ( color == LED_COLOR_MAGENTA )
+	{
+		vals[0] = LEDST_ON; vals[2] = LEDST_ON;
 	}
-	else {
-		led_set_state(led_blue, LEDST_ON);
+	else // OFF
+	{
 	}
+
+	if ( led_red )
+		led_set_state(led_red, vals[0] );
+	if ( led_green )
+		led_set_state(led_green, vals[1] );
+	if ( led_blue )
+		led_set_state(led_blue, vals[2]);
 }
 
 static int update_boot_state_and_boot_valid(char boot_slot)
@@ -971,7 +986,7 @@ void qcom_spl_board_init(void)
 	// But until that's possible, at least show white or non-white based on if boot is desired
 	if ( deckard_boot_desired( pon_poff_reason ) )
 	{
-		deckard_spl_leds_set();
+		deckard_spl_leds_set_color(LED_COLOR_WHITE);
 	}
 
 	deckard_spl_battery_charging_setup(&battery_voltage);
