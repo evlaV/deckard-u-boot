@@ -473,6 +473,10 @@ void show_boot_progress(int progress)
 	display_turn_off();
 }
 
+bool g_dnl_board_usb_cable_connected(void)
+{
+	return deckard_battery_is_charging_enabled(g_deckard_devices.pm8550b);
+}
 
 /*
 	turn device on. lowest level battery allow us to get into SPL at all (prior to uboot).
