@@ -12,6 +12,7 @@
 #include <command.h>
 #include <asm/io.h>
 #include <video.h>
+#include <stdio_dev.h>
 
 #include "pm8550vs.h"
 #include "smb1510.h"
@@ -482,39 +483,20 @@ bool deckard_adb_mode_enabled( void )
 	return ( env_get_ulong( "adb-mode", 10, 0 ) != 0 ); // defaults to off
 }
 
-#define ENV_GET_MAX_SIZE 64
-static char s_stdout_env[ENV_GET_MAX_SIZE];
-
-//TODO: jeremys save and restore instead of push and pop
-void push_console_state_vid_enable(void) 
+int deckard_write_string_to_vidconsole(const char * str)
 {
-	fflush(stdout); //needed to make things not explode
-	fflush(stderr); //needed to make things not explode
-
-	char * stdout_env = env_get("stdout");
-	if ( stdout_env )
+	//this stdio_get_by_name will probe the vidconsole if it is not already probed
+	//so this can potentially cause problems with env_set("stdout","vidconsole")
+	//presently no problems are observed, but keep at eye out for that
+	struct stdio_dev *vc = stdio_get_by_name("vidconsole");
+	if ( vc && vc->puts )
 	{
-		strncpy( s_stdout_env, stdout_env, sizeof(s_stdout_env) );
-		s_stdout_env[ENV_GET_MAX_SIZE-1] = 0; // force null termination
+		vc->puts( vc, str );
 	}
-	else
-	{
-		memset( s_stdout_env, 0, sizeof(s_stdout_env) );
-	}
+	else 
+		return 1;
 
-	env_set("stdout","vidconsole");
-}
-
-void pop_console_state_vid_enable(void) 
-{
-	fflush(stdout); //needed to make things not explode
-	fflush(stderr); //needed to make things not explode
-
-	if ( s_stdout_env[0] )
-	{
-		env_set("stdout", s_stdout_env );
-		memset( s_stdout_env, 0, sizeof(s_stdout_env) );
-	}
+	return 0;
 }
 
 static int console_state_handler(enum combined_serial_console_state_t total_console_state) 
@@ -903,16 +885,19 @@ void deckard_display_image( boot_intention_t boot_intention )
 		consolevr_save_background_image();
 		consolevr_set_background_image_enabled( true );
 
-		push_console_state_vid_enable();
-
+		#define ESC "\x1b"
 		const char *text = "Boot Menu Starting...";
 		int col = ( ( 80 - (int) strlen( text ) ) / 2 ) + 1;
+		char buffer[128] = { 0 };
+		snprintf( buffer, sizeof(buffer) - 1, ESC "7"		/* Save cursor position */
+												ESC "[1;1H"   /* move cursor to 1,1 */
+												ESC "[2K"     /* erase line */
+												ESC "[1;%dH"  /* center the string */
+												"%s"          /* print string */
+												ESC "8",      /* restore cursor */
+												col, text);
 
-		// save cursor, draw text, restore cursor
-		printf("\0337\033[1;1H\033[2K\033[1;%dH%s\0338", col, text);
-
-		pop_console_state_vid_enable();
+		deckard_write_string_to_vidconsole((const char *) buffer);
 	}
 }
-
 
