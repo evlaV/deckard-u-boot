@@ -1113,7 +1113,7 @@ void qcom_spl_board_init(void)
 	if (ret)
 		panic("Failed to scan SCSI (%d)\n", ret);	
 
-	env_lun = deckard_spl_get_dev(DECKARD_UBOOT_ENV_SLOT_A);
+	env_lun = deckard_spl_get_dev(DECKARD_BOOT_ENV_SLOT_A);
 	if (env_lun < 0)
 		panic("lun for env not found\n");
 
