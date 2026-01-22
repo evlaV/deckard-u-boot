@@ -10,6 +10,7 @@
 #include <fdt_support.h>
 #include <spl_load.h>
 #include <cpu_func.h>
+#include <memalign.h>
 #include <spl.h>
 #include <stdlib.h>
 #include <env_internal.h>
@@ -42,6 +43,8 @@
 #define DECKARD_UBOOT_SLOT_B "uboot_b"
 #define DECKARD_BOOT_ENV_SLOT_B "bootenvb"
 #define DECKARD_BOOTFW_SLOT_B "xbl_b"
+
+#define DECKARD_DDR "ddr"
 
 #define BOOT_ATTEMPTS_MAX			8
 
@@ -747,7 +750,7 @@ static int spl_env_save(struct blk_desc *blk_dev, struct disk_partition *mainenv
 	return 0;
 }
 
-void trigger_xblramdump_fault(void) {
+static __maybe_unused void deckard_spl_trigger_xblramdump_fault(void) {
 	//trigger xblramdump by reading from memory we should not be reading from!
 	int memfaultaddr=0x8000000;
 	void * tmpbuf = map_sysmem(memfaultaddr, 4); 
@@ -756,15 +759,70 @@ void trigger_xblramdump_fault(void) {
 	unmap_sysmem(tmpbuf);
 }
 
-void trigger_uboot_cleanup(void)
-{	
+static int deckard_spl_partition_erase(const char *partition)
+{
+	struct disk_partition part_info;
+	struct blk_desc *blk_dev;
+	unsigned long count;
+	int ret = 0;
+	void *buf;
+	int part;
+	int lun;
+
+	lun = deckard_spl_get_dev(partition);
+	if (lun < 0) {
+		deckard_log("device to partition to erase not found: %s\n", partition);
+		return lun;
+	}
+
+	blk_dev = blk_get_devnum_by_uclass_id(UCLASS_SCSI, lun);
+	if (!blk_dev) {
+		deckard_log("block to partition to erase not found: %s\n", partition);
+		return -ENOENT;
+	}
+
+	part = deckard_spl_get_part(partition);
+	if (part < 0) {
+		deckard_log("block to partition to erase not found: %s\n", partition);
+		return part;
+	}
+
+	ret = part_get_info(blk_dev, part, &part_info);
+	if (ret < 0) {
+		deckard_log("block to partition to erase not found: %s\n", partition);
+		return ret;
+	}
+
+	buf = malloc_cache_aligned(part_info.blksz);
+	count = blk_write(blk_dev->bdev, part_info.start, part_info.size, buf);
+	if (count != part_info.size) {
+		deckard_log("failed to erase ddr partition, count: %lu size: %lu\n", count,
+				part_info.size);
+		return count;
+	}
+	free(buf);
+
+	deckard_log("partition: %s part_size: %ld erased\n", part_info.name, part_info.size);
+
+	return 0;
+}
+
+static void deckard_spl_trigger_uboot_cleanup(void)
+{
+	uint16_t battery_voltage;
+	const char *boot_slot;
+	int ret = 0;
+
 	//goal is to have a key combo that would nuke any extra env vars that could cause problems
 	deckard_log("uboot cleanup:\n");
 
-	int ret = 0;
-	
 	//1. check we don't have dangerously low battery voltage
-	//TODO
+	deckard_spl_battery_charging_setup(&battery_voltage);
+	/* OCV_BOOT_VOLTAGE or SPL_BATTERY_MIN_BOOT_VOLTAGE for min value ? */
+	if (battery_voltage < OCV_BOOT_VOLTAGE) {
+		deckard_log("uboot cleanup: battery voltage too low: %d\n", battery_voltage);
+		return;
+	}
 
 	//2. flash LED in special way
 	int i = 0;
@@ -774,15 +832,28 @@ void trigger_uboot_cleanup(void)
 		deckard_spl_leds_set_color(LED_COLOR_MAGENTA); udelay(50000);
 	}
 
-	//3. potentially also trigger a memory retrain by nuking the ddr partition?
-	//TODO
+	//3. potentially also trigger a memory retrain by nuking the ddr partition
+	deckard_log("uboot cleanup: reset ddr partition\n");
+	ret = deckard_spl_partition_erase(DECKARD_DDR);
+	if (ret < 0)
+		deckard_log("uboot cleanup: failed to reset ddr partition: %d\n", ret);
 
 	//4. nuke reboot reason to avoid getting into reboot loop
-	deckard_log("reseting reboot reason to none\n");
+	deckard_log("uboot cleanup: reseting reboot reason to none\n");
 	pmk8550_set_reboot_command_reason(REBOOT_COMMAND_REASON_NONE);
 
 	//5. nuke uboot env on current slot (ubootenv_a for example)
-	//TODO
+	determine_boot_target();
+	if (!strncmp(env_get("BOOT_TARGET"), "A", 1))
+		boot_slot = DECKARD_UBOOT_ENV_SLOT_A;
+	else
+		boot_slot = DECKARD_UBOOT_ENV_SLOT_B;
+
+	deckard_log("uboot cleanup: reseting uboot env slot: %s\n", boot_slot);
+	ret = deckard_spl_partition_erase(boot_slot);
+	if (ret < 0)
+		deckard_log("uboot cleanup: failed to reset %s partition: %d\n",
+				boot_slot, ret);
 
 	//6. flash LED again
 	i = 0;
@@ -793,6 +864,7 @@ void trigger_uboot_cleanup(void)
 	}
 
 	//7. reboot
+	deckard_log("uboot cleanup: done. Rebooting\n");
 	ret = sysreset_walk(SYSRESET_COLD);
 }
 
@@ -856,7 +928,7 @@ enum combined_button_state_t button_state_handler(void)
 		case POWER_ON__VOLUP_ON__VOLDN_OFF__SELECT_OFF:
 			break;
 		case POWER_ON__VOLUP_ON__VOLDN_OFF__SELECT_ON:
-			trigger_uboot_cleanup();
+			deckard_spl_trigger_uboot_cleanup();
 			break;
 		case POWER_ON__VOLUP_ON__VOLDN_ON__SELECT_OFF:
 			break;
