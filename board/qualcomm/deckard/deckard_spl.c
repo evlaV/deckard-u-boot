@@ -31,17 +31,25 @@
 
 #define DECKARD_IFNAME "scsi"
 
+//SPL related environment
+#define DECKARD_SPL_BOOTENV_PRIMARY "bootenv"
+#define DECKARD_SPL_BOOTENV_BACKUP "bootenvb"
+
+//Boot firmware slots -- different from UBOOT slot A/B
+//These only switch when boot firmware changes
+#define DECKARD_BOOTFW_SLOT_A "xbl_a"
+#define DECKARD_BOOTFW_SLOT_B "xbl_b"
+
+//UBOOT slots, switches with every system update
+//UBOOT slot A partitions
 #define DECKARD_UBOOT_ENV_SLOT_A "ubootenv_a"
 #define DECKARD_UBOOT_FW_SLOT_A "ubootfw_a"
 #define DECKARD_UBOOT_SLOT_A "uboot_a"
-#define DECKARD_BOOT_ENV_SLOT_A "bootenv"
-#define DECKARD_BOOTFW_SLOT_A "xbl_a"
 
+//UBOOT slot B partitions
 #define DECKARD_UBOOT_ENV_SLOT_B "ubootenv_b"
 #define DECKARD_UBOOT_FW_SLOT_B "ubootfw_b"
 #define DECKARD_UBOOT_SLOT_B "uboot_b"
-#define DECKARD_BOOT_ENV_SLOT_B "bootenvb"
-#define DECKARD_BOOTFW_SLOT_B "xbl_b"
 
 #define BOOT_ATTEMPTS_MAX			8
 
@@ -680,17 +688,17 @@ static int determine_boot_target(void)
 
 static int spl_env_load(struct blk_desc *blk_dev, struct disk_partition *mainenv_info, struct disk_partition *altenv_info, void *mainbuf, void *altbuf)
 {
-	int env_part_a, env_part_b;
+	int env_part_primary, env_part_backup;
 	long count;
 	int ret;
 
-	env_part_a = deckard_spl_get_part(DECKARD_BOOT_ENV_SLOT_A);
-	env_part_b = deckard_spl_get_part(DECKARD_BOOT_ENV_SLOT_B);
+	env_part_primary = deckard_spl_get_part(DECKARD_SPL_BOOTENV_PRIMARY);
+	env_part_backup = deckard_spl_get_part(DECKARD_SPL_BOOTENV_BACKUP);
 
 	/* Read spl_env partition */
-	ret = part_get_info(blk_dev, env_part_a, mainenv_info);
+	ret = part_get_info(blk_dev, env_part_primary, mainenv_info);
 	if (ret == -ENOENT)
-		panic("partition %d for env not found\n", env_part_a);
+		panic("partition %d for env not found\n", env_part_primary);
 
 	count = blk_read(blk_dev->bdev, mainenv_info->start, mainenv_info->size, mainbuf);
 	if (count < 0)
@@ -700,10 +708,10 @@ static int spl_env_load(struct blk_desc *blk_dev, struct disk_partition *mainenv
 	altbuf = mainbuf + (mainenv_info->size * blk_dev->blksz);
 
 	/* Read spl_alt_env partition */
-	ret = part_get_info(blk_dev, env_part_b, altenv_info);
+	ret = part_get_info(blk_dev, env_part_backup, altenv_info);
 	if (ret == -ENOENT)
 		panic("partition %d for env_alt not found\n",
-		       env_part_b);
+		       env_part_backup);
 
 	count = blk_read(blk_dev->bdev, altenv_info->start, altenv_info->size, altbuf);
 	if (count < 0)
@@ -1041,7 +1049,7 @@ void qcom_spl_board_init(void)
 	if (ret)
 		panic("Failed to scan SCSI (%d)\n", ret);	
 
-	env_lun = deckard_spl_get_dev(DECKARD_UBOOT_ENV_SLOT_A);
+	env_lun = deckard_spl_get_dev(DECKARD_SPL_BOOTENV_PRIMARY);
 	if (env_lun < 0)
 		panic("lun for env not found\n");
 
