@@ -168,7 +168,37 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices )
 
 	// Figure out if boot-up (to kernel, etc) is desired.
 	int boot_up_desired = false;
+	int bootmenu_desired = false;
 	{
+		//Check for button combo's -- only return directly for special debug situations
+		//such that even in dire situations we can still get fastboot or usb console
+		//otherwise, proceed further
+		combined_button_state_t button_state = deckard_get_button_state( pdevices );
+		switch(button_state)
+		{
+			case VOLUP_OFF__VOLDN_OFF__SELECT_OFF:
+				break;
+			case VOLUP_OFF__VOLDN_OFF__SELECT_ON:
+				bootmenu_desired = true;
+				break;
+			case VOLUP_OFF__VOLDN_ON__SELECT_OFF:
+				deckard_log("fastboot mode\n");
+				return BOOT_INTENTION_FASTBOOT;
+			case VOLUP_OFF__VOLDN_ON__SELECT_ON:
+				deckard_log("console wait mode\n");
+				return BOOT_INTENTION_CONSOLE_WAIT;
+			case VOLUP_ON__VOLDN_OFF__SELECT_OFF:
+				break;
+			case VOLUP_ON__VOLDN_OFF__SELECT_ON:
+				break;
+			case VOLUP_ON__VOLDN_ON__SELECT_OFF:
+				break;
+			case VOLUP_ON__VOLDN_ON__SELECT_ON:
+				break;
+			default:
+				break;
+		}
+
 		/*
 		* check on/off reasons to see if we were booted by a button
 		* push or warm reset (reboot command), in case of unknown reason
@@ -187,8 +217,6 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices )
 			pmk8550_get_pon_trigger_str(pon_poff_reason.trigger),
 			pon_poff_reason.trigger,
 			pon_poff_reason.pon_reason);
-
-		boot_up_desired = deckard_boot_desired( pon_poff_reason );
 		
 		//TODO: integrate with above logic potentially?
 		if( pon_poff_reason.reboot_command_reason == REBOOT_COMMAND_REASON_BOOTLOADER )
@@ -220,6 +248,8 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices )
 		{
 			//default case
 		}
+
+		boot_up_desired = deckard_boot_desired( pon_poff_reason );
 	}
 
 	if( boot_up_desired && !deckard_battery_ok_for_userspace( pdevices->max17320 ) )
@@ -229,8 +259,7 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices )
 	}
 	else
 	{
-		combined_button_state_t button_state = deckard_get_button_state( pdevices );
-		if ( button_state == VOLUP_OFF__VOLDN_OFF__SELECT_ON )
+		if ( bootmenu_desired )
 		{
 			deckard_log("Select button pressed. Boot intention: boot menu\n");
 			return BOOT_INTENTION_BOOT_MENU;
