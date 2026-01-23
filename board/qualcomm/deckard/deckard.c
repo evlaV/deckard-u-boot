@@ -967,6 +967,33 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 		// FIX<E: goto fail?
 	}
 
+#define USE_INITRD_OVERLAY
+#ifdef USE_INITRD_OVERLAY
+	//this initrd overlay img needs to be a .cpio or cpio + zst (or similar) ramdisk img file -- it should NOT be a .uImage file
+	char * k_INITRD2_TARGET = "vrfonts.img"; //contains default.vrfont, default.vrterminal
+	bool initrd_overlay_load_ok = true;
+	ulong addr_initrd2 = addr_initrd + image_size + 0xA00000;
+	addr_initrd2 += 0x200000 - ( addr_initrd2 % 0x200000 );
+	char INITRD_ADDR2[DEVPARTMAXLEN] = { 0 };
+	sprintf(INITRD_ADDR2, "0x%lX", addr_initrd2);
+
+	if ( deckard_load_image( k_INITRD2_TARGET, addr_initrd2, LOAD_SOURCE_ESP_PARTITION ) )
+	{
+		deckard_log("Failed to load initrd overlay\n");
+		initrd_overlay_load_ok = false;
+	}
+
+	// check for max file sizes
+	image_size = hextoul(env_get("filesize"), NULL); // fixme hextoul(NULL) is bad
+	if ( addr_initrd2 + image_size > MAX_ADDR_INITRD ) {
+		deckard_log("DANGER!! exceeded maximum memory allocated for kernel, dtb, and initrd + overlay!!!");
+		initrd_overlay_load_ok = false;
+	}
+	
+	env_set("initrd_addon_blob_addr", initrd_overlay_load_ok ? INITRD_ADDR2 : 0); //hex value required
+	env_set_ulong("initrd_addon_blob_len", initrd_overlay_load_ok ? image_size : 0); // decimal value required
+#endif
+
 	// prep bootargs
 	char * default_bootargs = env_get("default_bootargs");
 	char * temp_bootargs = env_get("temp_bootargs");
