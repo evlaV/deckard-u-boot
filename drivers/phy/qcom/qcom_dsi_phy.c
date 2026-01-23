@@ -1054,7 +1054,7 @@ static int dsi_7nm_phy_enable(struct msm_dsi_phy *phy,
 	/* DSI lane settings */
 	dsi_phy_hw_v4_0_lane_settings(phy);
 
-	debug("DSI%d PHY enabled gabegabe\n", phy->plat->id);
+	debug("DSI%d PHY enabled\n", phy->plat->id);
 
 	phy->plat->phy_powered_on = true;
 

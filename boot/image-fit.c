@@ -1973,7 +1973,7 @@ int fit_get_data_conf_prop(const void *fit, const char *prop_name,
 
 static int fit_image_select(const void *fit, int rd_noffset, int verify)
 {
-	//TODO: make an abbreviated version of this gabe
+	//TODO: make an abbreviated version of this
 	//fit_image_print(fit, rd_noffset, "   ");
 
 	if (verify) {

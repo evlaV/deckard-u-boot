@@ -542,7 +542,7 @@ enum ufs_lu_wp_type {
  * The Well Known LUNS (SAM-3) in our int representation of a LUN
  */
 //#define SCSI_W_LUN_BASE 0xc100
-//gabe: unclear if we should be using the 0xc100 or not?
+//TODO: gabe: unclear if we should be using the 0xc100 or not?
 #define SCSI_W_LUN_BASE 0x0
 
 /*
