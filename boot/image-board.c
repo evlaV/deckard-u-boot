@@ -512,39 +512,39 @@ int boot_get_ramdisk(char const *select, struct bootm_headers *images,
 	debug("   ramdisk start = 0x%08lx, ramdisk end = 0x%08lx\n",
 	      *rd_start, *rd_end);
 
-#if 1
-	//this is not meant to be another full-on initrd, just a small addition of a few files most likely
-	#define INITRD_ADDON_BLOB_MAX_LEN 10000000
-	ulong initrd_addon_blob_addr = 0x0;
-	ulong initrd_addon_blob_len = 0x0;
-	char *s;
-	//env_set("initrd_addon_blob", "0xffffffffff"); //hex value required
-	s = env_get("initrd_addon_blob_addr");
-	if (s) initrd_addon_blob_addr = hextoul(s, NULL);
-	
-	//env_set("initrd_addon_len", "455"); // decimal value required
-	s = env_get("initrd_addon_blob_len");
-	if (s) initrd_addon_blob_len = dectoul(s, NULL);
-
-	if(initrd_addon_blob_addr && initrd_addon_blob_len && initrd_addon_blob_len < INITRD_ADDON_BLOB_MAX_LEN)
+	if (IS_ENABLED(CONFIG_SUPPORT_INITRD_OVERLAY)) 
 	{
-		ulong blob_start_addr = *rd_end; //the end points to the next avail byte it appears (so don't add 1 here)
-		ulong blob_end_addr = *rd_end + initrd_addon_blob_len;
-		memcpy((void*)blob_start_addr, (void*)initrd_addon_blob_addr, (size_t) initrd_addon_blob_len);
-		//printf(" ramdisk overlay start = 0x%08lx, ramdisk overlay end = 0x%08lx\n",  blob_start_addr, blob_end_addr);
-		printf(" ramdisk image pre-overlay   : start = 0x%08lx, ramdisk end = 0x%08lx (len=%ld)\n",  *rd_start, *rd_end, (*rd_end - *rd_start) );
-		//run_commandf("md5sum 0x%lx 0x%lx", *rd_start, (*rd_end - *rd_start));
-		*rd_end = *rd_end + initrd_addon_blob_len;
-		printf(" ramdisk image post-overlay  : start = 0x%08lx, ramdisk end = 0x%08lx (len=%ld)\n",  *rd_start, *rd_end, (*rd_end - *rd_start) );
-		//run_commandf("md5sum 0x%lx 0x%lx", *rd_start, (*rd_end - *rd_start));
-		//run_commandf("md.b 0x%lx %d", blob_start_addr - 8, 16);
-	}
-	else
-	{
-		//printf(" ramdisk overlay unused: initrd_addon_blob_addr = 0x%08lx, initrd_addon_blob_len = %ld\n",  initrd_addon_blob_addr, initrd_addon_blob_len);
-	}
+		//this is not meant to be another full-on initrd, just a small addition of a few files most likely
+		ulong initrd_addon_blob_addr = 0x0;
+		ulong initrd_addon_blob_len = 0x0;
+		char *s;
+		//env_set("initrd_addon_blob", "0xffffffffff"); //hex value required
+		s = env_get("initrd_addon_blob_addr");
+		if (s) initrd_addon_blob_addr = hextoul(s, NULL);
+		
+		//env_set("initrd_addon_len", "455"); // decimal value required
+		s = env_get("initrd_addon_blob_len");
+		if (s) initrd_addon_blob_len = dectoul(s, NULL);
 
-#endif
+		if(initrd_addon_blob_addr && initrd_addon_blob_len && initrd_addon_blob_len < CONFIG_INITRD_OVERLAY_MAXSIZE)
+		{
+			ulong blob_start_addr = *rd_end; //the end points to the next avail byte it appears (so don't add 1 here)
+			ulong blob_end_addr = *rd_end + initrd_addon_blob_len;
+			memcpy((void*)blob_start_addr, (void*)initrd_addon_blob_addr, (size_t) initrd_addon_blob_len);
+			//printf(" ramdisk overlay start = 0x%08lx, ramdisk overlay end = 0x%08lx\n",  blob_start_addr, blob_end_addr);
+			printf(" ramdisk image pre-overlay   : start = 0x%08lx, ramdisk end = 0x%08lx (len=%ld)\n",  *rd_start, *rd_end, (*rd_end - *rd_start) );
+			//run_commandf("md5sum 0x%lx 0x%lx", *rd_start, (*rd_end - *rd_start));
+			*rd_end = *rd_end + initrd_addon_blob_len;
+			printf(" ramdisk image post-overlay  : start = 0x%08lx, ramdisk end = 0x%08lx (len=%ld)\n",  *rd_start, *rd_end, (*rd_end - *rd_start) );
+			//run_commandf("md5sum 0x%lx 0x%lx", *rd_start, (*rd_end - *rd_start));
+			//run_commandf("md.b 0x%lx %d", blob_start_addr - 8, 16);
+		}
+		else
+		{
+			//printf(" ramdisk overlay unused: initrd_addon_blob_addr = 0x%08lx, initrd_addon_blob_len = %ld\n",  initrd_addon_blob_addr, initrd_addon_blob_len);
+		}
+
+	}
 
 	return 0;
 }
