@@ -1011,6 +1011,20 @@ config SUPPORT_RAW_INITRD
 	  address of the initrd must be augmented by it's size, in the following
 	  format: "<initrd address>:<initrd size>".
 
+config SUPPORT_INITRD_OVERLAY
+	bool "Enable initrd overlay"
+	select INITRD_OVERLAY_MAXSIZE
+	help
+	  Note, defining the SUPPORT_INITRD_OVERLAY allows user to supply
+	  kernel with additional initrd image with a max size.
+
+config INITRD_OVERLAY_MAXSIZE
+	int "Maximum size of a decompresed initrd overlay image in bytes"
+	depends on SUPPORT_INITRD_OVERLAY
+	default 10000000
+	help
+	  Note, used with SUPPORT_INITRD_OVERLAY to specify max size in bytes.
+
 config CHROMEOS
 	bool "Support booting Chrome OS"
 	help
