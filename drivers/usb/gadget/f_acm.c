@@ -268,6 +268,8 @@ static void acm_unbind(struct usb_configuration *c, struct usb_function *f)
 {
 	struct f_acm *f_acm = func_to_acm(f);
 
+	console_remove_by_name("usbacm");
+
 	if (default_acm_function == f_acm)
 		default_acm_function = NULL;
 
