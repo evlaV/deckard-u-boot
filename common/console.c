@@ -1282,24 +1282,21 @@ int console_remove_by_name(const char *name)
 
 	log_debug("removing console device %s\n", name);
 	for (fnum = 0; fnum < MAX_FILES; fnum++) {
-		struct stdio_dev **src, **dest;
+		struct stdio_dev **src;
 		int i;
 
 		log_debug("file %d: %d devices: ", fnum, cd_count[fnum]);
 		src = console_devices[fnum];
-		dest = src;
 		for (i = 0; i < cd_count[fnum]; i++, src++) {
 			struct stdio_dev *sdev = *src;
 			int ret = 0;
 
 			if (!strcmp(sdev->name, name))
-				ret = stdio_deregister_dev(sdev, true);
-			else
-				*dest++ = *src;
+				ret = iomux_replace_device(fnum, sdev->name, "nulldev");
+
 			if (ret && !err)
 				err = ret;
 		}
-		cd_count[fnum] = dest - console_devices[fnum];
 		log_debug("now %d\n", cd_count[fnum]);
 	}
 #endif /* CONSOLE_MUX */
