@@ -1363,7 +1363,8 @@ static void composite_unbind(struct usb_gadget *gadget)
 		}
 		free(c);
 	}
-	if (composite->unbind)
+
+	if (composite && composite->unbind)
 		composite->unbind(cdev);
 
 	if (cdev->req) {
