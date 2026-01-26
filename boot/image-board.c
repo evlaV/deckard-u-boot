@@ -532,17 +532,16 @@ int boot_get_ramdisk(char const *select, struct bootm_headers *images,
 		ulong blob_end_addr = *rd_end + initrd_addon_blob_len;
 		memcpy((void*)blob_start_addr, (void*)initrd_addon_blob_addr, (size_t) initrd_addon_blob_len);
 		//printf(" ramdisk overlay start = 0x%08lx, ramdisk overlay end = 0x%08lx\n",  blob_start_addr, blob_end_addr);
-		//printf(" ramdisk with overlay   : start = 0x%08lx, ramdisk end = 0x%08lx (len=%ld)\n",  *rd_start, *rd_end, (*rd_end - *rd_start) );
+		printf(" ramdisk image pre-overlay   : start = 0x%08lx, ramdisk end = 0x%08lx (len=%ld)\n",  *rd_start, *rd_end, (*rd_end - *rd_start) );
 		//run_commandf("md5sum 0x%lx 0x%lx", *rd_start, (*rd_end - *rd_start));
 		*rd_end = *rd_end + initrd_addon_blob_len;
-		printf(" ramdisk with overlay   : start = 0x%08lx, ramdisk end = 0x%08lx (len=%ld)\n",  *rd_start, *rd_end, (*rd_end - *rd_start) );
+		printf(" ramdisk image post-overlay  : start = 0x%08lx, ramdisk end = 0x%08lx (len=%ld)\n",  *rd_start, *rd_end, (*rd_end - *rd_start) );
 		//run_commandf("md5sum 0x%lx 0x%lx", *rd_start, (*rd_end - *rd_start));
 		//run_commandf("md.b 0x%lx %d", blob_start_addr - 8, 16);
-		
 	}
 	else
 	{
-		printf(" ramdisk overlay fail: initrd_addon_blob_addr = 0x%08lx, initrd_addon_blob_len = %ld\n",  initrd_addon_blob_addr, initrd_addon_blob_len);
+		//printf(" ramdisk overlay unused: initrd_addon_blob_addr = 0x%08lx, initrd_addon_blob_len = %ld\n",  initrd_addon_blob_addr, initrd_addon_blob_len);
 	}
 
 #endif
