@@ -1013,7 +1013,6 @@ config SUPPORT_RAW_INITRD
 
 config SUPPORT_INITRD_OVERLAY
 	bool "Enable initrd overlay"
-	select INITRD_OVERLAY_MAXSIZE
 	help
 	  Note, defining the SUPPORT_INITRD_OVERLAY allows user to supply
 	  kernel with additional initrd image with a max size.
