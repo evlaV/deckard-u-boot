@@ -985,7 +985,7 @@ int blkroset(int fd, int setro_val)
 	bool parent_exists = false;
 	struct stat st;
 	if (fstat(fd, &st) < 0) return -1;
-	if (!S_ISBLK(st.st_mode)) { errno = ENOTBLK; return -1; }
+	if (!S_ISBLK(st.st_mode)) return -1;
 
 	char p[128];
 	snprintf(p, sizeof(p), "/sys/dev/block/%u:%u/../dev", major(st.st_rdev), minor(st.st_rdev));
