@@ -79,6 +79,8 @@ static struct envdev_s envdevices[2] = {
 
 static int dev_current;
 
+static int g_blkdev_was_locked = 0;
+
 #define DEVNAME(i)    envdevices[(i)].devname
 #define DEVOFFSET(i)  envdevices[(i)].devoff
 #define ENVSIZE(i)    envdevices[(i)].env_size
@@ -999,13 +1001,21 @@ int blkroset(int fd, int setro_val)
 		int fd_parent = open(p, O_RDONLY | O_CLOEXEC);
 		if(fd_parent >= 0) 
 		{
-			ioctl(fd_parent, BLKROSET, &setro_val); //ignore failure case
+			//only set BLKROSET if the existing RO bit is enabled
+			int getro_val = 0;
+			ioctl(fd_parent, BLKROGET, &getro_val);
+			if(getro_val == 1) g_blkdev_was_locked = 1;
+			if(g_blkdev_was_locked) ioctl(fd_parent, BLKROSET, &setro_val); //ignore failure case
 			close(fd_parent);
 		}
 	}
 
 	//this could be either /dev/sdc7, or could even be /dev/sdc -- we can handle both situations
-	ret = ioctl(fd, BLKROSET, &setro_val);
+	//only set BLKROSET if the existing RO bit is enabled 
+	int getro_val = 0;
+	ioctl(fd, BLKROGET, &getro_val);
+	if(getro_val == 1) g_blkdev_was_locked = 1;
+	if(g_blkdev_was_locked) ret = ioctl(fd, BLKROSET, &setro_val);
 
 	return ret;
 }
