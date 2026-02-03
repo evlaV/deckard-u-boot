@@ -230,7 +230,7 @@ config PMIC_MAX8997
 	- 12x GPIOs
 	- Haptic Motor driver
 	- RTC with two alarms
-	- Fueal Gauge and One backup battery charger
+	- Fuel Gauge and One backup battery charger
 	- MUIC
 	- Others
 
@@ -241,7 +241,7 @@ config PMIC_MAX17320
 	This config enables implementation of driver-model pmic uclass features
 	for PMIC MAX17320. The driver implements read/write operations.
 	This is a Power Management IC with Fuel Gauge.
-	- Fueal Gauge
+	- Fuel Gauge
 
 config PMIC_QCOM
 	bool "Enable Driver Model for Qualcomm generic PMIC"
