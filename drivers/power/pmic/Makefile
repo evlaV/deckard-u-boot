@@ -26,6 +26,7 @@ obj-$(CONFIG_$(PHASE_)PMIC_MAX17320) += max17320.o
 obj-$(CONFIG_PMIC_QCOM) += pmic_qcom.o
 obj-$(CONFIG_$(PHASE_)PMIC_RK8XX) += rk8xx.o
 obj-$(CONFIG_$(PHASE_)PMIC_RN5T567) += rn5t567.o
+obj-$(CONFIG_$(PHASE_)PMIC_SLG4AD48669M) += slg4ad48669m_hotswap.o
 obj-$(CONFIG_PMIC_TPS65090) += tps65090.o
 obj-$(CONFIG_PMIC_S5M8767) += s5m8767.o
 obj-$(CONFIG_DM_PMIC_TPS65910) += pmic_tps65910_dm.o
