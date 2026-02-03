@@ -252,6 +252,7 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices )
 		boot_up_desired = deckard_boot_desired( pon_poff_reason );
 	}
 
+	// With Boulder this remains unchanged, the internal battery must always be OK for usespace to boot
 	if( boot_up_desired && !deckard_battery_ok_for_userspace( pdevices->max17320 ) )
 	{
 		deckard_log("boot intention: cannot boot, battery not ready\n");
@@ -405,6 +406,20 @@ int deckard_setup_devices( deckard_devices_t * pdevices )
 	ret = pmic_get("pmic@36", &pdevices->max17320);
 	if (ret != 0) {
 		deckard_log("ERROR: Failed to find max17320\n");
+		nerror = 1;
+	}
+
+	// Find the max17320 - external battery
+	ret = pmic_get("pmic@76", &pdevices->max17320_external);
+	if (ret != 0) {
+		deckard_log("ERROR: Failed to find max17320 External\n");
+		nerror = 1;
+	}
+
+	// Find Hotswap Silego
+	ret = pmic_get("pmic@18", &pdevices->slg4ad48669m);
+	if (ret != 0) {
+		deckard_log("ERROR: Failed to find hotswap silego\n");
 		nerror = 1;
 	}
 
