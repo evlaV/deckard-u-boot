@@ -664,6 +664,18 @@
 		status		= "okay";
 		reg         = <0x36>;
 	};
+
+	max17320_external: pmic@76 {
+		compatible	= "maxim,max17320";
+		status		= "okay";
+		reg			= <0x76>;
+	};
+
+	northgate_hotswap: slg4ad48669m@18 {
+		compatible 	= "silego,northgate_hotswap";
+		status		= "okay";
+		reg 		= <0x18>;
+	};
 };
 
 &pcie0 {

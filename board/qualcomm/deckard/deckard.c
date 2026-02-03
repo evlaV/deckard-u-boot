@@ -43,6 +43,7 @@
 #include "deckard_devices.h"
 #include "deckard_disk.h"
 #include "deckard_eeprom.h"
+#include "deckard_hotswap.h"
 #include "deckard_log.h"
 
 
@@ -543,12 +544,34 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 	static const int k_AutoPowerOffDelayMS = 30 * 1000; // 30s.
 
 	bool adsp_battery_ok_for_userspace = true;
+	bool boulder_crosscharging = false;
+	const bool boulder_headstrap = deckard_hotswap_supported( pdevices->slg4ad48669m );
 
 	while ( true )
 	{
+		// Boulder cross charging blocks the aDSP, so it needs to come first
+		if (!adsp_started &&
+			 boulder_headstrap &&
+			!boulder_crosscharging &&
+			 deckard_hotswap_on_external_battery( pdevices->slg4ad48669m ) &&
+			!deckard_battery_ok_for_userspace( pdevices->max17320 )) {
+			// Boulder Headstrap with External Battery and Low Internal Battery, enable Cross Charger
+			// Note this is OK to boot since we are blocking the aDSP
+			deckard_hotswap_enable_charging(pdevices->slg4ad48669m, true, true);
+			boulder_crosscharging = deckard_hotswap_charger_enabled(pdevices->slg4ad48669m);
+
+		} else if (!adsp_started &&
+					boulder_crosscharging &&
+					(deckard_battery_ok_for_userspace( pdevices->max17320 ) ||
+					!deckard_hotswap_on_external_battery( pdevices->slg4ad48669m ))) {
+			// Internal Battery OK to Boot || External Battery Removed, disable cross charger (we might have already browned out)
+			deckard_hotswap_enable_charging(pdevices->slg4ad48669m, false, true);
+			boulder_crosscharging = false;
+		}
+
 		// Start the ADSP_lite (to allow charging) if needed, and if we're allowed (both time and battery)
 		// Note that deckard_battery_ok_for_dsp can only be called if adsp is not started (i2c)
-		bool try_start_adsp = ( !adsp_started && 
+		bool try_start_adsp = ( !adsp_started && !boulder_crosscharging &&
 			( !adsp_start_time || get_timer( adsp_start_time ) > k_ADSP_RestartIntervalMS ) &&
 			deckard_battery_ok_for_dsp( pdevices->max17320 ) );
 
@@ -709,8 +732,14 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 			bool wantsPoweroff;
 			if ( adsp_started )
 				wantsPoweroff = ( adsp_state.valid && !adsp_state.inhibit_poweroff );
-			else
+			else if (!boulder_headstrap || !deckard_hotswap_on_external_battery( pdevices->slg4ad48669m ))
 				wantsPoweroff = !deckard_battery_is_charging_enabled( pdevices->pm8550b );
+			else {
+				// Boulder running on external battery, but check is for internal battery
+				wantsPoweroff = (deckard_battery_ok_for_userspace( pdevices->max17320 ) &&
+								!deckard_battery_is_charging_enabled( pdevices->pm8550b ) && 
+								!boulder_crosscharging);
+			}
 
 			if ( wantsPoweroff )
 			{
