@@ -476,31 +476,43 @@ bool deckard_boulder_run_crosscharging(deckard_devices_t * pdevices)
 	//if disabled, enable it
 	//otherwise return the existing charging state
 	if( ! deckard_boulder_charger_enabled( pdevices->slg4ad48669m ) )
+	{
+		deckard_log("deckard_boulder_run_crosscharging: deckard_boulder_charger_enabled is false, calling deckard_boulder_enable_charging!\n");
 		deckard_boulder_enable_charging(pdevices->slg4ad48669m, BOULDER_BATTERY_INTERNAL);
+	}
 
 	if( !deckard_boulder_external_battery_is_installed(pdevices->slg4ad48669m) )
 	{
+		deckard_log("deckard_boulder_run_crosscharging: deckard_boulder_external_battery_is_installed is false, calling deckard_boulder_disable_charging, returning false!\n");
 		// Internal Battery OK to Boot || External Battery Removed, disable cross charger (we might have already browned out)
 		deckard_boulder_disable_charging(pdevices->slg4ad48669m, BOULDER_BATTERY_INTERNAL);
 		return false;
 	}
 
-	return deckard_boulder_charger_enabled( pdevices->slg4ad48669m );
+	bool ret = deckard_boulder_charger_enabled( pdevices->slg4ad48669m );
+
+	deckard_log("deckard_boulder_run_crosscharging: returning ret = %d\n",ret);
+	return ret;
 }
 
 bool should_wait_for_boulder_cross_charging( deckard_devices_t * pdevices) 
 {
 	bool should_wait_for_boulder_cross_charging = false;
 
+//GABER: skip over this for testing only!!
+#if 0
 	if(deckard_battery_ok_for_userspace( pdevices->max17320 ))
 		return false;
+#endif
 
 	if( deckard_boulder_detected( pdevices->slg4ad48669m ))
 	{
+		deckard_log("should_wait_for_boulder_cross_charging: deckard_boulder_detected!\n");
 		//start or continue running crosscharging
 		return deckard_boulder_run_crosscharging( pdevices );
 	}
 
+	deckard_log("should_wait_for_boulder_cross_charging: returning false!\n");
 	return false;
 }
 
