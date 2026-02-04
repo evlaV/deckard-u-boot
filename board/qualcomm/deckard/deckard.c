@@ -542,8 +542,6 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 
 	static const int k_AutoPowerOffDelayMS = 30 * 1000; // 30s.
 
-	bool adsp_battery_ok_for_userspace = true;
-
 	while ( true )
 	{
 		// Start the ADSP_lite (to allow charging) if needed, and if we're allowed (both time and battery)
@@ -627,7 +625,7 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 			{
 				boot_intention = ( button_get_state( pdevices->btn_select ) == BUTTON_ON ) ? 
 					BOOT_INTENTION_BOOT_MENU : BOOT_INTENTION_START_USERSPACE;
-				if ( adsp_started && !adsp_battery_ok_for_userspace )
+				if ( adsp_started && adsp_state.valid && !adsp_state.battery_ok_for_userspace )
 				{
 					boot_intention = BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY;
 				}
