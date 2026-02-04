@@ -417,7 +417,7 @@ int deckard_setup_devices( deckard_devices_t * pdevices )
 	}
 
 	// Find Hotswap Silego
-	ret = pmic_get("pmic@18", &pdevices->slg4ad48669m);
+	ret = pmic_get("slg4ad48669m@18", &pdevices->slg4ad48669m);
 	if (ret != 0) {
 		deckard_log("ERROR: Failed to find hotswap silego\n");
 		nerror = 1;
