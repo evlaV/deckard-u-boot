@@ -93,8 +93,7 @@ static int deckard_boulder_enable_charging_internal(struct udevice *slg4ad48669m
 bool deckard_boulder_disable_charging(struct udevice *slg4ad48669m, enum deckard_boulder_battery_t target_battery) {
   
   int ret = deckard_boulder_enable_charging_internal(slg4ad48669m, false, target_battery);
-
-  if(ret > 0) return true;
+  if(ret != 0) return true;
 
   return false;
 }
@@ -103,7 +102,7 @@ bool deckard_boulder_enable_charging(struct udevice *slg4ad48669m, enum deckard_
 
   int ret = deckard_boulder_enable_charging_internal(slg4ad48669m, true, target_battery);
 
-  if(ret > 0) return true;
+  if(ret != 0) return true;
 
   return false;
 }
@@ -131,7 +130,7 @@ bool deckard_boulder_on_external_battery(struct udevice *slg4ad48669m) {
 bool deckard_boulder_charger_enabled(struct udevice *slg4ad48669m) {
   uint8_t reg;
   if (pmic_read(slg4ad48669m, REG_I2C_VIRTUAL_IN, &reg, sizeof(reg))) {
-    return -ENXIO;
+    return false;
   }
 
   return !!(reg & VI_ENABLE_SLOW_CHARGER);
