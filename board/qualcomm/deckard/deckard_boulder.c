@@ -93,7 +93,10 @@ static int deckard_boulder_enable_charging_internal(struct udevice *slg4ad48669m
 bool deckard_boulder_disable_charging(struct udevice *slg4ad48669m, enum deckard_boulder_battery_t target_battery) {
   
   int ret = deckard_boulder_enable_charging_internal(slg4ad48669m, false, target_battery);
-  if(ret != 0) return true;
+
+  //ret is from pmic_write() which can return error vals (negative), or length of write
+  //length of write being 0 is not useful so we only accept success if the pmic_write return is greater than 0
+  if(ret > 0) return true;
 
   return false;
 }
