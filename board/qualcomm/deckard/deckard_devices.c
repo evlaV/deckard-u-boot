@@ -252,7 +252,7 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices )
 		boot_up_desired = deckard_boot_desired( pon_poff_reason );
 	}
 
-	if( boot_up_desired && !deckard_battery_ok_for_userspace( pdevices->max17320 ) )
+	if( boot_up_desired && !deckard_battery_ok_for_userspace( pdevices->max17320, pdevices->max17320_external ) )
 	{
 		deckard_log("boot intention: cannot boot, battery not ready\n");
 		return BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY;
