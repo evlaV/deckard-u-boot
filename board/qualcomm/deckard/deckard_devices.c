@@ -408,6 +408,13 @@ int deckard_setup_devices( deckard_devices_t * pdevices )
 		nerror = 1;
 	}
 
+	// Find the max17320 - external battery
+	ret = pmic_get("pmic@76", &pdevices->max17320_external);
+	if (ret != 0) {
+		deckard_log("ERROR: Failed to find max17320 External\n");
+		nerror = 1;
+	}
+
 	// Power button
 	ret = button_get_by_label( "Power Button", &pdevices->btn_power );
 	if (ret != 0) {

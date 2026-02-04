@@ -664,6 +664,12 @@
 		status		= "okay";
 		reg         = <0x36>;
 	};
+
+	max17320_external: pmic@76 {
+		compatible	= "maxim,max17320";
+		status		= "okay";
+		reg			= <0x76>;
+	};
 };
 
 &pcie0 {
