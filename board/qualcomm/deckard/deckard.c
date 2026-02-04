@@ -469,7 +469,7 @@ bool g_dnl_board_usb_cable_connected(void)
 		- need to have enough to boot DSP for higher power charging
 		- need to have enough to boot displays
 */
-
+/*
 bool deckard_boulder_run_crosscharging(deckard_devices_t * pdevices)
 {
 	//If we have a boulder headstrap, check if charger is disabled
@@ -514,6 +514,51 @@ bool should_wait_for_boulder_cross_charging( deckard_devices_t * pdevices)
 
 	deckard_log("should_wait_for_boulder_cross_charging: returning false!\n");
 	return false;
+}*/
+
+
+bool deckard_is_boulder_cross_charging_needed()
+{
+	if( !deckard_boulder_detected( pdevices->slg4ad48669m ))
+		return false;
+
+	if( deckard_battery_ok_for_userspace( pdevices->max17320 ) )
+		return false;
+
+	// if an external battery is installed, and the internal isn't ok for userspace, charge
+	//return deckard_boulder_external_battery_is_installed();
+
+
+	// TODO:  Implement this
+	//If we have a boulder headstrap, check if charger is disabled
+	//if disabled, enable it
+	//otherwise return the existing charging state
+	/*
+	if( ! deckard_boulder_charger_enabled( pdevices->slg4ad48669m ) )
+		deckard_boulder_enable_charging(pdevices->slg4ad48669m, BOULDER_BATTERY_INTERNAL);
+
+	if( !deckard_boulder_external_battery_is_installed(pdevices->slg4ad48669m) )
+	{
+		// Internal Battery OK to Boot || External Battery Removed, disable cross charger (we might have already browned out)
+		deckard_boulder_disable_charging(pdevices->slg4ad48669m, BOULDER_BATTERY_INTERNAL);
+		return false;
+	}
+
+	return deckard_boulder_charger_enabled( pdevices->slg4ad48669m );
+	*/
+}
+
+bool deckard_boulder_start_cross_charging()
+{
+	bool boulder_cross_charging_active = true;
+	return boulder_cross_charging_active;
+}
+
+
+bool deckard_boulder_stop_cross_charging()
+{
+	bool boulder_cross_charging_active = false;
+	return boulder_cross_charging_active;
 }
 
 
@@ -592,12 +637,70 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 
 	bool adsp_battery_ok_for_userspace = true;
 
+	/*
+	Boulder cross charging.
+
+	Q: Is this used only to unblock extremely low battery charge?  Or also when nominally unplugged, to charge the main battery
+	from the external one?
+
+	Q: When dead, we rely on the hw based cross charging capability.  Why aren't we doing this on the low case.?
+
+	Q: for each of the functions below, which are reliable? is deckard_boulder_detected always correct?
+
+	Q: What if ADSP is running?  Seems very likely this can happen.  USes pressed button to turn on.  Sees red LED.
+	Deckard enters this charge loop.  User plugs in external battery.  Need to handle this gracefullt
+
+	Q: when the internal battery is extremely low, we are forced to allow the external battery to cross charge the internal battery
+	to get us over a threshold to allow us to boot.  How high is that threshold?
+
+	Q: On boulder, is the internal battery is accessed via the normal battery api?
+	*/
+
+	bool boulder_cross_charging_active = false; // only used for low voltage recovery
+
 	while ( true )
 	{
+		// Do we want to enable or disable cross-charging on boulder?
+		// This allows for low-voltage recovery on boulder
+		// ( from the external battery -> internal )
+		// TODO: run every N times, not every time?  (can do this renaming adsp_start_time -> advanced_charging_start_time)
+
+		if ( deckard_boulder_detected() ) // Is this reliable?
+		{
+			deckard_log( "Starting cross-charging...\n" );
+			bool cross_charging_needed = deckard_is_boulder_cross_charging_needed();
+			if ( cross_charging_needed && !boulder_cross_charging_active )
+			{
+				if ( adsp_started )
+				{
+					// If we're allowed to have the DSP on as we transition to HW cross charging,
+					// we can turn this on to allow us any any point.
+					// If that ISN'T allowed, maybe this should be a reboot?
+					// (though that could entertain a reboot loop)
+					#if 0
+					deckard_log( "Stopping ADSP to allow cross-charging\n" );
+					deckard_adsp_stop(); // hard shutdown
+					deckard_adsp_state_clear( &adsp_state );
+					adsp_started = false;
+					#endif
+				}
+				else
+				{
+					boulder_cross_charging_active = deckard_boulder_start_cross_charging(); // Is this reliable?
+					deckard_log( "cross-charging: %d\n", (int) boulder_cross_charging_active );
+				}
+			}
+			else if ( !cross_charging_needed && boulder_cross_charging_active )
+			{
+				deckard_log( "Stopping cross-charging...\n" );
+				boulder_cross_charging_active = deckard_boulder_stop_cross_charging(); // Is this reliable?
+				deckard_log( "cross-charging: %d\n", (int) boulder_cross_charging_active );
+			}
+		}
+
 		// Start the ADSP_lite (to allow charging) if needed, and if we're allowed (both time and battery)
 		// Note that deckard_battery_ok_for_dsp can only be called if adsp is not started (i2c)
-		bool try_start_adsp = ( !adsp_started && 
-			!should_wait_for_boulder_cross_charging( pdevices ) &&
+		bool try_start_adsp = ( !adsp_started && !boulder_cross_charging_active &&
 			( !adsp_start_time || get_timer( adsp_start_time ) > k_ADSP_RestartIntervalMS ) &&
 			deckard_battery_ok_for_dsp( pdevices->max17320 ) );
 
@@ -759,8 +862,8 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 			if ( adsp_started )
 				wantsPoweroff = ( adsp_state.valid && !adsp_state.inhibit_poweroff );
 			else {
-				bool actively_charging_from_any_source =   deckard_battery_is_charging_enabled( pdevices->pm8550b )   //normal type-c charger into type-c port
-                                                       || deckard_boulder_charger_enabled( pdevices->slg4ad48669m );  //boulder external battery is cross charging the internal battery
+				bool actively_charging_from_any_source = deckard_battery_is_charging_enabled( pdevices->pm8550b )   //normal type-c charger into type-c port
+                                                       || deckard_boulder_charger_enabled( pdevices->slg4ad48669m );  // TODO: is boulder_cross_charging_active a better check?
 				wantsPoweroff = !actively_charging_from_any_source;
 			}
 
