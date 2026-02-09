@@ -292,7 +292,7 @@ unsigned long blk_dwrite(struct blk_desc *block_dev, lbaint_t start,
 			 lbaint_t blkcnt, const void *buffer);
 unsigned long blk_derase(struct blk_desc *block_dev, lbaint_t start,
 			 lbaint_t blkcnt);
-
+int blk_dread_md5(struct blk_desc *desc, lbaint_t start, lbaint_t blkcnt, unsigned char *output);
 #endif /* BLK */
 
 /**

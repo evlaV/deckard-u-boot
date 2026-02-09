@@ -124,6 +124,25 @@ int blk_common_cmd(int argc, char *const argv[], enum uclass_id uclass_id,
 			printf("%ld blocks erased: %s\n", n,
 			       n == cnt ? "OK" : "ERROR");
 			return n == cnt ? CMD_RET_SUCCESS : CMD_RET_FAILURE;
+		} else if (strcmp(argv[1], "readmd5") == 0) {
+			lbaint_t blk = hextoul(argv[2], NULL);
+			ulong cnt = hextoul(argv[3], NULL);
+			struct blk_desc *desc;
+			int ret;
+
+			printf("%s read: device %d block # "LBAFU", count %lu : ",
+			       if_name, *cur_devnump, blk, cnt);
+
+			ret = blk_get_desc(uclass_id, *cur_devnump, &desc);
+			if (ret)
+				return CMD_RET_FAILURE;
+
+			unsigned char output[16];
+			ret = blk_dread_md5(desc, blk, cnt, output);
+			if( ret == 0 ) for (int i = 0; i < 16; i++) printf("%02x", output[i]);
+			printf("\n");
+
+			return CMD_RET_SUCCESS;
 		} else {
 			return CMD_RET_USAGE;
 		}

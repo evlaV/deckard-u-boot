@@ -15,6 +15,7 @@
 #include <dm/lists.h>
 #include <dm/uclass-internal.h>
 #include <linux/err.h>
+#include <u-boot/md5.h>
 
 #define blk_get_ops(dev)	((struct blk_ops *)(dev)->driver->ops)
 
@@ -512,6 +513,45 @@ long blk_erase(struct udevice *dev, lbaint_t start, lbaint_t blkcnt)
 	blkcache_invalidate(desc->uclass_id, desc->devnum);
 
 	return ops->erase(dev, start, blkcnt);
+}
+
+int blk_dread_md5(struct blk_desc *desc, lbaint_t start, lbaint_t blkcnt, unsigned char *output)
+{
+	unsigned char buffer[16384]; //blocksize needs to be smaller than this
+	unsigned char *input;
+	unsigned int len;
+	int fail = 0;
+	int blocksize = desc->blksz;
+	long ret = 0;
+
+	if(!output) return -1;
+
+	MD5Context context;
+	MD5Init(&context);
+
+	output[0]='\0';
+	
+	for(int i=0; i<blkcnt; i++)
+	{
+		int bc = 1;
+		ret = blk_read(desc->bdev, start, bc, (void*)buffer); // should read bc blocks back -- typically just 1
+		if( ret <= 0 )
+		{
+			fail = 1;
+			break;
+		}
+		MD5Update(&context, buffer, blocksize);
+	}
+
+	MD5Final(output, &context);
+
+	if(fail) 
+	{
+		output[0]='\0'; 
+		return -1; 
+	}
+
+	return 0;
 }
 
 ulong blk_dread(struct blk_desc *desc, lbaint_t start, lbaint_t blkcnt,
