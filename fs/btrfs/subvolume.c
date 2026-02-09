@@ -172,9 +172,13 @@ static int list_subvolums(struct btrfs_fs_info *fs_info)
 	if (ret < 0)
 		goto out;
 	root = fs_info->fs_root;
-	printf("ID %llu gen %llu path %.*s\n",
+	struct btrfs_root_item * root_item = &root->root_item;
+	__le64 flags_le = root_item->flags;
+	int btrfs_ro = (le64_to_cpu(flags_le) & BTRFS_ROOT_SUBVOL_RDONLY) != 0;
+
+	printf("ID %llu gen %llu path %.*s, [ro=%d]\n",
 		root->root_key.objectid, btrfs_root_generation(&root->root_item),
-		PATH_MAX, result);
+		PATH_MAX, result, btrfs_ro);
 
 	key.objectid = BTRFS_FIRST_FREE_OBJECTID;
 	key.type = BTRFS_ROOT_ITEM_KEY;
@@ -204,10 +208,18 @@ static int list_subvolums(struct btrfs_fs_info *fs_info)
 		ret = list_one_subvol(root, result);
 		if (ret < 0)
 			goto out;
-		printf("ID %llu gen %llu path %.*s\n",
+
+		root_item = &root->root_item;
+		flags_le = root_item->flags;
+		btrfs_ro = (le64_to_cpu(flags_le) & BTRFS_ROOT_SUBVOL_RDONLY) != 0;
+
+		printf("ID %llu gen %llu path %.*s, ro=%d\n",
 			root->root_key.objectid,
 			btrfs_root_generation(&root->root_item),
-			PATH_MAX, result);
+			PATH_MAX, result, btrfs_ro);
+		
+		
+
 next:
 		ret = btrfs_next_item(tree_root, &path);
 		if (ret < 0)
