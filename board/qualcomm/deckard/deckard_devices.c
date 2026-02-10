@@ -835,7 +835,12 @@ void deckard_fastboot_enable(deckard_devices_t * pdevices)
 		*/
 	if (!env_get("serial#")) {
 		deckard_log("setting dummy serial number: %s\n", DECKARD_FASTBOOT_DUMMY_SERIAL_NUMB);
+		/*
+		 * we first update the saved env variable, but we still need to set
+		 * the variable for the first/current run
+		 */
 		env_update("serial#", DECKARD_FASTBOOT_DUMMY_SERIAL_NUMB);
+		env_set("serial#", DECKARD_FASTBOOT_DUMMY_SERIAL_NUMB);
 	}
 
 	deckard_setledcolor( LED_COLOR_WHITE, pdevices );
