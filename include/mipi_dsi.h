@@ -477,6 +477,17 @@ int mipi_dsi_dcs_set_display_brightness(struct mipi_dsi_device *dsi,
 					u16 brightness);
 
 /**
+ * mipi_dsi_dcs_set_display_brightness_large() - sets the brightness value of the
+ *    display
+ * @dsi: DSI peripheral device
+ * @brightness: brightness value
+ *
+ * Return: 0 on success or a negative error code on failure.
+ */
+int mipi_dsi_dcs_set_display_brightness_large(struct mipi_dsi_device *dsi,
+					u16 brightness);
+
+/**
  * mipi_dsi_dcs_get_display_brightness() - gets the current brightness value
  *    of the display
  * @dsi: DSI peripheral device
