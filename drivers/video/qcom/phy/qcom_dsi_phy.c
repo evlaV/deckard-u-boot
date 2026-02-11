@@ -1,8 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
+#define LOG_DEBUG
+
 #include <dm.h>
 #include <dm/device_compat.h>
 #include <dm/devres.h>
+#include <dt-bindings/phy/phy.h>
 #include <div64.h>
 #include <generic-phy.h>
 #include <linux/kernel.h>
@@ -125,6 +128,105 @@ int msm_dsi_cphy_timing_calc_v4(struct msm_dsi_dphy_timing *timing,
 	debug("%s: %d, %d, %d, %d, %d\n", __func__,
 		timing->shared_timings.clk_pre, timing->shared_timings.clk_post,
 		timing->clk_prepare, timing->hs_exit, timing->hs_rqst);
+
+	return 0;
+}
+
+
+int msm_dsi_dphy_timing_calc_v4(struct msm_dsi_dphy_timing *timing,
+	struct msm_dsi_phy_clk_request *clk_req)
+{
+	const unsigned long bit_rate = clk_req->bitclk_rate;
+	const unsigned long esc_rate = clk_req->escclk_rate;
+	s32 ui, ui_x8;
+	s32 tmax, tmin;
+	s32 pcnt_clk_prep = 50;
+	s32 pcnt_clk_zero = 2;
+	s32 pcnt_clk_trail = 30;
+	s32 pcnt_hs_prep = 50;
+	s32 pcnt_hs_zero = 10;
+	s32 pcnt_hs_trail = 30;
+	s32 pcnt_hs_exit = 10;
+	s32 coeff = 1000; /* Precision, should avoid overflow */
+	s32 hb_en;
+	s32 temp;
+
+	if (!bit_rate || !esc_rate)
+		return -EINVAL;
+
+	hb_en = 0;
+
+	ui = mult_frac(NSEC_PER_MSEC, coeff, bit_rate / 1000);
+	ui_x8 = ui << 3;
+
+	/* TODO: verify these calculations against latest downstream driver
+	 * everything except clk_post/clk_pre uses calculations from v3 based
+	 * on the downstream driver having the same calculations for v3 and v4
+	 */
+
+	temp = S_DIV_ROUND_UP(38 * coeff, ui_x8);
+	tmin = max_t(s32, temp, 0);
+	temp = (95 * coeff) / ui_x8;
+	tmax = max_t(s32, temp, 0);
+	timing->clk_prepare = linear_inter(tmax, tmin, pcnt_clk_prep, 0, false);
+
+	temp = 300 * coeff - (timing->clk_prepare << 3) * ui;
+	tmin = S_DIV_ROUND_UP(temp, ui_x8) - 1;
+	tmax = (tmin > 255) ? 511 : 255;
+	timing->clk_zero = linear_inter(tmax, tmin, pcnt_clk_zero, 0, false);
+
+	tmin = DIV_ROUND_UP(60 * coeff + 3 * ui, ui_x8);
+	temp = 105 * coeff + 12 * ui - 20 * coeff;
+	tmax = (temp + 3 * ui) / ui_x8;
+	timing->clk_trail = linear_inter(tmax, tmin, pcnt_clk_trail, 0, false);
+
+	temp = S_DIV_ROUND_UP(40 * coeff + 4 * ui, ui_x8);
+	tmin = max_t(s32, temp, 0);
+	temp = (85 * coeff + 6 * ui) / ui_x8;
+	tmax = max_t(s32, temp, 0);
+	timing->hs_prepare = linear_inter(tmax, tmin, pcnt_hs_prep, 0, false);
+
+	temp = 145 * coeff + 10 * ui - (timing->hs_prepare << 3) * ui;
+	tmin = S_DIV_ROUND_UP(temp, ui_x8) - 1;
+	tmax = 255;
+	timing->hs_zero = linear_inter(tmax, tmin, pcnt_hs_zero, 0, false);
+
+	tmin = DIV_ROUND_UP(60 * coeff + 4 * ui, ui_x8) - 1;
+	temp = 105 * coeff + 12 * ui - 20 * coeff;
+	tmax = (temp / ui_x8) - 1;
+	timing->hs_trail = linear_inter(tmax, tmin, pcnt_hs_trail, 0, false);
+
+	temp = 50 * coeff + ((hb_en << 2) - 8) * ui;
+	timing->hs_rqst = S_DIV_ROUND_UP(temp, ui_x8);
+
+	tmin = DIV_ROUND_UP(100 * coeff, ui_x8) - 1;
+	tmax = 255;
+	timing->hs_exit = linear_inter(tmax, tmin, pcnt_hs_exit, 0, false);
+
+	/* recommended min
+	 * = roundup((mipi_min_ns + t_hs_trail_ns)/(16*bit_clk_ns), 0) - 1
+	 */
+	temp = 60 * coeff + 52 * ui + + (timing->hs_trail + 1) * ui_x8;
+	tmin = DIV_ROUND_UP(temp, 16 * ui) - 1;
+	tmax = 255;
+	timing->shared_timings.clk_post = linear_inter(tmax, tmin, 5, 0, false);
+
+	/* recommended min
+	 * val1 = (tlpx_ns + clk_prepare_ns + clk_zero_ns + hs_rqst_ns)
+	 * val2 = (16 * bit_clk_ns)
+	 * final = roundup(val1/val2, 0) - 1
+	 */
+	temp = 52 * coeff + (timing->clk_prepare + timing->clk_zero + 1) * ui_x8 + 54 * coeff;
+	tmin = DIV_ROUND_UP(temp, 16 * ui) - 1;
+	tmax = 255;
+	timing->shared_timings.clk_pre = DIV_ROUND_UP((tmax - tmin) * 125, 10000) + tmin;
+
+	timing->shared_timings.byte_intf_clk_div_2 = true;
+
+	debug("%s: %d, %d, %d, %d, %d, %d, %d, %d, %d, %d\n", __func__,
+		timing->shared_timings.clk_pre, timing->shared_timings.clk_post,
+		timing->clk_zero, timing->clk_trail, timing->clk_prepare, timing->hs_exit,
+		timing->hs_zero, timing->hs_prepare, timing->hs_trail, timing->hs_rqst);
 
 	return 0;
 }
@@ -365,6 +467,8 @@ static void dsi_pll_commit(struct dsi_pll_7nm *pll, struct dsi_pll_config *confi
 // Parent clock should be RPMh CXO output which is typically xo_board/2 but according
 // to the logs below it's actually the full TCXO rate (38.4MHz)??
 #define TCXO_RATE	38400000
+/* FIXME: this needs to be calculated properly in tandem with dispcc clocks! */
+#define FIXME_VCO_TARGET_RATE 2365350000
 
 static unsigned long _dsi_pll_7nm_vco_set_rate(struct dsi_pll_7nm *pll_7nm, unsigned long rate)
 {
@@ -570,12 +674,12 @@ static int _dsi_pll_7nm_vco_prepare(struct dsi_pll_7nm *pll_7nm)
 	int rc;
 
 	if (pll_7nm->vco_desired_rate && pll_7nm->vco_current_rate) {
-		debug("--------- PLL(%d) already enabled\n", pll_7nm->plat->id);
+		// debug("--------- PLL(%d) already enabled\n", pll_7nm->plat->id);
 		return 0;
 	}
 
 	/* copy from linux 80Hz config */
-	pll_7nm->vco_desired_rate = 851023681;
+	pll_7nm->vco_desired_rate = FIXME_VCO_TARGET_RATE;
 
 	/* U-Boot doesn't have recalc_rate support so just set things up now */
 	/* follow sequence of kernel */
@@ -583,7 +687,7 @@ static int _dsi_pll_7nm_vco_prepare(struct dsi_pll_7nm *pll_7nm)
 		pll_7nm->vco_desired_rate = dsi_pll_7nm_vco_recalc_rate(pll_7nm, TCXO_RATE);
 	if (!pll_7nm->vco_desired_rate) {
 		pr_err("DSI PLL(%d) recalc_rate returned 0 :( overriding...\n", pll_7nm->plat->id);
-		pll_7nm->vco_desired_rate = 851023681;
+		pll_7nm->vco_desired_rate = FIXME_VCO_TARGET_RATE;
 	}
 	_dsi_pll_7nm_vco_set_rate(pll_7nm, pll_7nm->vco_desired_rate);
 	pll_7nm->vco_desired_rate = dsi_pll_7nm_vco_recalc_rate(pll_7nm, TCXO_RATE);
@@ -622,19 +726,20 @@ static int _dsi_pll_7nm_vco_prepare(struct dsi_pll_7nm *pll_7nm)
 
 	/* Hard coding downstream clock mnd for headset usage case, to avoid
 	 * create parent clocks in pll_7nm_register() */
-	writel(0, pll_7nm->plat->base + REG_DSI_7nm_PHY_PLL_PLL_OUTDIV_RATE);
+	writel(0, pll_7nm->plat->pll_base + REG_DSI_7nm_PHY_PLL_PLL_OUTDIV_RATE);
 	// div_3_0  = 2
 	dsi_pll_cmn_clk_cfg0_update(pll_7nm,
 				    DSI_7nm_PHY_CMN_CLK_CFG0_DIV_CTRL_3_0__MASK,
 				    DSI_7nm_PHY_CMN_CLK_CFG0_DIV_CTRL_3_0(1));
 	// div_7_4 = 1
+	// CASEY: this is dsi0_phy_pll_out_dsiclk, divides by 6 on linux for 8650 hdk
 	dsi_pll_cmn_clk_cfg0_update(pll_7nm,
 				    DSI_7nm_PHY_CMN_CLK_CFG0_DIV_CTRL_7_4__MASK,
-				    DSI_7nm_PHY_CMN_CLK_CFG0_DIV_CTRL_7_4(1));
+				    DSI_7nm_PHY_CMN_CLK_CFG0_DIV_CTRL_7_4(6));
 	//writel(0x13, pll_7nm->plat->base + REG_DSI_7nm_PHY_CMN_CLK_CFG1);
-	dsi_pll_cmn_clk_cfg1_update(pll_7nm,
-				    DSI_7nm_PHY_CMN_CLK_CFG1_DSICLK_SEL__MASK,
-				    DSI_7nm_PHY_CMN_CLK_CFG1_DSICLK_SEL(3));
+	// dsi_pll_cmn_clk_cfg1_update(pll_7nm,
+	// 			    DSI_7nm_PHY_CMN_CLK_CFG1_DSICLK_SEL__MASK,
+	// 			    DSI_7nm_PHY_CMN_CLK_CFG1_DSICLK_SEL(3));
 
 	dsi_pll_enable_global_clk(pll_7nm);
 	if (pll_7nm->slave)
@@ -704,11 +809,110 @@ static unsigned long dsi_pll_7nm_clk_round_rate(struct clk *clk,
 		return rate;
 }
 
+static unsigned long dsi_pll_7nm_clk_get_rate(struct clk *clk)
+{
+	struct dsi_pll_7nm *pll_7nm = dev_get_priv(clk->dev);
+
+	return pll_7nm->vco_current_rate;
+}
+
+#define FIELD_MASK(x, shift) ((BIT(x) - 1) << shift)
+
+static __maybe_unused void dsi_pll_7nm_vco_dump(struct udevice *dev)
+{
+	struct dsi_pll_7nm *pll_7nm = dev_get_priv(dev);
+	void __iomem *base = pll_7nm->plat->base;
+	void __iomem *pll_base = pll_7nm->plat->pll_base;
+	ulong dsi0_pll_out_div_clk, dsi0_pll_bit_clk;
+	ulong dsi0vco_clk, dsi0_phy_pll_out_byteclk;
+	ulong dsi0_pll_by_2_bit_clk;
+	ulong dsi0_pclk_mux, dsi0_phy_pll_out_dsiclk;
+	ulong dsi0_pll_post_out_div_clk;
+	u32 out_div, divl_3_0, div_7_4;
+	u32 dsiclk_sel;
+
+	dsi0vco_clk = pll_7nm->vco_current_rate;
+
+	out_div = 1 << (readl(pll_base + REG_DSI_7nm_PHY_PLL_PLL_OUTDIV_RATE) & FIELD_MASK(2, 0));
+	dsi0_pll_out_div_clk = dsi0vco_clk / out_div;
+
+	divl_3_0 = readl(base + REG_DSI_7nm_PHY_CMN_CLK_CFG0) & FIELD_MASK(4, 0);
+	dsi0_pll_bit_clk = dsi0_pll_out_div_clk / divl_3_0;
+
+	dsi0_phy_pll_out_byteclk = dsi0_pll_bit_clk / 8;
+
+	dsi0_pll_by_2_bit_clk = dsi0_pll_bit_clk / 2;
+
+	dsiclk_sel = readl(base + REG_DSI_7nm_PHY_CMN_CLK_CFG1) & 0x3;
+
+	dsi0_pclk_mux = dsiclk_sel & 0x1 ? dsi0_pll_by_2_bit_clk : dsi0_pll_bit_clk;
+
+	div_7_4 = (readl(base + REG_DSI_7nm_PHY_CMN_CLK_CFG0) & FIELD_MASK(4, 4)) >> 4;
+	dsi0_phy_pll_out_dsiclk = dsi0_pclk_mux / div_7_4;
+
+	dsi0_pll_post_out_div_clk = dsi0_pll_out_div_clk / 4;
+
+/*
+ * DSI PLL 7nm - clock diagram (eg: DSI0): TODO: updated CPHY diagram
+ *
+ *           dsi0_pll_out_div_clk  dsi0_pll_bit_clk
+ *                              |                |
+ *                              |                |
+ *                 +---------+  |  +----------+  |  +----+
+ *  dsi0vco_clk ---| out_div |--o--| divl_3_0 |--o--| /8 |-- dsi0_phy_pll_out_byteclk
+ *                 +---------+  |  +----------+  |  +----+
+ *                              |                |
+ *                              |                |         dsi0_pll_by_2_bit_clk
+ *                              |                |          |
+ *                              |                |  +----+  |  |\  dsi0_pclk_mux
+ *                              |                |--| /2 |--o--| \   |
+ *                              |                |  +----+     |  \  |  +---------+
+ *                              |                --------------|  |--o--| div_7_4 |-- dsi0_phy_pll_out_dsiclk
+ *                              |------------------------------|  /     +---------+
+ *                              |          +-----+             | /
+ *                              -----------| /4? |--o----------|/
+ *                                         +-----+  |           |
+ *                                                  |           |dsiclk_sel
+ *                                                  |
+ *                                                  dsi0_pll_post_out_div_clk
+ */
+
+	printf("\n");
+	printf("           dsi0_pll_out_div_clk  dsi0_pll_bit_clk\n");
+	printf("            %-18lu|   %-13lu|\n", dsi0_pll_out_div_clk, dsi0_pll_bit_clk);
+	printf("                              |                |\n");
+	printf("                              |                |\n");
+	printf("                 +---------+  |  +----------+  |  +----+\n");
+	printf("  dsi0vco_clk ---| out_div |--o--| divl_3_0 |--o--| /8 |-- dsi0_phy_pll_out_byteclk\n");
+	printf("   %-10lu    |  %-6u |  |  |  %-7u |  |  +----+    %lu\n", dsi0vco_clk, out_div, divl_3_0, dsi0_phy_pll_out_byteclk);
+	printf("                 +---------+  |  +----------+  |\n");
+	printf("                              |                |\n");
+	printf("                              |                |         dsi0_pll_by_2_bit_clk: %lu\n", dsi0_pll_by_2_bit_clk);
+	printf("                              |                |          |\n");
+	printf("                              |                |  +----+  |  |\\  dsi0_pclk_mux: %lu\n", dsi0_pclk_mux);
+	printf("                              |                |--| /2 |--o--1 \\   |\n");
+	printf("                              |                |  +----+     |  \\  |  +---------+\n");
+	printf("                              |                --------------0  |--o--| div_7_4 |-- dsi0_phy_pll_out_dsiclk\n");
+	printf("                              |------------------------------2  /     |  %-6u |    %lu\n", div_7_4, dsi0_phy_pll_out_dsiclk);
+	printf("                              |          +-----+             | /      +---------+\n");
+	printf("                              -----------| /4? |--o----------3/\n");
+	printf("                                         +-----+  |           |\n");
+	printf("                                                  |           |dsiclk_sel: %u\n", dsiclk_sel);
+	printf("                                                  |\n");
+	printf("                                                  dsi0_pll_post_out_div_clk\n");
+	printf("                                                   %lu\n", dsi0_pll_post_out_div_clk);
+
+}
+
 static const struct clk_ops clk_ops_dsi_pll_7nm_vco = {
 	.round_rate = dsi_pll_7nm_clk_round_rate,
 	.set_rate = dsi_pll_7nm_vco_set_rate,
+	.get_rate = dsi_pll_7nm_clk_get_rate,
 	.enable = dsi_pll_7nm_vco_prepare,
 	.disable = dsi_pll_7nm_vco_unprepare,
+#if IS_ENABLED(CONFIG_CMD_CLK)
+	.dump = dsi_pll_7nm_vco_dump,
+#endif
 };
 
 /*
@@ -839,12 +1043,14 @@ static int dsi_7nm_phy_enable(struct msm_dsi_phy *phy,
 	unsigned long timeout;
 	u32 val;
 
+	dev_info(phy->dev, "%s!\n", __func__);
+
 	if (phy->plat->cphy_mode)
 		ret = msm_dsi_cphy_timing_calc_v4(timing, clk_req);
-/*
+
 	else
 		ret = msm_dsi_dphy_timing_calc_v4(timing, clk_req);
-*/
+
 	if (ret) {
 		dev_err(phy->dev,
 			      "%s: PHY timing calculation failed\n", __func__);
@@ -1117,7 +1323,8 @@ static int msm_dsi_phy_power_on(struct phy *phy)
 
 	/* TODO: need to calculate it via panel/lane/dsc data */
 	struct msm_dsi_phy_clk_request clk_req = {
-		.bitclk_rate = 851187806,
+		// CASEY: clocks :sob:
+		.bitclk_rate = FIXME_VCO_TARGET_RATE, //851187806,
 		.escclk_rate = 19200000,
 	 };
 
@@ -1209,8 +1416,8 @@ static int qcom_dsi_phy_of_to_plat(struct udevice *dev)
 	struct msm_dsi_phy_plat *plat = dev_get_plat(dev);
 
 	plat->cfg = &dsi_phy_4nm_8650_cfgs;
-	// FIXME: read from DTS
-	plat->cphy_mode = true;
+	if (dev_read_u32_default(dev, "phy-type", PHY_TYPE_DPHY) == PHY_TYPE_CPHY)
+		plat->cphy_mode = true;
 
 	plat->base = dev_remap_addr_name(dev, "dsi_phy");
 	if (IS_ERR(plat->base))

@@ -6,7 +6,14 @@
 
 config VIDEO_QCOM
 	bool "Enable Qualcomm video support"
-	depends on VIDEO
+	depends on VIDEO && VIDEO_MIPI_DSI && VIDEO_BRIDGE && ARCH_SNAPDRAGON
 	select DISPLAY
 	help
 	  Enable Qualcomm Video Processing Unit video support.
+
+config PHY_QCOM_MIPI_DSI
+	tristate "Qualcomm MIPI DSI PHY driver"
+	depends on PHY && VIDEO_QCOM
+	help
+	  Enable this to support the MIPI DSI PHY on various on Qualcomm
+	  chipsets.

@@ -2,7 +2,6 @@
 
 /* this file handles configuration of VBIF/CTL/SSPP/INTF/LM/PP/DSC in DPU */
 
-#define DEBUG 7
 #include <asm/io.h>
 #include <clk.h>
 #include <dm/device.h>
@@ -15,6 +14,7 @@
 #include "dpu_hw_mdss.h"
 #include "dpu_hwio.h"
 #include "catalog/dpu_hw_catalog.h"
+#include "mdp_common.xml.h"
 
 #define FLD_INTF_2_SW_TRG_MUX             BIT(8)
 #define SPLIT_DISPLAY_LOWER_PIPE_CTRL   0x3F0
@@ -539,6 +539,19 @@ static void dpu_kms_mdp_snapshot(void)
 }
 #endif
 
+static inline void DPU_REG_WRITE(void *base, u32 off, u32 val)
+{
+	debug("%s: %#llx: %#010x (%#llx + %#x)\n", __func__, (u64)base + off, val, (u64)base, off);
+	writel(val, base + off);
+}
+
+static inline u32 DPU_REG_READ(void *base, u32 off)
+{
+	u32 val = readl(base + off);
+	debug("%s: %#llx: %#010x (%#llx + %#x)\n", __func__, (u64)base + off, val, (u64)base, off);
+	return val;
+}
+
 static void mdss_sspp_config_rec1(void *dpu_base, const struct dpu_mdss_cfg *cat, uint32_t fb,
 				  unsigned fb_stride, unsigned sspp_id, unsigned height,
 				  unsigned width, int x_off)
@@ -627,7 +640,167 @@ static void mdss_vbif_setup(void *regs_vbif)
 #endif
 }
 
-static void mdss_intf_setup(void *dpu_base, const struct dpu_mdss_cfg *cat,
+/* dpu_hw_intf_setup_timing_engine in Linux */
+static void mdss_intf_setup(void *dpu_base, struct display_timing *p, const struct dpu_mdss_cfg *cat,
+			    unsigned intf_id, unsigned pp_id)
+{
+	u32 hsync_period, vsync_period;
+	u32 display_v_start, display_v_end;
+	u32 hsync_start_x, hsync_end_x;
+	u32 hsync_data_start_x, hsync_data_end_x;
+	u32 active_h_start, active_h_end;
+	u32 active_v_start, active_v_end;
+	u32 active_hctl, display_hctl, hsync_ctl;
+	u32 polarity_ctl, den_polarity;
+	u32 panel_format;
+	u32 intf_cfg, intf_cfg2 = 0;
+	u32 display_data_hctl = 0, active_data_hctl = 0;
+	u32 data_width;
+	u32 vsync_polarity, hsync_polarity;
+	bool dp_intf = false;
+
+	dpu_base += cat->intf[intf_id - INTF_0].base;
+
+	/* read interface_cfg */
+	intf_cfg = DPU_REG_READ(dpu_base, INTF_CONFIG);
+
+	// if (intf->cap->type == INTF_DP)
+	// 	dp_intf = true;
+
+	hsync_period = p->hsync_len.typ + p->hback_porch.typ + p->hactive.typ + p->hfront_porch.typ;
+	vsync_period = p->vsync_len.typ + p->vback_porch.typ + p->vactive.typ + p->vfront_porch.typ;
+
+	display_v_start = ((p->vsync_len.typ + p->vback_porch.typ) * hsync_period); // + p->hsync_skew;
+	display_v_end = ((vsync_period - p->vfront_porch.typ) * hsync_period) /*+ p->hsync_skew*/ - 1;
+
+	hsync_start_x = p->hback_porch.typ + p->hsync_len.typ;
+	hsync_end_x = hsync_period - p->hfront_porch.typ - 1;
+
+	// if (p->hactive.typ != p->hactive.typ) { /* border fill added */
+	// 	active_h_start = hsync_start_x;
+	// 	active_h_end = active_h_start + p->hactive.typ - 1;
+	// } else {
+		active_h_start = 0;
+		active_h_end = 0;
+	// }
+
+	// if (p->height != p->yres) { /* border fill added */
+	// 	active_v_start = display_v_start;
+	// 	active_v_end = active_v_start + (p->yres * hsync_period) - 1;
+	// } else {
+		active_v_start = 0;
+		active_v_end = 0;
+	// }
+
+	if (active_h_end) {
+		active_hctl = (active_h_end << 16) | active_h_start;
+		intf_cfg |= INTF_CFG_ACTIVE_H_EN;
+	} else {
+		active_hctl = 0;
+	}
+
+	if (active_v_end)
+		intf_cfg |= INTF_CFG_ACTIVE_V_EN;
+
+	hsync_ctl = (hsync_period << 16) | p->hsync_len.typ;
+	display_hctl = (hsync_end_x << 16) | hsync_start_x;
+
+	// if (p->wide_bus_en)
+	// 	intf_cfg2 |= INTF_CFG2_DATABUS_WIDEN;
+
+	data_width = p->hactive.typ;
+
+	/*
+	 * If widebus is enabled, data is valid for only half the active window
+	 * since the data rate is doubled in this mode. But for the compression
+	 * mode in DP case, the p->hactive.typ is already adjusted in
+	 * drm_mode_to_intf_timing_params()
+	 */
+	// if (p->wide_bus_en && !dp_intf)
+	// 	data_width = p->hactive.typ >> 1;
+
+	/* TODO: handle DSC+DP case, we only handle DSC+DSI case so far */
+	// if (p->compression_en && !dp_intf &&
+	//     intf->mdss_ver->core_major_ver >= 7)
+	// 	intf_cfg2 |= INTF_CFG2_DCE_DATA_COMPRESS;
+
+	hsync_data_start_x = hsync_start_x;
+	hsync_data_end_x =  hsync_start_x + data_width - 1;
+
+	display_data_hctl = (hsync_data_end_x << 16) | hsync_data_start_x;
+
+	if (dp_intf) {
+		/* DP timing adjustment */
+		display_v_start += p->hsync_len.typ + p->hback_porch.typ;
+		display_v_end   -= p->hfront_porch.typ;
+
+		active_h_start = hsync_start_x;
+		active_h_end = active_h_start + p->hactive.typ - 1;
+		active_v_start = display_v_start;
+		active_v_end = active_v_start + (p->vactive.typ * hsync_period) - 1;
+
+		active_hctl = (active_h_end << 16) | active_h_start;
+		display_hctl = active_hctl;
+
+		intf_cfg |= INTF_CFG_ACTIVE_H_EN | INTF_CFG_ACTIVE_V_EN;
+	}
+
+	den_polarity = 0;
+	// CASEY: debug here!!
+	vsync_polarity = 0; //p->flags & DRM_MODE_FLAG_NVSYNC;
+	hsync_polarity = 0; //p->flags & DRM_MODE_FLAG_NVSYNC;
+	polarity_ctl = (den_polarity << 2) | /*  DEN Polarity  */
+		(vsync_polarity << 1) | /* VSYNC Polarity */
+		(hsync_polarity << 0);  /* HSYNC Polarity */
+
+	// if (!MSM_FORMAT_IS_YUV(fmt))
+	// 	panel_format = (fmt->bpc_g_y |
+	// 			(fmt->bpc_b_cb << 2) |
+	// 			(fmt->bpc_r_cr << 4) |
+	// 			(0x21 << 8));
+	// else
+		/* Interface treats all the pixel data in RGB888 format */
+		panel_format = (BPC8 |
+				(BPC8 << 2) |
+				(BPC8 << 4) |
+				(0x21 << 8));
+
+	DPU_REG_WRITE(dpu_base, INTF_HSYNC_CTL, hsync_ctl);
+	DPU_REG_WRITE(dpu_base, INTF_VSYNC_PERIOD_F0, vsync_period * hsync_period);
+	DPU_REG_WRITE(dpu_base, INTF_VSYNC_PULSE_WIDTH_F0,
+			p->vsync_len.typ * hsync_period);
+	DPU_REG_WRITE(dpu_base, INTF_DISPLAY_HCTL, display_hctl);
+	DPU_REG_WRITE(dpu_base, INTF_DISPLAY_V_START_F0, display_v_start);
+	DPU_REG_WRITE(dpu_base, INTF_DISPLAY_V_END_F0, display_v_end);
+	DPU_REG_WRITE(dpu_base, INTF_ACTIVE_HCTL,  active_hctl);
+	DPU_REG_WRITE(dpu_base, INTF_ACTIVE_V_START_F0, active_v_start);
+	DPU_REG_WRITE(dpu_base, INTF_ACTIVE_V_END_F0, active_v_end);
+	DPU_REG_WRITE(dpu_base, INTF_BORDER_COLOR, 0); // p->border_clr
+	DPU_REG_WRITE(dpu_base, INTF_UNDERFLOW_COLOR, 0xff); // p->underflow_clr
+	DPU_REG_WRITE(dpu_base, INTF_HSYNC_SKEW, 0); // p->hsync_skew
+	DPU_REG_WRITE(dpu_base, INTF_POLARITY_CTL, polarity_ctl);
+	DPU_REG_WRITE(dpu_base, INTF_FRAME_LINE_COUNT_EN, 0x3);
+	DPU_REG_WRITE(dpu_base, INTF_CONFIG, intf_cfg);
+	DPU_REG_WRITE(dpu_base, INTF_PANEL_FORMAT, panel_format);
+
+	// FIXME: support older platforms!
+	// if (intf->mdss_ver->core_major_ver >= 5) {
+		/*
+		 * DATA_HCTL_EN controls data timing which can be different from
+		 * video timing. It is recommended to enable it for all cases, except
+		 * if compression is enabled in 1 pixel per clock mode
+		 */
+		// if (!(p->compression_en && !p->wide_bus_en))
+			intf_cfg2 |= INTF_CFG2_DATA_HCTL_EN;
+
+		DPU_REG_WRITE(dpu_base, INTF_CONFIG2, intf_cfg2);
+		DPU_REG_WRITE(dpu_base, INTF_DISPLAY_DATA_HCTL, display_data_hctl);
+		DPU_REG_WRITE(dpu_base, INTF_ACTIVE_DATA_HCTL, active_data_hctl);
+	// }
+}
+
+// OLD
+static void mdss__intf_setup_old(void *dpu_base, const struct dpu_mdss_cfg *cat,
 			    unsigned intf_id, unsigned pp_id)
 {
 	unsigned intf = intf_id - INTF_0;
@@ -671,11 +844,11 @@ static void mdss_intf_fetch_start_config(void *dpu_base, const struct dpu_mdss_c
 	void *ctl_base = dpu_base + cat->ctl[ctl].base;
 
 	/* enable 2 DSI interface */
-	writel(BIT(intf), ctl_base + CTL_INTF_MASTER);
+	// writel(BIT(intf), ctl_base + CTL_INTF_MASTER);
 
 	// TOFIX make dsc optional
-	writel(BIT(dsc0) | BIT(dsc1), ctl_base + CTL_DSC_ACTIVE);
-	writel(BIT(dsc0) | BIT(dsc1), ctl_base + CTL_DSC_FLUSH);
+	// writel(BIT(dsc0) | BIT(dsc1), ctl_base + CTL_DSC_ACTIVE);
+	// writel(BIT(dsc0) | BIT(dsc1), ctl_base + CTL_DSC_FLUSH);
 
 	writel(BIT(intf), ctl_base + CTL_INTF_ACTIVE);
 	writel(BIT(intf), ctl_base + CTL_INTF_FLUSH);
@@ -724,7 +897,8 @@ void mdp_setup_stage_rec1(void *dpu_base, const struct dpu_mdss_cfg *cat,
 		op_mode |= BIT(31); /* split right half in stage */
 	writel(op_mode, lm_base + LM_OP_MODE);
 
-	writel(0x100, lm_base + LM_BLEND0_OP);
+	writel(0x100, lm_base + LM_BLEND0_OP); // DPU_BLEND_BG_ALPHA_FG_CONST
+	// see dpu_hw_lm_setup_blend_config_combined_alpha()
 	writel(0xFF0000, lm_base + LM_BLEND0_CONST_ALPHA);
 }
 
@@ -893,17 +1067,17 @@ int qcom_dpu_probe(struct udevice *dev)
 	}
 
 	// TOFIX follow port/endpoint instead
-	ret = uclass_get_device(UCLASS_VIDEO_BRIDGE, 1, &priv->bridge1);
-	if (ret) {
-		dev_dbg(dev, "No video bridge1, err %d\n", ret);
-		return ret;
-	}
+	// ret = uclass_get_device(UCLASS_VIDEO_BRIDGE, 1, &priv->bridge1);
+	// if (ret) {
+	// 	dev_dbg(dev, "No video bridge1, err %d\n", ret);
+	// 	return ret;
+	// }
 
-	ret = video_bridge_attach(priv->bridge1);
-	if (ret) {
-		dev_err(dev, "fail to attach bridge1\n");
-		return ret;
-	}
+	// ret = video_bridge_attach(priv->bridge1);
+	// if (ret) {
+	// 	dev_err(dev, "fail to attach bridge1\n");
+	// 	return ret;
+	// }
 
 	video_bridge_get_display_timing(priv->bridge0, &timings);
 	if (ret) {
@@ -911,11 +1085,11 @@ int qcom_dpu_probe(struct udevice *dev)
 		return ret;
 	}
 
-	video_bridge_get_display_timing(priv->bridge0, &timings1);
-	if (ret) {
-		dev_err(dev, "fail to get display timings\n");
-		return ret;
-	}
+	// video_bridge_get_display_timing(priv->bridge0, &timings1);
+	// if (ret) {
+	// 	dev_err(dev, "fail to get display timings\n");
+	// 	return ret;
+	// }
 
 	ret = video_bridge_set_backlight(priv->bridge0, 100);
 	if (ret) {
@@ -923,80 +1097,81 @@ int qcom_dpu_probe(struct udevice *dev)
 		return ret;
 	}
 
-	ret = video_bridge_set_backlight(priv->bridge1, 100);
-	if (ret) {
-		dev_err(dev, "bridge1 enable backlight error %d\n", ret);
-		return ret;
-	}
+	// ret = video_bridge_set_backlight(priv->bridge1, 100);
+	// if (ret) {
+	// 	dev_err(dev, "bridge1 enable backlight error %d\n", ret);
+	// 	return ret;
+	// }
 
 	/* Configure & start DPU */
 
 	uc_priv->bpix = VIDEO_BPP32;
 	uc_priv->xsize = timings.hactive.typ + timings1.hactive.typ;
 	uc_priv->ysize = timings.vactive.typ;
-	// Panels are rotated, vidconsole will rotate all console writes
-	uc_priv->rot = 2;
+	// FIXME: read from DT! Also warn about vidconsole_rotate driver not being available!
+	uc_priv->rot = 0;
 
 	mdss_vbif_setup(priv->vbif_base);
 
 	// TOFIX implement resources manager
 
 	/* Panel 0 */
-	mdss_intf_setup(priv->dpu_base, priv->cat, INTF_1, PINGPONG_0);
+	mdss_intf_setup(priv->dpu_base, &timings, priv->cat, INTF_0, PINGPONG_0); // INTF_1 ?
 
-	mdp_dsc_setup(priv->dpu_base, priv->cat, DSC_0, PINGPONG_0);
+	// mdp_dsc_setup(priv->dpu_base, priv->cat, DSC_0, PINGPONG_0);
 	// TOFIX use companion PP id from catalog
-	mdp_dsc_setup(priv->dpu_base, priv->cat, DSC_1, PINGPONG_1);
+	// mdp_dsc_setup(priv->dpu_base, priv->cat, DSC_1, PINGPONG_1);
 
 	// TOFIX use timings instead of static height/width
-	mdp_setup_stage_rec1(priv->dpu_base, priv->cat, CTL_0, LM_0, SSPP_DMA0, 2160, 2160, false);
+	mdp_setup_stage_rec1(priv->dpu_base, priv->cat, CTL_0, LM_0, SSPP_DMA0, timings.vactive.typ, timings.hactive.typ, false);
 	// TOFIX use companion LM id from catalog
-	mdp_setup_stage_rec1(priv->dpu_base, priv->cat, CTL_0, LM_1, SSPP_DMA0, 2160, 2160, true);
+	// mdp_setup_stage_rec1(priv->dpu_base, priv->cat, CTL_0, LM_1, SSPP_DMA0, 2160, 2160, true);
 
 	// Since the panels are rotated, use the right side of the fb for panel0
 	mdss_sspp_config_rec1(priv->dpu_base, priv->cat, uc_plat->base,
-			      (2160 * 2 * 4), SSPP_DMA0, 2160, 2160, 2160);
+			      (timings.hactive.typ * 4), SSPP_DMA0, timings.vactive.typ, timings.hactive.typ, 0);
 
 	mdss_intf_fetch_start_config(priv->dpu_base, priv->cat,
-				     CTL_0, INTF_1, DSC_0, DSC_1);
+				     CTL_0, INTF_0, DSC_0, DSC_1); // INTF_1 ?
 
 	// TOFIX fill a flush bitfield from the config commands
 	mdp_ctl_flush(priv->dpu_base, priv->cat, CTL_0, SSPP_DMA0, true,
 		      LM_0, LM_1);
 
 	/* Panel 1 */
-	mdss_intf_setup(priv->dpu_base, priv->cat, INTF_2, PINGPONG_2);
+	// mdss_intf_setup(priv->dpu_base, priv->cat, INTF_2, PINGPONG_2);
 
-	mdp_dsc_setup(priv->dpu_base, priv->cat, DSC_2, PINGPONG_2);
-	// TOFIX use companion PP id from catalog
-	mdp_dsc_setup(priv->dpu_base, priv->cat, DSC_3, PINGPONG_3);
+	// mdp_dsc_setup(priv->dpu_base, priv->cat, DSC_2, PINGPONG_2);
+	// // TOFIX use companion PP id from catalog
+	// mdp_dsc_setup(priv->dpu_base, priv->cat, DSC_3, PINGPONG_3);
 
-	// TOFIX use timings instead of static height/width
-	mdp_setup_stage_rec1(priv->dpu_base, priv->cat, CTL_1, LM_2, SSPP_DMA1, 2160, 2160, false);
-	// TOFIX use companion LM id from catalog
-	mdp_setup_stage_rec1(priv->dpu_base, priv->cat, CTL_1, LM_3, SSPP_DMA1, 2160, 2160, true);
+	// // TOFIX use timings instead of static height/width
+	// mdp_setup_stage_rec1(priv->dpu_base, priv->cat, CTL_1, LM_2, SSPP_DMA1, 2160, 2160, false);
+	// // TOFIX use companion LM id from catalog
+	// mdp_setup_stage_rec1(priv->dpu_base, priv->cat, CTL_1, LM_3, SSPP_DMA1, 2160, 2160, true);
 
-	// Since the panels are rotated, use the left side of the fb for panel0
-	mdss_sspp_config_rec1(priv->dpu_base, priv->cat, uc_plat->base,
-			(2160 * 2 * 4), SSPP_DMA1, 2160, 2160, 0);
+	// // Since the panels are rotated, use the left side of the fb for panel0
+	// mdss_sspp_config_rec1(priv->dpu_base, priv->cat, uc_plat->base,
+	// 		(2160 * 2 * 4), SSPP_DMA1, 2160, 2160, 0);
 
-	mdss_intf_fetch_start_config(priv->dpu_base, priv->cat,
-			CTL_1, INTF_2, DSC_2, DSC_3);
+	// mdss_intf_fetch_start_config(priv->dpu_base, priv->cat,
+	// 		CTL_1, INTF_2, DSC_2, DSC_3);
 
-	// TOFIX fill a flush bitfield from the config commands
-	mdp_ctl_flush(priv->dpu_base, priv->cat, CTL_1, SSPP_DMA1, true,
-			LM_2, LM_3);
+	// // TOFIX fill a flush bitfield from the config commands
+	// mdp_ctl_flush(priv->dpu_base, priv->cat, CTL_1, SSPP_DMA1, true,
+	// 		LM_2, LM_3);
 
 	// TOFIX should we use bonded dsi instead ?
 	//writel(FLD_INTF_2_SW_TRG_MUX, priv->dpu_base + SPLIT_DISPLAY_LOWER_PIPE_CTRL);
 
 	mdp_intf_enable(priv->dpu_base, priv->cat, INTF_1);
-	mdp_intf_enable(priv->dpu_base, priv->cat, INTF_2);
+	// mdp_intf_enable(priv->dpu_base, priv->cat, INTF_2);
 
 #if 0
 	local_priv = priv;
 	dpu_kms_mdp_snapshot();
 #endif
+	printf("DPU probed!\n");
 	return 0;
 }
 
@@ -1004,14 +1179,14 @@ static int qcom_dpu_remove(struct udevice *dev)
 {
 	struct qcom_dpu_priv *priv = dev_get_priv(dev);
 
-	if (!priv->bridge0 || !priv->bridge1)
+	if (!priv->bridge0)
 		return 0;
 
 	video_bridge_set_backlight(priv->bridge0, 0);
-	video_bridge_set_backlight(priv->bridge1, 0);
+	// video_bridge_set_backlight(priv->bridge1, 0);
 
 	mdp_intf_enable(priv->dpu_base, priv->cat, INTF_1);
-	mdp_intf_enable(priv->dpu_base, priv->cat, INTF_2);
+	// mdp_intf_enable(priv->dpu_base, priv->cat, INTF_2);
 
 	clk_disable_bulk(&priv->bulk);
 

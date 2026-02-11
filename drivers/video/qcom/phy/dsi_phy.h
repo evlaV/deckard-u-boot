@@ -22,6 +22,7 @@ enum msm_dsi_phy_usecase {
 };
 
 struct msm_dsi_phy;
+
 struct msm_dsi_phy_shared_timings {
 	u32 clk_post;
 	u32 clk_pre;
