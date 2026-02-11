@@ -4,6 +4,8 @@
  * Copyright (c) 2023, Linaro Ltd.
  */
 
+#define LOG_DEBUG
+
 #include <clk-uclass.h>
 #include <dm.h>
 #include <dm/device_compat.h>
@@ -117,12 +119,10 @@ static const struct freq_tbl ftbl_disp_cc_mdss_mdp_clk_src[] = {
 	F(85714286, CFG_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
 	F(100000000, CFG_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
 	F(150000000, CFG_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
-	F(172000000, CFG_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
 	F(200000000, CFG_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
 	F(325000000, CFG_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
-	F(375000000, CFG_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
+	F(402000000, CFG_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
 	F(514000000, CFG_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
-	F(690000000, CFG_DISP_CC_PLL0_OUT_MAIN, 2, 0, 0),
 	{ }
 };
 
@@ -169,10 +169,12 @@ static int dispcc_enable_src(const struct freq_tbl *freq)
 	}
 }
 
-static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
+// ID overrides id used when looking for parents
+static ulong _sm8650_disp_cc_set_rate(struct clk *clk, ulong rate, long id)
 {
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
 	const struct freq_tbl *freq;
+	ulong parent_rate = 0;
 	const char *name;
 
 	if (clk->id < ARRAY_SIZE(sm8650_disp_clks))
@@ -180,7 +182,17 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 	else
 		name = "unknown";
 
-	dev_dbg(clk->dev, "set clk %s (%lu) rate: %lu\n", name, clk->id, rate);
+	id = id < 0 ? clk->id : id;
+	if (clk_valid(&priv->parents_map[id])) {
+		parent_rate = clk_get_rate(&priv->parents_map[id]);
+		/* FIXME: hacks for dsi PLL clocks */
+		if (id == DISP_CC_MDSS_PCLK0_CLK_SRC)
+			parent_rate /= 6;
+		else if (id == DISP_CC_MDSS_BYTE0_CLK_SRC)
+			parent_rate /= 8;
+	}
+
+	dev_dbg(clk->dev, "set clk %s (%lu) rate: %lu parent_rate: %lu\n", name, clk->id, rate, parent_rate);
 
 	switch (clk->id) {
 	case DISP_CC_MDSS_AHB_CLK:
@@ -195,7 +207,9 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		 * .reg = 0x8120, .shift = 0, .width = 4 with test. Due to DSC ?
 		 * Or we just fall thru into the grand parent disp_cc_mdss_byte0_clk_src
 		 * at 0x8108? */
-		writel(0, priv->base + 0x8120);
+
+		// FIXME: should be 1 for dphy, 0 for cphy
+		writel(1, priv->base + 0x8120);
 	case DISP_CC_MDSS_BYTE0_CLK:
 		/* There is only 1 entry in original ftbl_disp_cc_mdss_byte0_clk_src,
 		 *while parent is dsi0_phy_pll_out_byteclk with rate 121574874 in
@@ -249,7 +263,8 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		 * rate are 243149748 per test. The GGGrand-parent dsi0_pll_out_div_clk
 		 * is 851024121 in 90Hz case, that's m/n = 7/2. Also 7/2 for 80/120Hz
 		 * The divider shall happen inside DSI PLL, ignore it here. */
-		clk_rcg_set_rate_mnd(priv->base, 0x80a8, 1, 1, 1, CFG_DSI0_PHY_PLL_OUT_DSICLK, 8);
+		// clk_rcg_set_rate_mnd(priv->base, 0x80a8, 1, 1, 1, CFG_DSI0_PHY_PLL_OUT_DSICLK, 8);
+		clk_pixel_set_rate(priv->base, 0x80a8, rate, parent_rate, CFG_DSI0_PHY_PLL_OUT_DSICLK, 8);
 		return rate;
 
 	case DISP_CC_MDSS_PCLK1_CLK:
@@ -259,7 +274,8 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 		 * is 851024121 in 90Hz case, that's m/n = 7/2. Also 7/2 for 80/120Hz
 		 * The divider shall happen inside DSI PLL, ignore it here. */
 		/* TODO: this clk use clk_pixel_ops in Linux, not mnd */
-		clk_rcg_set_rate_mnd(priv->base, 0x80c0, 1, 1, 1, CFG_DSI1_PHY_PLL_OUT_DSICLK, 8);
+		// clk_rcg_set_rate_mnd(priv->base, 0x80c0, 1, 1, 1, CFG_DSI1_PHY_PLL_OUT_DSICLK, 8);
+		clk_pixel_set_rate(priv->base, 0x80c0, rate, parent_rate, CFG_DSI0_PHY_PLL_OUT_DSICLK, 8);
 		return rate;
 
 	case DISP_CC_MDSS_ESC0_CLK:
@@ -285,6 +301,11 @@ static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
 	}
 }
 
+static ulong sm8650_disp_cc_set_rate(struct clk *clk, ulong rate)
+{
+	return _sm8650_disp_cc_set_rate(clk, rate, -1);
+}
+
 static int sm8650_disp_cc_parent_enable(struct clk *clk, ulong id)
 {
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
@@ -306,35 +327,41 @@ static int sm8650_disp_cc_enable(struct clk *clk)
 	else
 		name = "unknown";
 
+#define MDSS_PCLK_FREQ     (394225000u) // $(((1080 + 20 + 2 + 20) * (2400 + 20 + 2 + 18) * 120))
+#define MDSS_BYTE_CLK_FREQ (295668750u)
+
+
 	switch (clk->id) {
 	case DISP_CC_MDSS_AHB_CLK:
 		sm8650_disp_cc_set_rate(clk, 19200000);
 		break;
 	case DISP_CC_MDSS_MDP_CLK:
-		sm8650_disp_cc_set_rate(clk, 514000000);
+		sm8650_disp_cc_set_rate(clk, 402000000);
 		break;
 	case DISP_CC_MDSS_BYTE0_CLK:
 		sm8650_disp_cc_parent_enable(clk, DISP_CC_MDSS_BYTE0_CLK_SRC);
-		sm8650_disp_cc_set_rate(clk, 121574874);
+		_sm8650_disp_cc_set_rate(clk, MDSS_BYTE_CLK_FREQ, DISP_CC_MDSS_BYTE0_CLK_SRC);
 		break;
 	case DISP_CC_MDSS_BYTE1_CLK:
 		sm8650_disp_cc_parent_enable(clk, DISP_CC_MDSS_BYTE1_CLK_SRC);
-		sm8650_disp_cc_set_rate(clk, 121574874);
+		_sm8650_disp_cc_set_rate(clk, MDSS_BYTE_CLK_FREQ, DISP_CC_MDSS_BYTE1_CLK_SRC);
 		break;
 	case DISP_CC_MDSS_BYTE0_INTF_CLK:
 		sm8650_disp_cc_parent_enable(clk, DISP_CC_MDSS_BYTE0_CLK_SRC);
-		sm8650_disp_cc_set_rate(clk, 121574874);
+		sm8650_disp_cc_set_rate(clk, MDSS_BYTE_CLK_FREQ);
 		break;
 	case DISP_CC_MDSS_BYTE1_INTF_CLK:
 		sm8650_disp_cc_parent_enable(clk, DISP_CC_MDSS_BYTE1_CLK_SRC);
-		sm8650_disp_cc_set_rate(clk, 121574874);
+		sm8650_disp_cc_set_rate(clk, MDSS_BYTE_CLK_FREQ);
 		break;
 	case DISP_CC_MDSS_VSYNC_CLK:
 		sm8650_disp_cc_set_rate(clk, 19200000);
 		break;
 	case DISP_CC_MDSS_PCLK0_CLK:
+		_sm8650_disp_cc_set_rate(clk, MDSS_PCLK_FREQ, DISP_CC_MDSS_PCLK0_CLK_SRC);
+		break;
 	case DISP_CC_MDSS_PCLK1_CLK:
-		sm8650_disp_cc_set_rate(clk, 243149748);
+		_sm8650_disp_cc_set_rate(clk, MDSS_PCLK_FREQ, DISP_CC_MDSS_PCLK1_CLK_SRC);
 		break;
 	case DISP_CC_MDSS_ESC0_CLK:
 	case DISP_CC_MDSS_ESC1_CLK:
@@ -429,9 +456,7 @@ static const phys_addr_t dbg_rcg_addrs[] = {
 	BASE + 0x82e8,
 	BASE + 0x80d8,
 	BASE + 0x8108,
-	BASE + 0x8120,
 	BASE + 0x8124,
-	BASE + 0x813c,
 	BASE + 0x80a8,
 	BASE + 0xe03c,
 };
@@ -440,12 +465,13 @@ static const char *dbg_rcg_names[] = {
 	"disp_cc_mdss_ahb_clk_src",
 	"disp_cc_mdss_mdp_clk_src",
 	"disp_cc_mdss_byte0_clk_src",
-	"disp_cc_mdss_byte0_div_clk_src",
 	"disp_cc_mdss_byte1_clk_src",
-	"disp_cc_mdss_byte1_div_clk_src",
 	"disp_cc_mdss_pclk0_clk_src",
 	"disp_cc_xo_clk_src",
 };
+
+// CASEY: add the power domain driver! :3
+// maybe the reason GDSC 0 stuck at off?
 
 static struct msm_clk_data sm8650_disp_cc_data = {
 	.resets = disp_cc_sm8650_resets,
