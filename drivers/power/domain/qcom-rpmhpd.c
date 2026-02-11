@@ -171,6 +171,8 @@ static int rpmhpd_power_on(struct power_domain *pd)
 	rpmhpds = desc->rpmhpds;
 	curr_rpmhpd = rpmhpds[pd->id];
 
+	dev_info(pd->dev, "%s: %s\n", __func__, curr_rpmhpd->res_name);
+
 	/* Do nothing for undefined power domains */
 	if (!curr_rpmhpd) {
 		log_warning("%s: Power domain id (%ld) not supported\n", __func__,
