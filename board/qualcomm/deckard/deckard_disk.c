@@ -204,9 +204,21 @@ const char *deckard_get_booted_firmware_slotname(void)
 
 void deckard_get_booted_esp_part(char * disk_part_str, int disk_part_str_len)
 {
-	if(booted_from_usb() && g_efivar_store.valid)
+	if(booted_from_usb())
 	{
-		snprintf(disk_part_str,disk_part_str_len, "%d:%d", g_efivar_store.devnum,  g_efivar_store.partnum);
+		char partname[16] = { 0 };
+		enum disk_interface_t disk_interface = DISK_INTERFACE_USB;
+		int devnum_restrict = -1; // allow finding efi var store on any USB disk device
+		int devnum, partnum;
+		strlcat(partname, DECKARD_ESP_PARTITION_NAME, 16);
+		if (!deckard_find_part_by_label(disk_interface, devnum_restrict, partname, &devnum, &partnum)) 
+		{
+			snprintf(disk_part_str,disk_part_str_len, "%d:%d", devnum, partnum);
+		}
+		else
+		{
+			snprintf(disk_part_str,disk_part_str_len, "%s", DECKARD_ESP_PARTITION);
+		}
 	}
 	else
 	{
@@ -483,6 +495,7 @@ int deckard_load_image(const char * logo_name, ulong addr, load_source_t load_so
 
 	char *argv[] = { "", interface_str, diskpart, loadaddr_arg, filename };
 	int argc = 5;
+	deckard_log("load: %s, %s, %s, %s\n",interface_str, diskpart, loadaddr_arg, filename);
 	return do_load( NULL, 0, argc, argv, FS_TYPE_ANY );
 }
 
