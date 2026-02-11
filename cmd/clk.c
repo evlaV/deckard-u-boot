@@ -91,6 +91,24 @@ static int do_clk_dump(struct cmd_tbl *cmdtp, int flag, int argc,
 	return ret;
 }
 
+static int do_clk_debug(struct cmd_tbl *cmdtp, int flag, int argc,
+		       char *const argv[])
+{
+	struct udevice *dev;
+	const struct clk_ops *ops;
+
+	uclass_foreach_dev_probe(UCLASS_CLK, dev) {
+		ops = dev_get_driver_ops(dev);
+		if (ops && ops->debug_clks) {
+			printf("\n%s %s:\n", dev->driver->name, dev->name);
+			ops->debug_clks(dev, argc, argv);
+			return 0;
+		}
+	}
+
+	return 0;
+}
+
 static int do_clk_setfreq(struct cmd_tbl *cmdtp, int flag, int argc,
 			  char *const argv[])
 {
@@ -123,6 +141,7 @@ static int do_clk_setfreq(struct cmd_tbl *cmdtp, int flag, int argc,
 
 static struct cmd_tbl cmd_clk_sub[] = {
 	U_BOOT_CMD_MKENT(dump, 1, 1, do_clk_dump, "", ""),
+	U_BOOT_CMD_MKENT(debug, 8, 1, do_clk_debug, "", ""),
 	U_BOOT_CMD_MKENT(setfreq, 3, 1, do_clk_setfreq, "", ""),
 };
 
@@ -150,4 +169,4 @@ U_BOOT_LONGHELP(clk,
 	"dump - Print clock frequencies\n"
 	"clk setfreq [clk] [freq] - Set clock frequency");
 
-U_BOOT_CMD(clk, 4, 1, do_clk, "CLK sub-system", clk_help_text);
+U_BOOT_CMD(clk, 8, 1, do_clk, "CLK sub-system", clk_help_text);
