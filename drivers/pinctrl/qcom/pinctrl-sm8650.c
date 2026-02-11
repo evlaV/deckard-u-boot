@@ -18,6 +18,7 @@ static const struct pinctrl_function msm_pinctrl_functions[] = {
 	{"gpio", 0},
 	{"pcie0_clk_req_n", 1},
 	{"pcie1_clk_req_n", 1},
+	{ "mdp_vsync", 1},
 };
 
 #define SDC_QDSD_PINGROUP(pg_name, ctl, pull, drv)	\
