@@ -11,8 +11,8 @@
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/interrupt-controller/irq.h>
 
-/dts-v1/;
-/plugin/;
+// /dts-v1/;
+// /plugin/;
 
 /* Disable HDMI bridge related nodes (mutually exclusive with the display card) */
 
