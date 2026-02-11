@@ -42,6 +42,11 @@
 #define CFG_GDSCR_OFFSET		0x4
 #define GDSC_STATUS_POLL_TIMEOUT_US	1500
 
+struct frac_entry {
+	int num;
+	int den;
+};
+
 /* Enable clock controlled by CBC soft macro */
 void clk_enable_cbc(phys_addr_t cbcr)
 {
@@ -199,6 +204,46 @@ void clk_rcg_set_rate(phys_addr_t base, uint32_t cmd_rcgr, int pre_div,
 
 	/* Inform h/w to start using the new config. */
 	clk_bcr_update(base + cmd_rcgr);
+}
+
+static const struct frac_entry frac_table_pixel[] = {
+	{ 3, 8 },
+	{ 2, 9 },
+	{ 4, 9 },
+	{ 1, 1 },
+	{ 2, 3 },
+	{ }
+};
+
+int clk_pixel_set_rate(phys_addr_t base, uint32_t cmd_rcgr, unsigned long rate,
+		unsigned long parent_rate, int src, int mnt_width)
+{
+	int pre_div, m, n;
+	const struct frac_entry *frac = frac_table_pixel;
+	unsigned long request;
+	int delta = 100000;
+	u32 cfg;
+
+	cfg = readl(base + cmd_rcgr + RCG_CFG_REG);
+	pre_div = cfg & CFG_SRC_DIV_MASK;
+	cfg &= CFG_SRC_SEL_MASK;
+	cfg >>= CFG_SRC_SEL_SHIFT;
+
+	for (; frac->num; frac++) {
+		request = (rate * frac->den) / frac->num;
+
+		if ((parent_rate < (request - delta)) ||
+			(parent_rate > (request + delta)))
+			continue;
+
+		m = frac->num;
+		n = frac->den;
+
+		clk_rcg_set_rate_mnd(base, cmd_rcgr, pre_div, m, n, src, mnt_width);
+		return 0;
+	}
+	printf("%s: couldn't find suitable fractions for clk @ %#x\n", __func__, cmd_rcgr);
+	return -EINVAL;
 }
 
 #define PHY_MUX_MASK		GENMASK(1, 0)

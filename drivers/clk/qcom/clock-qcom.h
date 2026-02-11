@@ -119,6 +119,8 @@ void clk_phy_mux_enable(phys_addr_t base, uint32_t cmd_rcgr, bool enabled);
 void clk_rcg_set_rate_div(phys_addr_t base, uint32_t cmd_rcgr,
 			  int width, int shift);;
 void clk_rcg_shared_disable(phys_addr_t base, uint32_t cmd_rcgr, int safe_source);
+int clk_pixel_set_rate(phys_addr_t base, uint32_t cmd_rcgr, unsigned long rate,
+		unsigned long parent_rate, int src, int mnt_width);
 
 int qcom_gate_clk_en(const struct msm_clk_priv *priv, unsigned long id);
 
