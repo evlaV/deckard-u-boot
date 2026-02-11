@@ -118,11 +118,11 @@ void clk_bcr_update(phys_addr_t apps_cmd_rcgr)
 			break;
 		udelay(1);
 	}
-	WARN(count == 50000, "WARNING: RCG @ %#llx [%#010x] stuck at off\n",
+	WARN(count == 50000, "WARNING: RCG @ %#llx [%#010x] didn't update it's configuration!\n",
 	     apps_cmd_rcgr, readl(apps_cmd_rcgr));
 }
 
-#define CFG_SRC_DIV_MASK	0b11111
+#define CFG_SRC_DIV_MASK	0b11111 /* For hid_width=5 */
 #define CFG_SRC_SEL_SHIFT	8
 #define CFG_SRC_SEL_MASK	(0x7 << CFG_SRC_SEL_SHIFT)
 #define CFG_MODE_SHIFT		12
@@ -147,7 +147,7 @@ void clk_rcg_set_rate_mnd(phys_addr_t base, uint32_t cmd_rcgr,
 	u32 d_val = ~(clamp_t(u32, n, m, n_minus_m));
 	u32 mask = BIT(mnd_width) - 1;
 
-	debug("m %#x n %#x d %#x div %#x mask %#x\n", m_val, n_val, d_val, div, mask);
+	debug("m %#x n %#x d %#x div %#x mask %#x\n", m, n, d_val, div, mask);
 
 	/* Program MND values */
 	if (mnd_width) {
@@ -674,8 +674,8 @@ static int qcom_power_set(struct power_domain *pwr, bool on)
 					 GDSC_STATUS_POLL_TIMEOUT_US);
 
 	if (ret == -ETIMEDOUT)
-		printf("WARNING: GDSC %lu is stuck during power on/off\n",
-		       pwr->id);
+		printf("WARNING: %s GDSC %lu is stuck during power %s\n", ofnode_get_name(dev_ofnode(pwr->dev)),
+		       pwr->id, on ? "on" : "off");
 	return ret;
 }
 
