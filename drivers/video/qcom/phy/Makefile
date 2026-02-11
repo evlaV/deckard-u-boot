@@ -1,0 +1,1 @@
+obj-$(CONFIG_PHY_QCOM_MIPI_DSI) += qcom_dsi_phy.o
