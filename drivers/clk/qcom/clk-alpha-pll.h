@@ -140,6 +140,7 @@ struct alpha_pll_config {
 	u32 lock_det;
 };
 
+void alpha_pll_lucid_evo_disable(struct clk_alpha_pll *pll, bool reset);
 int alpha_pll_lucid_evo_enable(struct clk_alpha_pll *pll);
 void clk_lucid_ole_pll_configure(struct clk_alpha_pll *pll,
 				 const struct alpha_pll_config *config);

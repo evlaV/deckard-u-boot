@@ -439,6 +439,36 @@ static int trion_pll_is_enabled(struct clk_alpha_pll *pll)
 	return ((opmode_val & PLL_RUN) && (mode_val & PLL_OUTCTRL));
 }
 
+void alpha_pll_lucid_evo_disable(struct clk_alpha_pll *pll, bool reset)
+{
+	phys_addr_t base = pll->base;
+	u32 val;
+	int ret;
+
+	val = readl(pll->base + PLL_USER_CTL(pll));
+	///* If in FSM mode, just unvote it */
+	if (val & LUCID_EVO_ENABLE_VOTE_RUN) {
+	//	clk_disable_regmap(hw);
+	//	return;
+		printf("%s:%d in FSM mode\n", __func__, __LINE__);
+	}
+
+	/* Disable the global PLL output */
+	clrbits_32(base + PLL_MODE(pll), PLL_OUTCTRL);
+
+	/* Disable the PLL outputs */
+	clrbits_32(base + PLL_USER_CTL(pll), PLL_OUT_MASK);
+	if (ret)
+		return;
+
+	/* Place the PLL mode in STANDBY */
+	setbits_32(base + PLL_OPMODE(pll), PLL_STANDBY);
+	
+
+	if (reset)
+		clrbits_32(base + PLL_MODE(pll), PLL_RESET_N);
+}
+
 int alpha_pll_lucid_evo_enable(struct clk_alpha_pll *pll)
 {
 	phys_addr_t base = pll->base;
@@ -447,9 +477,9 @@ int alpha_pll_lucid_evo_enable(struct clk_alpha_pll *pll)
 
 	/* U-Boot: actually from Linux prepare cb */
 	/* Return early if calibration is not needed. */
-	val = readl(pll->base + PLL_MODE(pll));
-	if (!(val & LUCID_EVO_PCAL_NOT_DONE))
-		return 0;
+	//val = readl(pll->base + PLL_MODE(pll));
+	//if (!(val & LUCID_EVO_PCAL_NOT_DONE))
+	//	return 0;
 
 	val = readl(base + PLL_USER_CTL(pll));
 

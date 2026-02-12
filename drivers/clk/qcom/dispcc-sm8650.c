@@ -502,7 +502,9 @@ static int dispcc_sm8650_probe(struct udevice *dev)
 	disp_cc_pll0.base = base;
 	disp_cc_pll1.base = base;
 	clk_lucid_ole_pll_configure(&disp_cc_pll0, &disp_cc_pll0_config);
-	clk_lucid_ole_pll_configure(&disp_cc_pll0, &disp_cc_pll1_config);
+	clk_lucid_ole_pll_configure(&disp_cc_pll1, &disp_cc_pll1_config);
+
+	alpha_pll_lucid_evo_disable(&disp_cc_pll0, false);
 
 	/* Enable clock gating for MDP clocks */
 	setbits_32(base + DISP_CC_MISC_CMD, 0x10);
