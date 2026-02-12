@@ -844,7 +844,7 @@ static void mdss_intf_fetch_start_config(void *dpu_base, const struct dpu_mdss_c
 	void *ctl_base = dpu_base + cat->ctl[ctl].base;
 
 	/* enable 2 DSI interface */
-	// writel(BIT(intf), ctl_base + CTL_INTF_MASTER);
+	writel(BIT(intf), ctl_base + CTL_INTF_MASTER);
 
 	// TOFIX make dsc optional
 	// writel(BIT(dsc0) | BIT(dsc1), ctl_base + CTL_DSC_ACTIVE);
@@ -1106,7 +1106,7 @@ int qcom_dpu_probe(struct udevice *dev)
 	/* Configure & start DPU */
 
 	uc_priv->bpix = VIDEO_BPP32;
-	uc_priv->xsize = timings.hactive.typ + timings1.hactive.typ;
+	uc_priv->xsize = timings.hactive.typ;
 	uc_priv->ysize = timings.vactive.typ;
 	// FIXME: read from DT! Also warn about vidconsole_rotate driver not being available!
 	uc_priv->rot = 0;
@@ -1116,7 +1116,7 @@ int qcom_dpu_probe(struct udevice *dev)
 	// TOFIX implement resources manager
 
 	/* Panel 0 */
-	mdss_intf_setup(priv->dpu_base, &timings, priv->cat, INTF_0, PINGPONG_0); // INTF_1 ?
+	mdss_intf_setup(priv->dpu_base, &timings, priv->cat, INTF_1, PINGPONG_0);
 
 	// mdp_dsc_setup(priv->dpu_base, priv->cat, DSC_0, PINGPONG_0);
 	// TOFIX use companion PP id from catalog
@@ -1125,17 +1125,17 @@ int qcom_dpu_probe(struct udevice *dev)
 	// TOFIX use timings instead of static height/width
 	mdp_setup_stage_rec1(priv->dpu_base, priv->cat, CTL_0, LM_0, SSPP_DMA0, timings.vactive.typ, timings.hactive.typ, false);
 	// TOFIX use companion LM id from catalog
-	// mdp_setup_stage_rec1(priv->dpu_base, priv->cat, CTL_0, LM_1, SSPP_DMA0, 2160, 2160, true);
+	mdp_setup_stage_rec1(priv->dpu_base, priv->cat, CTL_0, LM_1, SSPP_DMA0, timings.vactive.typ, timings.hactive.typ, true);
 
 	// Since the panels are rotated, use the right side of the fb for panel0
 	mdss_sspp_config_rec1(priv->dpu_base, priv->cat, uc_plat->base,
 			      (timings.hactive.typ * 4), SSPP_DMA0, timings.vactive.typ, timings.hactive.typ, 0);
 
 	mdss_intf_fetch_start_config(priv->dpu_base, priv->cat,
-				     CTL_0, INTF_0, DSC_0, DSC_1); // INTF_1 ?
+				     CTL_0, INTF_1, DSC_0, DSC_1);
 
 	// TOFIX fill a flush bitfield from the config commands
-	mdp_ctl_flush(priv->dpu_base, priv->cat, CTL_0, SSPP_DMA0, true,
+	mdp_ctl_flush(priv->dpu_base, priv->cat, CTL_0, SSPP_DMA0, false,
 		      LM_0, LM_1);
 
 	/* Panel 1 */
