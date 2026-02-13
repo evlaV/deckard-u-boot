@@ -312,6 +312,9 @@ static int rpmh_regulator_is_enabled(struct udevice *rdev)
 	return vreg->enabled > 0;
 }
 
+static int rpmh_regulator_vrm_set_mode(struct udevice *rdev,
+				       int mode);
+
 static int rpmh_regulator_set_enable_state(struct udevice *rdev,
 					   bool enable)
 {
@@ -349,6 +352,7 @@ static int rpmh_regulator_set_enable_state(struct udevice *rdev,
 						    vreg->uv, true);
 		if (ret < 0)
 			return ret;
+		rpmh_regulator_vrm_set_mode(rdev, REGULATOR_MODE_HPM);
 	}
 
 	ret = rpmh_regulator_send_request(vreg, &cmd, enable);
