@@ -208,6 +208,7 @@ static int dsi_cmds2buf_tx(struct mipi_dsi_host *host,
 	if (packet.size < len)
 		memset(data + packet.size, 0xff, len - packet.size);
 
+#if 1
 	dsi_flush_cache(dsi->tx_buf, len);
 
 	// dsi_write(base + REG_DSI_TEST_PATTERN_GEN_CTRL, 0);
@@ -245,6 +246,71 @@ static int dsi_cmds2buf_tx(struct mipi_dsi_host *host,
 	// dsi_write(base + REG_DSI_INTR_CTRL, 0);
 
 	return ret < 0 ? ret : packet.size;
+#else
+	printf("%s:%d\n", __func__, __LINE__);
+	dsi_write(base + REG_DSI_TEST_PATTERN_GEN_CTRL, DSI_TEST_PATTERN_GEN_CTRL_CMD_DMA_TPG_EN |
+							DSI_TEST_PATTERN_GEN_CTRL_TPG_DMA_FIFO_MODE |
+							DSI_TEST_PATTERN_GEN_CTRL_CMD_DMA_PATTERN_SEL(CMD_DMA_CUSTOM_PATTERN_DMA_FIFO));
+	printf("%s:%d\n", __func__, __LINE__);
+
+	for (int i = 0; i < len ; i+=4) {
+		//printf("CMD[%d]=%x\n", i, *(u32 *)(&data[i]));
+		dsi_write(base + REG_DSI_TEST_PATTERN_GEN_CMD_DMA_INIT_VAL, *(u32 *)(&data[i]));
+	}
+	printf("%s:%d\n", __func__, __LINE__);
+
+	if ((len % 8) != 0)
+		dsi_write(base + REG_DSI_TEST_PATTERN_GEN_CMD_DMA_INIT_VAL, 0);
+	printf("%s:%d\n", __func__, __LINE__);
+
+	dsi_write(base + REG_DSI_DMA_LEN, len);
+	printf("%s:%d\n", __func__, __LINE__);
+
+	// Unmask
+	dsi_write(base + REG_DSI_INTR_CTRL, DSI_IRQ_MASK_CMD_DMA_DONE);
+	printf("%s:%d\n", __func__, __LINE__);
+	// Clear
+	dsi_write(base + REG_DSI_INTR_CTRL, DSI_IRQ_MASK_CMD_DMA_DONE | DSI_IRQ_CMD_DMA_DONE);
+	printf("%s:%d\n", __func__, __LINE__);
+
+	dsi_write(base + REG_DSI_TRIG_DMA, 0x1);
+	printf("%s:%d\n", __func__, __LINE__);
+
+	printf("Started DMA for len %d, waiting for DONE\n", len);
+
+	val = dsi_read(base + REG_DSI_INTR_CTRL) & DSI_IRQ_CMD_DMA_DONE;
+	count = 0;
+	ret = 0;
+	while (!val) {
+		if (count > 0xffff) {
+			printf("DSI CMD: count :%d dma failed\n", count);
+			//printf("DSI CMD: irq value = %x\n", dsi_read(base + REG_DSI_INTR_CTRL));
+			ret = -EIO;
+			break;
+		}
+		udelay(10);
+		val = dsi_read(base + REG_DSI_INTR_CTRL) & DSI_IRQ_CMD_DMA_DONE;
+		count++;
+	}
+	printf("%s:%d\n", __func__, __LINE__);
+
+	// Clear
+	dsi_write(base + REG_DSI_INTR_CTRL, DSI_IRQ_MASK_CMD_DMA_DONE | DSI_IRQ_CMD_DMA_DONE);
+	printf("%s:%d\n", __func__, __LINE__);
+	// Mask
+	dsi_write(base + REG_DSI_INTR_CTRL, 0);
+	printf("%s:%d\n", __func__, __LINE__);
+
+	dsi_write(base + REG_DSI_TPG_DMA_FIFO_RESET, 1);
+	printf("%s:%d\n", __func__, __LINE__);
+	dsi_write(base + REG_DSI_TPG_DMA_FIFO_RESET, 0);
+	printf("%s:%d\n", __func__, __LINE__);
+
+	//dsi_write(base + REG_DSI_TEST_PATTERN_GEN_CTRL, 0);
+	printf("%s:%d\n", __func__, __LINE__);
+
+	return ret < 0 ? ret : packet.size;
+#endif
 }
 
 static int dsi_cmd_dma_rx(struct qcom_mipi_dsi *dsi,
