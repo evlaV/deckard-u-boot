@@ -351,8 +351,9 @@
 		vreg_bob1: bob1 {
 			regulator-name = "vreg_bob1";
 			regulator-min-microvolt = <3296000>;
-			regulator-max-microvolt = <3960000>;
+			regulator-max-microvolt = <3296000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+			regulator-always-on;
 		};
 
 		vreg_bob2: bob2 {
@@ -422,11 +423,12 @@
 		vreg_l11b_1p2: ldo11 {
 			regulator-name = "vreg_l11b_1p2";
 			regulator-min-microvolt = <1200000>;
-			regulator-max-microvolt = <1504000>;
+			regulator-max-microvolt = <1200000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
 			regulator-allow-set-load;
 			regulator-allowed-modes = <RPMH_REGULATOR_MODE_LPM
 						   RPMH_REGULATOR_MODE_HPM>;
+			regulator-always-on;
 		};
 
 		vreg_l12b_1p8: ldo12 {
@@ -437,6 +439,7 @@
 			regulator-allow-set-load;
 			regulator-allowed-modes = <RPMH_REGULATOR_MODE_LPM
 						   RPMH_REGULATOR_MODE_HPM>;
+			regulator-always-on;
 		};
 
 		vreg_l13b_3p0: ldo13 {
@@ -447,6 +450,7 @@
 			regulator-allow-set-load;
 			regulator-allowed-modes = <RPMH_REGULATOR_MODE_LPM
 						   RPMH_REGULATOR_MODE_HPM>;
+			regulator-always-on;
 		};
 
 		vreg_l14b_3p2: ldo14 {
@@ -508,8 +512,9 @@
 		vreg_s1c_1p2: smps1 {
 			regulator-name = "vreg_s1c_1p2";
 			regulator-min-microvolt = <1256000>;
-			regulator-max-microvolt = <1348000>;
+			regulator-max-microvolt = <1256000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+			regulator-always-on;
 		};
 
 		vreg_s2c_0p8: smps2 {
@@ -522,8 +527,9 @@
 		vreg_s3c_0p9: smps3 {
 			regulator-name = "vreg_s3c_0p9";
 			regulator-min-microvolt = <976000>;
-			regulator-max-microvolt = <1064000>;
+			regulator-max-microvolt = <976000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+			regulator-always-on;
 		};
 
 		vreg_s4c_1p2: smps4 {
@@ -543,8 +549,9 @@
 		vreg_s6c_1p8: smps6 {
 			regulator-name = "vreg_s6c_1p8";
 			regulator-min-microvolt = <1856000>;
-			regulator-max-microvolt = <2000000>;
+			regulator-max-microvolt = <1856000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+			regulator-always-on;
 		};
 
 		vreg_l1c_1p2: ldo1 {
@@ -658,6 +665,7 @@
 			regulator-allow-set-load;
 			regulator-allowed-modes = <RPMH_REGULATOR_MODE_LPM
 						   RPMH_REGULATOR_MODE_HPM>;
+			regulator-always-on;
 		};
 
 		vreg_l2i_0p88: ldo2 {
@@ -678,6 +686,7 @@
 			regulator-allow-set-load;
 			regulator-allowed-modes = <RPMH_REGULATOR_MODE_LPM
 						   RPMH_REGULATOR_MODE_HPM>;
+			regulator-always-on;
 		};
 	};
 
