@@ -750,7 +750,7 @@ int deckard_reboot_mode_usb(void)
 	return 0;
 }
 
-void deckard_sysreset_prepare_edl(void)
+void deckard_disable_sdi(void)
 {
 	struct arm_smccc_res res = {0};
 
@@ -762,7 +762,10 @@ void deckard_sysreset_prepare_edl(void)
 	 */
 	arm_smccc_smc(QCOM_SCM_BOOT_DISABLE_SDI, 0x2, 0x1, 0x0, 0, 0, 0, 0, &res);
 	mdelay(100);
+}
 
+void deckard_sysreset_prepare_edl(void)
+{
 	/*
 	 * Setup the boot_misc to 0x1 for EDL, 0x10 is minidump,
 	 * 0x20 is dump. We may need to disalble PMIC watchdog
@@ -790,6 +793,9 @@ void sysreset_board_reset_prepare(int argc, char *const argv[], enum sysreset_t 
 	} else if (argc == 2 && !strncmp(argv[1], "recovery", 8)) {
 		pmk8550_set_reboot_command_reason(REBOOT_COMMAND_REASON_RECOVERY);
 	}
+
+	if (*reset_type == SYSRESET_WARM)
+		deckard_disable_sdi();
 }
 #endif
 
