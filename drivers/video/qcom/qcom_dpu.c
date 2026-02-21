@@ -919,7 +919,7 @@ void mdp_intf_disable(void *dpu_base, const struct dpu_mdss_cfg *cat, unsigned i
 	DPU_REG_WRITE(base, INTF_CONFIG, intf_cfg & ~BIT(31));
 	udelay(60 * 1000);
 
-	// writel(0, base + INTF_TIMING_ENGINE_EN);
+	writel(0, base + INTF_TIMING_ENGINE_EN);
 }
 
 int qcom_dpu_probe(struct udevice *dev)
@@ -1108,5 +1108,5 @@ U_BOOT_DRIVER(qcom_dpu) = {
 	.probe	= qcom_dpu_probe,
 	.remove	= qcom_dpu_remove,
 	.priv_auto	= sizeof(struct qcom_dpu_priv),
-	.flags	= DM_FLAG_LEAVE_PD_ON, // | DM_FLAG_OS_PREPARE,
+	.flags	= DM_FLAG_LEAVE_PD_ON,
 };
