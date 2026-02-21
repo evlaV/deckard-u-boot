@@ -1312,7 +1312,7 @@ static void dsi_7nm_phy_disable(struct msm_dsi_phy *phy)
 
 	phy->plat->phy_powered_on = false;
 
-	printf("DSI%d PHY disabled\n", phy->plat->id);
+	debug("DSI%d PHY disabled\n", phy->plat->id);
 }
 
 static int msm_dsi_phy_power_on(struct phy *phy)
