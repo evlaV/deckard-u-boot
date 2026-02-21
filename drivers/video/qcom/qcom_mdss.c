@@ -76,7 +76,7 @@ U_BOOT_DRIVER(qcom_mdss) = {
 	.probe	= qcom_mdss_probe,
 	.remove	= qcom_mdss_remove,
 	.priv_auto = sizeof(struct qcom_mdss_priv),
-	.flags  = DM_FLAG_LEAVE_PD_ON,
+	.flags	= DM_FLAG_LEAVE_PD_ON,
 };
 
 static int do_mdss_ctrl(struct cmd_tbl *cmdtp, int flag, int argc,
