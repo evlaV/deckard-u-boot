@@ -4,7 +4,6 @@
  *
  */
 
-#define DEBUG
 #define LOG_CATEGORY UCLASS_VIDEO_BRIDGE
 
 #include <clk.h>
@@ -94,8 +93,6 @@ struct qcom_mipi_dsi {
 	u8 *rx_buf;
 };
 
-static bool dsi_write_debug = false;
-
 static inline struct qcom_mipi_dsi *host_to_dsi(struct mipi_dsi_host *host)
 {
 	return container_of(host, struct qcom_mipi_dsi, dsi_host);
@@ -103,8 +100,6 @@ static inline struct qcom_mipi_dsi *host_to_dsi(struct mipi_dsi_host *host)
 
 static inline void dsi_write(void *addr, u32 val)
 {
-	if (dsi_write_debug)
-		printf("%#010x: %#010x\n", (u32)(u64)addr, val);
 	writel(val, addr);
 }
 
@@ -152,7 +147,7 @@ static inline void dsi_flush_cache(uintptr_t addr, int length)
 	flush_dcache_range((unsigned long)start_addr, (unsigned long)end_addr);
 }
 
-#define REG_DSI_VBIF_CTRL	(0x01CC)
+#define REG_DSI_VBIF_CTRL	(0x01C8)
 static int dsi_cmds2buf_tx(struct mipi_dsi_host *host,
 			   const struct mipi_dsi_msg *msg)
 {
@@ -208,19 +203,18 @@ static int dsi_cmds2buf_tx(struct mipi_dsi_host *host,
 	if (packet.size < len)
 		memset(data + packet.size, 0xff, len - packet.size);
 
-#if 1
 	dsi_flush_cache(dsi->tx_buf, len);
 
-	// dsi_write(base + REG_DSI_TEST_PATTERN_GEN_CTRL, 0);
+	dsi_write(base + REG_DSI_TEST_PATTERN_GEN_CTRL, 0);
 
 	dsi_write(base + REG_DSI_DMA_BASE, dsi->tx_buf);
 	dsi_write(base + REG_DSI_DMA_LEN, len);
-	// dsi_write(base + REG_DSI_VBIF_CTRL, 0x7);
+	dsi_write(base + REG_DSI_VBIF_CTRL, 0x7);
 
 	// Unmask
-	// dsi_write(base + REG_DSI_INTR_CTRL, DSI_IRQ_MASK_CMD_DMA_DONE);
+	dsi_write(base + REG_DSI_INTR_CTRL, DSI_IRQ_MASK_CMD_DMA_DONE);
 	// Clear
-	// dsi_write(base + REG_DSI_INTR_CTRL, DSI_IRQ_MASK_CMD_DMA_DONE | DSI_IRQ_CMD_DMA_DONE);
+	dsi_write(base + REG_DSI_INTR_CTRL, DSI_IRQ_MASK_CMD_DMA_DONE | DSI_IRQ_CMD_DMA_DONE);
 
 
 	dsi_write(base + REG_DSI_TRIG_DMA, 0x1);
@@ -241,76 +235,12 @@ static int dsi_cmds2buf_tx(struct mipi_dsi_host *host,
 	}
 
 	// Clear
-	// dsi_write(base + REG_DSI_INTR_CTRL, DSI_IRQ_MASK_CMD_DMA_DONE | DSI_IRQ_CMD_DMA_DONE);
-	// Mask
-	// dsi_write(base + REG_DSI_INTR_CTRL, 0);
-
-	return ret < 0 ? ret : packet.size;
-#else
-	printf("%s:%d\n", __func__, __LINE__);
-	dsi_write(base + REG_DSI_TEST_PATTERN_GEN_CTRL, DSI_TEST_PATTERN_GEN_CTRL_CMD_DMA_TPG_EN |
-							DSI_TEST_PATTERN_GEN_CTRL_TPG_DMA_FIFO_MODE |
-							DSI_TEST_PATTERN_GEN_CTRL_CMD_DMA_PATTERN_SEL(CMD_DMA_CUSTOM_PATTERN_DMA_FIFO));
-	printf("%s:%d\n", __func__, __LINE__);
-
-	for (int i = 0; i < len ; i+=4) {
-		//printf("CMD[%d]=%x\n", i, *(u32 *)(&data[i]));
-		dsi_write(base + REG_DSI_TEST_PATTERN_GEN_CMD_DMA_INIT_VAL, *(u32 *)(&data[i]));
-	}
-	printf("%s:%d\n", __func__, __LINE__);
-
-	if ((len % 8) != 0)
-		dsi_write(base + REG_DSI_TEST_PATTERN_GEN_CMD_DMA_INIT_VAL, 0);
-	printf("%s:%d\n", __func__, __LINE__);
-
-	dsi_write(base + REG_DSI_DMA_LEN, len);
-	printf("%s:%d\n", __func__, __LINE__);
-
-	// Unmask
-	dsi_write(base + REG_DSI_INTR_CTRL, DSI_IRQ_MASK_CMD_DMA_DONE);
-	printf("%s:%d\n", __func__, __LINE__);
-	// Clear
 	dsi_write(base + REG_DSI_INTR_CTRL, DSI_IRQ_MASK_CMD_DMA_DONE | DSI_IRQ_CMD_DMA_DONE);
-	printf("%s:%d\n", __func__, __LINE__);
-
-	dsi_write(base + REG_DSI_TRIG_DMA, 0x1);
-	printf("%s:%d\n", __func__, __LINE__);
-
-	printf("Started DMA for len %d, waiting for DONE\n", len);
-
-	val = dsi_read(base + REG_DSI_INTR_CTRL) & DSI_IRQ_CMD_DMA_DONE;
-	count = 0;
-	ret = 0;
-	while (!val) {
-		if (count > 0xffff) {
-			printf("DSI CMD: count :%d dma failed\n", count);
-			//printf("DSI CMD: irq value = %x\n", dsi_read(base + REG_DSI_INTR_CTRL));
-			ret = -EIO;
-			break;
-		}
-		udelay(10);
-		val = dsi_read(base + REG_DSI_INTR_CTRL) & DSI_IRQ_CMD_DMA_DONE;
-		count++;
-	}
-	printf("%s:%d\n", __func__, __LINE__);
-
-	// Clear
-	dsi_write(base + REG_DSI_INTR_CTRL, DSI_IRQ_MASK_CMD_DMA_DONE | DSI_IRQ_CMD_DMA_DONE);
-	printf("%s:%d\n", __func__, __LINE__);
 	// Mask
 	dsi_write(base + REG_DSI_INTR_CTRL, 0);
-	printf("%s:%d\n", __func__, __LINE__);
 
-	dsi_write(base + REG_DSI_TPG_DMA_FIFO_RESET, 1);
-	printf("%s:%d\n", __func__, __LINE__);
-	dsi_write(base + REG_DSI_TPG_DMA_FIFO_RESET, 0);
-	printf("%s:%d\n", __func__, __LINE__);
-
-	//dsi_write(base + REG_DSI_TEST_PATTERN_GEN_CTRL, 0);
-	printf("%s:%d\n", __func__, __LINE__);
-
+	debug("%s: %#x (ret=%d)\n", __func__, packet.payload ? packet.payload[0] : packet.header[0], ret);
 	return ret < 0 ? ret : packet.size;
-#endif
 }
 
 static int dsi_cmd_dma_rx(struct qcom_mipi_dsi *dsi,
@@ -542,7 +472,7 @@ int msm_dsi_host_cmd_rx(struct mipi_dsi_host *host,
 		ret = dsi_long_read_resp(buf, msg);
 		break;
 	default:
-		printf("%s:Invalid response cmd 0x%x\n", __func__, cmd);
+		debug("%s:Invalid response cmd 0x%x\n", __func__, cmd);
 		ret = 0;
 	}
 
@@ -630,9 +560,9 @@ static void qcom_mipi_dsi_init_ctrl(void __iomem *base)
 }
 
 #define DSI_DUMP_REG(base, reg) \
-	printf(#reg ": %#llx: %#x\n", (u64)(base) + reg, dsi_read(base + reg))
+	debug(#reg ": %#llx: %#x\n", (u64)(base) + reg, dsi_read(base + reg))
 
-static void dsi_dump_regs(void __iomem *base)
+static void __maybe_unused dsi_dump_regs(void __iomem *base)
 {
 	DSI_DUMP_REG(base, REG_DSI_ACTIVE_H);
 	DSI_DUMP_REG(base, REG_DSI_ACTIVE_HSYNC);
@@ -858,10 +788,6 @@ static void dsi_ctrl_enable(struct qcom_mipi_dsi *priv,
 
 	if (phy->plat->cphy_mode)
 		dsi_write(priv->base + REG_DSI_CPHY_MODE_CTRL, BIT(0));
-
-
-	printf("Enabling DSI0 CMD_DMA_DEBUG_MODE!\n");
-	dsi_write(priv->base + 0x2c4, BIT(16));
 }
 
 static void dsi_timing_setup(struct qcom_mipi_dsi *dsi, struct display_timing *timings)
@@ -884,8 +810,6 @@ static void dsi_timing_setup(struct qcom_mipi_dsi *dsi, struct display_timing *t
 	u32 va_end = va_start + timings->vactive.typ;
 	u32 hdisplay = timings->hactive.typ;
 	u32 wc;
-
-	dsi_write_debug = true;
 
 	if (dsi->device->mode_flags & MIPI_DSI_MODE_VIDEO) {
 		dsi_write(base + REG_DSI_ACTIVE_H,
@@ -920,8 +844,6 @@ static void dsi_timing_setup(struct qcom_mipi_dsi *dsi, struct display_timing *t
 			DSI_CMD_MDP_STREAM0_TOTAL_H_TOTAL(hdisplay) |
 			DSI_CMD_MDP_STREAM0_TOTAL_V_TOTAL(timings->vactive.typ));
 	}
-
-	dsi_write_debug = false;
 }
 
 static void dsi_sw_reset(struct qcom_mipi_dsi *dsi)
@@ -1051,8 +973,6 @@ static int qcom_mipi_dsi_init(struct udevice *dev,
 	dsi_timing_setup(dsi, timings);
 	dsi_sw_reset(dsi);
 	dsi_ctrl_enable(dsi, &phy_priv->timing.shared_timings, phy_priv);
-
-	dsi_dump_regs(dsi->base);
 
 	return 0;
 }
@@ -1277,7 +1197,7 @@ static int qcom_dsi_probe(struct udevice *dev)
 		goto err_reg;
 	}
 
-	printf("DSI bridge probe done!\n");
+	debug("DSI bridge probe done!\n");
 
 	return 0;
 err_reg:
@@ -1289,11 +1209,10 @@ err_reg:
 static int qcom_dsi_remove(struct udevice *dev)
 {
 	struct qcom_dsi_priv *priv = dev_get_priv(dev);
-	printf("DSI remove\n");
-
-	clk_disable_bulk(&priv->bulk);
 
 	generic_phy_power_off(&priv->phy);
+
+	clk_disable_bulk(&priv->bulk);
 
 	regulator_set_enable(priv->vdd_reg, false);
 
