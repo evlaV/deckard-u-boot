@@ -6,10 +6,13 @@
 #include <clk.h>
 #include <dm/device.h>
 #include <dm/device_compat.h>
+#include <dm/device-internal.h>
 #include <dm/read.h>
 #include <video.h>
 #include <video_bridge.h>
 #include <linux/sizes.h>
+#include <linux/delay.h>
+#include <video_console.h>
 
 #include "dpu_hw_mdss.h"
 #include "dpu_hwio.h"
@@ -406,139 +409,6 @@ struct qcom_dpu_priv {
 	struct udevice *bridge1;
 };
 
-#if 0
-struct qcom_dpu_priv *local_priv;
-struct dpu_kms {
-	void *mmio;
-} dpu_kms_inst;
-
-static void dpu_kms_mdp_snapshot(void)
-{
-	int i;
-	const struct dpu_mdss_cfg *cat = local_priv->cat;
-	struct dpu_kms *dpu_kms = &dpu_kms_inst;
-	void __iomem *base;
-
-	dpu_kms->mmio = local_priv->dpu_base;
-
-	/* dump CTL sub-blocks HW regs info */
-	for (i = 0; i < cat->ctl_count; i++)
-		msm_disp_snapshot_add_block(cat->ctl[i].len,
-				dpu_kms->mmio + cat->ctl[i].base, "%s",
-				cat->ctl[i].name);
-
-	/* dump DSPP sub-blocks HW regs info */
-	for (i = 0; i < cat->dspp_count; i++) {
-		base = dpu_kms->mmio + cat->dspp[i].base;
-		msm_disp_snapshot_add_block(cat->dspp[i].len, base,
-					    "%s", cat->dspp[i].name);
-
-		if (cat->dspp[i].sblk && cat->dspp[i].sblk->pcc.len > 0)
-			msm_disp_snapshot_add_block(cat->dspp[i].sblk->pcc.len,
-						    base + cat->dspp[i].sblk->pcc.base, "%s_%s",
-						    cat->dspp[i].name,
-						    cat->dspp[i].sblk->pcc.name);
-	}
-
-	/* dump INTF sub-blocks HW regs info */
-	for (i = 0; i < cat->intf_count; i++)
-		msm_disp_snapshot_add_block(cat->intf[i].len,
-				dpu_kms->mmio + cat->intf[i].base, "%s",
-				cat->intf[i].name);
-
-	/* dump PP sub-blocks HW regs info */
-	for (i = 0; i < cat->pingpong_count; i++) {
-		base = dpu_kms->mmio + cat->pingpong[i].base;
-		msm_disp_snapshot_add_block(cat->pingpong[i].len, base,
-					    "%s", cat->pingpong[i].name);
-
-		/* TE2 sub-block has length of 0, so will not print it */
-
-		if (cat->pingpong[i].sblk && cat->pingpong[i].sblk->dither.len > 0)
-			msm_disp_snapshot_add_block(cat->pingpong[i].sblk->dither.len,
-						    base + cat->pingpong[i].sblk->dither.base,
-						    "%s_%s", cat->pingpong[i].name,
-						    cat->pingpong[i].sblk->dither.name);
-	}
-
-	/* dump SSPP sub-blocks HW regs info */
-	for (i = 0; i < cat->sspp_count; i++) {
-		base = dpu_kms->mmio + cat->sspp[i].base;
-		msm_disp_snapshot_add_block(cat->sspp[i].len, base,
-					    "%s", cat->sspp[i].name);
-
-		if (cat->sspp[i].sblk && cat->sspp[i].sblk->scaler_blk.len > 0)
-			msm_disp_snapshot_add_block(cat->sspp[i].sblk->scaler_blk.len,
-						    base + cat->sspp[i].sblk->scaler_blk.base,
-						    "%s_%s", cat->sspp[i].name,
-						    cat->sspp[i].sblk->scaler_blk.name);
-
-		if (cat->sspp[i].sblk && cat->sspp[i].sblk->csc_blk.len > 0)
-			msm_disp_snapshot_add_block(cat->sspp[i].sblk->csc_blk.len,
-						    base + cat->sspp[i].sblk->csc_blk.base,
-						    "%s_%s", cat->sspp[i].name,
-						    cat->sspp[i].sblk->csc_blk.name);
-	}
-
-	/* dump LM sub-blocks HW regs info */
-	for (i = 0; i < cat->mixer_count; i++)
-		msm_disp_snapshot_add_block(cat->mixer[i].len,
-				dpu_kms->mmio + cat->mixer[i].base,
-				"%s", cat->mixer[i].name);
-
-	/* dump WB sub-blocks HW regs info */
-	for (i = 0; i < cat->wb_count; i++)
-		msm_disp_snapshot_add_block(cat->wb[i].len,
-				dpu_kms->mmio + cat->wb[i].base, "%s",
-				cat->wb[i].name);
-
-	if (cat->mdp[0].features & BIT(DPU_MDP_PERIPH_0_REMOVED)) {
-		msm_disp_snapshot_add_block(MDP_PERIPH_TOP0,
-				dpu_kms->mmio + cat->mdp[0].base, "top");
-		msm_disp_snapshot_add_block(cat->mdp[0].len - MDP_PERIPH_TOP0_END,
-				dpu_kms->mmio + cat->mdp[0].base + MDP_PERIPH_TOP0_END, "top_2");
-	} else {
-		msm_disp_snapshot_add_block(cat->mdp[0].len,
-				dpu_kms->mmio + cat->mdp[0].base, "top");
-	}
-
-	/* dump CWB sub-blocks HW regs info */
-	for (i = 0; i < cat->cwb_count; i++)
-		msm_disp_snapshot_add_block(cat->cwb[i].len,
-					    dpu_kms->mmio + cat->cwb[i].base, cat->cwb[i].name);
-
-	/* dump DSC sub-blocks HW regs info */
-	for (i = 0; i < cat->dsc_count; i++) {
-		base = dpu_kms->mmio + cat->dsc[i].base;
-		msm_disp_snapshot_add_block(cat->dsc[i].len, base,
-					    "%s", cat->dsc[i].name);
-
-		if (cat->dsc[i].features & BIT(DPU_DSC_HW_REV_1_2)) {
-			struct dpu_dsc_blk enc = cat->dsc[i].sblk->enc;
-			struct dpu_dsc_blk ctl = cat->dsc[i].sblk->ctl;
-
-			msm_disp_snapshot_add_block(enc.len, base + enc.base, "%s_%s",
-						    cat->dsc[i].name, enc.name);
-			msm_disp_snapshot_add_block(ctl.len, base + ctl.base, "%s_%s",
-						    cat->dsc[i].name, ctl.name);
-		}
-	}
-
-	if (cat->cdm)
-		msm_disp_snapshot_add_block(cat->cdm->len,
-					    dpu_kms->mmio + cat->cdm->base,
-					    "%s", cat->cdm->name);
-
-	for (i = 0; i < local_priv->cat->vbif_count; i++) {
-		const struct dpu_vbif_cfg *vbif = &local_priv->cat->vbif[i];
-
-		msm_disp_snapshot_add_block(vbif->len,
-					    local_priv->vbif_base + vbif->base,
-					    "%s", vbif->name);
-	}
-}
-#endif
-
 static inline void DPU_REG_WRITE(void *base, u32 off, u32 val)
 {
 	debug("%s: %#llx: %#010x (%#llx + %#x)\n", __func__, (u64)base + off, val, (u64)base, off);
@@ -574,20 +444,21 @@ static void mdss_sspp_config_rec1(void *dpu_base, const struct dpu_mdss_cfg *cat
 	// TOFIX use define for all bits & values
 	writel(fb, base + SSPP_SRC0_ADDR);
 	writel(x_off, base + SSPP_SRC_XY);
-	writel((height << 16) | (width >> 1), base + SSPP_SRC_SIZE);
-	writel((height << 16) | (width >> 1), base + SSPP_OUT_SIZE);
+	writel((height << 16) | (width / 2), base + SSPP_SRC_SIZE);
+	writel((height << 16) | (width / 2), base + SSPP_OUT_SIZE);
 	writel(0, base + SSPP_OUT_XY);
-	writel(0x236FF, base + SSPP_SRC_FORMAT);
+	writel(0x236ff, base + SSPP_SRC_FORMAT);
+	// writel(0x2000103, base + SSPP_SRC_UNPACK_PATTERN);
 	writel(0x3020001, base + SSPP_SRC_UNPACK_PATTERN);
 	writel(0x80000000, base + SSPP_SRC_OP_MODE);
 	writel(0x9, base + SSPP_CDP_CNTL);
 
 	writel(fb, base + SSPP_SRC1_ADDR);
-	writel(x_off + (width >> 1), base + SSPP_SRC_XY_REC1);
-	writel((height << 16) | (width >> 1), base + SSPP_SRC_SIZE_REC1);
-	writel((height << 16) | (width >> 1), base + SSPP_OUT_SIZE_REC1);
-	writel((width >> 1), base + SSPP_OUT_XY_REC1);
-	writel(0x236FF, base + SSPP_SRC_FORMAT_REC1);
+	writel(x_off + (width / 2), base + SSPP_SRC_XY_REC1);
+	writel((height << 16) | (width / 2), base + SSPP_SRC_SIZE_REC1);
+	writel((height << 16) | (width / 2), base + SSPP_OUT_SIZE_REC1);
+	writel((width / 2), base + SSPP_OUT_XY_REC1);
+	writel(0x236ff, base + SSPP_SRC_FORMAT_REC1);
 	writel(0x3020001, base + SSPP_SRC_UNPACK_PATTERN_REC1);
 	writel(0x80000000, base + SSPP_SRC_OP_MODE_REC1);
 	writel(0x9, base + SSPP_CDP_CNTL_REC1);
@@ -595,16 +466,17 @@ static void mdss_sspp_config_rec1(void *dpu_base, const struct dpu_mdss_cfg *cat
 	writel(0x87, base + SSPP_FETCH_CONFIG);
 
 	writel((fb_stride << 16) | fb_stride, base + SSPP_SRC_YSTRIDE0);
+	// writel(fb_stride, base + SSPP_SRC_YSTRIDE0);
 	writel(0, base + SSPP_SRC_YSTRIDE1);
 	writel(0, base + SSPP_SW_PIX_EXT_C0_LR);
 	writel(0, base + SSPP_SW_PIX_EXT_C0_TB);
-	writel((height << 16) | (width >> 1), base + SSPP_SW_PIX_EXT_C0_REQ_PIXELS);
+	writel((height << 16) | (width / 2), base + SSPP_SW_PIX_EXT_C0_REQ_PIXELS);
 	writel(0, base + SSPP_SW_PIX_EXT_C1C2_LR);
 	writel(0, base + SSPP_SW_PIX_EXT_C1C2_TB);
-	writel((height << 16) | (width >> 1), base + SSPP_SW_PIX_EXT_C1C2_REQ_PIXELS);
+	writel((height << 16) | (width / 2), base + SSPP_SW_PIX_EXT_C1C2_REQ_PIXELS);
 	writel(0, base + SSPP_SW_PIX_EXT_C3_LR);
 	writel(0, base + SSPP_SW_PIX_EXT_C3_TB);
-	writel((height << 16) | (width >> 1), base + SSPP_SW_PIX_EXT_C3_REQ_PIXELS);
+	writel((height << 16) | (width / 2), base + SSPP_SW_PIX_EXT_C3_REQ_PIXELS);
 	writel(0x3, base + SSPP_MULTIRECT_OPMODE);
 	writel(0x80000000, base + SSPP_UBWC_ERROR_STATUS);
 	writel(0x3FFFF, base + SSPP_DANGER_LUT);
@@ -612,32 +484,61 @@ static void mdss_sspp_config_rec1(void *dpu_base, const struct dpu_mdss_cfg *cat
 	writel(0x22335777, base + SSPP_CREQ_LUT_0);
 	writel(0x112222, base + SSPP_CREQ_LUT_1);
 	writel(0x1, base + SSPP_QOS_CTRL);
-	//writel(0x5, base + SSPP_CLK_CTRL);
+	// writel(0x5, base + SSPP_CLK_CTRL);
 }
 
 static void mdss_vbif_setup(void *regs_vbif)
 {
 	writel(0x33333333, regs_vbif + VBIF_OUT_AXI_AMEMTYPE_CONF0);
    	writel(0x33333333, regs_vbif + VBIF_OUT_AXI_AMEMTYPE_CONF1);
+}
 
-#if 0
-	writel(0x400040, regs_vbif + VBIF_XINL_QOS_RP_REMAP_000);
-	writel(0x400040, regs_vbif + VBIF_XINL_QOS_RP_REMAP_000 + reg_lvl);
-	writel(0x11411141, regs_vbif + VBIF_XINL_QOS_RP_REMAP_000 + 0x8);
-	writel(0x11411141, regs_vbif + VBIF_XINL_QOS_RP_REMAP_000 + reg_lvl + 0x8);
-	writel(0x22522252, regs_vbif + VBIF_XINL_QOS_RP_REMAP_000 + 0x10);
-	writel(0x22522252, regs_vbif + VBIF_XINL_QOS_RP_REMAP_000 + reg_lvl + 0x10);
-	writel(0x33533353, regs_vbif + VBIF_XINL_QOS_RP_REMAP_000 + 0x18);
-	writel(0x33533353, regs_vbif + VBIF_XINL_QOS_RP_REMAP_000 + reg_lvl + 0x18);
-	writel(0x44544454, regs_vbif + VBIF_XINL_QOS_RP_REMAP_000 + 0x20);
-	writel(0x44544454, regs_vbif + VBIF_XINL_QOS_RP_REMAP_000 + reg_lvl + 0x20);
-	writel(0x55555555, regs_vbif + VBIF_XINL_QOS_RP_REMAP_000 + 0x28);
-	writel(0x55555555, regs_vbif + VBIF_XINL_QOS_RP_REMAP_000 + reg_lvl + 0x28);
-	writel(0x66566656, regs_vbif + VBIF_XINL_QOS_RP_REMAP_000 + 0x30);
-	writel(0x66566656, regs_vbif + VBIF_XINL_QOS_RP_REMAP_000 + reg_lvl + 0x30);
-	writel(0x77677767, regs_vbif + VBIF_XINL_QOS_RP_REMAP_000 + 0x38);
-	writel(0x77677767, regs_vbif + VBIF_XINL_QOS_RP_REMAP_000 + reg_lvl + 0x38);
-#endif
+/*
+ * programmable_fetch_get_num_lines:
+ *	Number of fetch lines in vertical front porch
+ * @timing: Pointer to the intf timing information for the requested mode
+ *
+ * Returns the number of fetch lines in vertical front porch at which mdp
+ * can start fetching the next frame.
+ *
+ * Number of needed prefetch lines is anything that cannot be absorbed in the
+ * start of frame time (back porch + vsync pulse width).
+ *
+ * Some panels have very large VFP, however we only need a total number of
+ * lines based on the chip worst case latencies.
+ */
+static u32 programmable_fetch_get_num_lines(
+		const struct dpu_intf_cfg *hw_intf,
+		const struct display_timing *timing)
+{
+	u32 worst_case_needed_lines =
+	    hw_intf->prog_fetch_lines_worst_case;
+	u32 start_of_frame_lines =
+	    timing->vback_porch.typ + timing->vsync_len.typ;
+	u32 needed_vfp_lines = worst_case_needed_lines - start_of_frame_lines;
+	u32 actual_vfp_lines = 0;
+
+	/* Fetch must be outside active lines, otherwise undefined. */
+	if (start_of_frame_lines >= worst_case_needed_lines) {
+		debug("prog fetch is not needed, large vbp+vsw\n");
+		actual_vfp_lines = 0;
+	} else if (timing->vfront_porch.typ < needed_vfp_lines) {
+		/* Warn fetch needed, but not enough porch in panel config */
+		debug("low vbp+vfp may lead to perf issues in some cases\n");
+		debug("less vfp than fetch req, using entire vfp\n");
+		actual_vfp_lines = timing->vfront_porch.typ;
+	} else {
+		debug("room in vfp for needed prefetch\n");
+		actual_vfp_lines = needed_vfp_lines;
+	}
+
+	debug("vfront_porch.typ %u v_back_porch %u vsync_pulse_width %u\n",
+		timing->vfront_porch.typ, timing->vback_porch.typ,
+		timing->vsync_len.typ);
+	debug("wc_lines %u needed_vfp_lines %u actual_vfp_lines %u\n",
+		worst_case_needed_lines, needed_vfp_lines, actual_vfp_lines);
+
+	return actual_vfp_lines;
 }
 
 /* dpu_hw_intf_setup_timing_engine in Linux */
@@ -658,8 +559,9 @@ static void mdss_intf_setup(void *dpu_base, struct display_timing *p, const stru
 	u32 data_width;
 	u32 vsync_polarity, hsync_polarity;
 	bool dp_intf = false;
+	const struct dpu_intf_cfg *hw_intf = &cat->intf[intf_id - INTF_0];
 
-	dpu_base += cat->intf[intf_id - INTF_0].base;
+	dpu_base += hw_intf->base;
 
 	/* read interface_cfg */
 	intf_cfg = DPU_REG_READ(dpu_base, INTF_CONFIG);
@@ -775,12 +677,11 @@ static void mdss_intf_setup(void *dpu_base, struct display_timing *p, const stru
 	DPU_REG_WRITE(dpu_base, INTF_ACTIVE_HCTL,  active_hctl);
 	DPU_REG_WRITE(dpu_base, INTF_ACTIVE_V_START_F0, active_v_start);
 	DPU_REG_WRITE(dpu_base, INTF_ACTIVE_V_END_F0, active_v_end);
-	DPU_REG_WRITE(dpu_base, INTF_BORDER_COLOR, 0); // p->border_clr
-	DPU_REG_WRITE(dpu_base, INTF_UNDERFLOW_COLOR, 0xff); // p->underflow_clr
+	DPU_REG_WRITE(dpu_base, INTF_BORDER_COLOR, 0xa5); // p->border_clr
+	DPU_REG_WRITE(dpu_base, INTF_UNDERFLOW_COLOR, 0x5a); // p->underflow_clr
 	DPU_REG_WRITE(dpu_base, INTF_HSYNC_SKEW, 0); // p->hsync_skew
 	DPU_REG_WRITE(dpu_base, INTF_POLARITY_CTL, polarity_ctl);
 	DPU_REG_WRITE(dpu_base, INTF_FRAME_LINE_COUNT_EN, 0x3);
-	DPU_REG_WRITE(dpu_base, INTF_CONFIG, intf_cfg);
 	DPU_REG_WRITE(dpu_base, INTF_PANEL_FORMAT, panel_format);
 
 	// FIXME: support older platforms!
@@ -797,40 +698,27 @@ static void mdss_intf_setup(void *dpu_base, struct display_timing *p, const stru
 		DPU_REG_WRITE(dpu_base, INTF_DISPLAY_DATA_HCTL, display_data_hctl);
 		DPU_REG_WRITE(dpu_base, INTF_ACTIVE_DATA_HCTL, active_data_hctl);
 	// }
-}
 
-// OLD
-static void mdss__intf_setup_old(void *dpu_base, const struct dpu_mdss_cfg *cat,
-			    unsigned intf_id, unsigned pp_id)
-{
-	unsigned intf = intf_id - INTF_0;
-	unsigned pp = pp_id - PINGPONG_0;
-	void *base = dpu_base + cat->intf[intf].base;
+	// fetch enable
+	intf_cfg |= BIT(31);
 
-	/* config for 90Hz */
-	// TOFIX calculate from timings and panel data
-	writel(BIT(23) | BIT(31), base + INTF_CONFIG); //INTF_CONFIG_DSI_VIDEO_STOP_MODE
-	writel(0x3100014, base + INTF_HSYNC_CTL);
-	writel(0x001eec90, base + INTF_VSYNC_PERIOD_F0);
-	writel(0x310, base + INTF_VSYNC_PULSE_WIDTH_F0);
-	writel(0x2F70028, base + INTF_DISPLAY_HCTL);
-	writel(0x4050, base + INTF_DISPLAY_V_START_F0);
-	writel(0x1A174F, base + INTF_DISPLAY_V_END_F0);
-	writel(0, base + INTF_ACTIVE_HCTL);
-	writel(0, base + INTF_ACTIVE_V_START_F0);
-	writel(0, base + INTF_ACTIVE_V_END_F0);
-	writel(0, base + INTF_BORDER_COLOR);
-	writel(0xFF, base + INTF_UNDERFLOW_COLOR);
-	writel(0, base + INTF_HSYNC_SKEW);
-	writel(0, base + INTF_POLARITY_CTL);
-	writel(3, base + INTF_FRAME_LINE_COUNT_EN);
-	writel(0x213F, base + INTF_PANEL_FORMAT);
-	writel(0x1011, base + INTF_CONFIG2);
-	writel(0x18F0028, base + INTF_DISPLAY_DATA_HCTL);
-	writel(0, base + INTF_ACTIVE_DATA_HCTL);
-	writel(0x001ee361, base + INTF_PROG_FETCH_START);
+	DPU_REG_WRITE(dpu_base, INTF_CONFIG, intf_cfg);
 
-	writel(0xF0000 | pp, base + INTF_MUX);
+	u32 vfp_fetch_lines = programmable_fetch_get_num_lines(hw_intf, p);
+	u32 horiz_total = 0;
+	u32 vert_total = 0;
+	u32 vfp_fetch_start_vsync_counter;
+	if (vfp_fetch_lines) {
+		vert_total = p->vactive.typ + p->vback_porch.typ + p->vfront_porch.typ + p->vsync_len.typ;
+		horiz_total = p->hactive.typ + p->hback_porch.typ + p->hfront_porch.typ + p->hsync_len.typ;
+		vfp_fetch_start_vsync_counter =
+		    (vert_total - vfp_fetch_lines) * horiz_total + 1;
+
+		debug("intf fetch_start: %u\n", vfp_fetch_start_vsync_counter);
+		writel(vfp_fetch_start_vsync_counter, dpu_base + INTF_PROG_FETCH_START);
+	}
+
+	writel(0xF0000 | (pp_id - PINGPONG_0), dpu_base + INTF_MUX);
 }
 
 static void mdss_intf_fetch_start_config(void *dpu_base, const struct dpu_mdss_cfg *cat,
@@ -891,7 +779,7 @@ void mdp_setup_stage_rec1(void *dpu_base, const struct dpu_mdss_cfg *cat,
 	writel(0, base + CTL_LAYER_EXT3(lm_id));
 	writel(0, base + CTL_LAYER_EXT4(lm_id));
 
-	writel((height << 16) | (width >> 1), lm_base + LM_OUT_SIZE);
+	writel((height << 16) | width, lm_base + LM_OUT_SIZE);
 
 	if (split)
 		op_mode |= BIT(31); /* split right half in stage */
@@ -1024,7 +912,14 @@ void mdp_intf_disable(void *dpu_base, const struct dpu_mdss_cfg *cat, unsigned i
 	unsigned intf = intf_id - INTF_0;
 	void *base = dpu_base + cat->intf[intf].base;
 
-	writel(0, base + INTF_TIMING_ENGINE_EN);
+	debug("%s:%d: %s\n", __FILE__, __LINE__, __func__);
+
+	/* Disable fetch */
+	u32 intf_cfg = DPU_REG_READ(base, INTF_CONFIG);
+	DPU_REG_WRITE(base, INTF_CONFIG, intf_cfg & ~BIT(31));
+	udelay(60 * 1000);
+
+	// writel(0, base + INTF_TIMING_ENGINE_EN);
 }
 
 int qcom_dpu_probe(struct udevice *dev)
@@ -1125,7 +1020,7 @@ int qcom_dpu_probe(struct udevice *dev)
 	// TOFIX use timings instead of static height/width
 	mdp_setup_stage_rec1(priv->dpu_base, priv->cat, CTL_0, LM_0, SSPP_DMA0, timings.vactive.typ, timings.hactive.typ, false);
 	// TOFIX use companion LM id from catalog
-	mdp_setup_stage_rec1(priv->dpu_base, priv->cat, CTL_0, LM_1, SSPP_DMA0, timings.vactive.typ, timings.hactive.typ, true);
+	mdp_setup_stage_rec1(priv->dpu_base, priv->cat, CTL_0, LM_1, SSPP_DMA0, timings.vactive.typ, timings.hactive.typ, false);
 
 	// Since the panels are rotated, use the right side of the fb for panel0
 	mdss_sspp_config_rec1(priv->dpu_base, priv->cat, uc_plat->base,
@@ -1171,7 +1066,7 @@ int qcom_dpu_probe(struct udevice *dev)
 	local_priv = priv;
 	dpu_kms_mdp_snapshot();
 #endif
-	printf("DPU probed!\n");
+	debug("DPU probed!\n");
 	return 0;
 }
 
@@ -1179,22 +1074,13 @@ static int qcom_dpu_remove(struct udevice *dev)
 {
 	struct qcom_dpu_priv *priv = dev_get_priv(dev);
 
-	if (!priv->bridge0)
-		return 0;
-
-	video_bridge_set_backlight(priv->bridge0, 0);
-	// video_bridge_set_backlight(priv->bridge1, 0);
-
-	mdp_intf_enable(priv->dpu_base, priv->cat, INTF_1);
-	// mdp_intf_enable(priv->dpu_base, priv->cat, INTF_2);
-
-	clk_disable_bulk(&priv->bulk);
+	mdp_intf_disable(priv->dpu_base, priv->cat, INTF_1);
 
 	return 0;
 }
 
-#define LCD_MAX_WIDTH 4320
-#define LCD_MAX_HEIGHT 2160
+#define LCD_MAX_WIDTH 1080
+#define LCD_MAX_HEIGHT 2400
 static int qcom_dpu_bind(struct udevice *dev)
 {
 	struct video_uc_plat *uc_plat = dev_get_uclass_plat(dev);
@@ -1222,5 +1108,5 @@ U_BOOT_DRIVER(qcom_dpu) = {
 	.probe	= qcom_dpu_probe,
 	.remove	= qcom_dpu_remove,
 	.priv_auto	= sizeof(struct qcom_dpu_priv),
-	.flags  = DM_FLAG_LEAVE_PD_ON,
+	.flags	= DM_FLAG_LEAVE_PD_ON, // | DM_FLAG_OS_PREPARE,
 };
