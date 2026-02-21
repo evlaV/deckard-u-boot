@@ -4,7 +4,5 @@
 #
 # Author: Neil Armstrong <narmstrong@baylibre.com>
 
-ccflags-y += -DLOG_DEBUG
-
 obj-$(CONFIG_VIDEO_QCOM) += dpu_hw_catalog.o qcom_dsi.o qcom_mdss.o qcom_dpu.o #qcom_snapshot_util.o
 obj-$(CONFIG_VIDEO_QCOM) += phy/ #qcom_snapshot_util.o
