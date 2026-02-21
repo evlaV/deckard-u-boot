@@ -4,8 +4,6 @@
  * Copyright (c) 2023, Linaro Ltd.
  */
 
-#define LOG_DEBUG
-
 #include <clk-uclass.h>
 #include <dm.h>
 #include <dm/device_compat.h>
@@ -458,6 +456,7 @@ static const phys_addr_t dbg_rcg_addrs[] = {
 	BASE + 0x8108,
 	BASE + 0x8124,
 	BASE + 0x80a8,
+	BASE + 0x8140,
 	BASE + 0xe03c,
 };
 
@@ -467,11 +466,9 @@ static const char *dbg_rcg_names[] = {
 	"disp_cc_mdss_byte0_clk_src",
 	"disp_cc_mdss_byte1_clk_src",
 	"disp_cc_mdss_pclk0_clk_src",
+	"disp_cc_mdss_esc0_clk",
 	"disp_cc_xo_clk_src",
 };
-
-// CASEY: add the power domain driver! :3
-// maybe the reason GDSC 0 stuck at off?
 
 static struct msm_clk_data sm8650_disp_cc_data = {
 	.resets = disp_cc_sm8650_resets,
