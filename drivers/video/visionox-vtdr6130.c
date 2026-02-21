@@ -136,8 +136,7 @@ static int visionox_vtdr6130_on(struct vtdr_priv *priv)
 	panel_dsi_write_seq(priv, 0xff, 0x5a, 0x00);
 
 	mipi_dsi_dcs_exit_sleep_mode(dsi);
-	// mdelay(120);
-	mdelay(50);
+	mdelay(120);
 
 	mipi_dsi_dcs_set_display_on(dsi);
 	mdelay(20);
