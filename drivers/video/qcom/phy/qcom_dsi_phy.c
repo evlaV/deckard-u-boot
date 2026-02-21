@@ -1,7 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
-#define LOG_DEBUG
-
 #include <dm.h>
 #include <dm/device_compat.h>
 #include <dm/devres.h>
