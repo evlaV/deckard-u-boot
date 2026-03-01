@@ -332,6 +332,13 @@ config DM_REGULATOR_SANDBOX
 	A detailed information can be found in header: '<power/sandbox_pmic.h>'
 	Binding info: 'doc/device-tree-bindings/pmic/max77686.txt'
 
+config DM_REGULATOR_SGM3804
+	tristate "SGMicro sgm3804 voltage regulator"
+	depends on DM_REGULATOR
+	select DM_I2C
+	help
+	  This driver supports SGMicro sgm3804 voltage regulator.
+
 config REGULATOR_TPS65090
 	bool "Enable driver for TPS65090 PMIC regulators"
 	depends on PMIC_TPS65090

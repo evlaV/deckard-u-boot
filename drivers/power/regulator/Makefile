@@ -34,6 +34,7 @@ obj-$(CONFIG_$(PHASE_)DM_REGULATOR_PALMAS) += palmas_regulator.o
 obj-$(CONFIG_$(PHASE_)DM_REGULATOR_PBIAS) += pbias_regulator.o
 obj-$(CONFIG_$(PHASE_)DM_REGULATOR_LP873X) += lp873x_regulator.o
 obj-$(CONFIG_$(PHASE_)DM_REGULATOR_LP87565) += lp87565_regulator.o
+obj-$(CONFIG_$(PHASE_)DM_REGULATOR_SGM3804) += sgm3804_regulator.o
 obj-$(CONFIG_$(PHASE_)DM_REGULATOR_STM32_VREFBUF) += stm32-vrefbuf.o
 obj-$(CONFIG_DM_REGULATOR_TPS65910) += tps65910_regulator.o
 obj-$(CONFIG_$(PHASE_)DM_REGULATOR_TPS65911) += tps65911_regulator.o
