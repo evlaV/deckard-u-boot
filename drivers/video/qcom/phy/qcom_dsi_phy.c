@@ -522,7 +522,7 @@ static unsigned long dsi_pll_7nm_vco_set_rate(struct clk *clk, unsigned long rat
 		return 0; //-ENOSYS;
 	}
 
-	printf("%s: clk %lu rate %lu\n", __func__, clk->id, rate);
+	debug("%s: clk %lu rate %lu\n", __func__, clk->id, rate);
 
 	if (clk->id == DSI_BYTE_PLL_CLK)
 		rate *= FIXME_VCO_BYTE_DIV;
@@ -787,7 +787,6 @@ static int dsi_pll_7nm_vco_prepare(struct clk *clk)
 	}
 
 	if (pll_7nm->plat->usecase == MSM_DSI_PHY_SLAVE) {
-		printf("%s: copied clk req from master\n", clk->dev->name);
 		memcpy(&pll_7nm->plat->clk_req, &pll_7nm_list[0]->plat->clk_req, sizeof(struct msm_dsi_phy_clk_request));
 	}
 
@@ -858,10 +857,9 @@ static unsigned long dsi_pll_7nm_clk_get_rate(struct clk *clk)
 	u32 dsiclk_sel;
 
 	if (!pll_7nm->vco_current_rate) {
-		printf("current rate 0, recalculating...\n");
 		dsi_pll_7nm_vco_recalc_rate(pll_7nm, 0);
 		if (!pll_7nm->vco_current_rate) {
-			printf("current rate in hw is 0!\n");
+			debug("current rate in hw is 0!\n");
 			return 0;
 		}
 	}
@@ -877,7 +875,7 @@ static unsigned long dsi_pll_7nm_clk_get_rate(struct clk *clk)
 	dsi0_phy_pll_out_byteclk = dsi0_pll_bit_clk / 8;
 
 	if (clk->id == DSI_BYTE_PLL_CLK) {
-		printf("%s: BYTE_PLL_CLK: %lu\n", __func__, dsi0_phy_pll_out_byteclk);
+		debug("%s: BYTE_PLL_CLK: %lu\n", __func__, dsi0_phy_pll_out_byteclk);
 		return dsi0_phy_pll_out_byteclk;
 	}
 
@@ -891,11 +889,11 @@ static unsigned long dsi_pll_7nm_clk_get_rate(struct clk *clk)
 	dsi0_phy_pll_out_dsiclk = dsi0_pclk_mux / div_7_4;
 
 	if (clk->id == DSI_PIXEL_PLL_CLK) {
-		printf("%s: PIXEL_PLL_CLK: %lu\n", __func__, dsi0_phy_pll_out_dsiclk);
+		debug("%s: PIXEL_PLL_CLK: %lu\n", __func__, dsi0_phy_pll_out_dsiclk);
 		return dsi0_phy_pll_out_dsiclk;
 	}
 
-	printf("%s: unknown clk ID %lu\n", __func__, clk->id);
+	debug("%s: unknown clk ID %lu\n", __func__, clk->id);
 
 	return 0;
 }
@@ -1028,7 +1026,7 @@ static int dsi_7nm_set_usecase(struct msm_dsi_phy *phy)
 	void __iomem *base = phy->plat->base;
 	u32 data = 0x0;	/* internal PLL */
 
-	printf("dsi_7nm_set_usecase DSI PLL%d\n", phy->plat->id);
+	debug("%s: DSI PLL%d\n", __func__, phy->plat->id);
 
 	switch (phy->plat->usecase) {
 	case MSM_DSI_PHY_STANDALONE:
@@ -1156,7 +1154,7 @@ static int dsi_7nm_phy_enable(struct msm_dsi_phy *phy,
 	unsigned long timeout;
 	u32 val;
 
-	dev_info(phy->dev, "%s bitclk %lu\n", __func__, clk_req->bitclk_rate);
+	dev_dbg(phy->dev, "%s bitclk %lu\n", __func__, clk_req->bitclk_rate);
 
 	if (phy->plat->cphy_mode)
 		ret = msm_dsi_cphy_timing_calc_v4(timing, clk_req);

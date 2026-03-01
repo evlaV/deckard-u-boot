@@ -225,7 +225,6 @@ static int dsi_cmds2buf_tx(struct mipi_dsi_host *host,
 	// dsi_write(base + REG_DSI_TEST_PATTERN_GEN_CTRL, 0);
 
 	dsi_write(base + REG_DSI_DMA_BASE, dsi->tx_buf);
-	printf("Wrote DMA base reg %#lx < %#lx\n", (ulong)base + REG_DSI_DMA_BASE, (ulong)dsi->tx_buf);
 	dsi_write(base + REG_DSI_DMA_LEN, len);
 	dsi_write(base + REG_DSI_VBIF_CTRL, 0x7);
 
@@ -585,55 +584,6 @@ static const struct mipi_dsi_host_ops qcom_mipi_dsi_host_ops = {
 		DSI_CLK_CTRL_BYTECLK_ON | DSI_CLK_CTRL_ESCCLK_ON | \
 		DSI_CLK_CTRL_FORCE_ON_DYN_AHBM_HCLK)
 
-bool regdump_decode(u64 addr, u32 val);
-bool regdump_read_decode(u64 addr);
-
-static void __maybe_unused dsi_dump_regs(int i, u64 base)
-{
-	printf("#### [DSI %d] (%#llx) ####\n", i, base);
-	for (u32 off = 0; off < 0x400; off+=4) {
-		printf("%#lx: ", (ulong)base + off);
-		if (!regdump_read_decode(base + off ))
-				printf("%#010x\n", readl(base + off ));
-	}
-	// regdump_read_decode(base + REG_DSI_ACTIVE_H);
-	// regdump_read_decode(base + REG_DSI_ACTIVE_HSYNC);
-	// regdump_read_decode(base + REG_DSI_ACTIVE_V);
-	// regdump_read_decode(base + REG_DSI_ACTIVE_VSYNC_HPOS);
-	// regdump_read_decode(base + REG_DSI_ACTIVE_VSYNC_VPOS);
-	// regdump_read_decode(base + REG_DSI_CLK_CTRL);
-	// regdump_read_decode(base + REG_DSI_CLKOUT_TIMING_CTRL);
-	// regdump_read_decode(base + REG_DSI_CMD_CFG0);
-	// regdump_read_decode(base + REG_DSI_CMD_CFG1);
-	// regdump_read_decode(base + REG_DSI_CMD_DMA_CTRL);
-	// regdump_read_decode(base + REG_DSI_CMD_MDP_STREAM0_CTRL);
-	// regdump_read_decode(base + REG_DSI_CMD_MDP_STREAM0_TOTAL);
-	// regdump_read_decode(base + REG_DSI_CMD_MODE_MDP_CTRL2);
-	// regdump_read_decode(base + REG_DSI_CPHY_MODE_CTRL);
-	// regdump_read_decode(base + REG_DSI_CTRL);
-	// regdump_read_decode(base + REG_DSI_DMA_BASE);
-	// regdump_read_decode(base + REG_DSI_DMA_LEN);
-	// regdump_read_decode(base + REG_DSI_EOT_PACKET_CTRL);
-	// regdump_read_decode(base + REG_DSI_ERR_INT_MASK0);
-	// regdump_read_decode(base + REG_DSI_INTR_CTRL);
-	// regdump_read_decode(base + REG_DSI_LANE_CTRL);
-	// regdump_read_decode(base + REG_DSI_LANE_SWAP_CTRL);
-	// regdump_read_decode(base + REG_DSI_PHY_RESET);
-	// regdump_read_decode(base + REG_DSI_RDBK_DATA_CTRL);
-	// regdump_read_decode(base + REG_DSI_RESET);
-	// regdump_read_decode(base + REG_DSI_STATUS0);
-	// regdump_read_decode(base + REG_DSI_T_CLK_PRE_EXTEND);
-	// regdump_read_decode(base + REG_DSI_TEST_PATTERN_GEN_CTRL);
-	// regdump_read_decode(base + REG_DSI_TOTAL);
-	// regdump_read_decode(base + REG_DSI_TRIG_CTRL);
-	// regdump_read_decode(base + REG_DSI_TRIG_DMA);
-	// regdump_read_decode(base + REG_DSI_VBIF_CTRL);
-	// regdump_read_decode(base + REG_DSI_VERSION);
-	// regdump_read_decode(base + REG_DSI_VID_CFG0);
-	// regdump_read_decode(base + REG_DSI_VID_CFG1);
-	// regdump_read_decode(base + REG_DSI_VIDEO_COMPRESSION_MODE_CTRL);
-}
-
 static inline enum dsi_traffic_mode dsi_get_traffic_mode(const u32 mode_flags)
 {
 	if (mode_flags & MIPI_DSI_MODE_VIDEO_BURST)
@@ -683,7 +633,6 @@ bool msm_dsi_phy_set_continuous_clock(struct msm_dsi_phy *phy, bool enable)
 	if (!phy || !phy->plat->cfg->ops.set_continuous_clock)
 		return false;
 
-	dev_info(phy->dev, "set_continuous_clock: %d\n", enable);
 	return phy->plat->cfg->ops.set_continuous_clock(phy, enable);
 }
 
@@ -767,7 +716,7 @@ static void dsi_ctrl_enable(struct qcom_mipi_dsi *priv,
 
 	data = DSI_CLKOUT_TIMING_CTRL_T_CLK_POST(phy_shared_timings->clk_post) |
 		DSI_CLKOUT_TIMING_CTRL_T_CLK_PRE(phy_shared_timings->clk_pre);
-	dev_info(device->dev, "Writing DSI_CLKOUT_TIMING_CTRL: %#x (post %u, pre %u)\n", data, phy_shared_timings->clk_post, phy_shared_timings->clk_pre);
+	dev_dbg(device->dev, "Writing DSI_CLKOUT_TIMING_CTRL: %#x (post %u, pre %u)\n", data, phy_shared_timings->clk_post, phy_shared_timings->clk_pre);
 	dsi_write(priv->base + REG_DSI_CLKOUT_TIMING_CTRL, data);
 
 	if ((cfg_hnd->major == MSM_DSI_VER_MAJOR_6G) &&
@@ -791,7 +740,6 @@ static void dsi_ctrl_enable(struct qcom_mipi_dsi *priv,
 
 	data = DSI_CTRL_CLK_EN;
 
-	dev_info(device->dev, "lane number=%d\n", device->lanes);
 	data |= ((DSI_CTRL_LANE0 << device->lanes) - DSI_CTRL_LANE0);
 
 	if (device->mode_flags & MIPI_DSI_MODE_VIDEO)
@@ -887,9 +835,6 @@ static void dsi_timing_setup(struct qcom_mipi_dsi *dsi, struct display_timing *t
 static void dsi_sw_reset(struct qcom_mipi_dsi *dsi)
 {
 	u32 ctrl;
-
-	// printf("%s: SKIP!\n", __func__);
-	// return;
 
 	ctrl = dsi_read(dsi->base + REG_DSI_CTRL);
 
@@ -999,21 +944,15 @@ static int qcom_mipi_dsi_init(struct udevice *dev,
 	memset((void *)dsi->tx_buf, 0xff, 0x1000);
 	dsi->rx_buf = malloc(0x1000);
 
-	// printf("DSI skip init!\n");
-	// return 0;
-
 	ret = phy_ops->init(device);
 
 	/* Ugly poke into through the DSI bridge device to the phy */
 	struct qcom_dsi_priv *priv = dev_get_priv(device->dev);
 	struct msm_dsi_phy *phy_priv = dev_get_priv(priv->phy.dev);
 
-	// qcom_mipi_dsi_init_ctrl(dsi->base);
 	dsi_timing_setup(dsi, timings);
 	dsi_sw_reset(dsi);
 	dsi_ctrl_enable(dsi, &phy_priv->timing.shared_timings, phy_priv);
-
-	// dsi_dump_regs(dev_seq(dev), (u64)dsi->base);
 
 	return 0;
 }
@@ -1044,15 +983,11 @@ static int qcom_mipi_dsi_probe(struct udevice *dev)
 
 	qcom_dsi_globals.dsi[dsi->id] = &dsi->dsi_host;
 
-	// printf("BEFORE RESET!\n");
-	// dsi_dump_regs(dsi->id, (u64)dsi->base + 0x4);
-
 	qcom_dsi_globals.bonded_dsi = dev_read_bool(dev, "qcom,dual-dsi-mode");
 	qcom_dsi_globals.sync_needed = dev_read_bool(dev, "qcom,sync-dual-dsi");
 
 	/* check hardware version */
 	dsi_get_version(dsi->base, &dsi->cfg_hnd.major, &dsi->cfg_hnd.minor);
-	dev_info(dev, "Got hw_version: %#x.%#x\n", dsi->cfg_hnd.major, dsi->cfg_hnd.minor);
 	if (dsi->cfg_hnd.minor != MSM_DSI_6G_VER_MINOR_V2_8_0) { // sm8650
 		dev_err(dev, "DSI version %#x.%#x not supported\n", dsi->cfg_hnd.major, dsi->cfg_hnd.minor);
 		dev_dbg(dev, "remove and unbind all DSI child\n");
@@ -1072,7 +1007,7 @@ static int qcom_mipi_dsi_remove(struct udevice *dev)
 {
 	struct qcom_mipi_dsi *dsi = dev_get_priv(dev);
 	
-	dev_dbg(dev, "DSI host remove??\n");
+	dev_dbg(dev, "%s\n", __func__);
 
 	dsi_write(dsi->base + REG_DSI_PHY_RESET, 0x1);
 	mdelay(1);
@@ -1124,7 +1059,7 @@ static int dsi_phy_calc_clk_req(struct qcom_dsi_priv *dsi, struct msm_dsi_phy_cl
 	clk_req->bitclk_rate = byteclk_rate * 8;
 	clk_req->escclk_rate = 19200000; // FIXME: less would be nice perhaps but eh
 
-	printf("%s: DSI %d calculated bitclk_rate: %lu\n", __func__, DSI_ID(dsi), clk_req->bitclk_rate);
+	dev_dbg(dsi->device.dev, "%s: DSI %d calculated bitclk_rate: %lu\n", __func__, DSI_ID(dsi), clk_req->bitclk_rate);
 
 	return 0;
 }
@@ -1198,8 +1133,6 @@ static int dsi_phy_init(void *priv_data)
 			dev_err(dev, "peripheral clock enable error %d\n", ret);
 			return ret;
 		}
-
-		dev_info(dev, "Reset both DSI phys!\n");
 	} else if (!IS_BONDED_DSI()) {
 
 		dsi_host_reset_phy(dsi->base);
@@ -1239,16 +1172,12 @@ static int qcom_dsi_attach(struct udevice *dev)
 	struct mipi_dsi_panel_plat *mplat;
 	int ret;
 
-	dev_info(dev, "%s\n", __func__);
-
 	ret = uclass_get_device(UCLASS_PANEL, dev_seq(dev), &priv->panel);
 	// ret = uclass_get_device_by_endpoint(UCLASS_PANEL, dev, 1, -1, &priv->panel);
 	if (ret) {
 		dev_err(dev, "panel device error %d\n", ret);
 		return ret;
 	}
-
-	dev_info(dev, "Attaching panel %s\n", priv->panel->name);
 
 	mplat = dev_get_plat(priv->panel);
 	mplat->device = device;
