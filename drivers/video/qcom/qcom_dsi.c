@@ -69,7 +69,8 @@ struct qcom_dsi_priv {
 	struct udevice *panel;
 	struct phy phy;
 	struct phy_configure_opts_mipi_dphy phy_opts;
-	u32 pllref_clk;
+	u64 pclk_rate;
+	u64 byte_clk_rate;
 	int lane_min_kbps;
 	int lane_max_kbps;
 	unsigned int lane_mbps; /* per lane */
@@ -77,6 +78,7 @@ struct qcom_dsi_priv {
 	struct udevice *dsi_host;
 	struct clk_bulk bulk;
 	struct display_timing timings;
+	int id;
 };
 
 /* for dsi host */
@@ -84,6 +86,7 @@ struct qcom_mipi_dsi {
 	struct mipi_dsi_host dsi_host;
 	struct mipi_dsi_device *device;
 	void __iomem *base;
+	int id;
 	unsigned int lane_mbps; /* per lane */
 	u32 channel;
 	unsigned int max_data_lanes;
@@ -92,6 +95,20 @@ struct qcom_mipi_dsi {
 	phys_addr_t tx_buf;
 	u8 *rx_buf;
 };
+
+struct {
+	struct mipi_dsi_host *dsi[2];
+	bool bonded_dsi; // dual-DSI mode with a single panel
+	bool sync_needed; // Send DCS commands to both DSI links in-sync
+} qcom_dsi_globals;
+
+#define DSI_0 0
+#define DSI_1 1
+
+#define DSI_ID(dsi) (dsi->id)
+#define IS_SYNC_NEEDED() (qcom_dsi_globals.sync_needed)
+#define IS_BONDED_DSI() (qcom_dsi_globals.bonded_dsi)
+#define GET_DSI(id) (qcom_dsi_globals.dsi[id])
 
 static inline struct qcom_mipi_dsi *host_to_dsi(struct mipi_dsi_host *host)
 {
@@ -161,16 +178,16 @@ static int dsi_cmds2buf_tx(struct mipi_dsi_host *host,
 	while (count < 1000) {
 		val = dsi_read(base + REG_DSI_STATUS0);
 
-		if (!(val & (DSI_STATUS0_VIDEO_MODE_ENGINE_BUSY | DSI_STATUS0_CMD_MODE_ENGINE_BUSY)))
+		if (!(val & (DSI_STATUS0_CMD_MODE_ENGINE_BUSY)))
 			break;
 
 		++count;
 	}
 
-	if (val & DSI_STATUS0_VIDEO_MODE_ENGINE_BUSY) {
-		dev_err(host->dev, "failed to wait for video engine busy (%x)\n", val);
-		return -EIO;
-	}
+	// if (val & DSI_STATUS0_VIDEO_MODE_ENGINE_BUSY) {
+	// 	dev_err(host->dev, "failed to wait for video engine busy (%x)\n", val);
+	// 	return -EIO;
+	// }
 	if (val & DSI_STATUS0_CMD_MODE_ENGINE_BUSY) {
 		dev_err(host->dev, "failed to wait for cmd mode engine busy (%x)\n", val);
 		return -EIO;
@@ -205,9 +222,10 @@ static int dsi_cmds2buf_tx(struct mipi_dsi_host *host,
 
 	dsi_flush_cache(dsi->tx_buf, len);
 
-	dsi_write(base + REG_DSI_TEST_PATTERN_GEN_CTRL, 0);
+	// dsi_write(base + REG_DSI_TEST_PATTERN_GEN_CTRL, 0);
 
 	dsi_write(base + REG_DSI_DMA_BASE, dsi->tx_buf);
+	printf("Wrote DMA base reg %#lx < %#lx\n", (ulong)base + REG_DSI_DMA_BASE, (ulong)dsi->tx_buf);
 	dsi_write(base + REG_DSI_DMA_LEN, len);
 	dsi_write(base + REG_DSI_VBIF_CTRL, 0x7);
 
@@ -218,6 +236,17 @@ static int dsi_cmds2buf_tx(struct mipi_dsi_host *host,
 
 
 	dsi_write(base + REG_DSI_TRIG_DMA, 0x1);
+
+	debug("%s: %#x (ret=%d)\n", __func__, packet.payload ? packet.payload[0] : packet.header[0], ret);
+	return ret < 0 ? ret : packet.size;
+}
+
+static int dsi_tx_wait_done(struct mipi_dsi_host *host)
+{
+	struct qcom_mipi_dsi *dsi = host_to_dsi(host);
+	void __iomem *base = dsi->base;
+	int ret, count;
+	u32 val;
 
 	count = 0;
 	ret = 0;
@@ -239,8 +268,7 @@ static int dsi_cmds2buf_tx(struct mipi_dsi_host *host,
 	// Mask
 	dsi_write(base + REG_DSI_INTR_CTRL, 0);
 
-	debug("%s: %#x (ret=%d)\n", __func__, packet.payload ? packet.payload[0] : packet.header[0], ret);
-	return ret < 0 ? ret : packet.size;
+	return 0;
 }
 
 static int dsi_cmd_dma_rx(struct qcom_mipi_dsi *dsi,
@@ -483,15 +511,32 @@ static ssize_t qcom_mipi_dsi_host_transfer(struct mipi_dsi_host *host,
 					 const struct mipi_dsi_msg *msg)
 {
 	struct qcom_mipi_dsi *dsi = host_to_dsi(host);
+	struct mipi_dsi_host *host0 = GET_DSI(DSI_0);
+	struct qcom_mipi_dsi *dsi0 = host_to_dsi(host0);
 	int ret;
-	u32 save_ctrl;
+	u32 save_ctrl, save_ctrl0;
+
+	/*
+	 * In the synchronous case we send the command over both DSI
+	 * links when it is sent over DSI 1 and and ignore DSI 0.
+	 */
+	if (IS_SYNC_NEEDED() && DSI_ID(dsi) == 0)
+		return msg->rx_len ?: msg->tx_len;
 
 	/* from msm_dsi_host_xfer_prepare() */
-	if (!(msg->flags & MIPI_DSI_MSG_USE_LPM))
+	if (!(msg->flags & MIPI_DSI_MSG_USE_LPM)) {
 		dsi_set_tx_power_mode(0, dsi);
+		if (IS_SYNC_NEEDED() && host0)
+			dsi_set_tx_power_mode(0, dsi0);
+	}
 
 	save_ctrl = dsi_read(dsi->base + REG_DSI_CTRL);
-	dsi_write(dsi->base + REG_DSI_CTRL, save_ctrl | 0x5);
+	dsi_write(dsi->base + REG_DSI_CTRL, save_ctrl | DSI_CTRL_CMD_MODE_EN);
+
+	if (IS_SYNC_NEEDED() && host0) {
+		save_ctrl0 = dsi_read(dsi0->base + REG_DSI_CTRL);
+		dsi_write(dsi0->base + REG_DSI_CTRL, save_ctrl0 | DSI_CTRL_CMD_MODE_EN);
+	}
 
 	if (msg->rx_buf && msg->rx_len) {
 		ret = msm_dsi_host_cmd_rx(host, msg);
@@ -500,14 +545,31 @@ static ssize_t qcom_mipi_dsi_host_transfer(struct mipi_dsi_host *host,
 		ret = msg->rx_len;
 	} else {
 		ret = dsi_cmds2buf_tx(host, msg);
+		if (IS_SYNC_NEEDED() && host0 && ret >= 0)
+			ret = dsi_cmds2buf_tx(host0, msg);
+
+		ret = dsi_tx_wait_done(host);
+		if (ret)
+			dev_err(host0->dev, "DSI %d: Failed waiting for TX done: %d\n", DSI_ID(dsi), ret);
+
+		if (IS_SYNC_NEEDED() && host0) {
+			ret = dsi_tx_wait_done(host0);
+			if (ret)
+				dev_err(host0->dev, "DSI 0: Failed waiting for TX done: %d\n", ret);
+		}
 	}
 
 out:
 	dsi_write(dsi->base + REG_DSI_CTRL, save_ctrl);
+	if (IS_SYNC_NEEDED() && host0)
+		dsi_write(dsi0->base + REG_DSI_CTRL, save_ctrl0);
 
 	/* from msm_dsi_host_xfer_restore() */
-	if (!(msg->flags & MIPI_DSI_MSG_USE_LPM))
+	if (!(msg->flags & MIPI_DSI_MSG_USE_LPM)) {
 		dsi_set_tx_power_mode(1, dsi);
+		if (IS_SYNC_NEEDED() && host0)
+			dsi_set_tx_power_mode(1, dsi0);
+	}
 
 	return ret;
 }
@@ -523,83 +585,53 @@ static const struct mipi_dsi_host_ops qcom_mipi_dsi_host_ops = {
 		DSI_CLK_CTRL_BYTECLK_ON | DSI_CLK_CTRL_ESCCLK_ON | \
 		DSI_CLK_CTRL_FORCE_ON_DYN_AHBM_HCLK)
 
-static void qcom_mipi_dsi_init_ctrl(void __iomem *base)
+bool regdump_decode(u64 addr, u32 val);
+bool regdump_read_decode(u64 addr);
+
+static void __maybe_unused dsi_dump_regs(int i, u64 base)
 {
-	debug("DSI host controller init\n");
-
-	/* DSC only */
-	dsi_write(base + REG_DSI_VIDEO_COMPRESSION_MODE_CTRL, 0x8700B01);
-	dsi_write(base + REG_DSI_ACTIVE_H, 0x02f80028);
-	dsi_write(base + REG_DSI_ACTIVE_V, 0x08850015);
-	dsi_write(base + REG_DSI_TOTAL, 0x0a18030f);
-	dsi_write(base + REG_DSI_ACTIVE_HSYNC, 0x00140000);
-	dsi_write(base + REG_DSI_ACTIVE_VSYNC_HPOS, 0x00000000);
-	dsi_write(base + REG_DSI_ACTIVE_VSYNC_VPOS, 0x00010000);
-
-	dsi_write(base + REG_DSI_CLK_CTRL, 0x23F);
-	dsi_write(base + REG_DSI_RESET, 0x1);
-	mdelay(20);
-	dsi_write(base + REG_DSI_RESET, 0x0);
-
-	dsi_write(base + REG_DSI_VID_CFG0, 0x2009130);
-	dsi_write(base + REG_DSI_VID_CFG1, 0x0);
-
-	dsi_write(base + REG_DSI_CMD_DMA_CTRL, 0x14000000);
-
-	dsi_write(base + REG_DSI_TRIG_CTRL, 0x80001004);
-	dsi_write(base + REG_DSI_CLKOUT_TIMING_CTRL, 0x1A26);
-	dsi_write(base + REG_DSI_EOT_PACKET_CTRL, 0x1);
-	dsi_write(base + REG_DSI_INTR_CTRL, 0);
-	dsi_write(base + REG_DSI_CLK_CTRL, 0x23F);
-	dsi_write(base + REG_DSI_LANE_SWAP_CTRL, 0x0);
-	dsi_write(base + REG_DSI_LANE_CTRL, DSI_LANE_CTRL_HS_REQ_SEL_PHY);
-
-	dsi_write(base + REG_DSI_CTRL, 0x173);
-
-	dsi_write(base + REG_DSI_CPHY_MODE_CTRL, 0x1);
-}
-
-#define DSI_DUMP_REG(base, reg) \
-	debug(#reg ": %#llx: %#x\n", (u64)(base) + reg, dsi_read(base + reg))
-
-static void __maybe_unused dsi_dump_regs(void __iomem *base)
-{
-	DSI_DUMP_REG(base, REG_DSI_ACTIVE_H);
-	DSI_DUMP_REG(base, REG_DSI_ACTIVE_HSYNC);
-	DSI_DUMP_REG(base, REG_DSI_ACTIVE_V);
-	DSI_DUMP_REG(base, REG_DSI_ACTIVE_VSYNC_HPOS);
-	DSI_DUMP_REG(base, REG_DSI_ACTIVE_VSYNC_VPOS);
-	DSI_DUMP_REG(base, REG_DSI_CLK_CTRL);
-	DSI_DUMP_REG(base, REG_DSI_CLKOUT_TIMING_CTRL);
-	DSI_DUMP_REG(base, REG_DSI_CMD_CFG0);
-	DSI_DUMP_REG(base, REG_DSI_CMD_CFG1);
-	DSI_DUMP_REG(base, REG_DSI_CMD_DMA_CTRL);
-	DSI_DUMP_REG(base, REG_DSI_CMD_MDP_STREAM0_CTRL);
-	DSI_DUMP_REG(base, REG_DSI_CMD_MDP_STREAM0_TOTAL);
-	DSI_DUMP_REG(base, REG_DSI_CMD_MODE_MDP_CTRL2);
-	DSI_DUMP_REG(base, REG_DSI_CPHY_MODE_CTRL);
-	DSI_DUMP_REG(base, REG_DSI_CTRL);
-	DSI_DUMP_REG(base, REG_DSI_DMA_BASE);
-	DSI_DUMP_REG(base, REG_DSI_DMA_LEN);
-	DSI_DUMP_REG(base, REG_DSI_EOT_PACKET_CTRL);
-	DSI_DUMP_REG(base, REG_DSI_ERR_INT_MASK0);
-	DSI_DUMP_REG(base, REG_DSI_INTR_CTRL);
-	DSI_DUMP_REG(base, REG_DSI_LANE_CTRL);
-	DSI_DUMP_REG(base, REG_DSI_LANE_SWAP_CTRL);
-	DSI_DUMP_REG(base, REG_DSI_PHY_RESET);
-	DSI_DUMP_REG(base, REG_DSI_RDBK_DATA_CTRL);
-	DSI_DUMP_REG(base, REG_DSI_RESET);
-	DSI_DUMP_REG(base, REG_DSI_STATUS0);
-	DSI_DUMP_REG(base, REG_DSI_T_CLK_PRE_EXTEND);
-	DSI_DUMP_REG(base, REG_DSI_TEST_PATTERN_GEN_CTRL);
-	DSI_DUMP_REG(base, REG_DSI_TOTAL);
-	DSI_DUMP_REG(base, REG_DSI_TRIG_CTRL);
-	DSI_DUMP_REG(base, REG_DSI_TRIG_DMA);
-	DSI_DUMP_REG(base, REG_DSI_VBIF_CTRL);
-	DSI_DUMP_REG(base, REG_DSI_VERSION);
-	DSI_DUMP_REG(base, REG_DSI_VID_CFG0);
-	DSI_DUMP_REG(base, REG_DSI_VID_CFG1);
-	DSI_DUMP_REG(base, REG_DSI_VIDEO_COMPRESSION_MODE_CTRL);
+	printf("#### [DSI %d] (%#llx) ####\n", i, base);
+	for (u32 off = 0; off < 0x400; off+=4) {
+		printf("%#lx: ", (ulong)base + off);
+		if (!regdump_read_decode(base + off ))
+				printf("%#010x\n", readl(base + off ));
+	}
+	// regdump_read_decode(base + REG_DSI_ACTIVE_H);
+	// regdump_read_decode(base + REG_DSI_ACTIVE_HSYNC);
+	// regdump_read_decode(base + REG_DSI_ACTIVE_V);
+	// regdump_read_decode(base + REG_DSI_ACTIVE_VSYNC_HPOS);
+	// regdump_read_decode(base + REG_DSI_ACTIVE_VSYNC_VPOS);
+	// regdump_read_decode(base + REG_DSI_CLK_CTRL);
+	// regdump_read_decode(base + REG_DSI_CLKOUT_TIMING_CTRL);
+	// regdump_read_decode(base + REG_DSI_CMD_CFG0);
+	// regdump_read_decode(base + REG_DSI_CMD_CFG1);
+	// regdump_read_decode(base + REG_DSI_CMD_DMA_CTRL);
+	// regdump_read_decode(base + REG_DSI_CMD_MDP_STREAM0_CTRL);
+	// regdump_read_decode(base + REG_DSI_CMD_MDP_STREAM0_TOTAL);
+	// regdump_read_decode(base + REG_DSI_CMD_MODE_MDP_CTRL2);
+	// regdump_read_decode(base + REG_DSI_CPHY_MODE_CTRL);
+	// regdump_read_decode(base + REG_DSI_CTRL);
+	// regdump_read_decode(base + REG_DSI_DMA_BASE);
+	// regdump_read_decode(base + REG_DSI_DMA_LEN);
+	// regdump_read_decode(base + REG_DSI_EOT_PACKET_CTRL);
+	// regdump_read_decode(base + REG_DSI_ERR_INT_MASK0);
+	// regdump_read_decode(base + REG_DSI_INTR_CTRL);
+	// regdump_read_decode(base + REG_DSI_LANE_CTRL);
+	// regdump_read_decode(base + REG_DSI_LANE_SWAP_CTRL);
+	// regdump_read_decode(base + REG_DSI_PHY_RESET);
+	// regdump_read_decode(base + REG_DSI_RDBK_DATA_CTRL);
+	// regdump_read_decode(base + REG_DSI_RESET);
+	// regdump_read_decode(base + REG_DSI_STATUS0);
+	// regdump_read_decode(base + REG_DSI_T_CLK_PRE_EXTEND);
+	// regdump_read_decode(base + REG_DSI_TEST_PATTERN_GEN_CTRL);
+	// regdump_read_decode(base + REG_DSI_TOTAL);
+	// regdump_read_decode(base + REG_DSI_TRIG_CTRL);
+	// regdump_read_decode(base + REG_DSI_TRIG_DMA);
+	// regdump_read_decode(base + REG_DSI_VBIF_CTRL);
+	// regdump_read_decode(base + REG_DSI_VERSION);
+	// regdump_read_decode(base + REG_DSI_VID_CFG0);
+	// regdump_read_decode(base + REG_DSI_VID_CFG1);
+	// regdump_read_decode(base + REG_DSI_VIDEO_COMPRESSION_MODE_CTRL);
 }
 
 static inline enum dsi_traffic_mode dsi_get_traffic_mode(const u32 mode_flags)
@@ -689,7 +721,7 @@ static void dsi_ctrl_enable(struct qcom_mipi_dsi *priv,
 
 		/* Do not swap RGB colors */
 		data = DSI_VID_CFG1_RGB_SWAP(SWAP_RGB);
-		dsi_write(priv->base + REG_DSI_VID_CFG1, 0);
+		dsi_write(priv->base + REG_DSI_VID_CFG1, data);
 	} else {
 		/* Do not swap RGB colors */
 		data = DSI_CMD_CFG0_RGB_SWAP(SWAP_RGB);
@@ -726,6 +758,8 @@ static void dsi_ctrl_enable(struct qcom_mipi_dsi *priv,
 	data |= DSI_TRIG_CTRL_MDP_TRIGGER(TRIGGER_NONE);
 	data |= DSI_TRIG_CTRL_DMA_TRIGGER(TRIGGER_SW);
 	data |= DSI_TRIG_CTRL_STREAM(device->channel);
+
+	// FIXME: ????
 	if ((cfg_hnd->major == MSM_DSI_VER_MAJOR_6G) &&
 		(cfg_hnd->minor >= MSM_DSI_6G_VER_MINOR_V1_2))
 		data |= DSI_TRIG_CTRL_BLOCK_DMA_WITHIN_FRAME;
@@ -751,7 +785,7 @@ static void dsi_ctrl_enable(struct qcom_mipi_dsi *priv,
 	dsi_write(priv->base + REG_DSI_ERR_INT_MASK0, 0x13ff3fe0);
 
 	/* U-Boot: disable all interrupts! */
-	dsi_write(priv->base + REG_DSI_INTR_CTRL, 0);
+	// dsi_write(priv->base + REG_DSI_INTR_CTRL, 0);
 
 	dsi_write(priv->base + REG_DSI_CLK_CTRL, DSI_CLK_CTRL_ENABLE_CLKS);
 
@@ -763,7 +797,7 @@ static void dsi_ctrl_enable(struct qcom_mipi_dsi *priv,
 	if (device->mode_flags & MIPI_DSI_MODE_VIDEO)
 		data |= DSI_CTRL_VID_MODE_EN;
 	else
-	 	data |= DSI_CTRL_CMD_MODE_EN;
+		data |= DSI_CTRL_CMD_MODE_EN;
 
 	/* FIXME: lane swap not supported yet */
 	u32 dlane_swap = 0;
@@ -794,9 +828,13 @@ static void dsi_timing_setup(struct qcom_mipi_dsi *dsi, struct display_timing *t
 {
 	void __iomem *base = dsi->base;
 	u32 hs_start = 0, vs_start = 0; /* take sync start as 0 */
+	u32 hactive = timings->hactive.typ;
+
+	if (true) // dual dsi!
+		hactive /= 2;
 
 	// 1080 + 20 + 20 + 2
-	u32 h_total = timings->hactive.typ + timings->hfront_porch.typ + timings->hback_porch.typ + timings->hsync_len.typ;
+	u32 h_total = hactive + timings->hfront_porch.typ + timings->hback_porch.typ + timings->hsync_len.typ;
 	u32 v_total = timings->vactive.typ + timings->vfront_porch.typ + timings->vback_porch.typ + timings->vsync_len.typ;
 
 	// (1080 + 20 + 2) - (1080 + 20) = 2 ~= hs_start + hs_len = 0 + 2
@@ -805,10 +843,10 @@ static void dsi_timing_setup(struct qcom_mipi_dsi *dsi, struct display_timing *t
 
 	// (1080 + 20 + 2 + 20) - (1080 + 18) = 20 ~= hs_start + hs_len + hback_porch = 0 + 2 + 18 = 20
 	u32 ha_start = timings->hsync_len.typ + timings->hback_porch.typ;
-	u32 ha_end = ha_start + timings->hactive.typ;
+	u32 ha_end = ha_start + hactive;
 	u32 va_start = timings->vsync_len.typ + timings->vback_porch.typ;
 	u32 va_end = va_start + timings->vactive.typ;
-	u32 hdisplay = timings->hactive.typ;
+	u32 hdisplay = hactive;
 	u32 wc;
 
 	if (dsi->device->mode_flags & MIPI_DSI_MODE_VIDEO) {
@@ -850,6 +888,9 @@ static void dsi_sw_reset(struct qcom_mipi_dsi *dsi)
 {
 	u32 ctrl;
 
+	// printf("%s: SKIP!\n", __func__);
+	// return;
+
 	ctrl = dsi_read(dsi->base + REG_DSI_CTRL);
 
 	if (ctrl & DSI_CTRL_ENABLE) {
@@ -867,7 +908,7 @@ static void dsi_sw_reset(struct qcom_mipi_dsi *dsi)
 	/* dsi controller can only be reset while clocks are running */
 	dsi_write(dsi->base + REG_DSI_RESET, 1);
 	udelay(DSI_RESET_TOGGLE_DELAY_MS * 1000); /* make sure reset happen */
-	dsi_write(dsi->base + REG_DSI_RESET, 0);
+	dsi_write(dsi->base + REG_DSI_RESET, 0); // reset during FIFO oflow, video start on vsync
 	wmb(); /* controller out of reset */
 
 	if (ctrl & DSI_CTRL_ENABLE) {
@@ -945,7 +986,7 @@ static int qcom_mipi_dsi_init(struct udevice *dev,
 	dsi->phy_ops = phy_ops;
 	dsi->max_data_lanes = max_data_lanes;
 	dsi->device = device;
-	dsi->dsi_host.dev = (struct device *)dev;
+	dsi->dsi_host.dev = dev;
 	dsi->dsi_host.ops = &qcom_mipi_dsi_host_ops;
 	device->host = &dsi->dsi_host;
 
@@ -958,10 +999,8 @@ static int qcom_mipi_dsi_init(struct udevice *dev,
 	memset((void *)dsi->tx_buf, 0xff, 0x1000);
 	dsi->rx_buf = malloc(0x1000);
 
-	dsi_write(dsi->base + REG_DSI_PHY_RESET, 0x1);
-	mdelay(1);
-	dsi_write(dsi->base + REG_DSI_PHY_RESET, 0x0);
-	mdelay(1);
+	// printf("DSI skip init!\n");
+	// return 0;
 
 	ret = phy_ops->init(device);
 
@@ -973,6 +1012,8 @@ static int qcom_mipi_dsi_init(struct udevice *dev,
 	dsi_timing_setup(dsi, timings);
 	dsi_sw_reset(dsi);
 	dsi_ctrl_enable(dsi, &phy_priv->timing.shared_timings, phy_priv);
+
+	// dsi_dump_regs(dev_seq(dev), (u64)dsi->base);
 
 	return 0;
 }
@@ -999,6 +1040,16 @@ static int qcom_mipi_dsi_probe(struct udevice *dev)
 		return -EINVAL;
 	}
 
+	dsi->id = dev_seq(dev);
+
+	qcom_dsi_globals.dsi[dsi->id] = &dsi->dsi_host;
+
+	// printf("BEFORE RESET!\n");
+	// dsi_dump_regs(dsi->id, (u64)dsi->base + 0x4);
+
+	qcom_dsi_globals.bonded_dsi = dev_read_bool(dev, "qcom,dual-dsi-mode");
+	qcom_dsi_globals.sync_needed = dev_read_bool(dev, "qcom,sync-dual-dsi");
+
 	/* check hardware version */
 	dsi_get_version(dsi->base, &dsi->cfg_hnd.major, &dsi->cfg_hnd.minor);
 	dev_info(dev, "Got hw_version: %#x.%#x\n", dsi->cfg_hnd.major, dsi->cfg_hnd.minor);
@@ -1012,7 +1063,7 @@ static int qcom_mipi_dsi_probe(struct udevice *dev)
 
 	dsi->base += 4;
 
-	dev_dbg(dev, "DSI host probe\n");
+	dev_dbg(dev, "DSI %d host probe\n", dsi->id);
 
 	return 0;
 }
@@ -1046,11 +1097,58 @@ U_BOOT_DRIVER(qcom_mipi_dsi) = {
 	.flags = DM_FLAG_LEAVE_PD_ON,
 };
 
+static int dsi_phy_calc_clk_req(struct qcom_dsi_priv *dsi, struct msm_dsi_phy_clk_request *clk_req)
+{
+	struct mipi_dsi_panel_plat *mplat = dev_get_plat(dsi->panel);
+	u32 pixelclock = dsi->timings.pixelclock.typ;
+	u32 bpp = mipi_dsi_pixel_format_to_bpp(mplat->format);
+	u64 pclk_rate = pixelclock;
+	u64 byteclk_rate;
+
+	// FIXME: DSC support
+
+	if (IS_BONDED_DSI())
+		pclk_rate /= 2;
+
+	// if (cphy_mode)
+	//	byteclk_rate = mult_frac(pclk_rate, bpp, 16 * mplat->lanes);
+	// else
+	byteclk_rate = mult_frac(pclk_rate, bpp, 8 * mplat->lanes);
+
+	dsi->pclk_rate = pclk_rate;
+	dsi->byte_clk_rate = byteclk_rate;
+
+	// if (cphy_mode)
+	//	clk_req->bitclk_rate = byteclk_rate * 7;
+	// else
+	clk_req->bitclk_rate = byteclk_rate * 8;
+	clk_req->escclk_rate = 19200000; // FIXME: less would be nice perhaps but eh
+
+	printf("%s: DSI %d calculated bitclk_rate: %lu\n", __func__, DSI_ID(dsi), clk_req->bitclk_rate);
+
+	return 0;
+}
+
+static int dsi_host_reset_phy(void *base)
+{
+	dsi_write(base + REG_DSI_PHY_RESET, 0x1);
+	wmb();
+	mdelay(1);
+	dsi_write(base + REG_DSI_PHY_RESET, 0x0);
+	mdelay(1);
+
+	return 0;
+}
+
 static int dsi_phy_init(void *priv_data)
 {
 	struct mipi_dsi_device *device = priv_data;
 	struct udevice *dev = device->dev;
+	// FIXME: layering violation, this is bridge priv...
 	struct qcom_dsi_priv *dsi = dev_get_priv(dev);
+	struct qcom_dsi_priv *mdsi = (struct qcom_dsi_priv *)(host_to_dsi(GET_DSI(DSI_0))->device);
+	struct msm_dsi_phy_plat *phy_plat = dev_get_plat(dsi->phy.dev);
+	struct msm_dsi_phy_clk_request clk_req = { 0 };
 	int ret;
 
 	dev_dbg(dev, "Initialize DSI physical layer\n");
@@ -1059,15 +1157,71 @@ static int dsi_phy_init(void *priv_data)
 		dev_dbg(dev, "fail to validate phy, phy %p phy->dev %p\n", &dsi->phy, dsi->phy.dev);
 	}
 
-	ret = generic_phy_power_on(&dsi->phy);
-	if (ret) {
-		dev_dbg(dev, "fail to power on phy\n");
+	dsi_phy_calc_clk_req(dsi, &clk_req);
+
+	if (IS_BONDED_DSI()) {
+		if (DSI_ID(dsi) == 0)
+			phy_plat->usecase = MSM_DSI_PHY_MASTER;
+		else
+		 	phy_plat->usecase = MSM_DSI_PHY_SLAVE;
 	}
 
-	ret = clk_enable_bulk(&dsi->bulk);
-	if (ret) {
-		dev_err(dev, "peripheral clock enable error %d\n", ret);
-		return ret;
+	if (DSI_ID(dsi) == DSI_1 && IS_BONDED_DSI()) {
+
+		// turn off the master phy so we can enable it again
+		// generic_phy_power_off(&mdsi->phy);
+
+		dsi_host_reset_phy(mdsi->base);
+		dsi_host_reset_phy(dsi->base);
+
+		generic_phy_configure(&mdsi->phy, &clk_req);
+		generic_phy_configure(&dsi->phy, &clk_req);
+
+		ret = generic_phy_power_on(&mdsi->phy);
+		if (ret) {
+			dev_dbg(dev, "fail to power on phy\n");
+		}
+
+		ret = generic_phy_power_on(&dsi->phy);
+		if (ret) {
+			dev_dbg(dev, "fail to power on phy\n");
+		}
+
+		ret = clk_enable_bulk(&mdsi->bulk);
+		if (ret) {
+			dev_err(dev, "peripheral clock enable error %d\n", ret);
+			return ret;
+		}
+
+		ret = clk_enable_bulk(&dsi->bulk);
+		if (ret) {
+			dev_err(dev, "peripheral clock enable error %d\n", ret);
+			return ret;
+		}
+
+		dev_info(dev, "Reset both DSI phys!\n");
+	} else if (!IS_BONDED_DSI()) {
+
+		dsi_host_reset_phy(dsi->base);
+
+		generic_phy_configure(&dsi->phy, &clk_req);
+		// FIXME: clock by name!
+		// clk_set_rate(&dsi->bulk.clks[0], dsi->byte_clk_rate);
+		// clk_set_rate(&dsi->bulk.clks[2], dsi->pclk_rate);
+
+		// Must be done first so that the PHY clocks are ready and rates are known!
+		ret = generic_phy_power_on(&dsi->phy);
+		if (ret) {
+			dev_dbg(dev, "fail to power on phy\n");
+		}
+
+		ret = clk_enable_bulk(&dsi->bulk);
+		if (ret) {
+			dev_err(dev, "peripheral clock enable error %d\n", ret);
+			return ret;
+		}
+	} else {
+		generic_phy_configure(&dsi->phy, &clk_req);
 	}
 
 	return 0;
@@ -1077,6 +1231,7 @@ static const struct mipi_dsi_phy_ops mdss_dsi_phy_ops = {
 	.init = dsi_phy_init,
 };
 
+// Video bridge device (parent of DSI host)
 static int qcom_dsi_attach(struct udevice *dev)
 {
 	struct qcom_dsi_priv *priv = dev_get_priv(dev);
@@ -1087,10 +1242,13 @@ static int qcom_dsi_attach(struct udevice *dev)
 	dev_info(dev, "%s\n", __func__);
 
 	ret = uclass_get_device(UCLASS_PANEL, dev_seq(dev), &priv->panel);
+	// ret = uclass_get_device_by_endpoint(UCLASS_PANEL, dev, 1, -1, &priv->panel);
 	if (ret) {
 		dev_err(dev, "panel device error %d\n", ret);
 		return ret;
 	}
+
+	dev_info(dev, "Attaching panel %s\n", priv->panel->name);
 
 	mplat = dev_get_plat(priv->panel);
 	mplat->device = device;
@@ -1169,6 +1327,7 @@ static int qcom_dsi_probe(struct udevice *dev)
 		return -EINVAL;
 	}
 	priv->base = priv->hw_base + 4;
+	priv->id = dev_seq(dev);
 
 	ret = generic_phy_get_by_name(dev, "dsi", &priv->phy);
 	if (ret && ret != -ENODATA) {

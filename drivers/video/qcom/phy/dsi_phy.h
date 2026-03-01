@@ -111,7 +111,9 @@ struct msm_dsi_phy_plat {
 	void __iomem *reg_base;
 	void __iomem *lane_base;
 	const struct msm_dsi_phy_cfg *cfg;
+	struct udevice *clk_dev;
 	enum msm_dsi_phy_usecase usecase;
+	struct msm_dsi_phy_clk_request clk_req;
 	bool cphy_mode;
 	bool phy_powered_on;
 };

@@ -8,6 +8,7 @@
 #include <dm/device_compat.h>
 #include <dm/device-internal.h>
 #include <dm/read.h>
+#include <dm/ofnode_graph.h>
 #include <video.h>
 #include <video_bridge.h>
 #include <linux/sizes.h>
@@ -25,6 +26,7 @@
 /* ==================== CTL registers ===================== */
 #define   CTL_LAYER(lm)                 \
 	(((lm) == LM_5) ? (0x024) : (((lm) - LM_0) * 0x004))
+
 #define   CTL_LAYER_EXT(lm)             \
 	(0x40 + (((lm) - LM_0) * 0x004))
 #define   CTL_LAYER_EXT2(lm)             \
@@ -407,6 +409,11 @@ struct qcom_dpu_priv {
 	struct clk_bulk bulk;
 	struct udevice *bridge0;
 	struct udevice *bridge1;
+	/*
+	 * If we're just driving one panel with both controllers,
+	 * false if two separate panels (or 1 panel 1 controller)
+	 */
+	bool dual_dsi;
 };
 
 static inline void DPU_REG_WRITE(void *base, u32 off, u32 val)
@@ -422,10 +429,12 @@ static inline u32 DPU_REG_READ(void *base, u32 off)
 	return val;
 }
 
-static void mdss_sspp_config_rec1(void *dpu_base, const struct dpu_mdss_cfg *cat, uint32_t fb,
+static void mdss_sspp_config_rec1(struct qcom_dpu_priv *priv, uint32_t fb,
 				  unsigned fb_stride, unsigned sspp_id, unsigned height,
 				  unsigned width, int x_off)
 {
+	void *dpu_base = priv->dpu_base;
+	const struct dpu_mdss_cfg *cat = priv->cat;
 	void *base = NULL;
 	int i;
 
@@ -441,50 +450,104 @@ static void mdss_sspp_config_rec1(void *dpu_base, const struct dpu_mdss_cfg *cat
 		return;
 	}
 
-	// TOFIX use define for all bits & values
-	writel(fb, base + SSPP_SRC0_ADDR);
-	writel(x_off, base + SSPP_SRC_XY);
-	writel((height << 16) | (width / 2), base + SSPP_SRC_SIZE);
-	writel((height << 16) | (width / 2), base + SSPP_OUT_SIZE);
-	writel(0, base + SSPP_OUT_XY);
-	writel(0x236ff, base + SSPP_SRC_FORMAT);
-	// writel(0x2000103, base + SSPP_SRC_UNPACK_PATTERN);
-	writel(0x3020001, base + SSPP_SRC_UNPACK_PATTERN);
-	writel(0x80000000, base + SSPP_SRC_OP_MODE);
-	writel(0x9, base + SSPP_CDP_CNTL);
+	DPU_REG_WRITE(base, SSPP_SRC_SIZE, (height << 16) | width);
+	DPU_REG_WRITE(base, SSPP_SRC_XY, x_off);
+	DPU_REG_WRITE(base, SSPP_OUT_SIZE, (height << 16) | width);
+	DPU_REG_WRITE(base, SSPP_SRC0_ADDR, fb);
+	DPU_REG_WRITE(base, SSPP_SRC_YSTRIDE0, fb_stride);
+	DPU_REG_WRITE(base, SSPP_OUT_XY, x_off);
+	DPU_REG_WRITE(base, SSPP_SRC_FORMAT, 0x236ff);
+	// base, SSPP_SRC_UNPACK_PATTERN, DPU_REG_WRITE(0x2000103);
+	DPU_REG_WRITE(base, SSPP_SRC_UNPACK_PATTERN, 0x3020001);
+	DPU_REG_WRITE(base, SSPP_SRC_OP_MODE, 0x80000000);
+	DPU_REG_WRITE(base, SSPP_CDP_CNTL, 0x9); // PRELOAD_ADDR_AHEAD_CNT | TILE_MODE_AMORTIZE_EN EN
 
-	writel(fb, base + SSPP_SRC1_ADDR);
-	writel(x_off + (width / 2), base + SSPP_SRC_XY_REC1);
-	writel((height << 16) | (width / 2), base + SSPP_SRC_SIZE_REC1);
-	writel((height << 16) | (width / 2), base + SSPP_OUT_SIZE_REC1);
-	writel((width / 2), base + SSPP_OUT_XY_REC1);
-	writel(0x236ff, base + SSPP_SRC_FORMAT_REC1);
-	writel(0x3020001, base + SSPP_SRC_UNPACK_PATTERN_REC1);
-	writel(0x80000000, base + SSPP_SRC_OP_MODE_REC1);
-	writel(0x9, base + SSPP_CDP_CNTL_REC1);
+	DPU_REG_WRITE(base, SSPP_SW_PIX_EXT_C0_REQ_PIXELS, (height << 16) | width);
+	DPU_REG_WRITE(base, SSPP_SW_PIX_EXT_C1C2_LR, 0);
+	DPU_REG_WRITE(base, SSPP_SW_PIX_EXT_C1C2_TB, 0);
+	DPU_REG_WRITE(base, SSPP_SW_PIX_EXT_C1C2_REQ_PIXELS, (height << 16) | width);
+	DPU_REG_WRITE(base, SSPP_SW_PIX_EXT_C3_LR, 0);
+	DPU_REG_WRITE(base, SSPP_SW_PIX_EXT_C3_TB, 0);
+	DPU_REG_WRITE(base, SSPP_SW_PIX_EXT_C3_REQ_PIXELS, (height << 16) | width);
 
-	writel(0x87, base + SSPP_FETCH_CONFIG);
+	DPU_REG_WRITE(base, SSPP_FETCH_CONFIG, 0x87);
+	DPU_REG_WRITE(base, SSPP_UBWC_ERROR_STATUS, 0x80000000);
+	DPU_REG_WRITE(base, SSPP_DANGER_LUT, 0x3ffff);
+	DPU_REG_WRITE(base, SSPP_SAFE_LUT, 0xfe00);
+	DPU_REG_WRITE(base, SSPP_CREQ_LUT_0, 0x22335777);
+	DPU_REG_WRITE(base, SSPP_CREQ_LUT_1, 0x112222);
+	DPU_REG_WRITE(base, SSPP_QOS_CTRL, 0x1);
 
-	writel((fb_stride << 16) | fb_stride, base + SSPP_SRC_YSTRIDE0);
+	// if (sspp_id == SSPP_VIG1)
+	DPU_REG_WRITE(base, SSPP_UBWC_STATIC_CTRL, 0xc0000101);
+
+	writel(0x4, base + SSPP_CLK_CTRL);
+
+
 	// writel(fb_stride, base + SSPP_SRC_YSTRIDE0);
-	writel(0, base + SSPP_SRC_YSTRIDE1);
-	writel(0, base + SSPP_SW_PIX_EXT_C0_LR);
-	writel(0, base + SSPP_SW_PIX_EXT_C0_TB);
-	writel((height << 16) | (width / 2), base + SSPP_SW_PIX_EXT_C0_REQ_PIXELS);
-	writel(0, base + SSPP_SW_PIX_EXT_C1C2_LR);
-	writel(0, base + SSPP_SW_PIX_EXT_C1C2_TB);
-	writel((height << 16) | (width / 2), base + SSPP_SW_PIX_EXT_C1C2_REQ_PIXELS);
-	writel(0, base + SSPP_SW_PIX_EXT_C3_LR);
-	writel(0, base + SSPP_SW_PIX_EXT_C3_TB);
-	writel((height << 16) | (width / 2), base + SSPP_SW_PIX_EXT_C3_REQ_PIXELS);
-	writel(0x3, base + SSPP_MULTIRECT_OPMODE);
-	writel(0x80000000, base + SSPP_UBWC_ERROR_STATUS);
-	writel(0x3FFFF, base + SSPP_DANGER_LUT);
-	writel(0xFE00, base + SSPP_SAFE_LUT);
-	writel(0x22335777, base + SSPP_CREQ_LUT_0);
-	writel(0x112222, base + SSPP_CREQ_LUT_1);
-	writel(0x1, base + SSPP_QOS_CTRL);
-	// writel(0x5, base + SSPP_CLK_CTRL);
+	// writel(0, base + SSPP_SRC_YSTRIDE1);
+	// writel(0, base + SSPP_SW_PIX_EXT_C0_LR);
+	// writel(0, base + SSPP_SW_PIX_EXT_C0_TB);
+	// writel((height << 16) | width, base + SSPP_SW_PIX_EXT_C0_REQ_PIXELS);
+	// writel(0, base + SSPP_SW_PIX_EXT_C1C2_LR);
+	// writel(0, base + SSPP_SW_PIX_EXT_C1C2_TB);
+	// writel((height << 16) | width, base + SSPP_SW_PIX_EXT_C1C2_REQ_PIXELS);
+	// writel(0, base + SSPP_SW_PIX_EXT_C3_LR);
+	// writel(0, base + SSPP_SW_PIX_EXT_C3_TB);
+	// writel((height << 16) | width, base + SSPP_SW_PIX_EXT_C3_REQ_PIXELS);
+	// writel(0x3, base + SSPP_MULTIRECT_OPMODE);
+	// writel(0x80000000, base + SSPP_UBWC_ERROR_STATUS);
+	// writel(0x3FFFF, base + SSPP_DANGER_LUT);
+	// writel(0xFE00, base + SSPP_SAFE_LUT);
+	// writel(0x22335777, base + SSPP_CREQ_LUT_0);
+	// writel(0x112222, base + SSPP_CREQ_LUT_1);
+	// writel(0x1, base + SSPP_QOS_CTRL);
+
+
+
+	// TOFIX use define for all bits & values
+	// writel(fb, base + SSPP_SRC0_ADDR);
+	// writel(x_off, base + SSPP_SRC_XY);
+	// writel((height << 16) | (width / 2), base + SSPP_SRC_SIZE);
+	// writel((height << 16) | (width / 2), base + SSPP_OUT_SIZE);
+	// writel(0, base + SSPP_OUT_XY);
+	// writel(0x236ff, base + SSPP_SRC_FORMAT);
+	// // writel(0x2000103, base + SSPP_SRC_UNPACK_PATTERN);
+	// writel(0x3020001, base + SSPP_SRC_UNPACK_PATTERN);
+	// writel(0x80000000, base + SSPP_SRC_OP_MODE);
+	// writel(0x9, base + SSPP_CDP_CNTL);
+
+	// writel(fb, base + SSPP_SRC1_ADDR);
+	// writel(x_off + (width / 2), base + SSPP_SRC_XY_REC1);
+	// writel((height << 16) | (width / 2), base + SSPP_SRC_SIZE_REC1);
+	// writel((height << 16) | (width / 2), base + SSPP_OUT_SIZE_REC1);
+	// writel((width / 2), base + SSPP_OUT_XY_REC1);
+	// writel(0x236ff, base + SSPP_SRC_FORMAT_REC1);
+	// writel(0x3020001, base + SSPP_SRC_UNPACK_PATTERN_REC1);
+	// writel(0x80000000, base + SSPP_SRC_OP_MODE_REC1);
+	// writel(0x9, base + SSPP_CDP_CNTL_REC1);
+
+	// writel(0x87, base + SSPP_FETCH_CONFIG);
+
+	// writel((fb_stride << 16) | fb_stride, base + SSPP_SRC_YSTRIDE0);
+	// // writel(fb_stride, base + SSPP_SRC_YSTRIDE0);
+	// writel(0, base + SSPP_SRC_YSTRIDE1);
+	// writel(0, base + SSPP_SW_PIX_EXT_C0_LR);
+	// writel(0, base + SSPP_SW_PIX_EXT_C0_TB);
+	// writel((height << 16) | (width / 2), base + SSPP_SW_PIX_EXT_C0_REQ_PIXELS);
+	// writel(0, base + SSPP_SW_PIX_EXT_C1C2_LR);
+	// writel(0, base + SSPP_SW_PIX_EXT_C1C2_TB);
+	// writel((height << 16) | (width / 2), base + SSPP_SW_PIX_EXT_C1C2_REQ_PIXELS);
+	// writel(0, base + SSPP_SW_PIX_EXT_C3_LR);
+	// writel(0, base + SSPP_SW_PIX_EXT_C3_TB);
+	// writel((height << 16) | (width / 2), base + SSPP_SW_PIX_EXT_C3_REQ_PIXELS);
+	// writel(0x3, base + SSPP_MULTIRECT_OPMODE);
+	// writel(0x80000000, base + SSPP_UBWC_ERROR_STATUS);
+	// writel(0x3FFFF, base + SSPP_DANGER_LUT);
+	// writel(0xFE00, base + SSPP_SAFE_LUT);
+	// writel(0x22335777, base + SSPP_CREQ_LUT_0);
+	// writel(0x112222, base + SSPP_CREQ_LUT_1);
+	// writel(0x1, base + SSPP_QOS_CTRL);
 }
 
 static void mdss_vbif_setup(void *regs_vbif)
@@ -542,9 +605,11 @@ static u32 programmable_fetch_get_num_lines(
 }
 
 /* dpu_hw_intf_setup_timing_engine in Linux */
-static void mdss_intf_setup(void *dpu_base, struct display_timing *p, const struct dpu_mdss_cfg *cat,
+static void mdss_intf_setup(struct qcom_dpu_priv *priv, const struct display_timing *p,
 			    unsigned intf_id, unsigned pp_id)
 {
+	void *dpu_base = priv->dpu_base;
+	const struct dpu_mdss_cfg *cat = priv->cat;
 	u32 hsync_period, vsync_period;
 	u32 display_v_start, display_v_end;
 	u32 hsync_start_x, hsync_end_x;
@@ -557,6 +622,7 @@ static void mdss_intf_setup(void *dpu_base, struct display_timing *p, const stru
 	u32 intf_cfg, intf_cfg2 = 0;
 	u32 display_data_hctl = 0, active_data_hctl = 0;
 	u32 data_width;
+	u32 hactive;
 	u32 vsync_polarity, hsync_polarity;
 	bool dp_intf = false;
 	const struct dpu_intf_cfg *hw_intf = &cat->intf[intf_id - INTF_0];
@@ -566,10 +632,17 @@ static void mdss_intf_setup(void *dpu_base, struct display_timing *p, const stru
 	/* read interface_cfg */
 	intf_cfg = DPU_REG_READ(dpu_base, INTF_CONFIG);
 
+	hactive = p->hactive.typ;
+
+	// FIXME: should divide hfront_porch too??
+	if (priv->dual_dsi) {
+		hactive /= 2;
+	}
+
 	// if (intf->cap->type == INTF_DP)
 	// 	dp_intf = true;
 
-	hsync_period = p->hsync_len.typ + p->hback_porch.typ + p->hactive.typ + p->hfront_porch.typ;
+	hsync_period = p->hsync_len.typ + p->hback_porch.typ + hactive + p->hfront_porch.typ;
 	vsync_period = p->vsync_len.typ + p->vback_porch.typ + p->vactive.typ + p->vfront_porch.typ;
 
 	display_v_start = ((p->vsync_len.typ + p->vback_porch.typ) * hsync_period); // + p->hsync_skew;
@@ -578,9 +651,9 @@ static void mdss_intf_setup(void *dpu_base, struct display_timing *p, const stru
 	hsync_start_x = p->hback_porch.typ + p->hsync_len.typ;
 	hsync_end_x = hsync_period - p->hfront_porch.typ - 1;
 
-	// if (p->hactive.typ != p->hactive.typ) { /* border fill added */
+	// if (hactive != hactive) { /* border fill added */
 	// 	active_h_start = hsync_start_x;
-	// 	active_h_end = active_h_start + p->hactive.typ - 1;
+	// 	active_h_end = active_h_start + hactive - 1;
 	// } else {
 		active_h_start = 0;
 		active_h_end = 0;
@@ -610,16 +683,16 @@ static void mdss_intf_setup(void *dpu_base, struct display_timing *p, const stru
 	// if (p->wide_bus_en)
 	// 	intf_cfg2 |= INTF_CFG2_DATABUS_WIDEN;
 
-	data_width = p->hactive.typ;
+	data_width = hactive;
 
 	/*
 	 * If widebus is enabled, data is valid for only half the active window
 	 * since the data rate is doubled in this mode. But for the compression
-	 * mode in DP case, the p->hactive.typ is already adjusted in
+	 * mode in DP case, the hactive is already adjusted in
 	 * drm_mode_to_intf_timing_params()
 	 */
 	// if (p->wide_bus_en && !dp_intf)
-	// 	data_width = p->hactive.typ >> 1;
+	// 	data_width = hactive >> 1;
 
 	/* TODO: handle DSC+DP case, we only handle DSC+DSI case so far */
 	// if (p->compression_en && !dp_intf &&
@@ -637,7 +710,7 @@ static void mdss_intf_setup(void *dpu_base, struct display_timing *p, const stru
 		display_v_end   -= p->hfront_porch.typ;
 
 		active_h_start = hsync_start_x;
-		active_h_end = active_h_start + p->hactive.typ - 1;
+		active_h_end = active_h_start + hactive - 1;
 		active_v_start = display_v_start;
 		active_v_end = active_v_start + (p->vactive.typ * hsync_period) - 1;
 
@@ -669,16 +742,19 @@ static void mdss_intf_setup(void *dpu_base, struct display_timing *p, const stru
 
 	DPU_REG_WRITE(dpu_base, INTF_HSYNC_CTL, hsync_ctl);
 	DPU_REG_WRITE(dpu_base, INTF_VSYNC_PERIOD_F0, vsync_period * hsync_period);
+	// DPU_REG_WRITE(dpu_base, INTF_VSYNC_PERIOD_F0, 2229024); // we calulcated 2243780 for the pocket s2
 	DPU_REG_WRITE(dpu_base, INTF_VSYNC_PULSE_WIDTH_F0,
 			p->vsync_len.typ * hsync_period);
 	DPU_REG_WRITE(dpu_base, INTF_DISPLAY_HCTL, display_hctl);
 	DPU_REG_WRITE(dpu_base, INTF_DISPLAY_V_START_F0, display_v_start);
+	// DPU_REG_WRITE(dpu_base, INTF_DISPLAY_V_START_F0, 3472); // we got 8680 ?
 	DPU_REG_WRITE(dpu_base, INTF_DISPLAY_V_END_F0, display_v_end);
+	// DPU_REG_WRITE(dpu_base, INTF_DISPLAY_V_END_F0, 2225551); // we got 2230759
 	DPU_REG_WRITE(dpu_base, INTF_ACTIVE_HCTL,  active_hctl);
 	DPU_REG_WRITE(dpu_base, INTF_ACTIVE_V_START_F0, active_v_start);
 	DPU_REG_WRITE(dpu_base, INTF_ACTIVE_V_END_F0, active_v_end);
-	DPU_REG_WRITE(dpu_base, INTF_BORDER_COLOR, 0xa5); // p->border_clr
-	DPU_REG_WRITE(dpu_base, INTF_UNDERFLOW_COLOR, 0x5a); // p->underflow_clr
+	// DPU_REG_WRITE(dpu_base, INTF_BORDER_COLOR, 0xa5); // p->border_clr
+	// DPU_REG_WRITE(dpu_base, INTF_UNDERFLOW_COLOR, 0x5a); // p->underflow_clr
 	DPU_REG_WRITE(dpu_base, INTF_HSYNC_SKEW, 0); // p->hsync_skew
 	DPU_REG_WRITE(dpu_base, INTF_POLARITY_CTL, polarity_ctl);
 	DPU_REG_WRITE(dpu_base, INTF_FRAME_LINE_COUNT_EN, 0x3);
@@ -710,7 +786,7 @@ static void mdss_intf_setup(void *dpu_base, struct display_timing *p, const stru
 	u32 vfp_fetch_start_vsync_counter;
 	if (vfp_fetch_lines) {
 		vert_total = p->vactive.typ + p->vback_porch.typ + p->vfront_porch.typ + p->vsync_len.typ;
-		horiz_total = p->hactive.typ + p->hback_porch.typ + p->hfront_porch.typ + p->hsync_len.typ;
+		horiz_total = hactive + p->hback_porch.typ + p->hfront_porch.typ + p->hsync_len.typ;
 		vfp_fetch_start_vsync_counter =
 		    (vert_total - vfp_fetch_lines) * horiz_total + 1;
 
@@ -719,6 +795,7 @@ static void mdss_intf_setup(void *dpu_base, struct display_timing *p, const stru
 	}
 
 	writel(0xF0000 | (pp_id - PINGPONG_0), dpu_base + INTF_MUX);
+	//DPU_REG_WRITE(dpu_base, INTF_MUX, (pp_id - PINGPONG_0));
 }
 
 static void mdss_intf_fetch_start_config(void *dpu_base, const struct dpu_mdss_cfg *cat,
@@ -732,50 +809,59 @@ static void mdss_intf_fetch_start_config(void *dpu_base, const struct dpu_mdss_c
 	void *ctl_base = dpu_base + cat->ctl[ctl].base;
 
 	/* enable 2 DSI interface */
-	writel(BIT(intf), ctl_base + CTL_INTF_MASTER);
+	// FIXME: check priv->dual_dsi!
+	if (intf_id == INTF_1)
+		writel(BIT(intf), ctl_base + CTL_INTF_MASTER);
 
 	// TOFIX make dsc optional
 	// writel(BIT(dsc0) | BIT(dsc1), ctl_base + CTL_DSC_ACTIVE);
 	// writel(BIT(dsc0) | BIT(dsc1), ctl_base + CTL_DSC_FLUSH);
 
-	writel(BIT(intf), ctl_base + CTL_INTF_ACTIVE);
-	writel(BIT(intf), ctl_base + CTL_INTF_FLUSH);
+	// FIXME: assuming intf_0 is written first...
+	if (intf_id == INTF_2) {
+		setbits_le32(ctl_base + CTL_INTF_ACTIVE, BIT(intf));
+		setbits_le32(ctl_base + CTL_INTF_FLUSH, BIT(intf));
+	} else {
+		writel(BIT(intf), ctl_base + CTL_INTF_ACTIVE);
+		writel(BIT(intf), ctl_base + CTL_INTF_FLUSH);
+	}
 }
 
 /* configure the mixer blending in ctl */
-void mdp_setup_stage_rec1(void *dpu_base, const struct dpu_mdss_cfg *cat,
+void mdp_setup_stage_rec1(struct qcom_dpu_priv *priv, const struct dpu_mdss_cfg *cat,
 		     unsigned ctl_id, unsigned lm_id, unsigned sspp_id,
 		     unsigned height, unsigned width, bool split)
 {
+	void *dpu_base = priv->dpu_base;
 	unsigned ctl = ctl_id - CTL_0;
 	unsigned lm = lm_id - LM_0;
 	void *base = dpu_base + cat->ctl[ctl].base;
 	void *lm_base = dpu_base + cat->mixer[lm].base;
-	u32 op_mode = 0x2;
+	u32 op_mode = 0x2; // BLEND0_COLOR3_OUT
+	u32 val;
+
+	if (priv->dual_dsi)
+		width /= 2;
+
+	// FIXME: need to refactor all this and configure both SSPPs in one call!
+		// This is to handle two SSPPs on two LMs
+	val = BIT(24) | readl(base + CTL_LAYER(lm_id));
 
 	switch (sspp_id) {
-	case SSPP_DMA0:
-		writel(BIT(24) | BIT(19), base + CTL_LAYER(lm_id));
+	case SSPP_VIG0:
+		val |= 2;
 		break;
-	case SSPP_DMA1:
-		writel(BIT(24) | BIT(22), base + CTL_LAYER(lm_id));
+	case SSPP_VIG1:
+		val |= 2 << 3;
 		break;
 	default:
 		WARN_ON(sspp_id);
 	};
 
-	switch (sspp_id) {
-	case SSPP_DMA0:
-		writel(BIT(9), base + CTL_LAYER_EXT2(lm_id));
-		break;
-	case SSPP_DMA1:
-		writel(BIT(13), base + CTL_LAYER_EXT2(lm_id));
-		break;
-	default:
-		WARN_ON(sspp_id);
-	};
+	writel(val, base + CTL_LAYER(lm_id));
 
 	writel(0, base + CTL_LAYER_EXT(lm_id));
+	writel(0, base + CTL_LAYER_EXT2(lm_id));
 	writel(0, base + CTL_LAYER_EXT3(lm_id));
 	writel(0, base + CTL_LAYER_EXT4(lm_id));
 
@@ -785,7 +871,8 @@ void mdp_setup_stage_rec1(void *dpu_base, const struct dpu_mdss_cfg *cat,
 		op_mode |= BIT(31); /* split right half in stage */
 	writel(op_mode, lm_base + LM_OP_MODE);
 
-	writel(0x100, lm_base + LM_BLEND0_OP); // DPU_BLEND_BG_ALPHA_FG_CONST
+	writel(0x100, lm_base + LM_BLEND0_OP); // BG_ALPHA_SEL: 1
+	// writel(0x400, lm_base + LM_BLEND0_OP); // BG_INV_ALPHA_SEL
 	// see dpu_hw_lm_setup_blend_config_combined_alpha()
 	writel(0xFF0000, lm_base + LM_BLEND0_CONST_ALPHA);
 }
@@ -833,26 +920,33 @@ void mdp_dsc_setup(void *dpu_base, const struct dpu_mdss_cfg *cat, unsigned dsc_
 }
 
 void mdp_ctl_flush(void *dpu_base, const struct dpu_mdss_cfg *cat,
-		   unsigned ctl_id, unsigned sspp_id,
+		   unsigned ctl_id, unsigned sspp_mask,
 		   bool dsc, unsigned lm0_id, unsigned lm1_id)
 {
 	unsigned ctl = ctl_id - CTL_0;
 	void *ctl_base = dpu_base + cat->ctl[ctl].base;
-	uint32_t flush = BIT(17) |	// CTL
+	uint32_t flush = CTL_FLUSH_MASK_CTL |	// CTL
 			 BIT(31); 	// INTF
 
-	switch (sspp_id) {
-	case SSPP_DMA0:
-		writel(BIT(0), ctl_base + CTL_FETCH_PIPE_ACTIVE);
-		flush |= BIT(11);
-		break;
-	case SSPP_DMA1:
-		writel(BIT(1), ctl_base + CTL_FETCH_PIPE_ACTIVE);
-		flush |= BIT(12);
-		break;
-	default:
-		WARN_ON(sspp_id);
-	}
+	// writel(sspp_mask, ctl_base + CTL_FETCH_PIPE_ACTIVE);
+	DPU_REG_WRITE(ctl_base, CTL_FETCH_PIPE_ACTIVE, sspp_mask);
+	if (sspp_mask & BIT(16))
+		flush |= BIT(0);
+	if (sspp_mask & BIT(17))
+		flush |= BIT(1);
+
+	// switch (sspp_id) {
+	// case SSPP_VIG0:
+	// 	writel(BIT(0), ctl_base + CTL_FETCH_PIPE_ACTIVE);
+	// 	flush |= BIT(11);
+	// 	break;
+	// case SSPP_VIG1:
+	// 	writel(BIT(1), ctl_base + CTL_FETCH_PIPE_ACTIVE);
+	// 	flush |= BIT(12);
+	// 	break;
+	// default:
+	// 	WARN_ON(sspp_id);
+	// }
 
 	switch (lm0_id) {
 	case 0:
@@ -896,7 +990,8 @@ void mdp_ctl_flush(void *dpu_base, const struct dpu_mdss_cfg *cat,
 		flush |= BIT(22);
 
 	writel(0xF0000000, ctl_base + CTL_TOP);
-	writel(flush, ctl_base + CTL_FLUSH);
+	// writel(flush, ctl_base + CTL_FLUSH);
+	DPU_REG_WRITE(ctl_base, CTL_FLUSH, flush);
 }
 
 void mdp_intf_enable(void *dpu_base, const struct dpu_mdss_cfg *cat, unsigned intf_id)
@@ -927,12 +1022,15 @@ int qcom_dpu_probe(struct udevice *dev)
 	struct video_uc_plat *uc_plat = dev_get_uclass_plat(dev);
 	struct qcom_dpu_priv *priv = dev_get_priv(dev);
 	struct video_priv *uc_priv = dev_get_uclass_priv(dev);
-	struct display_timing timings, timings1;
+	struct display_timing timings;
+	u32 fb_stride;
 	int ret;
 
 	priv->dpu_base = dev_remap_addr_name(dev, "mdp");
 	priv->vbif_base = dev_remap_addr_name(dev, "vbif");
 	priv->cat = &dpu_sm8650_cfg;
+
+	void *ctl_base = priv->dpu_base + priv->cat->ctl[CTL_0 - CTL_0].base;
 
 	video_set_flush_dcache(dev, true);
 
@@ -949,11 +1047,13 @@ int qcom_dpu_probe(struct udevice *dev)
 	}
 
 	// TOFIX follow port/endpoint instead
-	ret = uclass_get_device(UCLASS_VIDEO_BRIDGE, 0, &priv->bridge0);
+	ret = uclass_get_device_by_endpoint(UCLASS_VIDEO_BRIDGE, dev, 0, -1, &priv->bridge0);
 	if (ret) {
-		dev_dbg(dev, "No video bridge, err %d\n", ret);
+		dev_err(dev, "Couldn't get DSI 0 via port graph! %d", ret);
 		return ret;
 	}
+
+	priv->dual_dsi = dev_read_bool(priv->bridge0, "qcom,dual-dsi-mode");
 
 	ret = video_bridge_attach(priv->bridge0);
 	if (ret) {
@@ -961,30 +1061,37 @@ int qcom_dpu_probe(struct udevice *dev)
 		return ret;
 	}
 
+	debug("%s:%d: %s\n", __FILE__, __LINE__, __func__);
+
 	// TOFIX follow port/endpoint instead
-	// ret = uclass_get_device(UCLASS_VIDEO_BRIDGE, 1, &priv->bridge1);
-	// if (ret) {
-	// 	dev_dbg(dev, "No video bridge1, err %d\n", ret);
-	// 	return ret;
-	// }
+	ret = uclass_get_device_by_endpoint(UCLASS_VIDEO_BRIDGE, dev, 1, -1, &priv->bridge1);
+	if (!ret) {
+		ret = video_bridge_attach(priv->bridge1);
+		if (ret) {
+			dev_err(dev, "fail to attach bridge1\n");
+			return ret;
+		}
 
-	// ret = video_bridge_attach(priv->bridge1);
-	// if (ret) {
-	// 	dev_err(dev, "fail to attach bridge1\n");
-	// 	return ret;
-	// }
+		debug("%s:%d: %s\n", __FILE__, __LINE__, __func__);
 
+		if (!priv->dual_dsi) {
+			ret = video_bridge_set_backlight(priv->bridge1, 100);
+			if (ret) {
+				dev_err(dev, "bridge1 enable backlight error %d\n", ret);
+				return ret;
+			}
+		}
+	} else if (priv->dual_dsi) {
+		dev_err(dev, "qcom,dual-dsi set but unable to find second bridge! %d\n", ret);
+		return ret;
+	}
+
+	// We assume either two identical panels or a dual-dsi panel
 	video_bridge_get_display_timing(priv->bridge0, &timings);
 	if (ret) {
 		dev_err(dev, "fail to get display timings\n");
 		return ret;
 	}
-
-	// video_bridge_get_display_timing(priv->bridge0, &timings1);
-	// if (ret) {
-	// 	dev_err(dev, "fail to get display timings\n");
-	// 	return ret;
-	// }
 
 	ret = video_bridge_set_backlight(priv->bridge0, 100);
 	if (ret) {
@@ -992,75 +1099,112 @@ int qcom_dpu_probe(struct udevice *dev)
 		return ret;
 	}
 
-	// ret = video_bridge_set_backlight(priv->bridge1, 100);
-	// if (ret) {
-	// 	dev_err(dev, "bridge1 enable backlight error %d\n", ret);
-	// 	return ret;
-	// }
-
 	/* Configure & start DPU */
 
 	uc_priv->bpix = VIDEO_BPP32;
 	uc_priv->xsize = timings.hactive.typ;
 	uc_priv->ysize = timings.vactive.typ;
 	// FIXME: read from DT! Also warn about vidconsole_rotate driver not being available!
-	uc_priv->rot = 0;
+	u32 rot_degrees = 0;
+	struct udevice *panel;
+	ret = uclass_get_device_by_endpoint(UCLASS_PANEL, priv->bridge0, 1, -1, &panel);
+	if (!ret)
+		rot_degrees = dev_read_u32_default(panel, "rotation", 0);
+	uc_priv->rot = rot_degrees / 90;
+
+	fb_stride = timings.hactive.typ * 4;
+
+	u32 sspp_ctl_active_mask = BIT(16); // VIG_0
 
 	mdss_vbif_setup(priv->vbif_base);
+
+	// udelay(1000);
 
 	// TOFIX implement resources manager
 
 	/* Panel 0 */
-	mdss_intf_setup(priv->dpu_base, &timings, priv->cat, INTF_1, PINGPONG_0);
+	mdss_intf_setup(priv, &timings, INTF_1, PINGPONG_0);
 
 	// mdp_dsc_setup(priv->dpu_base, priv->cat, DSC_0, PINGPONG_0);
 	// TOFIX use companion PP id from catalog
 	// mdp_dsc_setup(priv->dpu_base, priv->cat, DSC_1, PINGPONG_1);
 
-	// TOFIX use timings instead of static height/width
-	mdp_setup_stage_rec1(priv->dpu_base, priv->cat, CTL_0, LM_0, SSPP_DMA0, timings.vactive.typ, timings.hactive.typ, false);
+
+	mdp_setup_stage_rec1(priv, priv->cat, CTL_0, LM_0, SSPP_VIG0, timings.vactive.typ, timings.hactive.typ, false);
 	// TOFIX use companion LM id from catalog
-	mdp_setup_stage_rec1(priv->dpu_base, priv->cat, CTL_0, LM_1, SSPP_DMA0, timings.vactive.typ, timings.hactive.typ, false);
+	// if (quad_pipe) // two LMs per SSPP!
+	// mdp_setup_stage_rec1(priv, priv->cat, CTL_0, LM_1, SSPP_VIG0, timings.vactive.typ, timings.hactive.typ, false);
 
 	// Since the panels are rotated, use the right side of the fb for panel0
-	mdss_sspp_config_rec1(priv->dpu_base, priv->cat, uc_plat->base,
-			      (timings.hactive.typ * 4), SSPP_DMA0, timings.vactive.typ, timings.hactive.typ, 0);
-
-	mdss_intf_fetch_start_config(priv->dpu_base, priv->cat,
-				     CTL_0, INTF_1, DSC_0, DSC_1);
-
-	// TOFIX fill a flush bitfield from the config commands
-	mdp_ctl_flush(priv->dpu_base, priv->cat, CTL_0, SSPP_DMA0, false,
-		      LM_0, LM_1);
-
-	/* Panel 1 */
-	// mdss_intf_setup(priv->dpu_base, priv->cat, INTF_2, PINGPONG_2);
-
-	// mdp_dsc_setup(priv->dpu_base, priv->cat, DSC_2, PINGPONG_2);
-	// // TOFIX use companion PP id from catalog
-	// mdp_dsc_setup(priv->dpu_base, priv->cat, DSC_3, PINGPONG_3);
-
-	// // TOFIX use timings instead of static height/width
-	// mdp_setup_stage_rec1(priv->dpu_base, priv->cat, CTL_1, LM_2, SSPP_DMA1, 2160, 2160, false);
-	// // TOFIX use companion LM id from catalog
-	// mdp_setup_stage_rec1(priv->dpu_base, priv->cat, CTL_1, LM_3, SSPP_DMA1, 2160, 2160, true);
-
-	// // Since the panels are rotated, use the left side of the fb for panel0
-	// mdss_sspp_config_rec1(priv->dpu_base, priv->cat, uc_plat->base,
-	// 		(2160 * 2 * 4), SSPP_DMA1, 2160, 2160, 0);
+	mdss_sspp_config_rec1(priv, uc_plat->base,
+			      fb_stride, SSPP_VIG0, timings.vactive.typ, timings.hactive.typ, 0);
 
 	// mdss_intf_fetch_start_config(priv->dpu_base, priv->cat,
-	// 		CTL_1, INTF_2, DSC_2, DSC_3);
+	// 			     CTL_0, INTF_1, DSC_0, DSC_1);
 
-	// // TOFIX fill a flush bitfield from the config commands
-	// mdp_ctl_flush(priv->dpu_base, priv->cat, CTL_1, SSPP_DMA1, true,
-	// 		LM_2, LM_3);
+	/* Panel 1 */
+	if (priv->bridge1) {
+		// FIXME: use PP 1 for non-bonded DSI??
+		mdss_intf_setup(priv, &timings, INTF_2, PINGPONG_1);
+
+		// mdp_dsc_setup(priv->dpu_base, priv->cat, DSC_2, PINGPONG_2);
+		// // TOFIX use companion PP id from catalog
+		// mdp_dsc_setup(priv->dpu_base, priv->cat, DSC_3, PINGPONG_3);
+
+		mdp_setup_stage_rec1(priv, priv->cat, CTL_0, LM_1, SSPP_VIG0, timings.vactive.typ, timings.hactive.typ, true);
+		// mdp_setup_stage_rec1(priv, priv->cat, CTL_0, LM_1, SSPP_VIG1, timings.vactive.typ, timings.hactive.typ, true);
+
+		// mdp_setup_stage_rec1(priv, priv->cat, CTL_1, LM_2, SSPP_VIG1, timings.vactive.typ, timings.hactive.typ, false);
+		// // TOFIX use companion LM id from catalog
+		// mdp_setup_stage_rec1(priv, priv->cat, CTL_1, LM_3, SSPP_VIG1, timings.vactive.typ, timings.hactive.typ, true);
+
+		// Since the panels are rotated, use the left side of the fb for panel0
+		u32 x_off = timings.hactive.typ / 2;
+		// if (priv->dual_dsi)
+		// 	x_off /= 2;
+		// mdss_sspp_config_rec1(priv, uc_plat->base,
+		// 		fb_stride, SSPP_VIG1, timings.vactive.typ, timings.hactive.typ, x_off);
+
+		// mdss_intf_fetch_start_config(priv->dpu_base, priv->cat,
+		// 		CTL_0, INTF_2, DSC_2, DSC_3);
+
+		// TOFIX fill a flush bitfield from the config commands
+		// mdp_ctl_flush(priv->dpu_base, priv->cat, CTL_1, SSPP_VIG1, false,
+		// 		LM_2, LM_3);
+
+		// if (quad_pipe)
+		// 	sspp_ctl_active_mask |= BIT(17)
+	}
+
+	u32 intf = INTF_1 - INTF_0;
+	u32 intf_active = BIT(intf);
+
+	writel(BIT(intf), ctl_base + CTL_INTF_MASTER);
+
+	if (priv->bridge1)
+		intf_active |= BIT(INTF_2 - INTF_0);
+
+	// TOFIX make dsc optional
+	// writel(BIT(dsc0) | BIT(dsc1), ctl_base + CTL_DSC_ACTIVE);
+	// writel(BIT(dsc0) | BIT(dsc1), ctl_base + CTL_DSC_FLUSH);
+
+	// FIXME: assuming intf_0 is written first...
+	writel(intf_active, ctl_base + CTL_INTF_ACTIVE);
+	writel(intf_active, ctl_base + CTL_INTF_FLUSH);
+
+	// TOFIX fill a flush bitfield from the config commands
+	// flush SSPP 0 and 1
+	mdp_ctl_flush(priv->dpu_base, priv->cat, CTL_0, sspp_ctl_active_mask, false,
+		      LM_0, LM_1);
 
 	// TOFIX should we use bonded dsi instead ?
 	//writel(FLD_INTF_2_SW_TRG_MUX, priv->dpu_base + SPLIT_DISPLAY_LOWER_PIPE_CTRL);
 
 	mdp_intf_enable(priv->dpu_base, priv->cat, INTF_1);
-	// mdp_intf_enable(priv->dpu_base, priv->cat, INTF_2);
+	if (priv->bridge1)
+		mdp_intf_enable(priv->dpu_base, priv->cat, INTF_2);
+
+	// qcom_dpu_dump_state(dev);
 
 #if 0
 	local_priv = priv;
@@ -1079,8 +1223,8 @@ static int qcom_dpu_remove(struct udevice *dev)
 	return 0;
 }
 
-#define LCD_MAX_WIDTH 1080
-#define LCD_MAX_HEIGHT 2400
+#define LCD_MAX_WIDTH 1400
+#define LCD_MAX_HEIGHT 2560
 static int qcom_dpu_bind(struct udevice *dev)
 {
 	struct video_uc_plat *uc_plat = dev_get_uclass_plat(dev);
@@ -1090,7 +1234,8 @@ static int qcom_dpu_bind(struct udevice *dev)
 	uc_plat->align = SZ_2M;
 	dev_dbg(dev, "frame buffer max size %d bytes align %x\n",
 		uc_plat->size, uc_plat->align);
-	uc_plat->base = 0xaf400000; //0x9bb00000;
+	// uc_plat->base = 0xaf400000; //0x9bb00000;
+	uc_plat->base = 0xd5100000;
 
 	return 0;
 }
