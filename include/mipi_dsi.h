@@ -133,7 +133,7 @@ struct mipi_dsi_phy_ops {
  * @list: list management
  */
 struct mipi_dsi_host {
-	struct device *dev;
+	struct udevice *dev;
 	const struct mipi_dsi_host_ops *ops;
 	struct list_head list;
 };
