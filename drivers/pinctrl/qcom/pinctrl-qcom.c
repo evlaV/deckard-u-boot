@@ -49,6 +49,7 @@ static const struct pinconf_param msm_conf_params[] = {
 	{ "bias-disable", PIN_CONFIG_BIAS_DISABLE, 0 },
 	{ "bias-pull-up", PIN_CONFIG_BIAS_PULL_UP, 3 },
 	{ "bias-pull-down", PIN_CONFIG_BIAS_PULL_UP, 1 },
+	{ "output-enable", PIN_CONFIG_OUTPUT_ENABLE, 1, },
 	{ "output-high", PIN_CONFIG_OUTPUT, 1, },
 	{ "output-low", PIN_CONFIG_OUTPUT, 0, },
 };
@@ -224,6 +225,12 @@ static int msm_pinconf_set(struct udevice *dev, unsigned int pin_selector,
 		       priv->base + GPIO_IN_OUT_REG(priv, pin_selector));
 		setbits_le32(priv->base + GPIO_CONFIG_REG(priv, pin_selector),
 			     TLMM_GPIO_OE_MASK);
+		break;
+	case PIN_CONFIG_OUTPUT_ENABLE:
+		// FIXME: we should read the pins current pull direction and set it to avoid
+		// glitches
+		clrsetbits_le32(priv->base + GPIO_CONFIG_REG(priv, pin_selector),
+				TLMM_GPIO_OE_MASK, argument ? TLMM_GPIO_OE_MASK : 0);
 		break;
 	default:
 		return 0;
