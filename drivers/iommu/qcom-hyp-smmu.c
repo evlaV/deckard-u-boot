@@ -40,6 +40,17 @@ enum arm_smmu_cbar_type {
 	CBAR_TYPE_S1_TRANS_S2_TRANS,
 };
 
+static inline const char *cbar_type_str(enum arm_smmu_cbar_type type)
+{
+	switch (type) {
+	case CBAR_TYPE_S2_TRANS: return "S2-Trans";
+	case CBAR_TYPE_S1_TRANS_S2_BYPASS: return "S1-Trans-S2-Bypass";
+	case CBAR_TYPE_S1_TRANS_S2_FAULT: return "S1-Trans-S2-Fault";
+	case CBAR_TYPE_S1_TRANS_S2_TRANS: return "S1-Trans-S2-Trans";
+	default: return "Unknown";
+	}
+}
+
 #define ARM_SMMU_GR1_CBA2R(n) (0x800 + ((n) << 2))
 #define ARM_SMMU_CBA2R_VA64 BIT(0)
 
@@ -82,6 +93,16 @@ enum arm_smmu_s2cr_type {
 	S2CR_TYPE_BYPASS,
 	S2CR_TYPE_FAULT,
 };
+
+static inline const char *s2cr_type_str(enum arm_smmu_cbar_type type)
+{
+	switch (type) {
+	case S2CR_TYPE_TRANS: return "Trans";
+	case S2CR_TYPE_BYPASS: return "Bypass";
+	case S2CR_TYPE_FAULT: return "Fault";
+	default: return "Unknown";
+	}
+}
 
 #define ARM_SMMU_S2CR_EXIDVALID BIT(10)
 #define ARM_SMMU_S2CR_CBNDX GENMASK(7, 0)
@@ -327,15 +348,32 @@ static int qcom_smmu_connect(struct udevice *dev)
 #ifdef DEBUG
 static inline void dump_boot_mappings(struct qcom_smmu_priv *priv)
 {
-	u32 val;
-	int i;
+	u32 cbar, type, vmid, val, ttbr1, ttbr0, tcr, sid;
+	int n, cbx;
 
 	debug("  SMMU dump boot mappings:\n");
-	for (i = 0; i < priv->num_smr; i++) {
-		val = gr0_readl(priv, ARM_SMMU_GR0_SMR(i));
-		if (val & ARM_SMMU_SMR_VALID)
-			debug("\tSMR %3d: SID: %#lx\n", i,
-			      FIELD_GET(ARM_SMMU_SMR_ID, val));
+	for (n = 0; n < priv->num_smr; n++) {
+		val = gr0_readl(priv, ARM_SMMU_GR0_SMR(n));
+		if (!(val & ARM_SMMU_SMR_VALID))
+			continue;
+
+		sid = FIELD_GET(ARM_SMMU_SMR_ID, val);
+
+		val = gr0_readl(priv, ARM_SMMU_GR0_S2CR(n));
+		cbx = FIELD_GET(ARM_SMMU_S2CR_CBNDX, val);
+		type = FIELD_GET(ARM_SMMU_S2CR_TYPE, val);
+
+		debug("\tSMR %2d: Type: %-6s SID: %#x\n", n, s2cr_type_str(type), sid);
+
+		cbar = gr1_readl(priv, ARM_SMMU_GR1_CBAR(cbx));
+		type = FIELD_GET(ARM_SMMU_CBAR_TYPE, cbar);
+		vmid = FIELD_GET(ARM_SMMU_CBAR_VMID, cbar);
+
+		debug("\t  CB %2d: Type %-12s VMID: %#x\n", cbx, cbar_type_str(type), vmid);
+		ttbr0 = cbx_readl(priv, n, ARM_SMMU_CB_TTBR0);
+		ttbr1 = cbx_readl(priv, n, ARM_SMMU_CB_TTBR1);
+		tcr = cbx_readl(priv, n, ARM_SMMU_CB_TCR);
+		debug("\t    TTBR0: %#x TTBR1: %#x TCR: %#x\n", ttbr0, ttbr1, tcr);
 	}
 }
 #else
