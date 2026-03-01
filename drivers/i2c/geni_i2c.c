@@ -97,9 +97,9 @@ struct geni_i2c_priv {
  * source_clock = 19.2 MHz
  */
 static const struct geni_i2c_clk_fld geni_i2c_clk_map[] = {
-	{I2C_SPEED_STANDARD_RATE, 7, 10, 11, 26},
-	{I2C_SPEED_FAST_RATE, 2,  5, 12, 24},
-	{I2C_SPEED_FAST_PLUS_RATE, 1, 3,  9, 18},
+	{ I2C_SPEED_STANDARD_RATE, 7, 10, 12, 26 },
+	{ I2C_SPEED_FAST_RATE, 2,  5, 11, 22 },
+	{ I2C_SPEED_FAST_PLUS_RATE, 1, 2,  8, 18 },
 };
 
 static int geni_i2c_clk_map_idx(struct geni_i2c_priv *geni, unsigned int clk_freq)
