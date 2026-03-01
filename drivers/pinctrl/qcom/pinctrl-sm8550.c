@@ -53,7 +53,10 @@ static const struct msm_special_pin_data msm_special_pins_data[] = {
 static const char *sm8550_get_function_name(struct udevice *dev,
 						 unsigned int selector)
 {
-	return msm_pinctrl_functions[selector].name;
+	if (selector < ARRAY_SIZE(msm_pinctrl_functions))
+		return msm_pinctrl_functions[selector].name;
+	else
+	 	return NULL;
 }
 
 static const char *sm8550_get_pin_name(struct udevice *dev,
@@ -71,7 +74,11 @@ static const char *sm8550_get_pin_name(struct udevice *dev,
 static int sm8550_get_function_mux(__maybe_unused unsigned int pin,
 				   unsigned int selector)
 {
-	return msm_pinctrl_functions[selector].val;
+	if (selector < ARRAY_SIZE(msm_pinctrl_functions))
+		return msm_pinctrl_functions[selector].val;
+	else {
+	 	return -ENOENT;
+	}
 }
 
 static struct msm_pinctrl_data sm8550_data = {
