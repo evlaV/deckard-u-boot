@@ -694,6 +694,13 @@ config VIDEO_LCD_VISIONOX_VTDR6130
 	  Say Y here to enable support for the Visionox VTDR6130 1080p
 	  DSI video mode panel.
 
+config VIDEO_LCD_WT0600
+	bool "WT0600/WT0630 DSI panel support"
+	select VIDEO_MIPI_DSI
+	help
+	  Say Y here to enable support for the WT0600/WT0630 1400p
+	  DSI video mode panel.
+
 config VIDEO_LCD_HITACHI_TX10D07VM0BAA
 	tristate "Hitachi TX10D07VM0BAA 480x800 MIPI DSI video mode panel"
 	depends on PANEL && BACKLIGHT
