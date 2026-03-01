@@ -589,6 +589,8 @@ static struct msm_pinctrl_data sc7280_data = {
 		.pin_count = 183,
 		.special_pins_start = 175,
 		.special_pins_data = sc7280_special_pins_data,
+		.egpio_present = 11,
+		.egpio_enable = 12,
 	},
 	.functions_count = ARRAY_SIZE(msm_pinctrl_functions),
 	.get_function_name = sc7280_get_function_name,

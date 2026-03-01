@@ -14,8 +14,9 @@
 static char pin_name[MAX_PIN_NAME_LEN] __section(".data");
 
 static const struct pinctrl_function msm_pinctrl_functions[] = {
-	{"qup2_se7", 1},
 	{"gpio", 0},
+	{"qup2_se7", 1},
+	{"qup2_se1", 1},
 	{"pcie0_clk_req_n", 1},
 	{"pcie1_clk_req_n", 1},
 };
@@ -87,6 +88,9 @@ static struct msm_pinctrl_data sm8650_data = {
 		.pin_count = 214,
 		.special_pins_start = 210,
 		.special_pins_data = msm_special_pins_data,
+		.egpio_present = 11,
+		.egpio_enable = 12,
+		.i2c_pull = 13,
 	},
 	.functions_count = ARRAY_SIZE(msm_pinctrl_functions),
 	.get_function_name = sm8650_get_function_name,

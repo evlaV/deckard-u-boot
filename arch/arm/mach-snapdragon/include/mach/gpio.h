@@ -29,6 +29,9 @@ struct msm_pin_data {
 	const unsigned int *pin_offsets;
 	unsigned int special_pins_start;
 	const struct msm_special_pin_data *special_pins_data;
+	u32 egpio_present : 5;
+	u32 egpio_enable : 5;
+	u32 i2c_pull : 5;
 };
 
 static inline u32 qcom_pin_offset(const unsigned int *offs, unsigned int selector)
