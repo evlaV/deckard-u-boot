@@ -2,6 +2,8 @@
 
 /* this file handles configuration of VBIF/CTL/SSPP/INTF/LM/PP/DSC in DPU */
 
+#define pr_fmt(fmt) "[DPU] "fmt
+
 #include <asm/io.h>
 #include <clk.h>
 #include <dm/device.h>
@@ -1054,14 +1056,8 @@ int qcom_dpu_probe(struct udevice *dev)
 	}
 
 	priv->dual_dsi = dev_read_bool(priv->bridge0, "qcom,dual-dsi-mode");
-
-	ret = video_bridge_attach(priv->bridge0);
-	if (ret) {
-		dev_err(dev, "fail to attach bridge\n");
-		return ret;
-	}
-
-	debug("%s:%d: %s\n", __FILE__, __LINE__, __func__);
+	if (priv->dual_dsi)
+		pr_info("Setting up dual DSI!\n");
 
 	// TOFIX follow port/endpoint instead
 	ret = uclass_get_device_by_endpoint(UCLASS_VIDEO_BRIDGE, dev, 1, -1, &priv->bridge1);
@@ -1075,14 +1071,22 @@ int qcom_dpu_probe(struct udevice *dev)
 		debug("%s:%d: %s\n", __FILE__, __LINE__, __func__);
 
 		if (!priv->dual_dsi) {
-			ret = video_bridge_set_backlight(priv->bridge1, 100);
+			ret = video_bridge_set_backlight(priv->bridge1, 60);
 			if (ret) {
 				dev_err(dev, "bridge1 enable backlight error %d\n", ret);
 				return ret;
 			}
 		}
+	} else if (ret != -ENODEV) {
+		return ret;
 	} else if (priv->dual_dsi) {
 		dev_err(dev, "qcom,dual-dsi set but unable to find second bridge! %d\n", ret);
+		return ret;
+	}
+
+	ret = video_bridge_attach(priv->bridge0);
+	if (ret) {
+		dev_err(dev, "fail to attach bridge\n");
 		return ret;
 	}
 
@@ -1093,7 +1097,7 @@ int qcom_dpu_probe(struct udevice *dev)
 		return ret;
 	}
 
-	ret = video_bridge_set_backlight(priv->bridge0, 100);
+	ret = video_bridge_set_backlight(priv->bridge0, 60);
 	if (ret) {
 		dev_err(dev, "bridge enable backlight error %d\n", ret);
 		return ret;
@@ -1210,7 +1214,7 @@ int qcom_dpu_probe(struct udevice *dev)
 	local_priv = priv;
 	dpu_kms_mdp_snapshot();
 #endif
-	debug("DPU probed!\n");
+	pr_debug("probed!\n");
 	return 0;
 }
 

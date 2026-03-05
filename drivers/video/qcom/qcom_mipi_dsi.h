@@ -5,6 +5,8 @@
 
 #include <linux/types.h>
 
+#include "phy/dsi_phy.h"
+
 /**********************************************************
   DSI register configuration options
  **********************************************************/
@@ -59,5 +61,16 @@ struct msm_dsi_cfg_handler {
 void mdss_dsi_clock_config(void);
 //void mdss_dsi_video_mode_config(struct edid *edid, uint32_t bpp);
 enum cb_err mdss_dsi_panel_initialize(const u8 *init_cmds);
+
+int msm_dsi_phy_enable(struct msm_dsi_phy *phy,
+			struct msm_dsi_phy_clk_request *clk_req,
+			struct msm_dsi_phy_shared_timings *shared_timings);
+void msm_dsi_phy_disable(struct msm_dsi_phy *phy);
+void msm_dsi_phy_set_usecase(struct msm_dsi_phy *phy,
+			     enum msm_dsi_phy_usecase uc);
+void msm_dsi_phy_pll_save_state(struct msm_dsi_phy *phy);
+int msm_dsi_phy_pll_restore_state(struct msm_dsi_phy *phy);
+// void msm_dsi_phy_snapshot(struct msm_disp_state *disp_state, struct msm_dsi_phy *phy);
+bool msm_dsi_phy_set_continuous_clock(struct msm_dsi_phy *phy, bool enable);
 
 #endif

@@ -41,6 +41,8 @@ int qcom_mdss_probe(struct udevice *dev)
 		return ret;
 	}
 
+	clk_set_rate(&priv->bulk.clks[2], 402000000);
+
 	return clk_enable_bulk(&priv->bulk);
 }
 

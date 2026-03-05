@@ -69,14 +69,21 @@ struct qcom_dsi_priv {
 	struct udevice *panel;
 	struct phy phy;
 	struct phy_configure_opts_mipi_dphy phy_opts;
-	u64 pclk_rate;
+	u64 pixel_clk_rate;
 	u64 byte_clk_rate;
+	unsigned long byte_intf_clk_rate;
 	int lane_min_kbps;
 	int lane_max_kbps;
 	unsigned int lane_mbps; /* per lane */
 	struct udevice *vdd_reg;
 	struct udevice *dsi_host;
-	struct clk_bulk bulk;
+	// struct clk_bulk bulk;
+	struct clk byte_clk;
+	struct clk byte_intf_clk;
+	struct clk pixel_clk;
+	struct clk esc_clk;
+	struct clk iface_clk;
+	struct clk bus_clk;
 	struct display_timing timings;
 	int id;
 };
@@ -104,6 +111,9 @@ struct {
 
 #define DSI_0 0
 #define DSI_1 1
+
+#define DSI_CLOCK_MASTER	DSI_0
+#define DSI_CLOCK_SLAVE		DSI_1
 
 #define DSI_ID(dsi) (dsi->id)
 #define IS_SYNC_NEEDED() (qcom_dsi_globals.sync_needed)
@@ -628,13 +638,13 @@ bool msm_dsi_host_is_wide_bus_enabled(struct qcom_mipi_dsi *priv)
 
 /**** PHY_OPS *****/
 
-bool msm_dsi_phy_set_continuous_clock(struct msm_dsi_phy *phy, bool enable)
-{
-	if (!phy || !phy->plat->cfg->ops.set_continuous_clock)
-		return false;
+// bool msm_dsi_phy_set_continuous_clock(struct msm_dsi_phy *phy, bool enable)
+// {
+// 	if (!phy || !phy->cfg->ops.set_continuous_clock)
+// 		return false;
 
-	return phy->plat->cfg->ops.set_continuous_clock(phy, enable);
-}
+// 	return phy->cfg->ops.set_continuous_clock(phy, enable);
+// }
 
 /**** PHY_OPS_END *****/
 
@@ -768,7 +778,7 @@ static void dsi_ctrl_enable(struct qcom_mipi_dsi *priv,
 
 	dsi_write(priv->base + REG_DSI_CTRL, data);
 
-	if (phy->plat->cphy_mode)
+	if (phy->cphy_mode)
 		dsi_write(priv->base + REG_DSI_CPHY_MODE_CTRL, BIT(0));
 }
 
@@ -944,15 +954,33 @@ static int qcom_mipi_dsi_init(struct udevice *dev,
 	memset((void *)dsi->tx_buf, 0xff, 0x1000);
 	dsi->rx_buf = malloc(0x1000);
 
+	/* For bonded DSI the primary DSI controller initialises everything */
+	if (IS_BONDED_DSI() && dsi->id != DSI_0)
+		return 0;
+
 	ret = phy_ops->init(device);
+	if (ret)
+		return ret;
 
 	/* Ugly poke into through the DSI bridge device to the phy */
-	struct qcom_dsi_priv *priv = dev_get_priv(device->dev);
-	struct msm_dsi_phy *phy_priv = dev_get_priv(priv->phy.dev);
+	struct qcom_dsi_priv *bridge = (struct qcom_dsi_priv *)(device);
+	struct msm_dsi_phy *phy = dev_get_priv(bridge->phy.dev);
 
 	dsi_timing_setup(dsi, timings);
 	dsi_sw_reset(dsi);
-	dsi_ctrl_enable(dsi, &phy_priv->timing.shared_timings, phy_priv);
+	dsi_ctrl_enable(dsi, &phy->timing.shared_timings, phy);
+
+	if (IS_BONDED_DSI()) {
+		struct qcom_mipi_dsi *sdsi = host_to_dsi(GET_DSI(DSI_1));
+		struct qcom_dsi_priv *sdsi_bridge = (struct qcom_dsi_priv *)(host_to_dsi(GET_DSI(DSI_1))->device);
+		struct msm_dsi_phy *sdsi_phy = dev_get_priv(sdsi_bridge->phy.dev);
+
+		dev_dbg(sdsi->device->dev, "Setting up secondary DSI! phy %p\n", sdsi_phy);
+
+		dsi_timing_setup(sdsi, timings);
+		dsi_sw_reset(sdsi);
+		dsi_ctrl_enable(sdsi, &sdsi_phy->timing.shared_timings, sdsi_phy);
+	}
 
 	return 0;
 }
@@ -982,9 +1010,10 @@ static int qcom_mipi_dsi_probe(struct udevice *dev)
 	dsi->id = dev_seq(dev);
 
 	qcom_dsi_globals.dsi[dsi->id] = &dsi->dsi_host;
+	dev_info(dev, "%s: DSI%d host prob!\n", __func__, dsi->id);
 
-	qcom_dsi_globals.bonded_dsi = dev_read_bool(dev, "qcom,dual-dsi-mode");
-	qcom_dsi_globals.sync_needed = dev_read_bool(dev, "qcom,sync-dual-dsi");
+	qcom_dsi_globals.bonded_dsi |= dev_read_bool(dev, "qcom,dual-dsi-mode");
+	qcom_dsi_globals.sync_needed |= dev_read_bool(dev, "qcom,sync-dual-dsi");
 
 	/* check hardware version */
 	dsi_get_version(dsi->base, &dsi->cfg_hnd.major, &dsi->cfg_hnd.minor);
@@ -1050,7 +1079,7 @@ static int dsi_phy_calc_clk_req(struct qcom_dsi_priv *dsi, struct msm_dsi_phy_cl
 	// else
 	byteclk_rate = mult_frac(pclk_rate, bpp, 8 * mplat->lanes);
 
-	dsi->pclk_rate = pclk_rate;
+	dsi->pixel_clk_rate = pclk_rate;
 	dsi->byte_clk_rate = byteclk_rate;
 
 	// if (cphy_mode)
@@ -1075,86 +1104,122 @@ static int dsi_host_reset_phy(void *base)
 	return 0;
 }
 
+static int enable_phy(struct qcom_dsi_priv *msm_dsi,
+		      struct msm_dsi_phy_shared_timings *shared_timings)
+{
+	struct msm_dsi_phy *phy = dev_get_priv(msm_dsi->phy.dev);
+	struct msm_dsi_phy_clk_request clk_req;
+
+	dsi_phy_calc_clk_req(msm_dsi, &clk_req);
+
+	return msm_dsi_phy_enable(phy, &clk_req, shared_timings);
+}
+
+static int dsi_enable_clocks(struct qcom_dsi_priv *dsi, struct msm_dsi_phy_shared_timings *shared_timings)
+{
+	int ret;
+
+	dev_dbg(dsi->device.dev, "DSI%d %s\n", dsi->id, __func__);
+
+	dsi->byte_intf_clk_rate = dsi->byte_clk_rate;
+	if (shared_timings->byte_intf_clk_div_2)
+		dsi->byte_intf_clk_rate /= 2;
+
+	// clk_set_rate(&dsi->esc_clk, 19200000);
+	if (clk_set_rate(&dsi->byte_clk, dsi->byte_clk_rate) < 0) {
+		dev_err(dsi->device.dev, "clk_set_rate(byte_clk) failed!\n");
+		return -EINVAL;
+	}
+	if (clk_set_rate(&dsi->byte_intf_clk, dsi->byte_intf_clk_rate) < 0) {
+		dev_err(dsi->device.dev, "clk_set_rate(byte_intf_clk) failed!\n");
+		return -EINVAL;
+	}
+	if (clk_set_rate(&dsi->pixel_clk, dsi->pixel_clk_rate) < 0) {
+		dev_err(dsi->device.dev, "clk_set_rate(pixel_clk) failed!\n");
+		return -EINVAL;
+	}
+
+	ret = clk_enable(&dsi->esc_clk);
+	if (ret < 0) {
+		dev_err(dsi->device.dev, "clk_enable(esc_clk) failed! %d\n", ret);
+		return ret;
+	}
+	ret = clk_enable(&dsi->byte_clk);
+	if (ret < 0) {
+		dev_err(dsi->device.dev, "clk_enable(byte_clk) failed! %d\n", ret);
+		return ret;
+	}
+	ret = clk_enable(&dsi->byte_intf_clk);
+	if (ret < 0) {
+		dev_err(dsi->device.dev, "clk_enable(byte_intf_clk) failed! %d\n", ret);
+		return ret;
+	}
+	ret = clk_enable(&dsi->pixel_clk);
+	if (ret < 0) {
+		dev_err(dsi->device.dev, "clk_enable(pixel_clk) failed! %d\n", ret);
+		return ret;
+	}
+
+	return 0;
+}
+
 static int dsi_phy_init(void *priv_data)
 {
 	struct mipi_dsi_device *device = priv_data;
 	struct udevice *dev = device->dev;
 	// FIXME: layering violation, this is bridge priv...
 	struct qcom_dsi_priv *dsi = dev_get_priv(dev);
-	struct qcom_dsi_priv *mdsi = (struct qcom_dsi_priv *)(host_to_dsi(GET_DSI(DSI_0))->device);
-	struct msm_dsi_phy_plat *phy_plat = dev_get_plat(dsi->phy.dev);
-	struct msm_dsi_phy_clk_request clk_req = { 0 };
+	struct qcom_dsi_priv *mdsi = dsi, *sdsi;
+	struct msm_dsi_phy *phy = dev_get_priv(dsi->phy.dev);
+	struct msm_dsi_phy *sdsi_phy; // = dev_get_priv(dsi->phy.dev);
+	struct msm_dsi_phy_shared_timings shared_timings[DSI_MAX];
 	int ret;
 
-	dev_dbg(dev, "Initialize DSI physical layer\n");
+	if (IS_BONDED_DSI() && DSI_ID(dsi) != DSI_0) {
+		dev_err(dev, "%s called for secondary DSI in bonded DSI mode!\n", __func__);
+		return 0;
+	}
+
+	dev_dbg(dev, "DSI%d phy init\n", dsi->id);
 
 	if (!generic_phy_valid(&dsi->phy)) {
 		dev_dbg(dev, "fail to validate phy, phy %p phy->dev %p\n", &dsi->phy, dsi->phy.dev);
 	}
 
-	dsi_phy_calc_clk_req(dsi, &clk_req);
-
+	/* At this point for bonded DSI we are the primary DSI */
 	if (IS_BONDED_DSI()) {
-		if (DSI_ID(dsi) == 0)
-			phy_plat->usecase = MSM_DSI_PHY_MASTER;
-		else
-		 	phy_plat->usecase = MSM_DSI_PHY_SLAVE;
-	}
-
-	if (DSI_ID(dsi) == DSI_1 && IS_BONDED_DSI()) {
-
-		// turn off the master phy so we can enable it again
-		// generic_phy_power_off(&mdsi->phy);
+		sdsi = (struct qcom_dsi_priv *)(host_to_dsi(GET_DSI(DSI_1))->device);
+		sdsi_phy = dev_get_priv(sdsi->phy.dev);
+		phy->usecase = MSM_DSI_PHY_MASTER;
+		sdsi_phy->usecase = MSM_DSI_PHY_SLAVE;
 
 		dsi_host_reset_phy(mdsi->base);
-		dsi_host_reset_phy(dsi->base);
+		dsi_host_reset_phy(sdsi->base);
 
-		generic_phy_configure(&mdsi->phy, &clk_req);
-		generic_phy_configure(&dsi->phy, &clk_req);
-
-		ret = generic_phy_power_on(&mdsi->phy);
+		ret = enable_phy(mdsi, &shared_timings[DSI_CLOCK_MASTER]);
+		if (ret)
+			return ret;
+		ret = enable_phy(sdsi, &shared_timings[DSI_CLOCK_SLAVE]);
 		if (ret) {
-			dev_dbg(dev, "fail to power on phy\n");
-		}
-
-		ret = generic_phy_power_on(&dsi->phy);
-		if (ret) {
-			dev_dbg(dev, "fail to power on phy\n");
-		}
-
-		ret = clk_enable_bulk(&mdsi->bulk);
-		if (ret) {
-			dev_err(dev, "peripheral clock enable error %d\n", ret);
 			return ret;
 		}
 
-		ret = clk_enable_bulk(&dsi->bulk);
-		if (ret) {
-			dev_err(dev, "peripheral clock enable error %d\n", ret);
+		/* FIXME: should do that in DSI host init not phy init... */
+		ret = dsi_enable_clocks(mdsi, &shared_timings[DSI_CLOCK_MASTER]);
+		if (ret)
 			return ret;
-		}
-	} else if (!IS_BONDED_DSI()) {
-
-		dsi_host_reset_phy(dsi->base);
-
-		generic_phy_configure(&dsi->phy, &clk_req);
-		// FIXME: clock by name!
-		// clk_set_rate(&dsi->bulk.clks[0], dsi->byte_clk_rate);
-		// clk_set_rate(&dsi->bulk.clks[2], dsi->pclk_rate);
-
-		// Must be done first so that the PHY clocks are ready and rates are known!
-		ret = generic_phy_power_on(&dsi->phy);
-		if (ret) {
-			dev_dbg(dev, "fail to power on phy\n");
-		}
-
-		ret = clk_enable_bulk(&dsi->bulk);
-		if (ret) {
-			dev_err(dev, "peripheral clock enable error %d\n", ret);
+		ret = dsi_enable_clocks(sdsi, &shared_timings[DSI_CLOCK_SLAVE]);
+		if (ret)
 			return ret;
-		}
 	} else {
-		generic_phy_configure(&dsi->phy, &clk_req);
+		dsi_host_reset_phy(dsi->base);
+		ret = enable_phy(dsi, &shared_timings[dsi->id]);
+		if (ret)
+			return ret;
+
+		ret = dsi_enable_clocks(dsi, &shared_timings[dsi->id]);
+		if (ret)
+			return ret;
 	}
 
 	return 0;
@@ -1279,11 +1344,42 @@ static int qcom_dsi_probe(struct udevice *dev)
 	if (ret)
 		return ret;
 
-	ret = clk_get_bulk(device->dev, &priv->bulk);
+	ret = clk_get_by_name(dev, "byte", &priv->byte_clk);
 	if (ret) {
-		dev_err(dev, "peripheral clock get error %d\n", ret);
+		dev_err(dev, "byte clock get error %d\n", ret);
 		goto err_reg;
 	}
+	ret = clk_get_by_name(dev, "byte_intf", &priv->byte_intf_clk);
+	if (ret) {
+		dev_err(dev, "byte_intf clock get error %d\n", ret);
+		goto err_reg;
+	}
+	ret = clk_get_by_name(dev, "pixel", &priv->pixel_clk);
+	if (ret) {
+		dev_err(dev, "pixel clock get error %d\n", ret);
+		goto err_reg;
+	}
+	ret = clk_get_by_name(dev, "core", &priv->esc_clk);
+	if (ret) {
+		dev_err(dev, "core clock get error %d\n", ret);
+		goto err_reg;
+	}
+	ret = clk_get_by_name(dev, "iface", &priv->iface_clk);
+	if (ret) {
+		dev_err(dev, "iface clock get error %d\n", ret);
+		goto err_reg;
+	}
+	ret = clk_get_by_name(dev, "bus", &priv->bus_clk);
+	if (ret) {
+		dev_err(dev, "bus clock get error %d\n", ret);
+		goto err_reg;
+	}
+
+	clk_set_rate(&priv->iface_clk, 19200000);
+	clk_set_rate(&priv->bus_clk, ULONG_MAX);
+
+	clk_enable(&priv->iface_clk);
+	clk_enable(&priv->bus_clk);
 
 	debug("DSI bridge probe done!\n");
 
@@ -1300,7 +1396,7 @@ static int qcom_dsi_remove(struct udevice *dev)
 
 	generic_phy_power_off(&priv->phy);
 
-	clk_disable_bulk(&priv->bulk);
+	// clk_disable_bulk(&priv->bulk);
 
 	regulator_set_enable(priv->vdd_reg, false);
 

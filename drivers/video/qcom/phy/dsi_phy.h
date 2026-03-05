@@ -34,19 +34,21 @@ struct msm_dsi_phy_clk_request {
 	unsigned long bitclk_rate;
 	unsigned long escclk_rate;
 };
-
 struct msm_dsi_phy_ops {
 	int (*pll_init)(struct msm_dsi_phy *phy);
 	int (*enable)(struct msm_dsi_phy *phy,
 			struct msm_dsi_phy_clk_request *clk_req);
 	void (*disable)(struct msm_dsi_phy *phy);
+	void (*save_pll_state)(struct msm_dsi_phy *phy);
+	int (*restore_pll_state)(struct msm_dsi_phy *phy);
 	bool (*set_continuous_clock)(struct msm_dsi_phy *phy, bool enable);
 	int (*parse_dt_properties)(struct msm_dsi_phy *phy);
 };
 
 struct msm_dsi_phy_cfg {
-	const struct regulator_bulk_data *regulator_data;
-	int num_regulators;
+	// const struct regulator_bulk_data *regulator_data;
+	// const char *supply_name;
+	// int num_regulators;
 	struct msm_dsi_phy_ops ops;
 
 	unsigned long	min_pll_rate;
@@ -89,61 +91,30 @@ struct msm_dsi_dphy_timing {
 
 #define DSI_LANE_MAX			5
 
-struct dsi_pll_config {
-	bool enable_ssc;
-	bool ssc_center;
-	u32 ssc_freq;
-	u32 ssc_offset;
-	u32 ssc_adj_per;
-
-	/* out */
-	u32 decimal_div_start;
-	u32 frac_div_start;
-	u32 pll_clock_inverters;
-	u32 ssc_stepsize;
-	u32 ssc_div_per;
-};
-
-struct msm_dsi_phy_plat {
-	int id;
+struct msm_dsi_phy {
+	struct udevice *dev;
 	void __iomem *base;
 	void __iomem *pll_base;
 	void __iomem *reg_base;
 	void __iomem *lane_base;
-	const struct msm_dsi_phy_cfg *cfg;
-	struct udevice *clk_dev;
-	enum msm_dsi_phy_usecase usecase;
-	struct msm_dsi_phy_clk_request clk_req;
-	bool cphy_mode;
-	bool phy_powered_on;
-};
-
-struct dsi_pll_7nm {
-	struct udevice *dev;
-	struct msm_dsi_phy_plat *plat;
-	u64 vco_current_rate;
-	u64 vco_desired_rate;
-	struct dsi_pll_7nm *slave;
-	u32 id;
-};
-
-struct msm_dsi_phy {
-	struct udevice *dev;
-	struct msm_dsi_phy_plat *plat;
-	struct phy_configure_opts_mipi_dphy dphy_cfg;
 	phys_addr_t base_size;
 	phys_addr_t pll_size;
 	phys_addr_t reg_size;
 	phys_addr_t lane_size;
+	int id;
 
-	struct clk *ahb_clk;
-	struct clk *ref_clk;
-	struct udevice *vdds_reg;
+	struct udevice *supply;
 
 	struct msm_dsi_dphy_timing timing;
+	const struct msm_dsi_phy_cfg *cfg;
 	void *tuning_cfg;
 
+	enum msm_dsi_phy_usecase usecase;
 	bool regulator_ldo_mode;
+	bool cphy_mode;
+
+	struct clk_hw *vco_hw;
+	bool pll_on;
 
 	struct clk_hw_onecell_data *provided_clocks;
 
@@ -153,6 +124,14 @@ struct msm_dsi_phy {
 /*
  * PHY internal functions
  */
+int msm_dsi_dphy_timing_calc(struct msm_dsi_dphy_timing *timing,
+			     struct msm_dsi_phy_clk_request *clk_req);
+int msm_dsi_dphy_timing_calc_v2(struct msm_dsi_dphy_timing *timing,
+				struct msm_dsi_phy_clk_request *clk_req);
+int msm_dsi_dphy_timing_calc_v3(struct msm_dsi_dphy_timing *timing,
+				struct msm_dsi_phy_clk_request *clk_req);
+int msm_dsi_dphy_timing_calc_v4(struct msm_dsi_dphy_timing *timing,
+				struct msm_dsi_phy_clk_request *clk_req);
 int msm_dsi_cphy_timing_calc_v4(struct msm_dsi_dphy_timing *timing,
 				struct msm_dsi_phy_clk_request *clk_req);
 
