@@ -119,4 +119,7 @@
 #define dev_vdbg(dev, fmt, ...) \
 	__dev_printk(LOGL_DEBUG_CONTENT, dev, fmt, ##__VA_ARGS__)
 
+#define dev_err_probe(dev, er, fmt, ...) \
+	({__dev_printk(LOGL_ERR, dev, "err=%d " fmt, er, ##__VA_ARGS__); er;})
+
 #endif
