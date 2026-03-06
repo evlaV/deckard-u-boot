@@ -62,6 +62,7 @@ extern void consolevr_save_background_image( void );
 extern void consolevr_set_background_image_enabled( bool enable );
 
 bool g_display_enabled = false;
+bool g_force_disable_display = false;
 
 enum combined_serial_console_state_t g_total_console_state = 0;
 
@@ -647,6 +648,16 @@ bool display_enabled(void)
 void set_display_enabled(bool state)
 {
 	g_display_enabled = state;
+}
+
+void set_force_disable_display(bool state)
+{
+	g_force_disable_display = state;
+}
+
+bool force_disable_display(void)
+{
+	return g_force_disable_display;
 }
 
 int deckard_unbind_usb(void)

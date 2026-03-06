@@ -106,6 +106,8 @@ void deckard_fastboot_enable(deckard_devices_t * pdevices);
 
 bool display_enabled(void);
 void set_display_enabled(bool state);
+bool force_disable_display(void);
+void set_force_disable_display(bool state);
 int display_turn_on(void);
 int display_turn_off(void);
 int display_turn_off_force(void);

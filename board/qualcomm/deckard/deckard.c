@@ -225,10 +225,30 @@ int misc_init_r(void)
 		// TODO: if fatal error, show an error display screen if possible
 	}
 
+	// get board data from eeprom
+	deckard_log( "deckard_eeprom_init\n" );
+	deckard_eeprom_init();
+
+	/*
+	 * Set the magic $fdtfile variable so we load the right DTB during EFI boot. This will be used
+	 * to populate the EFI configuration table, it can be overwritten by an OS Loader.
+	 */
+	char * eeprom_board = env_get("EEPROM_BOARD");
+	if (eeprom_board) {
+		char fdtfile[32];
+		snprintf(fdtfile, 32, "qcom/sm8650-%s.dtb", eeprom_board);
+		env_set("fdtfile", fdtfile);
+		// HACK disable displays for plano
+		if (!strcmp(eeprom_board, "ev3dplano") ) {
+			deckard_log("ev3dplano board detected, set force disable display\n");
+			set_force_disable_display( true );
+		}
+	}
+
 	g_factory_mode = deckard_factory_mode_enabled();
 	deckard_log( "Factory mode: %d\n", g_factory_mode );
 
-	set_display_enabled( (bool) ( g_factory_mode ? 0 : env_get_ulong( "display", 10, 1 )) ); // defaults to on in non-factory mode
+	set_display_enabled( (bool) ( ( g_factory_mode || force_disable_display() ) ? 0 : env_get_ulong( "display", 10, 1 )) ); // defaults to on in non-factory mode
 	deckard_log("Display Enabled: %d\n", display_enabled() );
 
 	if ( ! display_enabled() )
@@ -281,21 +301,6 @@ int misc_init_r(void)
 
 	console_state_set_flags(SERIAL_CONSOLE_MASK); //seems likely we always need this on otherwise will get crashes / sync abort handler loops?
 	console_state_activate();
-
-	// get board data from eeprom
-	deckard_log( "deckard_eeprom_init\n" );
-	deckard_eeprom_init();
-
-	/*
-	 * Set the magic $fdtfile variable so we load the right DTB during EFI boot. This will be used
-	 * to populate the EFI configuration table, it can be overwritten by an OS Loader.
-	 */
-	char * eeprom_board = env_get("EEPROM_BOARD");
-	if (eeprom_board) {
-		char fdtfile[32];
-		snprintf(fdtfile, 32, "qcom/sm8650-%s.dtb", eeprom_board);
-		env_set("fdtfile", fdtfile);
-	}
 
 	// do we still need this?
 	char * bootedslot = env_get("booted_slot");
