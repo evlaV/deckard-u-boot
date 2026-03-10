@@ -347,6 +347,46 @@ int misc_init_r(void)
 	return 0;
 }
 
+int ft_board_debug_fixup(void *fdt, struct bd_info *bd)
+{
+	int ret = 0;
+	char targetnode[128];
+	char *p, *tok;
+	char *fdt_disable_nodes = env_get("fdt_disable_soc_nodes");
+	int offs;
+
+	if (fdt_disable_nodes) {
+		p = fdt_disable_nodes;
+
+		while ((tok = strsep(&p, ",")) != NULL) 
+		{
+			if (*tok == '\0') continue;
+
+			snprintf(targetnode,128,"%s",tok);
+			int nodeparent = fdt_find_or_add_subnode(fdt, 0, "soc@0");
+			if (nodeparent < 0) return nodeparent;
+			int nodeoffset = fdt_find_or_add_subnode(fdt, nodeparent, targetnode);
+			if (nodeoffset < 0) return nodeoffset;
+
+			ret = fdt_setprop_string(fdt, nodeoffset, "status", "disabled");
+			if (ret < 0) {
+				deckard_log("WARNING: could not set %s disabled: %s.\n", targetnode, fdt_strerror(ret));
+				return ret;
+			}
+			else
+			{
+				printf("soc node: [%s] disabled\n", targetnode);
+			}
+		}
+	}
+	else
+		return 0;
+
+
+
+	return 0;
+}
+
 int ft_board_setup(void *fdt, struct bd_info *bd)
 {
 	/* find or create "/chosen" node. */
@@ -427,6 +467,8 @@ int ft_board_setup(void *fdt, struct bd_info *bd)
 			}
 		}
 	}
+
+	ft_board_debug_fixup(fdt,bd);
 
 	return 0;
 }
