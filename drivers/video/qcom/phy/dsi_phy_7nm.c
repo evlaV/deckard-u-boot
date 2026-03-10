@@ -553,6 +553,8 @@ static void dsi_pll_7nm_vco_unprepare(struct clk_hw *hw)
 {
 	struct dsi_pll_7nm *pll_7nm = to_pll_7nm(hw);
 
+	printf("%s DSI%d!\n", __func__, pll_7nm->phy->id);
+
 	/*
 	 * To avoid any stray glitches while abruptly powering down the PLL
 	 * make sure to gate the clock using the clock enable bit before

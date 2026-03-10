@@ -1221,8 +1221,16 @@ int qcom_dpu_probe(struct udevice *dev)
 static int qcom_dpu_remove(struct udevice *dev)
 {
 	struct qcom_dpu_priv *priv = dev_get_priv(dev);
+	void *ctl_base = priv->dpu_base + priv->cat->ctl[CTL_0 - CTL_0].base;
+
+	/* Disable INTFs to stop SMMU faults in Linux */
+	writel(0, ctl_base + CTL_INTF_ACTIVE);
 
 	mdp_intf_disable(priv->dpu_base, priv->cat, INTF_1);
+	if (priv->bridge1)
+		mdp_intf_disable(priv->dpu_base, priv->cat, INTF_2);
+
+	// clk_disable_bulk(&priv->bulk);
 
 	return 0;
 }

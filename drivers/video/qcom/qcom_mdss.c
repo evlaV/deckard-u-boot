@@ -55,12 +55,14 @@ static int qcom_mdss_remove(struct udevice *dev)
 {
 	struct qcom_mdss_priv *priv = dev_get_priv(dev);
 
-	reset_assert(&priv->reset);
+	printf("%s!\n", __func__);
 
 	clk_disable_bulk(&priv->bulk);
 
 	if (!IS_ERR(priv->path))
 		icc_put(priv->path);
+
+	reset_assert(&priv->reset);
 
 	return 0;
 }
@@ -78,7 +80,7 @@ U_BOOT_DRIVER(qcom_mdss) = {
 	.probe	= qcom_mdss_probe,
 	.remove	= qcom_mdss_remove,
 	.priv_auto = sizeof(struct qcom_mdss_priv),
-	.flags	= DM_FLAG_LEAVE_PD_ON,
+	.flags	= DM_FLAG_LEAVE_PD_ON | DM_FLAG_OS_PREPARE,
 };
 
 static int do_mdss_ctrl(struct cmd_tbl *cmdtp, int flag, int argc,

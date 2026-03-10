@@ -1393,12 +1393,44 @@ err_reg:
 static int qcom_dsi_remove(struct udevice *dev)
 {
 	struct qcom_dsi_priv *priv = dev_get_priv(dev);
+	struct qcom_mipi_dsi *sdsi_host = host_to_dsi(GET_DSI(DSI_1) ?: NULL);
+	struct qcom_dsi_priv *sdsi;
+	u32 val;
 
-	generic_phy_power_off(&priv->phy);
+	if (DSI_ID(priv) == DSI_0) {
+		/* Remove secondary DSI first if it exists */
+		if (sdsi_host) {
+			sdsi = (struct qcom_dsi_priv *)sdsi_host->device;
+			device_remove(sdsi->device.dev, DM_REMOVE_NORMAL);
+		}
+	}
+
+	printf("%s\n", __func__);
+
+	val = dsi_read(priv->base + REG_DSI_CTRL);
+	val &= ~DSI_CTRL_ENABLE;
+	dsi_write(priv->base + REG_DSI_CTRL, val);
+
+	printf("%s: disabled DSI%d ctrl\n", __func__, DSI_ID(priv));
+
+	// generic_phy_power_off(&priv->phy);
+
+	clk_disable(&priv->byte_clk);
+	clk_disable(&priv->byte_intf_clk);
+	clk_disable(&priv->pixel_clk);
 
 	// clk_disable_bulk(&priv->bulk);
 
 	regulator_set_enable(priv->vdd_reg, false);
+
+	qcom_dsi_globals.dsi[DSI_ID(priv)] = NULL;
+
+	if (DSI_ID(priv) == DSI_1 && IS_BONDED_DSI())
+		return 0;
+
+	msm_dsi_phy_disable(dev_get_priv(priv->phy.dev));
+	if (IS_BONDED_DSI() && sdsi)
+		msm_dsi_phy_disable(dev_get_priv(sdsi->phy.dev));
 
 	return 0;
 }
@@ -1423,5 +1455,5 @@ U_BOOT_DRIVER(qcom_dsi) = {
 	.remove	= qcom_dsi_remove,
 	.ops = &qcom_dsi_ops,
 	.priv_auto = sizeof(struct qcom_dsi_priv),
-	.flags = DM_FLAG_LEAVE_PD_ON,
+	.flags = DM_FLAG_LEAVE_PD_ON | DM_FLAG_OS_PREPARE,
 };
