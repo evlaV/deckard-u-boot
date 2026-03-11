@@ -78,7 +78,7 @@ static int imx93_clk_composite_gate_disable(struct clk *clk)
 	return 0;
 }
 
-static const struct clk_ops imx93_clk_composite_gate_ops = {
+static const struct clk_ops_uboot imx93_clk_composite_gate_ops = {
 	.enable = imx93_clk_composite_gate_enable,
 	.disable = imx93_clk_composite_gate_disable,
 };

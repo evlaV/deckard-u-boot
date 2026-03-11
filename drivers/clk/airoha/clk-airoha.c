@@ -497,7 +497,7 @@ apply:
 	return rate;
 }
 
-const struct clk_ops airoha_clk_ops = {
+const struct clk_ops_uboot airoha_clk_ops = {
 	.enable = airoha_clk_enable,
 	.disable = airoha_clk_disable,
 	.get_rate = airoha_clk_get_rate,

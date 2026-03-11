@@ -11,7 +11,7 @@
 #define JH7110_EXTCLK_END	12
 
 #define _JH7110_CLK_OPS(_name)					\
-static const struct clk_ops jh7110_##_name##_clk_ops = {	\
+static const struct clk_ops_uboot jh7110_##_name##_clk_ops = {	\
 	.set_rate = ccf_clk_set_rate,				\
 	.get_rate = ccf_clk_get_rate,				\
 	.set_parent = ccf_clk_set_parent,			\

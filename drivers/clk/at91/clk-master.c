@@ -100,7 +100,7 @@ static ulong clk_master_pres_get_rate(struct clk *clk)
 	return DIV_ROUND_CLOSEST_ULL(rate, pres);
 }
 
-static const struct clk_ops master_pres_ops = {
+static const struct clk_ops_uboot master_pres_ops = {
 	.enable = clk_master_enable,
 	.get_rate = clk_master_pres_get_rate,
 };
@@ -176,7 +176,7 @@ static ulong clk_master_div_get_rate(struct clk *clk)
 	return rate;
 }
 
-static const struct clk_ops master_div_ops = {
+static const struct clk_ops_uboot master_div_ops = {
 	.enable = clk_master_enable,
 	.get_rate = clk_master_div_get_rate,
 };
@@ -320,7 +320,7 @@ static ulong clk_sama7g5_master_get_rate(struct clk *clk)
 	return DIV_ROUND_CLOSEST(parent_rate, div);
 }
 
-static const struct clk_ops sama7g5_master_ops = {
+static const struct clk_ops_uboot sama7g5_master_ops = {
 	.enable = clk_sama7g5_master_enable,
 	.disable = clk_sama7g5_master_disable,
 	.set_rate = clk_sama7g5_master_set_rate,

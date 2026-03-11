@@ -312,7 +312,7 @@ int get_serial_clock(void)
 	return priv->speed[MPC83XX_CLK_CSB];
 }
 
-const struct clk_ops mpc83xx_clk_ops = {
+const struct clk_ops_uboot mpc83xx_clk_ops = {
 	.request = mpc83xx_clk_request,
 	.get_rate = mpc83xx_clk_get_rate,
 	.enable = mpc83xx_clk_enable,

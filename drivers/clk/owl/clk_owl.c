@@ -238,7 +238,7 @@ static int owl_clk_probe(struct udevice *dev)
 	return 0;
 }
 
-static const struct clk_ops owl_clk_ops = {
+static const struct clk_ops_uboot owl_clk_ops = {
 	.enable = owl_clk_enable,
 	.disable = owl_clk_disable,
 	.get_rate = owl_clk_get_rate,

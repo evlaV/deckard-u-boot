@@ -89,7 +89,7 @@ static int imxrt1170_clk_set_parent(struct clk *clk, struct clk *parent)
 	return clk_set_parent(c, cp);
 }
 
-static struct clk_ops imxrt1170_clk_ops = {
+static struct clk_ops_uboot imxrt1170_clk_ops = {
 	.set_rate = imxrt1170_clk_set_rate,
 	.get_rate = imxrt1170_clk_get_rate,
 	.enable = imxrt1170_clk_enable,

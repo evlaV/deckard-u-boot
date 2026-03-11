@@ -42,7 +42,7 @@ static ulong clk_gpio_get_rate(struct clk *clk)
 	return clk_get_rate(priv->clk);
 }
 
-const struct clk_ops clk_gpio_ops = {
+const struct clk_ops_uboot clk_gpio_ops = {
 	.enable		= clk_gpio_enable,
 	.disable	= clk_gpio_disable,
 	.get_rate	= clk_gpio_get_rate,

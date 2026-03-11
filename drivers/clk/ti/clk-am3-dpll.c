@@ -275,7 +275,7 @@ static ulong clk_ti_am3_dpll_get_rate(struct clk *clk)
 	return rate;
 }
 
-const struct clk_ops clk_ti_am3_dpll_ops = {
+const struct clk_ops_uboot clk_ti_am3_dpll_ops = {
 	.round_rate = clk_ti_am3_dpll_round_rate,
 	.get_rate = clk_ti_am3_dpll_get_rate,
 	.set_rate = clk_ti_am3_dpll_set_rate,

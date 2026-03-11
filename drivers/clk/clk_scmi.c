@@ -420,7 +420,7 @@ static int scmi_clk_set_parent(struct clk *clk, struct clk *parent)
 	return 0;
 }
 
-static const struct clk_ops scmi_clk_ops = {
+static const struct clk_ops_uboot scmi_clk_ops = {
 	.enable = scmi_clk_enable,
 	.disable = scmi_clk_disable,
 	.get_rate = scmi_clk_get_rate,

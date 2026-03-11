@@ -625,7 +625,7 @@ static int rk3066_clk_disable(struct clk *clk)
 	return 0;
 }
 
-static struct clk_ops rk3066_clk_ops = {
+static struct clk_ops_uboot rk3066_clk_ops = {
 	.disable	= rk3066_clk_disable,
 	.enable	= rk3066_clk_enable,
 	.get_rate	= rk3066_clk_get_rate,

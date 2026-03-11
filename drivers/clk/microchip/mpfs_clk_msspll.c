@@ -106,7 +106,7 @@ int mpfs_clk_register_msspll(void __iomem *base, struct clk *parent)
 	return 0;
 }
 
-const struct clk_ops mpfs_msspll_clk_ops = {
+const struct clk_ops_uboot mpfs_msspll_clk_ops = {
 	.get_rate = mpfs_clk_msspll_recalc_rate,
 };
 

@@ -197,7 +197,7 @@ static ulong mtk_clk_find_parent_rate(struct clk *clk, int id,
 		parent.dev = clk->dev;
 
 	args.node = dev_ofnode(parent.dev);
-	ret = ((struct clk_ops *)parent.dev->driver->ops)->of_xlate(&parent, &args);
+	ret = ((struct clk_ops_uboot *)parent.dev->driver->ops)->of_xlate(&parent, &args);
 	if (ret)
 		return ret;
 
@@ -1129,7 +1129,7 @@ static void mtk_clk_gate_dump(struct udevice *dev)
 }
 #endif
 
-const struct clk_ops mtk_clk_apmixedsys_ops = {
+const struct clk_ops_uboot mtk_clk_apmixedsys_ops = {
 	.of_xlate = mtk_apmixedsys_of_xlate,
 	.enable = mtk_apmixedsys_enable,
 	.disable = mtk_apmixedsys_disable,
@@ -1140,7 +1140,7 @@ const struct clk_ops mtk_clk_apmixedsys_ops = {
 #endif
 };
 
-const struct clk_ops mtk_clk_fixed_pll_ops = {
+const struct clk_ops_uboot mtk_clk_fixed_pll_ops = {
 	.of_xlate = mtk_topckgen_of_xlate,
 	.enable = mtk_dummy_enable,
 	.disable = mtk_dummy_enable,
@@ -1150,7 +1150,7 @@ const struct clk_ops mtk_clk_fixed_pll_ops = {
 #endif
 };
 
-const struct clk_ops mtk_clk_topckgen_ops = {
+const struct clk_ops_uboot mtk_clk_topckgen_ops = {
 	.of_xlate = mtk_topckgen_of_xlate,
 	.enable = mtk_topckgen_enable,
 	.disable = mtk_topckgen_disable,
@@ -1161,7 +1161,7 @@ const struct clk_ops mtk_clk_topckgen_ops = {
 #endif
 };
 
-const struct clk_ops mtk_clk_infrasys_ops = {
+const struct clk_ops_uboot mtk_clk_infrasys_ops = {
 	.of_xlate = mtk_infrasys_of_xlate,
 	.enable = mtk_clk_infrasys_enable,
 	.disable = mtk_clk_infrasys_disable,
@@ -1172,7 +1172,7 @@ const struct clk_ops mtk_clk_infrasys_ops = {
 #endif
 };
 
-const struct clk_ops mtk_clk_gate_ops = {
+const struct clk_ops_uboot mtk_clk_gate_ops = {
 	.of_xlate = mtk_clk_gate_of_xlate,
 	.enable = mtk_clk_gate_enable,
 	.disable = mtk_clk_gate_disable,

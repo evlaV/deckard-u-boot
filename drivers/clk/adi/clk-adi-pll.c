@@ -49,7 +49,7 @@ static unsigned long sc5xx_cgu_pll_get_rate(struct clk *clk)
 	return parent_rate * m;
 }
 
-static const struct clk_ops clk_sc5xx_cgu_pll_ops = {
+static const struct clk_ops_uboot clk_sc5xx_cgu_pll_ops = {
 	.get_rate = sc5xx_cgu_pll_get_rate,
 };
 

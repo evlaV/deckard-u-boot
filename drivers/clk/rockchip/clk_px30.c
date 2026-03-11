@@ -1422,7 +1422,7 @@ static int px30_clk_enable(struct clk *clk)
 	return -ENOENT;
 }
 
-static struct clk_ops px30_clk_ops = {
+static struct clk_ops_uboot px30_clk_ops = {
 	.get_rate = px30_clk_get_rate,
 	.set_rate = px30_clk_set_rate,
 #if CONFIG_IS_ENABLED(OF_REAL)
@@ -1736,7 +1736,7 @@ static ulong px30_pmuclk_set_rate(struct clk *clk, ulong rate)
 	return ret;
 }
 
-static struct clk_ops px30_pmuclk_ops = {
+static struct clk_ops_uboot px30_pmuclk_ops = {
 	.get_rate = px30_pmuclk_get_rate,
 	.set_rate = px30_pmuclk_set_rate,
 };

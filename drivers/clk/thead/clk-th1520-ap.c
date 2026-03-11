@@ -224,7 +224,7 @@ static int ccu_div_enable(struct clk *clk)
 	return ccu_enable_helper(&cd->common, cd->enable);
 }
 
-static const struct clk_ops ccu_div_ops = {
+static const struct clk_ops_uboot ccu_div_ops = {
 	.disable	= ccu_div_disable,
 	.enable		= ccu_div_enable,
 	.set_parent	= ccu_div_set_parent,
@@ -295,7 +295,7 @@ static unsigned long ccu_pll_get_rate(struct clk *clk)
 	return rate;
 }
 
-static const struct clk_ops clk_pll_ops = {
+static const struct clk_ops_uboot clk_pll_ops = {
 	.get_rate	= ccu_pll_get_rate,
 };
 
@@ -1018,7 +1018,7 @@ static int th1520_clk_set_parent(struct clk *clk, struct clk *parent)
 	return clk_set_parent(c, p);
 }
 
-static const struct clk_ops th1520_clk_ops = {
+static const struct clk_ops_uboot th1520_clk_ops = {
 	.enable		= th1520_clk_enable,
 	.disable	= th1520_clk_disable,
 	.get_rate	= th1520_clk_get_rate,

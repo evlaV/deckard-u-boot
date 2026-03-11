@@ -39,7 +39,7 @@ static int adi_disable(struct clk *clk)
 	return 0;
 }
 
-const struct clk_ops adi_clk_ops = {
+const struct clk_ops_uboot adi_clk_ops = {
 	.set_rate = adi_set_rate,
 	.get_rate = adi_get_rate,
 	.enable = adi_enable,

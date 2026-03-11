@@ -300,7 +300,7 @@ static int npcm_clk_request(struct clk *clk)
 	return 0;
 }
 
-const struct clk_ops npcm_clk_ops = {
+const struct clk_ops_uboot npcm_clk_ops = {
 	.get_rate = npcm_clk_get_rate,
 	.set_rate = npcm_clk_set_rate,
 	.set_parent = npcm_clk_set_parent,

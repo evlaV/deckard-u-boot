@@ -500,7 +500,7 @@ static void zynq_clk_dump(struct udevice *dev)
 }
 #endif
 
-static struct clk_ops zynq_clk_ops = {
+static struct clk_ops_uboot zynq_clk_ops = {
 	.get_rate = zynq_clk_get_rate,
 #ifndef CONFIG_XPL_BUILD
 	.set_rate = zynq_clk_set_rate,

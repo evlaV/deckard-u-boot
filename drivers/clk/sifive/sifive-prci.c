@@ -702,7 +702,7 @@ static int sifive_prci_probe(struct udevice *dev)
 	return 0;
 }
 
-static struct clk_ops sifive_prci_ops = {
+static struct clk_ops_uboot sifive_prci_ops = {
 	.set_rate = sifive_prci_set_rate,
 	.get_rate = sifive_prci_get_rate,
 	.enable = sifive_prci_enable,

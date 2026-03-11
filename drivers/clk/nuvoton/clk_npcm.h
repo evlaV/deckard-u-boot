@@ -101,6 +101,6 @@ struct npcm_clk_priv {
 	int num_clks;
 };
 
-extern const struct clk_ops npcm_clk_ops;
+extern const struct clk_ops_uboot npcm_clk_ops;
 
 #endif

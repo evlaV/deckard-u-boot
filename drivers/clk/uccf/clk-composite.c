@@ -36,7 +36,7 @@ static int clk_composite_set_parent(struct clk *clk, struct clk *parent)
 {
 	struct clk_composite *composite = to_clk_composite(clk_dev_binded(clk) ?
 		(struct clk *)dev_get_clk_ptr(clk->dev) : clk);
-	const struct clk_ops *mux_ops = composite->mux_ops;
+	const struct clk_ops_uboot *mux_ops = composite->mux_ops;
 	struct clk *mux = composite->mux;
 
 	if (!mux || !mux_ops)
@@ -49,7 +49,7 @@ static unsigned long clk_composite_recalc_rate(struct clk *clk)
 {
 	struct clk_composite *composite = to_clk_composite(clk_dev_binded(clk) ?
 		(struct clk *)dev_get_clk_ptr(clk->dev) : clk);
-	const struct clk_ops *rate_ops = composite->rate_ops;
+	const struct clk_ops_uboot *rate_ops = composite->rate_ops;
 	struct clk *rate = composite->rate;
 
 	if (rate && rate_ops)
@@ -62,7 +62,7 @@ static ulong clk_composite_set_rate(struct clk *clk, unsigned long rate)
 {
 	struct clk_composite *composite = to_clk_composite(clk_dev_binded(clk) ?
 		(struct clk *)dev_get_clk_ptr(clk->dev) : clk);
-	const struct clk_ops *rate_ops = composite->rate_ops;
+	const struct clk_ops_uboot *rate_ops = composite->rate_ops;
 	struct clk *clk_rate = composite->rate;
 
 	if (rate && rate_ops && rate_ops->set_rate)
@@ -75,7 +75,7 @@ static int clk_composite_enable(struct clk *clk)
 {
 	struct clk_composite *composite = to_clk_composite(clk_dev_binded(clk) ?
 		(struct clk *)dev_get_clk_ptr(clk->dev) : clk);
-	const struct clk_ops *gate_ops = composite->gate_ops;
+	const struct clk_ops_uboot *gate_ops = composite->gate_ops;
 	struct clk *gate = composite->gate;
 
 	if (gate && gate_ops)
@@ -88,7 +88,7 @@ static int clk_composite_disable(struct clk *clk)
 {
 	struct clk_composite *composite = to_clk_composite(clk_dev_binded(clk) ?
 		(struct clk *)dev_get_clk_ptr(clk->dev) : clk);
-	const struct clk_ops *gate_ops = composite->gate_ops;
+	const struct clk_ops_uboot *gate_ops = composite->gate_ops;
 	struct clk *gate = composite->gate;
 
 	if (gate && gate_ops)
@@ -100,11 +100,11 @@ static int clk_composite_disable(struct clk *clk)
 struct clk *clk_register_composite(struct udevice *dev, const char *name,
 				   const char * const *parent_names,
 				   int num_parents, struct clk *mux,
-				   const struct clk_ops *mux_ops,
+				   const struct clk_ops_uboot *mux_ops,
 				   struct clk *rate,
-				   const struct clk_ops *rate_ops,
+				   const struct clk_ops_uboot *rate_ops,
 				   struct clk *gate,
-				   const struct clk_ops *gate_ops,
+				   const struct clk_ops_uboot *gate_ops,
 				   unsigned long flags)
 {
 	struct clk *clk;
@@ -171,7 +171,7 @@ err:
 	return clk;
 }
 
-static const struct clk_ops clk_composite_ops = {
+static const struct clk_ops_uboot clk_composite_ops = {
 	.set_parent = clk_composite_set_parent,
 	.get_rate = clk_composite_recalc_rate,
 	.set_rate = clk_composite_set_rate,

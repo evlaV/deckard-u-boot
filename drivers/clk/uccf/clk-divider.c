@@ -178,7 +178,7 @@ static ulong clk_divider_set_rate(struct clk *clk, unsigned long rate)
 	return clk_get_rate(clk);
 }
 
-const struct clk_ops clk_divider_ops = {
+const struct clk_ops_uboot clk_divider_ops = {
 	.get_rate = clk_divider_recalc_rate,
 	.set_rate = clk_divider_set_rate,
 };

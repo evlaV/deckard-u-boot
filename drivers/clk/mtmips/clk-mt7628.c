@@ -101,7 +101,7 @@ static int mt7628_clk_disable(struct clk *clk)
 	return 0;
 }
 
-const struct clk_ops mt7628_clk_ops = {
+const struct clk_ops_uboot mt7628_clk_ops = {
 	.enable = mt7628_clk_enable,
 	.disable = mt7628_clk_disable,
 	.get_rate = mt7628_clk_get_rate,

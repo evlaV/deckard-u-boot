@@ -343,7 +343,7 @@ static int tcsrcc_sm8650_clk_probe(struct udevice *dev)
 	return 0;
 }
 
-static struct clk_ops tcsrcc_sm8650_clk_ops = {
+static struct clk_ops_uboot tcsrcc_sm8650_clk_ops = {
 	.enable = tcsrcc_sm8650_clk_enable,
 	.get_rate = tcsrcc_sm8650_clk_get_rate,
 };

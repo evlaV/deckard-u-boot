@@ -138,7 +138,7 @@ int mpfs_clk_register_cfgs(struct clk *parent, struct regmap *regmap)
 	return 0;
 }
 
-const struct clk_ops mpfs_cfg_clk_ops = {
+const struct clk_ops_uboot mpfs_cfg_clk_ops = {
 	.set_rate = mpfs_cfg_clk_set_rate,
 	.get_rate = mpfs_cfg_clk_recalc_rate,
 };

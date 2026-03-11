@@ -803,7 +803,7 @@ static int versal_clk_enable(struct clk *clk)
 	return 0;
 }
 
-static struct clk_ops versal_clk_ops = {
+static struct clk_ops_uboot versal_clk_ops = {
 	.set_rate = versal_clk_set_rate,
 	.get_rate = versal_clk_get_rate,
 	.enable = versal_clk_enable,

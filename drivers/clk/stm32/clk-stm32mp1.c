@@ -2310,7 +2310,7 @@ static int stm32mp1_clk_probe(struct udevice *dev)
 	return result;
 }
 
-static const struct clk_ops stm32mp1_clk_ops = {
+static const struct clk_ops_uboot stm32mp1_clk_ops = {
 	.enable = stm32mp1_clk_enable,
 	.disable = stm32mp1_clk_disable,
 	.get_rate = stm32mp1_clk_get_rate,

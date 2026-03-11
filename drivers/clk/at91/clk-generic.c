@@ -129,7 +129,7 @@ static ulong clk_gck_get_rate(struct clk *clk)
 	return parent_rate / (div + 1);
 }
 
-static const struct clk_ops gck_ops = {
+static const struct clk_ops_uboot gck_ops = {
 	.enable = clk_gck_enable,
 	.disable = clk_gck_disable,
 	.set_parent = clk_gck_set_parent,

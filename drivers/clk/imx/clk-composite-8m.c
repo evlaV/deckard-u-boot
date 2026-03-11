@@ -111,7 +111,7 @@ static ulong imx8m_clk_composite_divider_set_rate(struct clk *clk,
 	return clk_get_rate(&composite->clk);
 }
 
-static const struct clk_ops imx8m_clk_composite_divider_ops = {
+static const struct clk_ops_uboot imx8m_clk_composite_divider_ops = {
 	.get_rate = imx8m_clk_composite_divider_recalc_rate,
 	.set_rate = imx8m_clk_composite_divider_set_rate,
 };
@@ -174,7 +174,7 @@ static int imx8m_clk_mux_set_parent(struct clk *clk, struct clk *parent)
 	return 0;
 }
 
-const struct clk_ops imx8m_clk_mux_ops = {
+const struct clk_ops_uboot imx8m_clk_mux_ops = {
 	.get_rate = clk_generic_get_rate,
 	.set_parent = imx8m_clk_mux_set_parent,
 };

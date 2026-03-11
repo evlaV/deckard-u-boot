@@ -41,7 +41,7 @@ static int stub_clk_nop(struct clk *clk)
 	return 0;
 }
 
-static struct clk_ops stub_clk_ops = {
+static struct clk_ops_uboot stub_clk_ops = {
 	.set_rate = stub_clk_set_rate,
 	.get_rate = stub_clk_get_rate,
 	.enable = stub_clk_nop,

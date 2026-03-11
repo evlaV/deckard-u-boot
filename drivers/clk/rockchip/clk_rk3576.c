@@ -2354,7 +2354,7 @@ static int rk3576_clk_set_parent(struct clk *clk, struct clk *parent)
 }
 #endif
 
-static struct clk_ops rk3576_clk_ops = {
+static struct clk_ops_uboot rk3576_clk_ops = {
 	.get_rate = rk3576_clk_get_rate,
 	.set_rate = rk3576_clk_set_rate,
 #if (IS_ENABLED(OF_CONTROL)) || (!IS_ENABLED(OF_PLATDATA))

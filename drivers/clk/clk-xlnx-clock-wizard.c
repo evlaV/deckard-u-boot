@@ -105,7 +105,7 @@ static unsigned long clk_wzrd_set_rate(struct clk *clk, ulong rate)
 	return 0;
 }
 
-static struct clk_ops clk_wzrd_ops = {
+static struct clk_ops_uboot clk_wzrd_ops = {
 	.enable = clk_wzrd_enable,
 	.set_rate = clk_wzrd_set_rate,
 };

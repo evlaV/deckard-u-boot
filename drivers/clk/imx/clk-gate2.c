@@ -83,7 +83,7 @@ static ulong clk_gate2_set_rate(struct clk *clk, ulong rate)
 	return -ENODEV;
 }
 
-static const struct clk_ops clk_gate2_ops = {
+static const struct clk_ops_uboot clk_gate2_ops = {
 	.set_rate = clk_gate2_set_rate,
 	.enable = clk_gate2_enable,
 	.disable = clk_gate2_disable,

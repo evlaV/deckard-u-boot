@@ -1290,7 +1290,7 @@ static void k210_clk_dump(struct udevice *dev)
 }
 #endif
 
-static const struct clk_ops k210_clk_ops = {
+static const struct clk_ops_uboot k210_clk_ops = {
 	.request = k210_clk_request,
 	.set_rate = k210_clk_set_rate,
 	.get_rate = k210_clk_get_rate,

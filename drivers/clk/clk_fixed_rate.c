@@ -25,7 +25,7 @@ static int dummy_enable(struct clk *clk)
 	return 0;
 }
 
-const struct clk_ops clk_fixed_rate_ops = {
+const struct clk_ops_uboot clk_fixed_rate_ops = {
 	.get_rate = clk_fixed_rate_get_rate,
 	.enable = dummy_enable,
 	.disable = dummy_enable,
@@ -53,7 +53,7 @@ static ulong clk_fixed_rate_raw_get_rate(struct clk *clk)
 	return container_of(clk, struct clk_fixed_rate, clk)->fixed_rate;
 }
 
-const struct clk_ops clk_fixed_rate_raw_ops = {
+const struct clk_ops_uboot clk_fixed_rate_raw_ops = {
 	.get_rate = clk_fixed_rate_raw_get_rate,
 };
 

@@ -999,7 +999,7 @@ static int meson_clk_probe(struct udevice *dev)
 	return 0;
 }
 
-static struct clk_ops meson_clk_ops = {
+static struct clk_ops_uboot meson_clk_ops = {
 	.disable	= meson_clk_disable,
 	.enable		= meson_clk_enable,
 	.get_rate	= meson_clk_get_rate,

@@ -260,7 +260,7 @@ static int gen2_clk_of_xlate(struct clk *clk, struct ofnode_phandle_args *args)
 	return 0;
 }
 
-const struct clk_ops gen2_clk_ops = {
+const struct clk_ops_uboot gen2_clk_ops = {
 	.enable		= gen2_clk_enable,
 	.disable	= gen2_clk_disable,
 	.get_rate	= gen2_clk_get_rate,

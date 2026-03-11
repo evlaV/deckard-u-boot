@@ -1544,7 +1544,7 @@ static ulong rk3528_clk_set_rate(struct clk *clk, ulong rate)
 	return ret;
 };
 
-static struct clk_ops rk3528_clk_ops = {
+static struct clk_ops_uboot rk3528_clk_ops = {
 	.get_rate = rk3528_clk_get_rate,
 	.set_rate = rk3528_clk_set_rate,
 };

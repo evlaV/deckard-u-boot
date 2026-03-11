@@ -701,7 +701,7 @@ static void meson_clk_dump(struct udevice *dev)
 }
 #endif
 
-static struct clk_ops meson_clk_ops = {
+static struct clk_ops_uboot meson_clk_ops = {
 	.disable	= meson_clk_disable,
 	.enable		= meson_clk_enable,
 	.get_rate	= meson_clk_get_rate,

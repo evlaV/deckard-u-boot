@@ -1126,7 +1126,7 @@ static int __maybe_unused rk3308_clk_set_parent(struct clk *clk, struct clk *par
 }
 #endif
 
-static struct clk_ops rk3308_clk_ops = {
+static struct clk_ops_uboot rk3308_clk_ops = {
 	.get_rate = rk3308_clk_get_rate,
 	.set_rate = rk3308_clk_set_rate,
 #if CONFIG_IS_ENABLED(OF_REAL)

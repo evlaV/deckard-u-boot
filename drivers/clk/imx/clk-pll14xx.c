@@ -372,14 +372,14 @@ static int clk_pll14xx_unprepare(struct clk *clk)
 	return 0;
 }
 
-static const struct clk_ops clk_pll1416x_ops = {
+static const struct clk_ops_uboot clk_pll1416x_ops = {
 	.enable		= clk_pll14xx_prepare,
 	.disable	= clk_pll14xx_unprepare,
 	.set_rate	= clk_pll1416x_set_rate,
 	.get_rate	= clk_pll1416x_recalc_rate,
 };
 
-static const struct clk_ops clk_pll1443x_ops = {
+static const struct clk_ops_uboot clk_pll1443x_ops = {
 	.enable		= clk_pll14xx_prepare,
 	.disable	= clk_pll14xx_unprepare,
 	.set_rate	= clk_pll1443x_set_rate,

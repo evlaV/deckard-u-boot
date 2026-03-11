@@ -264,7 +264,7 @@ static ulong ti_clk_set_rate(struct clk *clk, ulong rate)
 	struct clk *clkp = data->map[clk->id].clk;
 	int div = 1;
 	ulong child_rate;
-	const struct clk_ops *ops;
+	const struct clk_ops_uboot *ops;
 	ulong new_rate, rem;
 	ulong diff, new_diff;
 	int freq_scale_up = rate >= ti_clk_get_rate(clk) ? 1 : 0;
@@ -405,7 +405,7 @@ static const struct udevice_id ti_clk_of_match[] = {
 	{ /* sentinel */ },
 };
 
-static const struct clk_ops ti_clk_ops = {
+static const struct clk_ops_uboot ti_clk_ops = {
 	.of_xlate = ti_clk_of_xlate,
 	.set_rate = ti_clk_set_rate,
 	.get_rate = ti_clk_get_rate,

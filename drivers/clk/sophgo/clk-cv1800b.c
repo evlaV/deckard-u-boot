@@ -731,7 +731,7 @@ static int cv1800b_clk_set_parent(struct clk *clk, struct clk *parent)
 	return clk_set_parent(c, p);
 }
 
-const struct clk_ops cv1800b_clk_ops = {
+const struct clk_ops_uboot cv1800b_clk_ops = {
 	.enable = cv1800b_clk_enable,
 	.disable = cv1800b_clk_disable,
 	.get_rate = cv1800b_clk_get_rate,

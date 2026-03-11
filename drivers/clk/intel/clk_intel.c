@@ -19,7 +19,7 @@ static ulong intel_clk_get_rate(struct clk *clk)
 	}
 }
 
-static struct clk_ops intel_clk_ops = {
+static struct clk_ops_uboot intel_clk_ops = {
 	.get_rate	= intel_clk_get_rate,
 };
 

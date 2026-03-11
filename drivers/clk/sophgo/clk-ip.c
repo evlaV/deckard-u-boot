@@ -48,7 +48,7 @@ static ulong gate_get_rate(struct clk *clk)
 	return clk_get_parent_rate(clk);
 }
 
-const struct clk_ops cv1800b_clk_gate_ops = {
+const struct clk_ops_uboot cv1800b_clk_gate_ops = {
 	.disable = gate_disable,
 	.enable = gate_enable,
 	.get_rate = gate_get_rate,
@@ -110,7 +110,7 @@ static ulong div_set_rate(struct clk *clk, ulong rate)
 	return DIV_ROUND_UP_ULL(parent_rate, val);
 }
 
-const struct clk_ops cv1800b_clk_div_ops = {
+const struct clk_ops_uboot cv1800b_clk_div_ops = {
 	.disable = div_disable,
 	.enable = div_enable,
 	.get_rate = div_get_rate,
@@ -163,7 +163,7 @@ static int bypass_div_set_parent(struct clk *clk, struct clk *pclk)
 	return 0;
 }
 
-const struct clk_ops cv1800b_clk_bypass_div_ops = {
+const struct clk_ops_uboot cv1800b_clk_bypass_div_ops = {
 	.disable = div_disable,
 	.enable = div_enable,
 	.get_rate = bypass_div_get_rate,
@@ -203,7 +203,7 @@ static ulong fixed_div_get_rate(struct clk *clk)
 	return DIV_ROUND_UP_ULL(clk_get_parent_rate(clk), div->div);
 }
 
-const struct clk_ops cv1800b_clk_fixed_div_ops = {
+const struct clk_ops_uboot cv1800b_clk_fixed_div_ops = {
 	.disable = fixed_div_disable,
 	.enable = fixed_div_enable,
 	.get_rate = fixed_div_get_rate,
@@ -247,7 +247,7 @@ static int bypass_fixed_div_set_parent(struct clk *clk, struct clk *pclk)
 	return 0;
 }
 
-const struct clk_ops cv1800b_clk_bypass_fixed_div_ops = {
+const struct clk_ops_uboot cv1800b_clk_bypass_fixed_div_ops = {
 	.disable = fixed_div_disable,
 	.enable = fixed_div_enable,
 	.get_rate = bypass_fixed_div_get_rate,
@@ -320,7 +320,7 @@ static int mux_set_parent(struct clk *clk, struct clk *pclk)
 	return 0;
 }
 
-const struct clk_ops cv1800b_clk_mux_ops = {
+const struct clk_ops_uboot cv1800b_clk_mux_ops = {
 	.disable = mux_disable,
 	.enable = mux_enable,
 	.get_rate = mux_get_rate,
@@ -378,7 +378,7 @@ static int bypass_mux_set_parent(struct clk *clk, struct clk *pclk)
 	return 0;
 }
 
-const struct clk_ops cv1800b_clk_bypass_mux_ops = {
+const struct clk_ops_uboot cv1800b_clk_bypass_mux_ops = {
 	.disable = mux_disable,
 	.enable = mux_enable,
 	.get_rate = bypass_mux_get_rate,
@@ -489,7 +489,7 @@ static int mmux_set_parent(struct clk *clk, struct clk *pclk)
 	return 0;
 }
 
-const struct clk_ops cv1800b_clk_mmux_ops = {
+const struct clk_ops_uboot cv1800b_clk_mmux_ops = {
 	.disable = mmux_disable,
 	.enable = mmux_enable,
 	.get_rate = mmux_get_rate,
@@ -579,7 +579,7 @@ static ulong aclk_set_rate(struct clk *clk, ulong rate)
 	return DIV_ROUND_UP_ULL(parent_rate * n, m * 2);
 }
 
-const struct clk_ops cv1800b_clk_audio_ops = {
+const struct clk_ops_uboot cv1800b_clk_audio_ops = {
 	.disable = aclk_disable,
 	.enable = aclk_enable,
 	.get_rate = aclk_get_rate,

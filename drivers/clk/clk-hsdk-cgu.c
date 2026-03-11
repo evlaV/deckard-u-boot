@@ -734,7 +734,7 @@ static int hsdk_cgu_disable(struct clk *sclk)
 	return -EINVAL;
 }
 
-static const struct clk_ops hsdk_cgu_ops = {
+static const struct clk_ops_uboot hsdk_cgu_ops = {
 	.set_rate = hsdk_cgu_set_rate,
 	.get_rate = hsdk_cgu_get_rate,
 	.disable = hsdk_cgu_disable,

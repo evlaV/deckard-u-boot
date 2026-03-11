@@ -196,7 +196,7 @@ static const struct udevice_id ti_sci_clk_of_match[] = {
 	{ /* sentinel */ },
 };
 
-static struct clk_ops ti_sci_clk_ops = {
+static struct clk_ops_uboot ti_sci_clk_ops = {
 	.of_xlate = ti_sci_clk_of_xlate,
 	.get_rate = ti_sci_clk_get_rate,
 	.set_rate = ti_sci_clk_set_rate,

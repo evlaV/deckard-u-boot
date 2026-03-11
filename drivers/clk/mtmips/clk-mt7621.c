@@ -181,7 +181,7 @@ static int mt7621_clk_request(struct clk *clk)
 	return 0;
 }
 
-const struct clk_ops mt7621_clk_ops = {
+const struct clk_ops_uboot mt7621_clk_ops = {
 	.request = mt7621_clk_request,
 	.enable = mt7621_clk_enable,
 	.disable = mt7621_clk_disable,

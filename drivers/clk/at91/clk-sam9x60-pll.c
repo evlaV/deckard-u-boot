@@ -245,7 +245,7 @@ static int sam9x60_frac_pll_disable(struct clk *clk)
 	return 0;
 }
 
-static const struct clk_ops sam9x60_frac_pll_ops = {
+static const struct clk_ops_uboot sam9x60_frac_pll_ops = {
 	.enable = sam9x60_frac_pll_enable,
 	.disable = sam9x60_frac_pll_disable,
 	.set_rate = sam9x60_frac_pll_set_rate,
@@ -372,14 +372,14 @@ static ulong sam9x60_fixed_div_pll_get_rate(struct clk *clk)
 	return parent_rate >> 1;
 }
 
-static const struct clk_ops sam9x60_div_pll_ops = {
+static const struct clk_ops_uboot sam9x60_div_pll_ops = {
 	.enable = sam9x60_div_pll_enable,
 	.disable = sam9x60_div_pll_disable,
 	.set_rate = sam9x60_div_pll_set_rate,
 	.get_rate = sam9x60_div_pll_get_rate,
 };
 
-static const struct clk_ops sam9x60_fixed_div_pll_ops = {
+static const struct clk_ops_uboot sam9x60_fixed_div_pll_ops = {
 	.enable = sam9x60_div_pll_enable,
 	.disable = sam9x60_div_pll_disable,
 	.get_rate = sam9x60_fixed_div_pll_get_rate,

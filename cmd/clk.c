@@ -58,7 +58,7 @@ static void show_clks(struct udevice *dev, int depth, int last_flag)
 static int soc_clk_dump(void)
 {
 	struct udevice *dev;
-	const struct clk_ops *ops;
+	const struct clk_ops_uboot *ops;
 
 	printf(" Rate               Usecnt      Name\n");
 	printf("------------------------------------------\n");

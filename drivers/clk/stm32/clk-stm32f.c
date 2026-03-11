@@ -717,7 +717,7 @@ static int stm32_clk_of_xlate(struct clk *clk, struct ofnode_phandle_args *args)
 	return 0;
 }
 
-static struct clk_ops stm32_clk_ops = {
+static struct clk_ops_uboot stm32_clk_ops = {
 	.of_xlate	= stm32_clk_of_xlate,
 	.enable		= stm32_clk_enable,
 	.get_rate	= stm32_clk_get_rate,

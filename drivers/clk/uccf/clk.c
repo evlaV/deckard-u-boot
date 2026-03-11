@@ -133,7 +133,7 @@ int ccf_clk_disable(struct clk *clk)
 	return ccf_clk_endisable(clk, false);
 }
 
-const struct clk_ops ccf_clk_ops = {
+const struct clk_ops_uboot ccf_clk_ops = {
 	.set_rate = ccf_clk_set_rate,
 	.get_rate = ccf_clk_get_rate,
 	.set_parent = ccf_clk_set_parent,

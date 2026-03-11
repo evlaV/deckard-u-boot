@@ -170,7 +170,7 @@ static ulong socfpga_a10_clk_get_rate(struct clk *clk)
 	return rate;
 }
 
-static struct clk_ops socfpga_a10_clk_ops = {
+static struct clk_ops_uboot socfpga_a10_clk_ops = {
 	.enable		= socfpga_a10_clk_enable,
 	.disable	= socfpga_a10_clk_disable,
 	.get_rate	= socfpga_a10_clk_get_rate,

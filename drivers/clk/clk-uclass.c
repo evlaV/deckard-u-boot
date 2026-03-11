@@ -24,9 +24,9 @@
 #include <linux/clk-provider.h>
 #include <linux/err.h>
 
-static inline const struct clk_ops *clk_dev_ops(struct udevice *dev)
+static inline const struct clk_ops_uboot *clk_dev_ops(struct udevice *dev)
 {
-	return (const struct clk_ops *)dev->driver->ops;
+	return (const struct clk_ops_uboot *)dev->driver->ops;
 }
 
 struct clk *dev_get_clk_ptr(struct udevice *dev)
@@ -81,7 +81,7 @@ static int clk_get_by_index_tail(int ret, ofnode node,
 				 struct clk *clk)
 {
 	struct udevice *dev_clk;
-	const struct clk_ops *ops;
+	const struct clk_ops_uboot *ops;
 
 	assert(clk);
 	clk->dev = NULL;
@@ -466,7 +466,7 @@ int clk_release_all(struct clk *clk, unsigned int count)
 
 int clk_request(struct udevice *dev, struct clk *clk)
 {
-	const struct clk_ops *ops;
+	const struct clk_ops_uboot *ops;
 
 	debug("%s(dev=%s, clk=%p)\n", __func__, dev_read_name(dev), clk);
 	if (!clk)
@@ -483,7 +483,7 @@ int clk_request(struct udevice *dev, struct clk *clk)
 
 ulong clk_get_rate(struct clk *clk)
 {
-	const struct clk_ops *ops;
+	const struct clk_ops_uboot *ops;
 
 	debug("%s(clk=%p)\n", __func__, clk);
 	if (!clk_valid(clk))
@@ -517,7 +517,7 @@ struct clk *clk_get_parent(struct clk *clk)
 
 ulong clk_get_parent_rate(struct clk *clk)
 {
-	const struct clk_ops *ops;
+	const struct clk_ops_uboot *ops;
 	struct clk *pclk;
 
 	debug("%s(clk=%p)\n", __func__, clk);
@@ -541,7 +541,7 @@ ulong clk_get_parent_rate(struct clk *clk)
 
 ulong clk_round_rate(struct clk *clk, ulong rate)
 {
-	const struct clk_ops *ops;
+	const struct clk_ops_uboot *ops;
 
 	debug("%s(clk=%p, rate=%lu)\n", __func__, clk, rate);
 	if (!clk_valid(clk))
@@ -588,7 +588,7 @@ static void clk_clean_rate_cache(struct clk *clk)
 
 ulong clk_set_rate(struct clk *clk, ulong rate)
 {
-	const struct clk_ops *ops;
+	const struct clk_ops_uboot *ops;
 	struct clk *clkp;
 
 	debug("%s(clk=%p, rate=%lu)\n", __func__, clk, rate);
@@ -621,7 +621,7 @@ ulong clk_set_rate(struct clk *clk, ulong rate)
 
 int clk_set_parent(struct clk *clk, struct clk *parent)
 {
-	const struct clk_ops *ops;
+	const struct clk_ops_uboot *ops;
 	int ret;
 
 	debug("%s(clk=%p, parent=%p)\n", __func__, clk, parent);
@@ -659,7 +659,7 @@ int clk_set_parent(struct clk *clk, struct clk *parent)
 
 int clk_enable(struct clk *clk)
 {
-	const struct clk_ops *ops;
+	const struct clk_ops_uboot *ops;
 	struct clk *clkp = NULL;
 	int ret;
 
@@ -720,7 +720,7 @@ int clk_enable_bulk(struct clk_bulk *bulk)
 
 int clk_disable(struct clk *clk)
 {
-	const struct clk_ops *ops;
+	const struct clk_ops_uboot *ops;
 	struct clk *clkp = NULL;
 	int ret;
 

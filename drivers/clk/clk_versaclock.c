@@ -277,7 +277,7 @@ static int vc5_mux_set_parent(struct clk *hw, unsigned char index)
 	return vc5_update_bits(vc5->i2c, VC5_PRIM_SRC_SHDN, mask, src);
 }
 
-static const struct clk_ops vc5_mux_ops = {
+static const struct clk_ops_uboot vc5_mux_ops = {
 	.get_rate	= vc5_mux_get_rate,
 };
 
@@ -358,7 +358,7 @@ static unsigned long vc5_pfd_set_rate(struct clk *hw, unsigned long rate)
 	return 0;
 }
 
-static const struct clk_ops vc5_pfd_ops = {
+static const struct clk_ops_uboot vc5_pfd_ops = {
 	.round_rate	= vc5_pfd_round_rate,
 	.get_rate	= vc5_pfd_recalc_rate,
 	.set_rate	= vc5_pfd_set_rate,
@@ -429,7 +429,7 @@ static unsigned long vc5_pll_set_rate(struct clk *hw, unsigned long rate)
 	return dm_i2c_write(vc5->i2c, VC5_FEEDBACK_INT_DIV, fb, 5);
 }
 
-static const struct clk_ops vc5_pll_ops = {
+static const struct clk_ops_uboot vc5_pll_ops = {
 	.round_rate	= vc5_pll_round_rate,
 	.get_rate	= vc5_pll_recalc_rate,
 	.set_rate	= vc5_pll_set_rate,
@@ -530,7 +530,7 @@ static unsigned long vc5_fod_set_rate(struct clk *hw, unsigned long rate)
 	return 0;
 }
 
-static const struct clk_ops vc5_fod_ops = {
+static const struct clk_ops_uboot vc5_fod_ops = {
 	.round_rate	= vc5_fod_round_rate,
 	.get_rate	= vc5_fod_recalc_rate,
 	.set_rate	= vc5_fod_set_rate,
@@ -636,20 +636,20 @@ static unsigned long vc5_clk_out_get_rate(struct clk *hw)
 	return clk_get_parent_rate(hw);
 }
 
-static const struct clk_ops vc5_clk_out_ops = {
+static const struct clk_ops_uboot vc5_clk_out_ops = {
 	.enable	= vc5_clk_out_prepare,
 	.disable	= vc5_clk_out_unprepare,
 	.set_rate	= vc5_clk_out_set_rate,
 	.get_rate	= vc5_clk_out_get_rate,
 };
 
-static const struct clk_ops vc5_clk_out_sel_ops = {
+static const struct clk_ops_uboot vc5_clk_out_sel_ops = {
 	.enable	= vc5_clk_out_prepare,
 	.disable	= vc5_clk_out_unprepare,
 	.get_rate	= vc5_clk_out_get_rate,
 };
 
-static const struct clk_ops vc5_clk_ops = {
+static const struct clk_ops_uboot vc5_clk_ops = {
 	.enable	= vc5_clk_out_prepare,
 	.disable	= vc5_clk_out_unprepare,
 	.set_rate	= vc5_clk_out_set_rate,

@@ -74,7 +74,7 @@ static unsigned long clk_pfd_set_rate(struct clk *clk, unsigned long rate)
 	return 0;
 }
 
-static const struct clk_ops clk_pfd_ops = {
+static const struct clk_ops_uboot clk_pfd_ops = {
 	.get_rate	= clk_pfd_recalc_rate,
 	.set_rate	= clk_pfd_set_rate,
 };

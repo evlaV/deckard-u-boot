@@ -97,7 +97,7 @@ static int main_rc_disable(struct clk *clk)
 	return 0;
 }
 
-static const struct clk_ops main_rc_clk_ops = {
+static const struct clk_ops_uboot main_rc_clk_ops = {
 	.enable = main_rc_enable,
 	.disable = main_rc_disable,
 	.get_rate = clk_generic_get_rate,
@@ -183,7 +183,7 @@ static int clk_main_osc_disable(struct clk *clk)
 	return 0;
 }
 
-static const struct clk_ops main_osc_clk_ops = {
+static const struct clk_ops_uboot main_osc_clk_ops = {
 	.enable = clk_main_osc_enable,
 	.disable = clk_main_osc_disable,
 	.get_rate = clk_generic_get_rate,
@@ -251,7 +251,7 @@ static int clk_rm9200_main_enable(struct clk *clk)
 	return clk_main_probe_frequency(main->reg);
 }
 
-static const struct clk_ops rm9200_main_clk_ops = {
+static const struct clk_ops_uboot rm9200_main_clk_ops = {
 	.enable = clk_rm9200_main_enable,
 };
 
@@ -338,7 +338,7 @@ static int clk_sam9x5_main_set_parent(struct clk *clk, struct clk *parent)
 	return 0;
 }
 
-static const struct clk_ops sam9x5_main_clk_ops = {
+static const struct clk_ops_uboot sam9x5_main_clk_ops = {
 	.enable = clk_sam9x5_main_enable,
 	.set_parent = clk_sam9x5_main_set_parent,
 	.get_rate = clk_generic_get_rate,

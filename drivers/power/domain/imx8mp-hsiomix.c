@@ -174,7 +174,7 @@ static int hsio_pll_clk_disable(struct clk *clk)
 	return 0;
 }
 
-static const struct clk_ops hsio_pll_clk_ops = {
+static const struct clk_ops_uboot hsio_pll_clk_ops = {
 	.enable = hsio_pll_clk_enable,
 	.disable = hsio_pll_clk_disable,
 };

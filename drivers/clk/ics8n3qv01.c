@@ -196,7 +196,7 @@ static int ics8n3qv01_disable(struct clk *clk)
 	return 0;
 }
 
-static const struct clk_ops ics8n3qv01_ops = {
+static const struct clk_ops_uboot ics8n3qv01_ops = {
 	.get_rate = ics8n3qv01_get_rate,
 	.set_rate = ics8n3qv01_set_rate,
 	.enable = ics8n3qv01_enable,

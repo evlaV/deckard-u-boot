@@ -684,7 +684,7 @@ static int stm32_usbphyc_clk48_disable(struct clk *clk)
 	return 0;
 }
 
-const struct clk_ops usbphyc_clk48_ops = {
+const struct clk_ops_uboot usbphyc_clk48_ops = {
 	.get_rate = stm32_usbphyc_clk48_get_rate,
 	.enable = stm32_usbphyc_clk48_enable,
 	.disable = stm32_usbphyc_clk48_disable,

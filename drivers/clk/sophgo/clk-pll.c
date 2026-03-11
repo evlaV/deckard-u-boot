@@ -112,7 +112,7 @@ static ulong cv1800b_ipll_set_rate(struct clk *clk, ulong rate)
 	return -EINVAL;
 }
 
-const struct clk_ops cv1800b_ipll_ops = {
+const struct clk_ops_uboot cv1800b_ipll_ops = {
 	.enable = cv1800b_ipll_enable,
 	.disable = cv1800b_ipll_disable,
 	.get_rate = cv1800b_ipll_get_rate,
@@ -259,7 +259,7 @@ static int cv1800b_fpll_set_parent(struct clk *clk, struct clk *parent)
 	return 0;
 }
 
-const struct clk_ops cv1800b_fpll_ops = {
+const struct clk_ops_uboot cv1800b_fpll_ops = {
 	.enable = cv1800b_ipll_enable,
 	.disable = cv1800b_ipll_disable,
 	.get_rate = cv1800b_fpll_get_rate,

@@ -377,7 +377,7 @@ static void __maybe_unused msm_dump_clks(struct udevice *dev)
 	dump_rcgs(dev);
 }
 
-static struct clk_ops msm_clk_ops = {
+static struct clk_ops_uboot msm_clk_ops = {
 	.set_rate = msm_clk_set_rate,
 	.enable = msm_clk_enable,
 #if IS_ENABLED(CONFIG_CMD_CLK)

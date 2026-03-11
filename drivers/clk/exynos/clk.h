@@ -33,7 +33,7 @@ static int _name##_of_xlate(struct clk *clk,				\
 	return 0;							\
 }									\
 									\
-static const struct clk_ops _name##_clk_ops = {				\
+static const struct clk_ops_uboot _name##_clk_ops = {				\
 	.set_rate = ccf_clk_set_rate,					\
 	.get_rate = ccf_clk_get_rate,					\
 	.set_parent = ccf_clk_set_parent,				\

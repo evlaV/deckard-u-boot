@@ -56,7 +56,7 @@ static unsigned long samsung_pll0822x_recalc_rate(struct clk *clk)
 	return (unsigned long)fvco;
 }
 
-static const struct clk_ops samsung_pll0822x_clk_min_ops = {
+static const struct clk_ops_uboot samsung_pll0822x_clk_min_ops = {
 	.get_rate = samsung_pll0822x_recalc_rate,
 };
 
@@ -94,7 +94,7 @@ static unsigned long samsung_pll0831x_recalc_rate(struct clk *clk)
 	return (unsigned long)fvco;
 }
 
-static const struct clk_ops samsung_pll0831x_clk_min_ops = {
+static const struct clk_ops_uboot samsung_pll0831x_clk_min_ops = {
 	.get_rate = samsung_pll0831x_recalc_rate,
 };
 

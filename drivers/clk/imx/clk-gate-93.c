@@ -103,7 +103,7 @@ static ulong imx93_clk_set_rate(struct clk *clk, ulong rate)
 	return -ENODEV;
 }
 
-static const struct clk_ops imx93_clk_gate_ops = {
+static const struct clk_ops_uboot imx93_clk_gate_ops = {
 	.enable = imx93_clk_gate_enable,
 	.disable = imx93_clk_gate_disable,
 	.get_rate = clk_generic_get_rate,

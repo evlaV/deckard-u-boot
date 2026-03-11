@@ -47,7 +47,7 @@ static ulong clk_pllv3_get_rate(struct clk *clk)
 	return parent_rate * 24;
 }
 
-static const struct clk_ops clk_pllv3_generic_ops = {
+static const struct clk_ops_uboot clk_pllv3_generic_ops = {
 	.get_rate       = clk_pllv3_get_rate,
 };
 
@@ -107,7 +107,7 @@ static int clk_gate2_disable(struct clk *clk)
 	return 0;
 }
 
-static const struct clk_ops clk_gate2_ops = {
+static const struct clk_ops_uboot clk_gate2_ops = {
 	.enable = clk_gate2_enable,
 	.disable = clk_gate2_disable,
 	.get_rate = clk_generic_get_rate,
@@ -161,7 +161,7 @@ static unsigned long sandbox_clk_composite_divider_recalc_rate(struct clk *clk)
 				   divider->flags, divider->width);
 }
 
-static const struct clk_ops sandbox_clk_composite_divider_ops = {
+static const struct clk_ops_uboot sandbox_clk_composite_divider_ops = {
 	.get_rate = sandbox_clk_composite_divider_recalc_rate,
 };
 

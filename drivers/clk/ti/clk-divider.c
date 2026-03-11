@@ -243,7 +243,7 @@ static int clk_ti_divider_request(struct clk *clk)
 	return 0;
 }
 
-const struct clk_ops clk_ti_divider_ops = {
+const struct clk_ops_uboot clk_ti_divider_ops = {
 	.request = clk_ti_divider_request,
 	.round_rate = clk_ti_divider_round_rate,
 	.get_rate = clk_ti_divider_get_rate,

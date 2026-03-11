@@ -1910,7 +1910,7 @@ static int rk3588_clk_set_parent(struct clk *clk, struct clk *parent)
 }
 #endif
 
-static struct clk_ops rk3588_clk_ops = {
+static struct clk_ops_uboot rk3588_clk_ops = {
 	.get_rate = rk3588_clk_get_rate,
 	.set_rate = rk3588_clk_set_rate,
 #if (CONFIG_IS_ENABLED(OF_CONTROL)) || (!CONFIG_IS_ENABLED(OF_PLATDATA))
@@ -2138,7 +2138,7 @@ static int rk3588_scru_clk_probe(struct udevice *dev)
 	return 0;
 }
 
-static const struct clk_ops rk3588_scru_clk_ops = {
+static const struct clk_ops_uboot rk3588_scru_clk_ops = {
 	.get_rate = rk3588_scru_clk_get_rate,
 	.set_rate = rk3588_scru_clk_set_rate,
 };

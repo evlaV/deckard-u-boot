@@ -177,7 +177,7 @@ static int serdes_am654_mux_clk_set_parent(struct clk *clk, struct clk *parent)
 	return 0;
 }
 
-static struct clk_ops serdes_am654_mux_clk_ops = {
+static struct clk_ops_uboot serdes_am654_mux_clk_ops = {
 	.set_parent = serdes_am654_mux_clk_set_parent,
 };
 

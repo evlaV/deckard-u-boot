@@ -39,7 +39,7 @@ static ulong octeon_clk_get_rate(struct clk *clk)
 	return 0;
 }
 
-static struct clk_ops octeon_clk_ops = {
+static struct clk_ops_uboot octeon_clk_ops = {
 	.enable = octeon_clk_enable,
 	.get_rate = octeon_clk_get_rate,
 };

@@ -73,7 +73,7 @@ static int clk_ti_gate_of_to_plat(struct udevice *dev)
 	return 0;
 }
 
-static struct clk_ops clk_ti_gate_ops = {
+static struct clk_ops_uboot clk_ti_gate_ops = {
 	.enable = clk_ti_gate_enable,
 	.disable = clk_ti_gate_disable,
 };

@@ -275,14 +275,14 @@ struct cv1800b_clk_audio {
 					  _n_width),			\
 	}
 
-extern const struct clk_ops cv1800b_clk_gate_ops;
-extern const struct clk_ops cv1800b_clk_div_ops;
-extern const struct clk_ops cv1800b_clk_bypass_div_ops;
-extern const struct clk_ops cv1800b_clk_fixed_div_ops;
-extern const struct clk_ops cv1800b_clk_bypass_fixed_div_ops;
-extern const struct clk_ops cv1800b_clk_mux_ops;
-extern const struct clk_ops cv1800b_clk_bypass_mux_ops;
-extern const struct clk_ops cv1800b_clk_mmux_ops;
-extern const struct clk_ops cv1800b_clk_audio_ops;
+extern const struct clk_ops_uboot cv1800b_clk_gate_ops;
+extern const struct clk_ops_uboot cv1800b_clk_div_ops;
+extern const struct clk_ops_uboot cv1800b_clk_bypass_div_ops;
+extern const struct clk_ops_uboot cv1800b_clk_fixed_div_ops;
+extern const struct clk_ops_uboot cv1800b_clk_bypass_fixed_div_ops;
+extern const struct clk_ops_uboot cv1800b_clk_mux_ops;
+extern const struct clk_ops_uboot cv1800b_clk_bypass_mux_ops;
+extern const struct clk_ops_uboot cv1800b_clk_mmux_ops;
+extern const struct clk_ops_uboot cv1800b_clk_audio_ops;
 
 #endif /* __CLK_SOPHGO_IP_H__ */

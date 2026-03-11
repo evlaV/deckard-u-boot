@@ -288,6 +288,6 @@ struct stm32_clk_composite_cfg {
 	.setup		= clk_stm32_register_composite, \
 }
 
-extern const struct clk_ops stm32_clk_ops;
+extern const struct clk_ops_uboot stm32_clk_ops;
 
 ulong clk_stm32_get_rate_by_index(struct udevice *dev, int index);

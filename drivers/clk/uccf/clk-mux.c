@@ -159,7 +159,7 @@ static int clk_mux_set_parent(struct clk *clk, struct clk *parent)
 	return 0;
 }
 
-const struct clk_ops clk_mux_ops = {
+const struct clk_ops_uboot clk_mux_ops = {
 	.get_rate = clk_generic_get_rate,
 	.set_parent = clk_mux_set_parent,
 };

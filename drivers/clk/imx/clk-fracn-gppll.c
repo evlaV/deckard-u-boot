@@ -325,7 +325,7 @@ static int clk_fracn_gppll_unprepare(struct clk *clk)
 	return 0;
 }
 
-static const struct clk_ops clk_fracn_gppll_ops = {
+static const struct clk_ops_uboot clk_fracn_gppll_ops = {
 	.enable		= clk_fracn_gppll_prepare,
 	.disable	= clk_fracn_gppll_unprepare,
 	.get_rate	= clk_fracn_gppll_recalc_rate,

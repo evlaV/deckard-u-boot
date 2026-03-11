@@ -1049,7 +1049,7 @@ static int r9a06g032_clk_of_xlate(struct clk *clk, struct ofnode_phandle_args *a
 	return 0;
 }
 
-static const struct clk_ops r9a06g032_clk_ops = {
+static const struct clk_ops_uboot r9a06g032_clk_ops = {
 	.enable		= r9a06g032_clk_enable,
 	.disable	= r9a06g032_clk_disable,
 	.get_rate	= r9a06g032_clk_get_rate,

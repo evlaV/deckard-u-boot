@@ -246,7 +246,7 @@ static unsigned long peri_clk_get_rate(struct clk *c)
 }
 
 /* Peripheral clock operations */
-struct clk_ops peri_clk_ops = {
+struct clk_ops_uboot peri_clk_ops = {
 	.enable = peri_clk_enable,
 	.set_rate = peri_clk_set_rate,
 	.get_rate = peri_clk_get_rate,
@@ -325,7 +325,7 @@ static unsigned long ccu_clk_get_rate(struct clk *c)
 }
 
 /* CCU clock operations */
-struct clk_ops ccu_clk_ops = {
+struct clk_ops_uboot ccu_clk_ops = {
 	.enable = ccu_clk_enable,
 	.get_rate = ccu_clk_get_rate,
 };
@@ -385,7 +385,7 @@ static unsigned long bus_clk_get_rate(struct clk *c)
 }
 
 /* Bus clock operations */
-struct clk_ops bus_clk_ops = {
+struct clk_ops_uboot bus_clk_ops = {
 	.enable = bus_clk_enable,
 	.get_rate = bus_clk_get_rate,
 };
@@ -398,7 +398,7 @@ static int ref_clk_enable(struct clk *c, int enable)
 }
 
 /* Reference clock operations */
-struct clk_ops ref_clk_ops = {
+struct clk_ops_uboot ref_clk_ops = {
 	.enable = ref_clk_enable,
 };
 

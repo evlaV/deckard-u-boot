@@ -468,7 +468,7 @@ static int rk322x_clk_set_parent(struct clk *clk, struct clk *parent)
 	return -ENOENT;
 }
 
-static struct clk_ops rk322x_clk_ops = {
+static struct clk_ops_uboot rk322x_clk_ops = {
 	.get_rate	= rk322x_clk_get_rate,
 	.set_rate	= rk322x_clk_set_rate,
 	.set_parent	= rk322x_clk_set_parent,

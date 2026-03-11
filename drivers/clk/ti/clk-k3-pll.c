@@ -499,7 +499,7 @@ static ulong ti_pll_clk_set_rate(struct clk *clk, ulong rate)
 
 
 
-static const struct clk_ops ti_pll_clk_ops = {
+static const struct clk_ops_uboot ti_pll_clk_ops = {
 	.get_rate = ti_pll_clk_get_rate,
 	.set_rate = ti_pll_clk_set_rate,
 	.enable = ti_pll_clk_enable,

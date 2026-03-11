@@ -1364,7 +1364,7 @@ static int rk3399_clk_disable(struct clk *clk)
 	return 0;
 }
 
-static struct clk_ops rk3399_clk_ops = {
+static struct clk_ops_uboot rk3399_clk_ops = {
 	.get_rate = rk3399_clk_get_rate,
 	.set_rate = rk3399_clk_set_rate,
 #if CONFIG_IS_ENABLED(OF_REAL)
@@ -1652,7 +1652,7 @@ static ulong rk3399_pmuclk_set_rate(struct clk *clk, ulong rate)
 	return ret;
 }
 
-static struct clk_ops rk3399_pmuclk_ops = {
+static struct clk_ops_uboot rk3399_pmuclk_ops = {
 	.get_rate = rk3399_pmuclk_get_rate,
 	.set_rate = rk3399_pmuclk_set_rate,
 };

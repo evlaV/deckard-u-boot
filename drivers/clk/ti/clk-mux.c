@@ -171,7 +171,7 @@ static int clk_ti_mux_request(struct clk *clk)
 	return clk_ti_mux_set_parent(clk, parent);
 }
 
-static struct clk_ops clk_ti_mux_ops = {
+static struct clk_ops_uboot clk_ti_mux_ops = {
 	.request = clk_ti_mux_request,
 	.round_rate = clk_ti_mux_round_rate,
 	.get_rate = clk_ti_mux_get_rate,

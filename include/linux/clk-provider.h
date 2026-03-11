@@ -79,7 +79,7 @@ struct clk_mux {
 };
 
 #define to_clk_mux(_clk) container_of(_clk, struct clk_mux, clk)
-extern const struct clk_ops clk_mux_ops;
+extern const struct clk_ops_uboot clk_mux_ops;
 u8 clk_mux_get_parent(struct clk *clk);
 int clk_mux_fetch_parent_index(struct clk *clk, struct clk *parent);
 
@@ -111,7 +111,7 @@ struct clk_gate {
 #define CLK_GATE_SET_TO_DISABLE		BIT(0)
 #define CLK_GATE_HIWORD_MASK		BIT(1)
 
-extern const struct clk_ops clk_gate_ops;
+extern const struct clk_ops_uboot clk_gate_ops;
 struct clk *clk_register_gate(struct udevice *dev, const char *name,
 			      const char *parent_name, unsigned long flags,
 			      void __iomem *reg, u8 bit_idx,
@@ -144,7 +144,7 @@ struct clk_divider {
 #define CLK_DIVIDER_ROUND_CLOSEST	BIT(4)
 #define CLK_DIVIDER_READ_ONLY		BIT(5)
 #define CLK_DIVIDER_MAX_AT_ZERO		BIT(6)
-extern const struct clk_ops clk_divider_ops;
+extern const struct clk_ops_uboot clk_divider_ops;
 
 /**
  * clk_divider_get_table_div() - convert the register value to the divider
@@ -200,7 +200,7 @@ struct clk_fixed_factor {
 	unsigned int	div;
 };
 
-extern const struct clk_ops clk_fixed_rate_ops;
+extern const struct clk_ops_uboot clk_fixed_rate_ops;
 
 #define to_clk_fixed_factor(_clk) container_of(_clk, struct clk_fixed_factor,\
 					       clk)
@@ -217,15 +217,15 @@ void clk_fixed_rate_ofdata_to_plat_(struct udevice *dev,
 
 struct clk_composite {
 	struct clk	clk;
-	struct clk_ops	ops;
+	struct clk_ops_uboot	ops;
 
 	struct clk	*mux;
 	struct clk	*rate;
 	struct clk	*gate;
 
-	const struct clk_ops	*mux_ops;
-	const struct clk_ops	*rate_ops;
-	const struct clk_ops	*gate_ops;
+	const struct clk_ops_uboot	*mux_ops;
+	const struct clk_ops_uboot	*rate_ops;
+	const struct clk_ops_uboot	*gate_ops;
 
 	struct udevice *dev;
 };
@@ -234,9 +234,9 @@ struct clk_composite {
 
 struct clk *clk_register_composite(struct udevice *dev, const char *name,
 		const char * const *parent_names, int num_parents,
-		struct clk *mux_clk, const struct clk_ops *mux_ops,
-		struct clk *rate_clk, const struct clk_ops *rate_ops,
-		struct clk *gate_clk, const struct clk_ops *gate_ops,
+		struct clk *mux_clk, const struct clk_ops_uboot *mux_ops,
+		struct clk *rate_clk, const struct clk_ops_uboot *rate_ops,
+		struct clk *gate_clk, const struct clk_ops_uboot *gate_ops,
 		unsigned long flags);
 
 int clk_register(struct clk *clk, const char *drv_name, const char *name,
@@ -270,6 +270,6 @@ ulong ccf_clk_set_rate(struct clk *clk, unsigned long rate);
 int ccf_clk_set_parent(struct clk *clk, struct clk *parent);
 int ccf_clk_enable(struct clk *clk);
 int ccf_clk_disable(struct clk *clk);
-extern const struct clk_ops ccf_clk_ops;
+extern const struct clk_ops_uboot ccf_clk_ops;
 
 #endif /* __LINUX_CLK_PROVIDER_H */

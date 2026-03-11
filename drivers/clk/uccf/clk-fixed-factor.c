@@ -33,7 +33,7 @@ static ulong clk_factor_recalc_rate(struct clk *clk)
 	return (ulong)rate;
 }
 
-const struct clk_ops ccf_clk_fixed_factor_ops = {
+const struct clk_ops_uboot ccf_clk_fixed_factor_ops = {
 	.get_rate = clk_factor_recalc_rate,
 };
 

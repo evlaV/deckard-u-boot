@@ -104,7 +104,7 @@ static ulong exynos7420_topc_get_rate(struct clk *clk)
 	}
 }
 
-static struct clk_ops exynos7420_clk_topc_ops = {
+static struct clk_ops_uboot exynos7420_clk_topc_ops = {
 	.get_rate	= exynos7420_topc_get_rate,
 };
 
@@ -155,7 +155,7 @@ static ulong exynos7420_top0_get_rate(struct clk *clk)
 	}
 }
 
-static struct clk_ops exynos7420_clk_top0_ops = {
+static struct clk_ops_uboot exynos7420_clk_top0_ops = {
 	.get_rate	= exynos7420_top0_get_rate,
 };
 
@@ -207,7 +207,7 @@ static ulong exynos7420_peric1_get_rate(struct clk *clk)
 	return freq;
 }
 
-static struct clk_ops exynos7420_clk_peric1_ops = {
+static struct clk_ops_uboot exynos7420_clk_peric1_ops = {
 	.get_rate	= exynos7420_peric1_get_rate,
 };
 

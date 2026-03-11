@@ -21,7 +21,7 @@ static int at91_clk_of_xlate(struct clk *clk, struct ofnode_phandle_args *args)
 	return 0;
 }
 
-const struct clk_ops at91_clk_ops = {
+const struct clk_ops_uboot at91_clk_ops = {
 	.of_xlate	= at91_clk_of_xlate,
 	.set_rate	= ccf_clk_set_rate,
 	.get_rate	= ccf_clk_get_rate,

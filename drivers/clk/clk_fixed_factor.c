@@ -36,7 +36,7 @@ static ulong clk_fixed_factor_get_rate(struct clk *clk)
 	return rate * ff->mult;
 }
 
-const struct clk_ops clk_fixed_factor_ops = {
+const struct clk_ops_uboot clk_fixed_factor_ops = {
 	.get_rate = clk_fixed_factor_get_rate,
 };
 

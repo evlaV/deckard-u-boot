@@ -418,7 +418,7 @@ static void pic32_dump(struct udevice *dev)
 }
 #endif
 
-static struct clk_ops pic32_pic32_clk_ops = {
+static struct clk_ops_uboot pic32_pic32_clk_ops = {
 	.set_rate = pic32_set_rate,
 	.get_rate = pic32_get_rate,
 #if IS_ENABLED(CONFIG_CMD_CLK)

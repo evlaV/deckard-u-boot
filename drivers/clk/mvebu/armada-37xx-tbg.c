@@ -135,7 +135,7 @@ static int armada_37xx_tbg_clk_probe(struct udevice *dev)
 	return 0;
 }
 
-static const struct clk_ops armada_37xx_tbg_clk_ops = {
+static const struct clk_ops_uboot armada_37xx_tbg_clk_ops = {
 	.get_rate = armada_37xx_tbg_clk_get_rate,
 };
 

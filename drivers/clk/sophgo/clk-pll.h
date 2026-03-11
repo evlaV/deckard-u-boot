@@ -68,7 +68,7 @@ struct cv1800b_clk_fpll {
 		},								\
 	}
 
-extern const struct clk_ops cv1800b_ipll_ops;
-extern const struct clk_ops cv1800b_fpll_ops;
+extern const struct clk_ops_uboot cv1800b_ipll_ops;
+extern const struct clk_ops_uboot cv1800b_fpll_ops;
 
 #endif /* __clk_SOPHGO_PLL_H__ */

@@ -175,7 +175,7 @@ static int milos_rpmh_clk_nop(struct clk *clk)
 	return 0;
 }
 
-static struct clk_ops milos_rpmh_clk_ops = {
+static struct clk_ops_uboot milos_rpmh_clk_ops = {
 	.set_rate = milos_rpmh_clk_set_rate,
 	.get_rate = milos_rpmh_clk_get_rate,
 	.enable = milos_rpmh_clk_nop,

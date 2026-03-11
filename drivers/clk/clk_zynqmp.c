@@ -884,7 +884,7 @@ static int zynqmp_clk_enable(struct clk *clk)
 	return ret;
 }
 
-static const struct clk_ops zynqmp_clk_ops = {
+static const struct clk_ops_uboot zynqmp_clk_ops = {
 	.set_rate = zynqmp_clk_set_rate,
 	.get_rate = zynqmp_clk_get_rate,
 	.enable = zynqmp_clk_enable,

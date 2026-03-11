@@ -106,7 +106,7 @@ static int sandbox_clk_request(struct clk *clk)
 	return 0;
 }
 
-static struct clk_ops sandbox_clk_ops = {
+static struct clk_ops_uboot sandbox_clk_ops = {
 	.round_rate	= sandbox_clk_round_rate,
 	.get_rate	= sandbox_clk_get_rate,
 	.set_rate	= sandbox_clk_set_rate,

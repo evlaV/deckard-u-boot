@@ -25,7 +25,7 @@ static int imx6ul_clk_request(struct clk *clk)
 	return 0;
 }
 
-static struct clk_ops imx6ul_clk_ops = {
+static struct clk_ops_uboot imx6ul_clk_ops = {
 	.request = imx6ul_clk_request,
 	.set_rate = ccf_clk_set_rate,
 	.get_rate = ccf_clk_get_rate,

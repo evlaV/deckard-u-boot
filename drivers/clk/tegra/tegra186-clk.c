@@ -81,7 +81,7 @@ static int tegra186_clk_disable(struct clk *clk)
 	return tegra186_clk_en_dis(clk, CMD_CLK_DISABLE);
 }
 
-static struct clk_ops tegra186_clk_ops = {
+static struct clk_ops_uboot tegra186_clk_ops = {
 	.get_rate = tegra186_clk_get_rate,
 	.set_rate = tegra186_clk_set_rate,
 	.enable = tegra186_clk_enable,

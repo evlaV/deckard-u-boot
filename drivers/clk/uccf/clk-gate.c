@@ -111,7 +111,7 @@ int clk_gate_is_enabled(struct clk *clk)
 	return reg ? 1 : 0;
 }
 
-const struct clk_ops clk_gate_ops = {
+const struct clk_ops_uboot clk_gate_ops = {
 	.enable = clk_gate_enable,
 	.disable = clk_gate_disable,
 	.get_rate = clk_generic_get_rate,

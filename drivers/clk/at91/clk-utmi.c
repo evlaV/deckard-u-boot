@@ -113,7 +113,7 @@ static ulong clk_utmi_get_rate(struct clk *clk)
 	return UTMI_RATE;
 }
 
-static const struct clk_ops utmi_ops = {
+static const struct clk_ops_uboot utmi_ops = {
 	.enable = clk_utmi_enable,
 	.disable = clk_utmi_disable,
 	.get_rate = clk_utmi_get_rate,
@@ -193,7 +193,7 @@ static int clk_utmi_sama7g5_enable(struct clk *clk)
 	return 0;
 }
 
-static const struct clk_ops sama7g5_utmi_ops = {
+static const struct clk_ops_uboot sama7g5_utmi_ops = {
 	.enable = clk_utmi_sama7g5_enable,
 	.get_rate = clk_utmi_get_rate,
 };
