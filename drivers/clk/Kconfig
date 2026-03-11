@@ -12,6 +12,7 @@ config CLK
 	  choose the source for each clock.
 
 source "drivers/clk/uccf/Kconfig"
+source "drivers/clk/ccf/Kconfig"
 
 config SANDBOX_CLK_CCF
 	bool "Sandbox U-Boot Common Clock Framework [uCCF] support"

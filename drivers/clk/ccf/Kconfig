@@ -1,0 +1,8 @@
+config CLK_CCF_FULL
+	bool "Full Common Clock Framework [CCF] support"
+	depends on CLK && !CLK_CCF
+	help
+	  Enable this option if you want to use the full Linux kernel's Common
+	  Clock Framework [CCF] code in U-Boot. This is a full API compatible
+	  port as opposed to U-Boot "uCCF", drivers must register clocks at
+	  runtime and should not use UCLASS_CLK.
