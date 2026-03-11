@@ -84,7 +84,7 @@ static int clk_gck_set_parent(struct clk *clk, struct clk *parent)
 	return 0;
 }
 
-static ulong clk_gck_set_rate(struct clk *clk, ulong rate)
+static long clk_gck_set_rate(struct clk *clk, ulong rate)
 {
 	struct clk_gck *gck = to_clk_gck(clk);
 	ulong parent_rate = clk_get_parent_rate(clk);

@@ -468,7 +468,7 @@ static ulong ast2500_enable_sdclk(struct ast2500_scu *scu)
 	return 0;
 }
 
-static ulong ast2500_clk_set_rate(struct clk *clk, ulong rate)
+static long ast2500_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct ast2500_clk_priv *priv = dev_get_priv(clk->dev);
 

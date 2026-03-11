@@ -714,7 +714,7 @@ static ulong rk3328_clk_get_rate(struct clk *clk)
 	return rate;
 }
 
-static ulong rk3328_clk_set_rate(struct clk *clk, ulong rate)
+static long rk3328_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct rk3328_clk_priv *priv = dev_get_priv(clk->dev);
 	ulong ret = 0;

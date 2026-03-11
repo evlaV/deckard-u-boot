@@ -258,7 +258,7 @@ static ulong ti_clk_get_rate(struct clk *clk)
 	return clk_get_rate(clkp);
 }
 
-static ulong ti_clk_set_rate(struct clk *clk, ulong rate)
+static long ti_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct ti_clk_data *data = dev_get_priv(clk->dev);
 	struct clk *clkp = data->map[clk->id].clk;

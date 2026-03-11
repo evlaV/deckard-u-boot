@@ -58,7 +58,7 @@ static unsigned long clk_composite_recalc_rate(struct clk *clk)
 		return clk_get_parent_rate(clk);
 }
 
-static ulong clk_composite_set_rate(struct clk *clk, unsigned long rate)
+static long clk_composite_set_rate(struct clk *clk, unsigned long rate)
 {
 	struct clk_composite *composite = to_clk_composite(clk_dev_binded(clk) ?
 		(struct clk *)dev_get_clk_ptr(clk->dev) : clk);

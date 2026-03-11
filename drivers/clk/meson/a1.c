@@ -476,7 +476,7 @@ static ulong meson_clk_get_rate(struct clk *clk)
  *     ..... | |---DIV--
  *  ---------|/
  */
-static ulong meson_composite_set_rate(struct clk *clk, ulong id, ulong rate)
+static long meson_composite_set_rate(struct clk *clk, ulong id, ulong rate)
 {
 	unsigned int i, best_div_val;
 	unsigned long best_delta, best_parent;
@@ -526,7 +526,7 @@ static ulong meson_composite_set_rate(struct clk *clk, ulong id, ulong rate)
 
 static ulong meson_clk_set_rate_by_id(struct clk *clk, unsigned int id, ulong rate);
 
-static ulong meson_mux_set_rate(struct clk *clk, unsigned long id, ulong rate)
+static long meson_mux_set_rate(struct clk *clk, unsigned long id, ulong rate)
 {
 	int i;
 	ulong ret = -EINVAL;
@@ -570,7 +570,7 @@ static ulong meson_clk_set_rate_by_id(struct clk *clk, unsigned int id, ulong ra
 	return -EINVAL;
 }
 
-static ulong meson_clk_set_rate(struct clk *clk, ulong rate)
+static long meson_clk_set_rate(struct clk *clk, ulong rate)
 {
 	return meson_clk_set_rate_by_id(clk, clk->id, rate);
 }

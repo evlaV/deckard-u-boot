@@ -28,7 +28,7 @@ static ulong tegra186_clk_get_rate(struct clk *clk)
 	return resp.clk_get_rate.rate;
 }
 
-static ulong tegra186_clk_set_rate(struct clk *clk, ulong rate)
+static long tegra186_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct mrq_clk_request req;
 	struct mrq_clk_response resp;

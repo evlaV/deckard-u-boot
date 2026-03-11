@@ -573,7 +573,7 @@ static uint32_t ast2600_configure_ddr(struct ast2600_scu *scu, ulong rate)
 	return ast2600_get_pll_rate(scu, ASPEED_CLK_MPLL);
 }
 
-static ulong ast2600_clk_set_rate(struct clk *clk, ulong rate)
+static long ast2600_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct ast2600_clk_priv *priv = dev_get_priv(clk->dev);
 	ulong new_rate;

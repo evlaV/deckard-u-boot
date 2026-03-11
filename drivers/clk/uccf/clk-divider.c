@@ -154,7 +154,7 @@ int divider_get_val(unsigned long rate, unsigned long parent_rate,
 	return min_t(unsigned int, value, clk_div_mask(width));
 }
 
-static ulong clk_divider_set_rate(struct clk *clk, unsigned long rate)
+static long clk_divider_set_rate(struct clk *clk, unsigned long rate)
 {
 	struct clk_divider *divider = to_clk_divider(clk);
 	unsigned long parent_rate = clk_get_parent_rate(clk);

@@ -26,7 +26,7 @@ U_BOOT_DRIVER(nop_parent) = {
 	.flags = DM_FLAG_DEFAULT_PD_CTRL_OFF,
 };
 
-static ulong stub_clk_set_rate(struct clk *clk, ulong rate)
+static long stub_clk_set_rate(struct clk *clk, ulong rate)
 {
 	return (clk->rate = rate);
 }

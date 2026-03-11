@@ -502,7 +502,7 @@ ulong clk_round_rate(struct clk *clk, ulong rate);
  *
  * Return: new rate, or -ve error code.
  */
-ulong clk_set_rate(struct clk *clk, ulong rate);
+long clk_set_rate(struct clk *clk, ulong rate);
 
 /**
  * clk_set_parent() - Set current clock parent.

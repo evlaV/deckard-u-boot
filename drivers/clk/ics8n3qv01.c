@@ -106,7 +106,7 @@ static int ics8n3qv01_calc_parameters(uint fout, uint *_mint, uint *_mfrac,
 	return 0;
 }
 
-static ulong ics8n3qv01_set_rate(struct clk *clk, ulong fout)
+static long ics8n3qv01_set_rate(struct clk *clk, ulong fout)
 {
 	struct ics8n3qv01_priv *priv = dev_get_priv(clk->dev);
 	uint n, mint, mfrac;

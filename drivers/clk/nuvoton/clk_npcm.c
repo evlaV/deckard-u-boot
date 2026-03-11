@@ -246,7 +246,7 @@ static ulong npcm_clk_get_rate(struct clk *clk)
 		return npcm_clk_get_fout(clk);
 }
 
-static ulong npcm_clk_set_rate(struct clk *clk, ulong rate)
+static long npcm_clk_set_rate(struct clk *clk, ulong rate)
 {
 	ulong parent_rate;
 	u32 div;

@@ -1328,7 +1328,7 @@ static ulong rk3588_uart_get_rate(struct rk3588_clk_priv *priv, ulong clk_id)
 	}
 }
 
-static ulong rk3588_uart_set_rate(struct rk3588_clk_priv *priv,
+static long rk3588_uart_set_rate(struct rk3588_clk_priv *priv,
 				  ulong clk_id, ulong rate)
 {
 	struct rk3588_cru *cru = priv->cru;
@@ -1437,7 +1437,7 @@ static ulong rk3588_pciephy_get_rate(struct rk3588_clk_priv *priv, ulong clk_id)
 		return OSC_HZ;
 }
 
-static ulong rk3588_pciephy_set_rate(struct rk3588_clk_priv *priv,
+static long rk3588_pciephy_set_rate(struct rk3588_clk_priv *priv,
 				     ulong clk_id, ulong rate)
 {
 	struct rk3588_cru *cru = priv->cru;
@@ -1648,7 +1648,7 @@ static ulong rk3588_clk_get_rate(struct clk *clk)
 	return rate;
 };
 
-static ulong rk3588_clk_set_rate(struct clk *clk, ulong rate)
+static long rk3588_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct rk3588_clk_priv *priv = dev_get_priv(clk->dev);
 	ulong ret = 0;
@@ -2085,7 +2085,7 @@ static ulong rk3588_scru_clk_get_rate(struct clk *clk)
 	}
 }
 
-static ulong rk3588_scru_clk_set_rate(struct clk *clk, ulong rate)
+static long rk3588_scru_clk_set_rate(struct clk *clk, ulong rate)
 {
 	u32 div, sel;
 

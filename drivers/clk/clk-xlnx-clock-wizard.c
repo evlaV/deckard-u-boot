@@ -87,7 +87,7 @@ static int clk_wzrd_enable(struct clk *clk)
 	return ret;
 }
 
-static unsigned long clk_wzrd_set_rate(struct clk *clk, ulong rate)
+static long clk_wzrd_set_rate(struct clk *clk, ulong rate)
 {
 	struct clkwzd *priv = dev_get_priv(clk->dev);
 	u64 div;

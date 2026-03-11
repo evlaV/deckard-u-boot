@@ -94,7 +94,7 @@ static ulong div_get_rate(struct clk *clk)
 	return DIV_ROUND_UP_ULL(clk_get_parent_rate(clk), val);
 }
 
-static ulong div_set_rate(struct clk *clk, ulong rate)
+static long div_set_rate(struct clk *clk, ulong rate)
 {
 	struct cv1800b_clk_div *div = to_cv1800b_clk_div(clk);
 	ulong parent_rate = clk_get_parent_rate(clk);
@@ -137,7 +137,7 @@ static ulong bypass_div_get_rate(struct clk *clk)
 	return div_get_rate(clk);
 }
 
-static ulong bypass_div_set_rate(struct clk *clk, ulong rate)
+static long bypass_div_set_rate(struct clk *clk, ulong rate)
 {
 	struct cv1800b_clk_bypass_div *div = to_cv1800b_clk_bypass_div(clk);
 
@@ -292,7 +292,7 @@ static ulong mux_get_rate(struct clk *clk)
 	return DIV_ROUND_UP_ULL(clk_get_parent_rate(clk), val);
 }
 
-static ulong mux_set_rate(struct clk *clk, ulong rate)
+static long mux_set_rate(struct clk *clk, ulong rate)
 {
 	struct cv1800b_clk_mux *mux = to_cv1800b_clk_mux(clk);
 	ulong parent_rate = clk_get_parent_rate(clk);
@@ -348,7 +348,7 @@ static ulong bypass_mux_get_rate(struct clk *clk)
 	return mux_get_rate(clk);
 }
 
-static ulong bypass_mux_set_rate(struct clk *clk, ulong rate)
+static long bypass_mux_set_rate(struct clk *clk, ulong rate)
 {
 	struct cv1800b_clk_bypass_mux *mux = to_cv1800b_clk_bypass_mux(clk);
 
@@ -433,7 +433,7 @@ static ulong mmux_get_rate(struct clk *clk)
 	return DIV_ROUND_UP_ULL(clk_get_parent_rate(clk), val);
 }
 
-static ulong mmux_set_rate(struct clk *clk, ulong rate)
+static long mmux_set_rate(struct clk *clk, ulong rate)
 {
 	struct cv1800b_clk_mmux *mmux = to_cv1800b_clk_mmux(clk);
 	int clk_sel = 1;
@@ -562,7 +562,7 @@ static void aclk_determine_mn(ulong parent_rate, ulong rate, u32 *m, u32 *n)
 	*n = tn / tcommon;
 }
 
-static ulong aclk_set_rate(struct clk *clk, ulong rate)
+static long aclk_set_rate(struct clk *clk, ulong rate)
 {
 	struct cv1800b_clk_audio *aclk = to_cv1800b_clk_audio(clk);
 	ulong parent_rate = clk_get_parent_rate(clk);

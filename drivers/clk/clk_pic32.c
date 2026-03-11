@@ -369,7 +369,7 @@ static ulong pic32_get_rate(struct clk *clk)
 	return rate;
 }
 
-static ulong pic32_set_rate(struct clk *clk, ulong rate)
+static long pic32_set_rate(struct clk *clk, ulong rate)
 {
 	struct pic32_clk_priv *priv = dev_get_priv(clk->dev);
 	ulong pll_hz;

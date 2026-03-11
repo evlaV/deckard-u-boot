@@ -54,7 +54,7 @@ static struct pll_vote_clk gpll9_vote_clk = {
 	.vote_bit = BIT(9),
 };
 
-static ulong sm8250_set_rate(struct clk *clk, ulong rate)
+static long sm8250_set_rate(struct clk *clk, ulong rate)
 {
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
 	const struct freq_tbl *freq;

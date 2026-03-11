@@ -79,7 +79,7 @@ static const struct freq_tbl ftbl_gcc_usb3_prim_phy_aux_clk_src[] = {
 	{ }
 };
 
-static ulong sm7150_clk_set_rate(struct clk *clk, ulong rate)
+static long sm7150_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
 	const struct freq_tbl *freq;

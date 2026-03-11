@@ -280,7 +280,7 @@ static ulong rzg2l_cpg_clk_get_rate(struct clk *clk)
 	return rzg2l_cpg_clk_get_rate_by_id(clk->dev, clk->id);
 }
 
-static ulong rzg2l_sdhi_clk_set_rate(struct udevice *dev, const struct cpg_core_clk *cc, ulong rate)
+static long rzg2l_sdhi_clk_set_rate(struct udevice *dev, const struct cpg_core_clk *cc, ulong rate)
 {
 	struct rzg2l_cpg_data *data =
 		(struct rzg2l_cpg_data *)dev_get_driver_data(dev);
@@ -346,7 +346,7 @@ static ulong rzg2l_sdhi_clk_set_rate(struct udevice *dev, const struct cpg_core_
 	return target_rate;
 }
 
-static ulong rzg2l_core_clk_set_rate(struct udevice *dev, const struct cpg_core_clk *cc, ulong rate)
+static long rzg2l_core_clk_set_rate(struct udevice *dev, const struct cpg_core_clk *cc, ulong rate)
 {
 	if (cc->type == CLK_TYPE_SD_MUX)
 		return rzg2l_sdhi_clk_set_rate(dev, cc, rate);
@@ -392,7 +392,7 @@ static ulong rzg2l_cpg_clk_set_rate_by_id(struct udevice *dev, unsigned int id, 
 	return -ENODEV;
 }
 
-static ulong rzg2l_cpg_clk_set_rate(struct clk *clk, ulong rate)
+static long rzg2l_cpg_clk_set_rate(struct clk *clk, ulong rate)
 {
 	return rzg2l_cpg_clk_set_rate_by_id(clk->dev, clk->id, rate);
 }

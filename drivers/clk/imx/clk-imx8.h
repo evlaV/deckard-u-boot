@@ -15,5 +15,5 @@ extern int num_clks;
 #endif
 
 ulong imx8_clk_get_rate(struct clk *clk);
-ulong imx8_clk_set_rate(struct clk *clk, unsigned long rate);
+long imx8_clk_set_rate(struct clk *clk, unsigned long rate);
 int __imx8_clk_enable(struct clk *clk, bool enable);

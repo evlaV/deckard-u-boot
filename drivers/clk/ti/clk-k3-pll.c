@@ -344,7 +344,7 @@ static void ti_pll_clk_bypass(struct ti_pll_clk *pll, bool bypass)
 	writel(ctrl, pll->base + PLL_16FFT_CTRL);
 }
 
-static ulong ti_pll_clk_set_rate(struct clk *clk, ulong rate)
+static long ti_pll_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct ti_pll_clk *pll = to_clk_pll(clk);
 	u64 current_freq;

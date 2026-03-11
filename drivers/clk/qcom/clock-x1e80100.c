@@ -64,7 +64,7 @@ static const struct freq_tbl ftbl_gcc_pcie_0_phy_rchng_clk_src[] = {
 	{ }
 };
 
-static ulong x1e80100_set_rate(struct clk *clk, ulong rate)
+static long x1e80100_set_rate(struct clk *clk, ulong rate)
 {
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
 	const struct freq_tbl *freq;

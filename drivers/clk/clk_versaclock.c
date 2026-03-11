@@ -325,7 +325,7 @@ static unsigned long vc5_pfd_recalc_rate(struct clk *hw)
 		return parent_rate / VC5_REF_DIVIDER_REF_DIV(div);
 }
 
-static unsigned long vc5_pfd_set_rate(struct clk *hw, unsigned long rate)
+static long vc5_pfd_set_rate(struct clk *hw, unsigned long rate)
 {
 	struct vc5_driver_data *vc5 =
 		container_of(hw, struct vc5_driver_data, clk_pfd);
@@ -414,7 +414,7 @@ static unsigned long vc5_pll_round_rate(struct clk *hw, unsigned long rate)
 	return (parent_rate * div_int) + ((parent_rate * div_frc) >> 24);
 }
 
-static unsigned long vc5_pll_set_rate(struct clk *hw, unsigned long rate)
+static long vc5_pll_set_rate(struct clk *hw, unsigned long rate)
 {
 	struct vc5_hw_data *hwdata = container_of(hw, struct vc5_hw_data, hw);
 	struct vc5_driver_data *vc5 = hwdata->vc5;
@@ -499,7 +499,7 @@ static unsigned long vc5_fod_round_rate(struct clk *hw, unsigned long rate)
 	return div64_u64((u64)f_in << 24ULL, ((u64)div_int << 24ULL) + div_frc);
 }
 
-static unsigned long vc5_fod_set_rate(struct clk *hw, unsigned long rate)
+static long vc5_fod_set_rate(struct clk *hw, unsigned long rate)
 {
 	struct vc5_hw_data *hwdata = container_of(hw, struct vc5_hw_data, hw);
 	struct vc5_driver_data *vc5 = hwdata->vc5;
@@ -617,7 +617,7 @@ static int vc5_clk_out_set_parent(struct vc5_driver_data *vc, u8 num, u8 index)
 	return vc5_update_bits(vc->i2c, VC5_OUT_DIV_CONTROL(num), mask, src);
 }
 
-static unsigned long vc5_clk_out_set_rate(struct clk *hw, unsigned long rate)
+static long vc5_clk_out_set_rate(struct clk *hw, unsigned long rate)
 {
 	struct udevice *dev;
 	struct vc5_driver_data *vc;

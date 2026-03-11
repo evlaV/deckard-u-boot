@@ -78,7 +78,7 @@ static int clk_init_uart(struct msm_clk_priv *priv)
 	return 0;
 }
 
-static ulong apq8096_clk_set_rate(struct clk *clk, ulong rate)
+static long apq8096_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
 

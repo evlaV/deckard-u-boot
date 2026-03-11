@@ -180,7 +180,7 @@ static ulong clk_ti_divider_round_rate(struct clk *clk, ulong rate)
 	return DIV_ROUND_UP(parent_rate, div);
 }
 
-static ulong clk_ti_divider_set_rate(struct clk *clk, ulong rate)
+static long clk_ti_divider_set_rate(struct clk *clk, ulong rate)
 {
 	struct clk_ti_divider_priv *priv = dev_get_priv(clk->dev);
 	ulong parent_rate;

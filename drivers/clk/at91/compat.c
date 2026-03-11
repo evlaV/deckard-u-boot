@@ -300,7 +300,7 @@ static ulong at91_plladiv_clk_get_rate(struct clk *clk)
 	return clk_rate;
 }
 
-static ulong at91_plladiv_clk_set_rate(struct clk *clk, ulong rate)
+static long at91_plladiv_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct pmc_plat *plat = dev_get_plat(clk->dev);
 	struct at91_pmc *pmc = plat->reg_base;
@@ -392,7 +392,7 @@ static ulong system_clk_get_rate(struct clk *clk)
 	return clk_get_rate(&clk_dev);
 }
 
-static ulong system_clk_set_rate(struct clk *clk, ulong rate)
+static long system_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct clk clk_dev;
 	int ret;
@@ -775,7 +775,7 @@ static ulong generic_clk_get_rate(struct clk *clk)
 	return clk_get_rate(&parent) / (gckdiv + 1);
 }
 
-static ulong generic_clk_set_rate(struct clk *clk, ulong rate)
+static long generic_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct pmc_plat *plat = dev_get_plat(clk->dev);
 	struct at91_pmc *pmc = plat->reg_base;
@@ -909,7 +909,7 @@ static ulong at91_usb_clk_get_rate(struct clk *clk)
 	return clk_get_rate(&source) / (usbdiv + 1);
 }
 
-static ulong at91_usb_clk_set_rate(struct clk *clk, ulong rate)
+static long at91_usb_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct pmc_plat *plat = dev_get_plat(clk->dev);
 	struct at91_pmc *pmc = plat->reg_base;

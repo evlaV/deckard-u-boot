@@ -21,7 +21,7 @@ static ulong adi_get_rate(struct clk *clk)
 	return clk_get_rate(c);
 }
 
-static ulong adi_set_rate(struct clk *clk, ulong rate)
+static long adi_set_rate(struct clk *clk, ulong rate)
 {
 	//Not yet implemented
 	return 0;

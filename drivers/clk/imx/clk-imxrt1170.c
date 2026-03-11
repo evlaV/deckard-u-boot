@@ -28,7 +28,7 @@ static ulong imxrt1170_clk_get_rate(struct clk *clk)
 	return clk_get_rate(c);
 }
 
-static ulong imxrt1170_clk_set_rate(struct clk *clk, ulong rate)
+static long imxrt1170_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct clk *c;
 	int ret;

@@ -84,7 +84,7 @@ static int clk_programmable_set_parent(struct clk *clk, struct clk *parent)
 	return 0;
 }
 
-static ulong clk_programmable_set_rate(struct clk *clk, ulong rate)
+static long clk_programmable_set_rate(struct clk *clk, ulong rate)
 {
 	struct clk_programmable *prog = to_clk_programmable(clk);
 	const struct clk_programmable_layout *layout = prog->layout;

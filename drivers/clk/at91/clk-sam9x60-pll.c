@@ -90,7 +90,7 @@ static long sam9x60_frac_pll_compute_mul_frac(const struct clk_range *core_clk,
 	return tmprate;
 }
 
-static ulong sam9x60_frac_pll_set_rate(struct clk *clk, ulong rate)
+static long sam9x60_frac_pll_set_rate(struct clk *clk, ulong rate)
 {
 	struct sam9x60_pll *pll = to_sam9x60_pll(clk);
 	void __iomem *base = pll->base;
@@ -300,7 +300,7 @@ static int sam9x60_div_pll_disable(struct clk *clk)
 	return 0;
 }
 
-static ulong sam9x60_div_pll_set_rate(struct clk *clk, ulong rate)
+static long sam9x60_div_pll_set_rate(struct clk *clk, ulong rate)
 {
 	struct sam9x60_pll *pll = to_sam9x60_pll(clk);
 	void __iomem *base = pll->base;

@@ -88,7 +88,7 @@ ulong ccf_clk_get_rate(struct clk *clk)
 	return clk_get_rate(c);
 }
 
-ulong ccf_clk_set_rate(struct clk *clk, unsigned long rate)
+long ccf_clk_set_rate(struct clk *clk, unsigned long rate)
 {
 	struct clk *c;
 	int err = clk_get_by_id(clk->id, &c);

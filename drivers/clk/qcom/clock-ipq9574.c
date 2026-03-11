@@ -26,7 +26,7 @@
 #define GCC_SDCC1_APPS_CMD_RCGR			0x33004
 #define GCC_SDCC1_ICE_CORE_CBCR			0x33030
 
-static ulong ipq9574_set_rate(struct clk *clk, ulong rate)
+static long ipq9574_set_rate(struct clk *clk, ulong rate)
 {
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
 

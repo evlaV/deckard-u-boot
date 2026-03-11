@@ -67,7 +67,7 @@ static struct rockchip_pll_clock rv1126_pll_clks[] = {
 		     RV1126_PMU_MODE, 0, 10, 0, rv1126_pll_rates),
 };
 
-static ulong rv1126_gpll_set_rate(struct rv1126_clk_priv *priv,
+static long rv1126_gpll_set_rate(struct rv1126_clk_priv *priv,
 				  struct rv1126_pmuclk_priv *pmu_priv,
 				  ulong rate);
 /*
@@ -403,7 +403,7 @@ static ulong rv1126_pmuclk_get_rate(struct clk *clk)
 	return rate;
 }
 
-static ulong rv1126_pmuclk_set_rate(struct clk *clk, ulong rate)
+static long rv1126_pmuclk_set_rate(struct clk *clk, ulong rate)
 {
 	struct rv1126_pmuclk_priv *priv = dev_get_priv(clk->dev);
 	ulong ret = 0;
@@ -1513,7 +1513,7 @@ static ulong rv1126_clk_get_rate(struct clk *clk)
 	return rate;
 };
 
-static ulong rv1126_clk_set_rate(struct clk *clk, ulong rate)
+static long rv1126_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct rv1126_clk_priv *priv = dev_get_priv(clk->dev);
 	ulong ret = 0;
@@ -1706,7 +1706,7 @@ static struct clk_ops_uboot rv1126_clk_ops = {
 #endif
 };
 
-static ulong rv1126_gpll_set_rate(struct rv1126_clk_priv *priv,
+static long rv1126_gpll_set_rate(struct rv1126_clk_priv *priv,
 				  struct rv1126_pmuclk_priv *pmu_priv,
 				  ulong rate)
 {

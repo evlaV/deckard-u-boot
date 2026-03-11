@@ -93,7 +93,7 @@ static int imx93_clk_gate_disable(struct clk *clk)
 	return 0;
 }
 
-static ulong imx93_clk_set_rate(struct clk *clk, ulong rate)
+static long imx93_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct clk *parent = clk_get_parent(clk);
 

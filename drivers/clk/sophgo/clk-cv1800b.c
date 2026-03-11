@@ -708,7 +708,7 @@ static ulong cv1800b_clk_get_rate(struct clk *clk)
 	return clk_get_rate(c);
 }
 
-static ulong cv1800b_clk_set_rate(struct clk *clk, ulong rate)
+static long cv1800b_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct clk *c;
 	int err = clk_get_by_id(CV1800B_CLK_ID_TRANSFORM(clk->id), &c);

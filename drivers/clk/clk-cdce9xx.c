@@ -171,7 +171,7 @@ static ulong cdce9xx_clk_get_rate(struct clk *clk)
 	return parent_rate / pdiv;
 }
 
-static ulong cdce9xx_clk_set_rate(struct clk *clk, ulong rate)
+static long cdce9xx_clk_set_rate(struct clk *clk, ulong rate)
 {
 	u32 parent_rate;
 	int pdiv;

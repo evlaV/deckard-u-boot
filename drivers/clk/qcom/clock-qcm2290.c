@@ -104,7 +104,7 @@ static const struct gate_clk qcm2290_clks[] = {
 	GATE_CLK(GCC_USB3_PRIM_PHY_PIPE_CLK, 0x1a058, 0x00000001),
 };
 
-static ulong qcm2290_set_rate(struct clk *clk, ulong rate)
+static long qcm2290_set_rate(struct clk *clk, ulong rate)
 {
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
 	const struct freq_tbl *freq;

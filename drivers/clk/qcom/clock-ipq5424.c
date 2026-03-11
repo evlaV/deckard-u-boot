@@ -20,7 +20,7 @@
 
 #define GCC_IM_SLEEP_CBCR	0x1834020u
 
-static ulong ipq5424_set_rate(struct clk *clk, ulong rate)
+static long ipq5424_set_rate(struct clk *clk, ulong rate)
 {
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
 

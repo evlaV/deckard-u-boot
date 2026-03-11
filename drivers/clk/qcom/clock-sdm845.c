@@ -68,7 +68,7 @@ static const struct freq_tbl ftbl_gcc_sdcc2_apps_clk_src[] = {
 	{ }
 };
 
-static ulong sdm670_clk_set_rate(struct clk *clk, ulong rate)
+static long sdm670_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
 	const struct freq_tbl *freq;
@@ -84,7 +84,7 @@ static ulong sdm670_clk_set_rate(struct clk *clk, ulong rate)
 	}
 }
 
-static ulong sdm845_clk_set_rate(struct clk *clk, ulong rate)
+static long sdm845_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
 	const struct freq_tbl *freq;

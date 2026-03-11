@@ -291,7 +291,7 @@ static ulong rk3036_clk_get_rate(struct clk *clk)
 	}
 }
 
-static ulong rk3036_clk_set_rate(struct clk *clk, ulong rate)
+static long rk3036_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct rk3036_clk_priv *priv = dev_get_priv(clk->dev);
 	ulong new_rate, gclk_rate;

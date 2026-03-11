@@ -34,7 +34,7 @@ struct clk_ops_uboot {
 	int (*request)(struct clk *clock);
 	ulong (*round_rate)(struct clk *clk, ulong rate);
 	ulong (*get_rate)(struct clk *clk);
-	ulong (*set_rate)(struct clk *clk, ulong rate);
+	long (*set_rate)(struct clk *clk, ulong rate);
 	int (*set_parent)(struct clk *clk, struct clk *parent);
 	int (*enable)(struct clk *clk);
 	int (*disable)(struct clk *clk);

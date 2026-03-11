@@ -639,7 +639,7 @@ static unsigned long zynqmp_clk_calc_peripheral_two_divs(ulong rate,
 	return best_rate;
 }
 
-static ulong zynqmp_clk_set_peripheral_rate(struct zynqmp_clk_priv *priv,
+static long zynqmp_clk_set_peripheral_rate(struct zynqmp_clk_priv *priv,
 					  enum zynqmp_clk id, ulong rate,
 					  bool two_divs)
 {
@@ -735,7 +735,7 @@ static ulong zynqmp_clk_get_rate(struct clk *clk)
 	}
 }
 
-static ulong zynqmp_clk_set_rate(struct clk *clk, ulong rate)
+static long zynqmp_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct zynqmp_clk_priv *priv = dev_get_priv(clk->dev);
 	enum zynqmp_clk id = clk->id;

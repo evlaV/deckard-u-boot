@@ -268,7 +268,7 @@ static int clk_sama7g5_master_disable(struct clk *clk)
 	return 0;
 }
 
-static ulong clk_sama7g5_master_set_rate(struct clk *clk, ulong rate)
+static long clk_sama7g5_master_set_rate(struct clk *clk, ulong rate)
 {
 	struct clk_master *master = to_clk_master(clk);
 	ulong parent_rate = clk_get_parent_rate(clk);

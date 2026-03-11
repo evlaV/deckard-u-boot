@@ -532,7 +532,7 @@ static int mtk_pll_calc_values(struct mtk_clk_priv *priv, struct clk *clk,
 	return 0;
 }
 
-static ulong mtk_apmixedsys_set_rate(struct clk *clk, ulong rate)
+static long mtk_apmixedsys_set_rate(struct clk *clk, ulong rate)
 {
 	struct mtk_clk_priv *priv = dev_get_priv(clk->dev);
 	u32 pcw = 0;

@@ -166,7 +166,7 @@ static ulong stm32_clk_get_rate(struct clk *clk)
 	return ops->get_rate(c);
 }
 
-static ulong stm32_clk_set_rate(struct clk *clk, unsigned long clk_rate)
+static long stm32_clk_set_rate(struct clk *clk, unsigned long clk_rate)
 {
 	const struct clk_ops_uboot *ops;
 	struct clk *c = NULL;

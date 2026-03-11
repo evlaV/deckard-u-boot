@@ -81,7 +81,7 @@ static ulong mpfs_cfg_clk_recalc_rate(struct clk *hw)
 	return rate;
 }
 
-static ulong mpfs_cfg_clk_set_rate(struct clk *hw, ulong rate)
+static long mpfs_cfg_clk_set_rate(struct clk *hw, ulong rate)
 {
 	struct mpfs_cfg_hw_clock *cfg_hw = to_mpfs_cfg_clk(hw);
 	struct mpfs_cfg_clock *cfg = &cfg_hw->cfg;

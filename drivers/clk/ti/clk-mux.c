@@ -100,7 +100,7 @@ static int clk_ti_mux_set_parent(struct clk *clk, struct clk *parent)
 	return 0;
 }
 
-static ulong clk_ti_mux_set_rate(struct clk *clk, ulong rate)
+static long clk_ti_mux_set_rate(struct clk *clk, ulong rate)
 {
 	struct clk_ti_mux_priv *priv = dev_get_priv(clk->dev);
 	struct clk *parent;

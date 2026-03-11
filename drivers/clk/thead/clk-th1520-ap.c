@@ -990,7 +990,7 @@ static ulong th1520_clk_get_rate(struct clk *clk)
 	return clk_get_rate(c);
 }
 
-static ulong th1520_clk_set_rate(struct clk *clk, ulong rate)
+static long th1520_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct clk *c;
 	int ret;

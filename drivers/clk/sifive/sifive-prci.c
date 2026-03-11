@@ -581,7 +581,7 @@ static ulong sifive_prci_get_rate(struct clk *clk)
 	return pc->ops->recalc_rate(pc, sifive_prci_parent_rate(pc, data));
 }
 
-static ulong sifive_prci_set_rate(struct clk *clk, ulong rate)
+static long sifive_prci_set_rate(struct clk *clk, ulong rate)
 {
 	int err;
 	struct __prci_clock *pc;

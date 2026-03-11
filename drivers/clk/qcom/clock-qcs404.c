@@ -93,7 +93,7 @@ static struct pll_vote_clk gpll1_vote_clk = {
 	.vote_bit = BIT(1),
 };
 
-static ulong qcs404_clk_set_rate(struct clk *clk, ulong rate)
+static long qcs404_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
 

@@ -1653,7 +1653,7 @@ static ulong rk3576_uart_frac_get_rate(struct rk3576_clk_priv *priv, ulong clk_i
 	return p_rate * n / m;
 }
 
-static ulong rk3576_uart_frac_set_rate(struct rk3576_clk_priv *priv,
+static long rk3576_uart_frac_set_rate(struct rk3576_clk_priv *priv,
 				       ulong clk_id, ulong rate)
 {
 	struct rk3576_cru *cru = priv->cru;
@@ -1785,7 +1785,7 @@ static ulong rk3576_uart_get_rate(struct rk3576_clk_priv *priv, ulong clk_id)
 	return DIV_TO_RATE(p_rate, div);
 }
 
-static ulong rk3576_uart_set_rate(struct rk3576_clk_priv *priv,
+static long rk3576_uart_set_rate(struct rk3576_clk_priv *priv,
 				  ulong clk_id, ulong rate)
 {
 	struct rk3576_cru *cru = priv->cru;
@@ -2055,7 +2055,7 @@ static ulong rk3576_clk_get_rate(struct clk *clk)
 	return rate;
 };
 
-static ulong rk3576_clk_set_rate(struct clk *clk, ulong rate)
+static long rk3576_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct rk3576_clk_priv *priv = dev_get_priv(clk->dev);
 	ulong ret = 0;

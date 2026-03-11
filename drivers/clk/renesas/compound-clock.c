@@ -43,7 +43,7 @@ static ulong clk_compound_rate_get_rate(struct clk *clk)
 	return clk_get_rate(&cc->per);
 }
 
-static ulong clk_compound_rate_set_rate(struct clk *clk, ulong rate)
+static long clk_compound_rate_set_rate(struct clk *clk, ulong rate)
 {
 	return 0;	/* Set rate is not forwarded to SCP */
 }

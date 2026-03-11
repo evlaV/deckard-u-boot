@@ -75,7 +75,7 @@ struct meson_clk {
 };
 
 static ulong meson_div_get_rate(struct clk *clk, unsigned long id);
-static ulong meson_div_set_rate(struct clk *clk, unsigned long id, ulong rate,
+static long meson_div_set_rate(struct clk *clk, unsigned long id, ulong rate,
 				ulong current_rate);
 static ulong meson_mux_set_parent(struct clk *clk, unsigned long id,
 				  unsigned long parent_id);
@@ -327,7 +327,7 @@ static ulong meson_div_get_rate(struct clk *clk, unsigned long id)
 	return rate;
 }
 
-static ulong meson_div_set_rate(struct clk *clk, unsigned long id, ulong rate,
+static long meson_div_set_rate(struct clk *clk, unsigned long id, ulong rate,
 				ulong current_rate)
 {
 	struct meson_clk *priv = dev_get_priv(clk->dev);
@@ -912,7 +912,7 @@ static ulong meson_clk_set_rate_by_id(struct clk *clk, unsigned long id,
 	return -EINVAL;
 }
 
-static ulong meson_clk_set_rate(struct clk *clk, ulong rate)
+static long meson_clk_set_rate(struct clk *clk, ulong rate)
 {
 	ulong current_rate = meson_clk_get_rate_by_id(clk, clk->id);
 	int ret;

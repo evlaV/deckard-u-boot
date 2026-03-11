@@ -586,7 +586,7 @@ static void clk_clean_rate_cache(struct clk *clk)
 	}
 }
 
-ulong clk_set_rate(struct clk *clk, ulong rate)
+long clk_set_rate(struct clk *clk, ulong rate)
 {
 	const struct clk_ops_uboot *ops;
 	struct clk *clkp;

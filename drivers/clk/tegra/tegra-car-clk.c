@@ -60,7 +60,7 @@ static ulong tegra_car_clk_get_rate(struct clk *clk)
 	return -1U;
 }
 
-static ulong tegra_car_clk_set_rate(struct clk *clk, ulong rate)
+static long tegra_car_clk_set_rate(struct clk *clk, ulong rate)
 {
 	enum clock_id parent;
 

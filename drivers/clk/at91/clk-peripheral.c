@@ -168,7 +168,7 @@ static ulong clk_sam9x5_peripheral_get_rate(struct clk *clk)
 	return parent_rate >> shift;
 }
 
-static ulong clk_sam9x5_peripheral_set_rate(struct clk *clk, ulong rate)
+static long clk_sam9x5_peripheral_set_rate(struct clk *clk, ulong rate)
 {
 	struct clk_sam9x5_peripheral *periph = to_clk_sam9x5_peripheral(clk);
 	ulong parent_rate = clk_get_parent_rate(clk);

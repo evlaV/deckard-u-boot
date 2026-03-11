@@ -241,7 +241,7 @@ static int gen2_clk_setup_mmcif_div(struct clk *clk, ulong rate)
 	return 0;
 }
 
-static ulong gen2_clk_set_rate(struct clk *clk, ulong rate)
+static long gen2_clk_set_rate(struct clk *clk, ulong rate)
 {
 	/* Force correct MMC-IF divider configuration if applicable */
 	gen2_clk_setup_mmcif_div(clk, rate);

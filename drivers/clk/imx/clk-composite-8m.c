@@ -84,7 +84,7 @@ static int imx8m_clk_composite_compute_dividers(unsigned long rate,
  * The clk are bound to a dev, because it is part of composite clk
  * use composite clk to get dev
  */
-static ulong imx8m_clk_composite_divider_set_rate(struct clk *clk,
+static long imx8m_clk_composite_divider_set_rate(struct clk *clk,
 						  unsigned long rate)
 {
 	struct clk_divider *divider = (struct clk_divider *)to_clk_divider(clk);

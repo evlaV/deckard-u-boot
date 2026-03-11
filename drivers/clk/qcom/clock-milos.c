@@ -155,7 +155,7 @@ U_BOOT_DRIVER(gcc_milos) = {
 	.flags		= DM_FLAG_PRE_RELOC | DM_FLAG_DEFAULT_PD_CTRL_OFF,
 };
 
-static ulong milos_rpmh_clk_set_rate(struct clk *clk, ulong rate)
+static long milos_rpmh_clk_set_rate(struct clk *clk, ulong rate)
 {
 	return (clk->rate = rate);
 }

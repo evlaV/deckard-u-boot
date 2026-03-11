@@ -94,7 +94,7 @@ static const struct gate_clk sm6115_clks[] = {
 	GATE_CLK(GCC_UFS_CLKREF_CLK, 0x8c000, 0x00000001),
 };
 
-static ulong sm6115_set_rate(struct clk *clk, ulong rate)
+static long sm6115_set_rate(struct clk *clk, ulong rate)
 {
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
 	const struct freq_tbl *freq;

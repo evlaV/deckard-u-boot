@@ -2156,7 +2156,7 @@ static int pll_set_output_rate(struct udevice *dev,
 	return 0;
 }
 
-static ulong stm32mp1_clk_set_rate(struct clk *clk, unsigned long clk_rate)
+static long stm32mp1_clk_set_rate(struct clk *clk, unsigned long clk_rate)
 {
 	struct stm32mp1_clk_priv *priv = dev_get_priv(clk->dev);
 	int p;

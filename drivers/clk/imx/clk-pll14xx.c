@@ -211,7 +211,7 @@ static int clk_pll14xx_wait_lock(struct clk_pll14xx *pll)
 			LOCK_TIMEOUT_US);
 }
 
-static ulong clk_pll1416x_set_rate(struct clk *clk, unsigned long drate)
+static long clk_pll1416x_set_rate(struct clk *clk, unsigned long drate)
 {
 	struct clk_pll14xx *pll = to_clk_pll14xx(dev_get_clk_ptr(clk->dev));
 	const struct imx_pll14xx_rate_table *rate;
@@ -276,7 +276,7 @@ static ulong clk_pll1416x_set_rate(struct clk *clk, unsigned long drate)
 	return clk_pll1416x_recalc_rate(clk);
 }
 
-static ulong clk_pll1443x_set_rate(struct clk *clk, unsigned long drate)
+static long clk_pll1443x_set_rate(struct clk *clk, unsigned long drate)
 {
 	struct clk_pll14xx *pll = to_clk_pll14xx(dev_get_clk_ptr(clk->dev));
 	const struct imx_pll14xx_rate_table *rate;

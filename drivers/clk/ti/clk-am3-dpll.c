@@ -202,7 +202,7 @@ static void clk_ti_am3_dpll_ssc_program(struct clk *clk)
 	clk_ti_writel(ctrl, &priv->clkmode_reg);
 }
 
-static ulong clk_ti_am3_dpll_set_rate(struct clk *clk, ulong rate)
+static long clk_ti_am3_dpll_set_rate(struct clk *clk, ulong rate)
 {
 	struct clk_ti_am3_dpll_priv *priv = dev_get_priv(clk->dev);
 	u32 v;

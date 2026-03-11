@@ -85,7 +85,7 @@ static const struct freq_tbl ftbl_gcc_ufs_phy_unipro_core_clk_src[] = {
 	{ }
 };
 
-static ulong sc7280_set_rate(struct clk *clk, ulong rate)
+static long sc7280_set_rate(struct clk *clk, ulong rate)
 {
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
 	const struct freq_tbl *freq;

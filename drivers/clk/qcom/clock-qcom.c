@@ -242,7 +242,7 @@ static int msm_clk_probe(struct udevice *dev)
 	return 0;
 }
 
-static ulong msm_clk_set_rate(struct clk *clk, ulong rate)
+static long msm_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct msm_clk_data *data = (struct msm_clk_data *)dev_get_driver_data(clk->dev);
 

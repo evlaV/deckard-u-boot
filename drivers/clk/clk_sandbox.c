@@ -41,7 +41,7 @@ static ulong sandbox_clk_round_rate(struct clk *clk, ulong rate)
 	return rate;
 }
 
-static ulong sandbox_clk_set_rate(struct clk *clk, ulong rate)
+static long sandbox_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct sandbox_clk_priv *priv = dev_get_priv(clk->dev);
 	ulong old_rate;

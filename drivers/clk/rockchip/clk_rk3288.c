@@ -788,7 +788,7 @@ static ulong rk3288_clk_get_rate(struct clk *clk)
 	return new_rate;
 }
 
-static ulong rk3288_clk_set_rate(struct clk *clk, ulong rate)
+static long rk3288_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct rk3288_clk_priv *priv = dev_get_priv(clk->dev);
 	struct rockchip_cru *cru = priv->cru;

@@ -110,7 +110,7 @@ int apq8016_clk_init_uart(phys_addr_t base, unsigned long id)
 	return 0;
 }
 
-static ulong apq8016_clk_set_rate(struct clk *clk, ulong rate)
+static long apq8016_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
 

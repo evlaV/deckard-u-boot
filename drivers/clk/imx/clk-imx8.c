@@ -21,7 +21,7 @@ __weak ulong imx8_clk_get_rate(struct clk *clk)
 	return 0;
 }
 
-__weak ulong imx8_clk_set_rate(struct clk *clk, unsigned long rate)
+__weak long imx8_clk_set_rate(struct clk *clk, unsigned long rate)
 {
 	return 0;
 }

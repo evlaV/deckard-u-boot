@@ -64,7 +64,7 @@ static ulong cv1800b_ipll_get_rate(struct clk *clk)
 	return DIV_ROUND_DOWN_ULL(parent_rate * div, pre_div * post_div);
 }
 
-static ulong cv1800b_ipll_set_rate(struct clk *clk, ulong rate)
+static long cv1800b_ipll_set_rate(struct clk *clk, ulong rate)
 {
 	struct cv1800b_clk_ipll *pll = to_clk_ipll(clk);
 	ulong parent_rate = clk_get_parent_rate(clk);
@@ -188,7 +188,7 @@ static ulong cv1800b_find_syn(ulong rate, ulong parent_rate, ulong pre_div, ulon
 	return new_rate;
 }
 
-static ulong cv1800b_fpll_set_rate(struct clk *clk, ulong rate)
+static long cv1800b_fpll_set_rate(struct clk *clk, ulong rate)
 {
 	struct cv1800b_clk_fpll *pll = to_clk_fpll(clk);
 	ulong parent_rate = clk_get_parent_rate(clk);

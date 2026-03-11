@@ -173,7 +173,7 @@ static unsigned long uniphier_clk_get_rate(struct clk *clk)
 	return __uniphier_clk_get_rate(priv, data);
 }
 
-static unsigned long __uniphier_clk_set_rate(
+static long __uniphier_clk_set_rate(
 					struct uniphier_clk_priv *priv,
 					const struct uniphier_clk_data *data,
 					unsigned long rate, bool set)
@@ -229,7 +229,7 @@ static unsigned long __uniphier_clk_set_rate(
 						   rate, true);
 }
 
-static unsigned long uniphier_clk_set_rate(struct clk *clk, ulong rate)
+static long uniphier_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct uniphier_clk_priv *priv = dev_get_priv(clk->dev);
 	const struct uniphier_clk_data *data;

@@ -95,7 +95,7 @@ struct msm_clk_data {
 	const char * const		*dbg_rcg_names;
 
 	int (*enable)(struct clk *clk);
-	unsigned long (*set_rate)(struct clk *clk, unsigned long rate);
+	long (*set_rate)(struct clk *clk, unsigned long rate);
 };
 
 struct msm_clk_priv {

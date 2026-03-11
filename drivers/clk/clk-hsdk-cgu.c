@@ -708,7 +708,7 @@ static ulong hsdk_cgu_get_rate(struct clk *sclk)
 	return clk->map[sclk->id].get_rate(sclk);
 }
 
-static ulong hsdk_cgu_set_rate(struct clk *sclk, ulong rate)
+static long hsdk_cgu_set_rate(struct clk *sclk, ulong rate)
 {
 	struct hsdk_cgu_clk *clk = dev_get_priv(sclk->dev);
 

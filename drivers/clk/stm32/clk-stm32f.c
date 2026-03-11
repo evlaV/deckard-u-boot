@@ -495,7 +495,7 @@ static ulong stm32_clk_get_rate(struct clk *clk)
 	}
 }
 
-static ulong stm32_set_rate(struct clk *clk, ulong rate)
+static long stm32_set_rate(struct clk *clk, ulong rate)
 {
 #ifdef CONFIG_VIDEO_STM32
 	struct stm32_clk *priv = dev_get_priv(clk->dev);
