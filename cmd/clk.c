@@ -10,6 +10,7 @@
 #include <dm/device-internal.h>
 #include <linux/clk-provider.h>
 
+#if !CONFIG_IS_ENABLED(CLK_CCF_FULL)
 static void show_clks(struct udevice *dev, int depth, int last_flag)
 {
 	int i, is_last;
@@ -120,6 +121,24 @@ static int do_clk_setfreq(struct cmd_tbl *cmdtp, int flag, int argc,
 	printf("set_rate returns %u\n", freq);
 	return 0;
 }
+#else
+
+void clk_summary_show(void);
+
+static int do_clk_dump(struct cmd_tbl *cmdtp, int flag, int argc,
+		       char *const argv[])
+{
+	clk_summary_show();
+	return 0;
+}
+
+static int do_clk_setfreq(struct cmd_tbl *cmdtp, int flag, int argc,
+			  char *const argv[])
+{
+	return 0;
+}
+
+#endif
 
 static struct cmd_tbl cmd_clk_sub[] = {
 	U_BOOT_CMD_MKENT(dump, 1, 1, do_clk_dump, "", ""),
