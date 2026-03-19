@@ -4,29 +4,28 @@
  * Sylwester Nawrocki <s.nawrocki@samsung.com>
  */
 
-#include <linux/clk.h>
+#include <dm/ofnode.h>
 #include <linux/clk-provider.h>
 #include <linux/clk/clk-conf.h>
+#include <linux/compat.h>
 #include <linux/device.h>
-#include <linux/of.h>
 #include <linux/printk.h>
-#include <linux/slab.h>
 
-static int __set_clk_parents(struct device_node *node, bool clk_supplier)
+static int __set_clk_parents(ofnode node, bool clk_supplier)
 {
-	struct of_phandle_args clkspec;
+	struct ofnode_phandle_args clkspec;
 	int index, rc, num_parents;
 	struct clk *clk, *pclk;
 
-	num_parents = of_count_phandle_with_args(node, "assigned-clock-parents",
-						 "#clock-cells");
+	num_parents = ofnode_count_phandle_with_args(node, "assigned-clock-parents",
+						 "#clock-cells", 0);
 	if (num_parents == -EINVAL)
 		pr_err("clk: invalid value of clock-parents property at %pOF\n",
-		       node);
+		       &node);
 
 	for (index = 0; index < num_parents; index++) {
-		rc = of_parse_phandle_with_args(node, "assigned-clock-parents",
-					"#clock-cells",	index, &clkspec);
+		rc = ofnode_parse_phandle_with_args(node, "assigned-clock-parents",
+					"#clock-cells", 0, index, &clkspec);
 		if (rc < 0) {
 			/* skip empty (null) phandles */
 			if (rc == -ENOENT)
@@ -34,34 +33,34 @@ static int __set_clk_parents(struct device_node *node, bool clk_supplier)
 			else
 				return rc;
 		}
-		if (clkspec.np == node && !clk_supplier) {
-			of_node_put(clkspec.np);
+		if (ofnode_equal(clkspec.node, node) && !clk_supplier) {
+			ofnode_put(clkspec.node);
 			return 0;
 		}
 		pclk = of_clk_get_from_provider(&clkspec);
-		of_node_put(clkspec.np);
+		ofnode_put(clkspec.node);
 		if (IS_ERR(pclk)) {
 			if (PTR_ERR(pclk) != -EPROBE_DEFER)
 				pr_warn("clk: couldn't get parent clock %d for %pOF\n",
-					index, node);
+					index, &node);
 			return PTR_ERR(pclk);
 		}
 
-		rc = of_parse_phandle_with_args(node, "assigned-clocks",
-					"#clock-cells", index, &clkspec);
+		rc = ofnode_parse_phandle_with_args(node, "assigned-clocks",
+					"#clock-cells", 0, index, &clkspec);
 		if (rc < 0)
 			goto err;
-		if (clkspec.np == node && !clk_supplier) {
-			of_node_put(clkspec.np);
+		if (ofnode_equal(clkspec.node, node) && !clk_supplier) {
+			ofnode_put(clkspec.node);
 			rc = 0;
 			goto err;
 		}
 		clk = of_clk_get_from_provider(&clkspec);
-		of_node_put(clkspec.np);
+		ofnode_put(clkspec.node);
 		if (IS_ERR(clk)) {
 			if (PTR_ERR(clk) != -EPROBE_DEFER)
 				pr_warn("clk: couldn't get assigned clock %d for %pOF\n",
-					index, node);
+					index, &node);
 			rc = PTR_ERR(clk);
 			goto err;
 		}
@@ -79,23 +78,23 @@ err:
 	return rc;
 }
 
-static int __set_clk_rates(struct device_node *node, bool clk_supplier)
+static int __set_clk_rates(ofnode node, bool clk_supplier)
 {
-	struct of_phandle_args clkspec;
+	struct ofnode_phandle_args clkspec;
 	int rc, count, count_64, index;
 	struct clk *clk;
-	u64 *rates_64 __free(kfree) = NULL;
-	u32 *rates __free(kfree) = NULL;
+	u64 *rates_64 = NULL;
+	u32 *rates = NULL;
 
-	count = of_property_count_u32_elems(node, "assigned-clock-rates");
-	count_64 = of_property_count_u64_elems(node, "assigned-clock-rates-u64");
+	count = ofnode_count_u32_elems(node, "assigned-clock-rates");
+	count_64 = ofnode_count_u64_elems(node, "assigned-clock-rates-u64");
 	if (count_64 > 0) {
 		count = count_64;
 		rates_64 = kcalloc(count, sizeof(*rates_64), GFP_KERNEL);
 		if (!rates_64)
 			return -ENOMEM;
 
-		rc = of_property_read_u64_array(node,
+		rc = ofnode_read_u64_array(node,
 						"assigned-clock-rates-u64",
 						rates_64, count);
 	} else if (count > 0) {
@@ -103,14 +102,14 @@ static int __set_clk_rates(struct device_node *node, bool clk_supplier)
 		if (!rates)
 			return -ENOMEM;
 
-		rc = of_property_read_u32_array(node, "assigned-clock-rates",
+		rc = ofnode_read_u32_array(node, "assigned-clock-rates",
 						rates, count);
 	} else {
 		return 0;
 	}
 
 	if (rc)
-		return rc;
+		goto out_free;
 
 	for (index = 0; index < count; index++) {
 		unsigned long rate;
@@ -121,27 +120,28 @@ static int __set_clk_rates(struct device_node *node, bool clk_supplier)
 			rate = rates[index];
 
 		if (rate) {
-			rc = of_parse_phandle_with_args(node, "assigned-clocks",
-					"#clock-cells",	index, &clkspec);
+			rc = ofnode_parse_phandle_with_args(node, "assigned-clocks",
+					"#clock-cells", 0,	index, &clkspec);
 			if (rc < 0) {
 				/* skip empty (null) phandles */
 				if (rc == -ENOENT)
 					continue;
 				else
-					return rc;
+					goto out_free;
 			}
-			if (clkspec.np == node && !clk_supplier) {
-				of_node_put(clkspec.np);
+			if (ofnode_equal(clkspec.node, node) && !clk_supplier) {
+				ofnode_put(clkspec.node);
 				return 0;
 			}
 
 			clk = of_clk_get_from_provider(&clkspec);
-			of_node_put(clkspec.np);
+			ofnode_put(clkspec.node);
 			if (IS_ERR(clk)) {
 				if (PTR_ERR(clk) != -EPROBE_DEFER)
 					pr_warn("clk: couldn't get clock %d for %pOF\n",
-						index, node);
-				return PTR_ERR(clk);
+						index, &node);
+				rc = PTR_ERR(clk);
+				goto out_free;
 			}
 
 			rc = clk_set_rate(clk, rate);
@@ -153,6 +153,12 @@ static int __set_clk_rates(struct device_node *node, bool clk_supplier)
 		}
 	}
 	return 0;
+
+out_free:
+	kfree(rates);
+	kfree(rates_64);
+
+	return rc;
 }
 
 /**
@@ -167,11 +173,11 @@ static int __set_clk_rates(struct device_node *node, bool clk_supplier)
  * If @clk_supplier is false the function exits returning 0 as soon as it
  * determines the @node is also a supplier of any of the clocks.
  */
-int of_clk_set_defaults(struct device_node *node, bool clk_supplier)
+int of_clk_set_defaults(ofnode node, bool clk_supplier)
 {
 	int rc;
 
-	if (!node)
+	if (!ofnode_valid(node))
 		return 0;
 
 	rc = __set_clk_parents(node, clk_supplier);
