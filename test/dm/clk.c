@@ -52,14 +52,19 @@ static int dm_test_clk(struct unit_test_state *uts)
 {
 	struct udevice *dev_fixed, *dev_fixed_factor, *dev_clk, *dev_test;
 	ulong rate;
+	enum uclass_id clk_uc = UCLASS_CLK;
+	
+	/* CCF clocks use UCLASS_NOP to differentiate */
+	if (CONFIG_IS_ENABLED(CLK_CCF_FULL))
+		clk_uc = UCLASS_NOP;
 
-	ut_assertok(uclass_get_device_by_name(UCLASS_CLK, "clk-fixed",
+	ut_assertok(uclass_get_device_by_name(clk_uc, "clk-fixed",
 					      &dev_fixed));
 
-	ut_assertok(uclass_get_device_by_name(UCLASS_CLK, "clk-fixed-factor",
+	ut_assertok(uclass_get_device_by_name(clk_uc, "clk-fixed-factor",
 					      &dev_fixed_factor));
 
-	ut_assertok(uclass_get_device_by_name(UCLASS_CLK, "clk-sbox",
+	ut_assertok(uclass_get_device_by_name(clk_uc, "clk-sbox",
 					      &dev_clk));
 	ut_asserteq(0, sandbox_clk_query_enable(dev_clk, SANDBOX_CLK_ID_SPI));
 	ut_asserteq(0, sandbox_clk_query_enable(dev_clk, SANDBOX_CLK_ID_I2C));
@@ -96,7 +101,13 @@ static int dm_test_clk(struct unit_test_state *uts)
 
 	rate = sandbox_clk_test_set_rate(dev_test, SANDBOX_CLK_TEST_ID_FIXED,
 					 12345);
+/*
+ * Set rate on fixed clocks is actually allowed with CCF since the clock could have a parent
+ * with a variable rate
+ */
+#if !CONFIG_IS_ENABLED(CLK_CCF_FULL)
 	ut_assert(IS_ERR_VALUE(rate));
+#endif
 	rate = sandbox_clk_test_get_rate(dev_test, SANDBOX_CLK_TEST_ID_FIXED);
 	ut_asserteq(1234, rate);
 
@@ -191,8 +202,13 @@ DM_TEST(dm_test_clk, UTF_SCAN_FDT);
 static int dm_test_clk_bulk(struct unit_test_state *uts)
 {
 	struct udevice *dev_clk, *dev_test;
+	enum uclass_id clk_uc = UCLASS_CLK;
+	
+	/* CCF clocks use UCLASS_NOP to differentiate */
+	if (CONFIG_IS_ENABLED(CLK_CCF_FULL))
+		clk_uc = UCLASS_NOP;
 
-	ut_assertok(uclass_get_device_by_name(UCLASS_CLK, "clk-sbox",
+	ut_assertok(uclass_get_device_by_name(clk_uc, "clk-sbox",
 					      &dev_clk));
 	ut_assertok(uclass_get_device_by_name(UCLASS_MISC, "clk-test",
 					      &dev_test));
