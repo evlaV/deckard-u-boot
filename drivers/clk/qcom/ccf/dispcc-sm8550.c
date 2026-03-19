@@ -4,27 +4,24 @@
  * Copyright (c) 2023, Linaro Ltd.
  */
 
+#include <dm/device.h>
 #include <linux/clk-provider.h>
 #include <linux/err.h>
 #include <linux/kernel.h>
-#include <linux/mod_devicetable.h>
-#include <linux/module.h>
-#include <linux/platform_device.h>
 #include <linux/regmap.h>
-#include <linux/pm_runtime.h>
 
 #include <dt-bindings/clock/qcom,sm8550-dispcc.h>
 
 #include "common.h"
 #include "clk-alpha-pll.h"
 #include "clk-branch.h"
-#include "clk-pll.h"
 #include "clk-rcg.h"
 #include "clk-regmap.h"
 #include "clk-regmap-divider.h"
-#include "clk-regmap-mux.h"
 #include "reset.h"
 #include "gdsc.h"
+
+#include "common-uboot.h"
 
 /* Need to match the order of clocks in DT binding */
 enum {
@@ -1737,7 +1734,7 @@ static struct gdsc *disp_cc_sm8550_gdscs[] = {
 	[MDSS_INT2_GDSC] = &mdss_int2_gdsc,
 };
 
-static const struct regmap_config disp_cc_sm8550_regmap_config = {
+static const struct compat_regmap_config disp_cc_sm8550_regmap_config = {
 	.reg_bits = 32,
 	.reg_stride = 4,
 	.val_bits = 32,
@@ -1755,39 +1752,36 @@ static const struct qcom_cc_desc disp_cc_sm8550_desc = {
 	.num_gdscs = ARRAY_SIZE(disp_cc_sm8550_gdscs),
 };
 
-static const struct of_device_id disp_cc_sm8550_match_table[] = {
+static const struct udevice_id disp_cc_sm8550_match_table[] = {
 	{ .compatible = "qcom,sar2130p-dispcc" },
 	{ .compatible = "qcom,sm8550-dispcc" },
 	{ .compatible = "qcom,sm8650-dispcc" },
 	{ }
 };
-MODULE_DEVICE_TABLE(of, disp_cc_sm8550_match_table);
 
-static int disp_cc_sm8550_probe(struct platform_device *pdev)
+static int dispcc_sm8650_bind(struct udevice *dev)
+{
+	dev->driver_data = (ulong)&disp_cc_sm8550_desc;
+	return qcom_cc_bind_pd_reset(dev);
+}
+
+static int disp_cc_sm8550_probe(struct udevice *dev)
 {
 	struct regmap *regmap;
 	int ret;
 
-	ret = devm_pm_runtime_enable(&pdev->dev);
-	if (ret)
-		return ret;
-
-	ret = pm_runtime_resume_and_get(&pdev->dev);
-	if (ret)
-		return ret;
-
-	regmap = qcom_cc_map(pdev, &disp_cc_sm8550_desc);
+	regmap = qcom_cc_map(dev, &disp_cc_sm8550_desc);
 	if (IS_ERR(regmap)) {
 		ret = PTR_ERR(regmap);
 		goto err_put_rpm;
 	}
 
-	if (of_device_is_compatible(pdev->dev.of_node, "qcom,sm8650-dispcc")) {
+	if (ofnode_device_is_compatible(dev_ofnode(dev), "qcom,sm8650-dispcc")) {
 		lucid_ole_vco[0].max_freq = 2100000000;
 		disp_cc_mdss_mdp_clk_src.freq_tbl = ftbl_disp_cc_mdss_mdp_clk_src_sm8650;
 		disp_cc_mdss_dptx1_usb_router_link_intf_clk.clkr.hw.init->parent_hws[0] =
 			&disp_cc_mdss_dptx1_link_div_clk_src.clkr.hw;
-	} else if (of_device_is_compatible(pdev->dev.of_node, "qcom,sar2130p-dispcc")) {
+	} else if (ofnode_device_is_compatible(dev_ofnode(dev), "qcom,sar2130p-dispcc")) {
 		disp_cc_pll0_config.l = 0x1f;
 		disp_cc_pll0_config.alpha = 0x4000;
 		disp_cc_pll0_config.user_ctl_val = 0x1;
@@ -1804,7 +1798,7 @@ static int disp_cc_sm8550_probe(struct platform_device *pdev)
 	/* Keep some clocks always-on */
 	qcom_branch_set_clk_en(regmap, 0xe054); /* DISP_CC_XO_CLK */
 
-	ret = qcom_cc_really_probe(&pdev->dev, &disp_cc_sm8550_desc, regmap);
+	ret = qcom_cc_really_probe(dev, &disp_cc_sm8550_desc, regmap);
 	if (ret)
 		goto err_put_rpm;
 
@@ -1818,15 +1812,14 @@ err_put_rpm:
 	return ret;
 }
 
-static struct platform_driver disp_cc_sm8550_driver = {
+U_BOOT_DRIVER(dispcc_sm8650) = {
+	.name = "dispcc-sm8650",
+	.id = UCLASS_NOP,
+	.bind = dispcc_sm8650_bind,
 	.probe = disp_cc_sm8550_probe,
-	.driver = {
-		.name = "disp_cc-sm8550",
-		.of_match_table = disp_cc_sm8550_match_table,
-	},
+	.of_match = disp_cc_sm8550_match_table,
+	// .flags = DM_FLAG_PRE_RELOC | DM_FLAG_DEFAULT_PD_CTRL_OFF,
 };
-
-module_platform_driver(disp_cc_sm8550_driver);
 
 MODULE_DESCRIPTION("QTI DISPCC SM8550 / SM8650  Driver");
 MODULE_LICENSE("GPL");

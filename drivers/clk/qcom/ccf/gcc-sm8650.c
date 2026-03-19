@@ -10,6 +10,8 @@
 
 #include <dt-bindings/clock/qcom,sm8650-gcc.h>
 
+#include "common-uboot.h"
+
 #include "clk-alpha-pll.h"
 #include "clk-branch.h"
 #include "clk-rcg.h"
@@ -3767,7 +3769,7 @@ static struct gdsc *gcc_sm8650_gdscs[] = {
 	[USB3_PHY_GDSC] = &usb3_phy_gdsc,
 };
 
-static const struct regmap_config gcc_sm8650_regmap_config = {
+static const struct compat_regmap_config gcc_sm8650_regmap_config = {
 	.reg_bits = 32,
 	.reg_stride = 4,
 	.val_bits = 32,
@@ -3785,18 +3787,25 @@ static const struct qcom_cc_desc gcc_sm8650_desc = {
 	.num_gdscs = ARRAY_SIZE(gcc_sm8650_gdscs),
 };
 
-static const struct of_device_id gcc_sm8650_match_table[] = {
-	{ .compatible = "qcom,sm8650-gcc" },
+static const struct udevice_id gcc_sm8650_match_table[] = {
+	{
+		.compatible = "qcom,sm8650-gcc",
+		.data = (ulong)&gcc_sm8650_desc,
+	},
 	{ }
 };
-MODULE_DEVICE_TABLE(of, gcc_sm8650_match_table);
 
-static int gcc_sm8650_probe(struct platform_device *pdev)
+static int gcc_sm8650_bind(struct udevice *dev)
+{
+	return qcom_cc_bind_pd_reset(dev);
+}
+
+static int gcc_sm8650_probe(struct udevice *dev)
 {
 	struct regmap *regmap;
 	int ret;
 
-	regmap = qcom_cc_map(pdev, &gcc_sm8650_desc);
+	regmap = qcom_cc_map(dev, (struct qcom_cc_desc *)dev_get_driver_data(dev));
 	if (IS_ERR(regmap))
 		return PTR_ERR(regmap);
 
@@ -3821,28 +3830,17 @@ static int gcc_sm8650_probe(struct platform_device *pdev)
 	/* Clear GDSC_SLEEP_ENA_VOTE to stop votes being auto-removed in sleep. */
 	regmap_write(regmap, 0x52150, 0x0);
 
-	return qcom_cc_really_probe(&pdev->dev, &gcc_sm8650_desc, regmap);
+	return qcom_cc_really_probe(dev, &gcc_sm8650_desc, regmap);
 }
 
-static struct platform_driver gcc_sm8650_driver = {
+U_BOOT_DRIVER(gcc_sm8650) = {
+	.name = "gcc-sm8650",
+	.id = UCLASS_NOP,
+	.bind = gcc_sm8650_bind,
 	.probe = gcc_sm8650_probe,
-	.driver = {
-		.name = "gcc-sm8650",
-		.of_match_table = gcc_sm8650_match_table,
-	},
+	.of_match = gcc_sm8650_match_table,
+	.flags = DM_FLAG_DEFAULT_PD_CTRL_OFF,
 };
-
-static int __init gcc_sm8650_init(void)
-{
-	return platform_driver_register(&gcc_sm8650_driver);
-}
-subsys_initcall(gcc_sm8650_init);
-
-static void __exit gcc_sm8650_exit(void)
-{
-	platform_driver_unregister(&gcc_sm8650_driver);
-}
-module_exit(gcc_sm8650_exit);
 
 MODULE_DESCRIPTION("QTI GCC SM8650 Driver");
 MODULE_LICENSE("GPL");
