@@ -6,7 +6,7 @@
 #ifndef __QCOM_CLK_RESET_H__
 #define __QCOM_CLK_RESET_H__
 
-#include <linux/reset-controller.h>
+#include <reset.h>
 
 struct qcom_reset_map {
 	unsigned int reg;
@@ -19,13 +19,11 @@ struct regmap;
 
 struct qcom_reset_controller {
 	const struct qcom_reset_map *reset_map;
+	int nr_resets;
 	struct regmap *regmap;
-	struct reset_controller_dev rcdev;
 };
 
-#define to_qcom_reset_controller(r) \
-	container_of(r, struct qcom_reset_controller, rcdev);
-
-extern const struct reset_control_ops qcom_reset_ops;
+int qcom_reset_register(struct udevice *dev, const struct qcom_reset_map *reset_map,
+			int nr_resets, struct regmap *regmap);
 
 #endif

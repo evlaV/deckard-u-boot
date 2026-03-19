@@ -3,18 +3,20 @@
  * Copyright (c) 2015, 2017-2018, 2022, The Linux Foundation. All rights reserved.
  */
 
+#include <dm/device.h>
+#include <dm/device_compat.h>
+#include <dm/device-internal.h>
+#include <dm/ofnode.h>
 #include <linux/bitops.h>
+#include <linux/compat.h>
 #include <linux/delay.h>
 #include <linux/err.h>
-#include <linux/export.h>
-#include <linux/jiffies.h>
+#include <linux/bug.h>
 #include <linux/kernel.h>
-#include <linux/ktime.h>
-#include <linux/pm_domain.h>
 #include <linux/regmap.h>
-#include <linux/regulator/consumer.h>
-#include <linux/reset-controller.h>
-#include <linux/slab.h>
+#include <power/regulator.h>
+#include <power-domain-uclass.h>
+#include <reset-uclass.h>
 #include "gdsc.h"
 
 #define PWR_ON_MASK		BIT(31)
@@ -49,7 +51,7 @@
 #define STATUS_POLL_TIMEOUT_US	2000
 #define TIMEOUT_US		500
 
-#define domain_to_gdsc(domain) container_of(domain, struct gdsc, pd)
+#define domain_to_gdsc(domain) ((struct gdsc *)domain->priv)
 
 enum gdsc_status {
 	GDSC_OFF,
@@ -102,13 +104,13 @@ static int gdsc_hwctrl(struct gdsc *sc, bool en)
 
 static int gdsc_poll_status(struct gdsc *sc, enum gdsc_status status)
 {
-	ktime_t start;
+	u64 timeout;
 
-	start = ktime_get();
+	timeout = timer_get_us() + STATUS_POLL_TIMEOUT_US;
 	do {
 		if (gdsc_check_status(sc, status))
 			return 0;
-	} while (ktime_us_delta(ktime_get(), start) < STATUS_POLL_TIMEOUT_US);
+	} while (timer_get_us() < timeout);
 
 	if (gdsc_check_status(sc, status))
 		return 0;
@@ -175,7 +177,7 @@ static int gdsc_toggle_logic(struct gdsc *sc, enum gdsc_status status,
 	}
 
 	ret = gdsc_poll_status(sc, status);
-	WARN(ret, "%s status stuck at 'o%s'", sc->pd.name, status ? "ff" : "n");
+	WARN(ret, "%s status stuck at 'o%s'\n", sc->pd.name, status ? "ff" : "n");
 
 	if (!ret && status == GDSC_OFF && sc->rsupply) {
 		ret = regulator_disable(sc->rsupply);
@@ -188,19 +190,21 @@ static int gdsc_toggle_logic(struct gdsc *sc, enum gdsc_status status,
 
 static inline int gdsc_deassert_reset(struct gdsc *sc)
 {
-	int i;
+	debug("%s: %s: resets not yet supported!\n", sc->pd.name, __func__);
+	// int i;
 
-	for (i = 0; i < sc->reset_count; i++)
-		sc->rcdev->ops->deassert(sc->rcdev, sc->resets[i]);
+	// for (i = 0; i < sc->reset_count; i++)
+	// 	reset_deassert(sc->rcdev, sc->resets[i]);
 	return 0;
 }
 
 static inline int gdsc_assert_reset(struct gdsc *sc)
 {
-	int i;
+	debug("%s: %s: resets not yet supported!\n", sc->pd.name, __func__);
+	// int i;
 
-	for (i = 0; i < sc->reset_count; i++)
-		sc->rcdev->ops->assert(sc->rcdev, sc->resets[i]);
+	// for (i = 0; i < sc->reset_count; i++)
+	// 	reset_assert(sc->rcdev, sc->resets[i]);
 	return 0;
 }
 
@@ -256,9 +260,8 @@ static void gdsc_retain_ff_on(struct gdsc *sc)
 	regmap_update_bits(sc->regmap, sc->gdscr, mask, mask);
 }
 
-static int gdsc_enable(struct generic_pm_domain *domain)
+static int _gdsc_enable(struct gdsc *sc)
 {
-	struct gdsc *sc = domain_to_gdsc(domain);
 	int ret;
 
 	if (sc->pwrsts == PWRSTS_ON)
@@ -314,7 +317,12 @@ static int gdsc_enable(struct generic_pm_domain *domain)
 	return 0;
 }
 
-static int gdsc_disable(struct generic_pm_domain *domain)
+static int gdsc_enable(struct power_domain *domain)
+{
+	return _gdsc_enable(domain_to_gdsc(domain));
+}
+
+static int gdsc_disable(struct power_domain *domain)
 {
 	struct gdsc *sc = domain_to_gdsc(domain);
 	int ret;
@@ -353,7 +361,7 @@ static int gdsc_disable(struct generic_pm_domain *domain)
 	if (sc->pwrsts == PWRSTS_RET_ON)
 		return 0;
 
-	ret = gdsc_toggle_logic(sc, GDSC_OFF, domain->synced_poweroff);
+	ret = gdsc_toggle_logic(sc, GDSC_OFF, true);
 	if (ret)
 		return ret;
 
@@ -361,43 +369,6 @@ static int gdsc_disable(struct generic_pm_domain *domain)
 		gdsc_assert_clamp_io(sc);
 
 	return 0;
-}
-
-static int gdsc_set_hwmode(struct generic_pm_domain *domain, struct device *dev, bool mode)
-{
-	struct gdsc *sc = domain_to_gdsc(domain);
-	int ret;
-
-	ret = gdsc_hwctrl(sc, mode);
-	if (ret)
-		return ret;
-
-	/*
-	 * Wait for the GDSC to go through a power down and
-	 * up cycle. If we poll the status register before the
-	 * power cycle is finished we might read incorrect values.
-	 */
-	udelay(1);
-
-	/*
-	 * When the GDSC is switched to HW mode, HW can disable the GDSC.
-	 * When the GDSC is switched back to SW mode, the GDSC will be enabled
-	 * again, hence we need to poll for GDSC to complete the power up.
-	 */
-	if (!mode)
-		return gdsc_poll_status(sc, GDSC_ON);
-
-	return 0;
-}
-
-static bool gdsc_get_hwmode(struct generic_pm_domain *domain, struct device *dev)
-{
-	struct gdsc *sc = domain_to_gdsc(domain);
-	u32 val;
-
-	regmap_read(sc->regmap, sc->gdscr, &val);
-
-	return !!(val & HW_CONTROL_MASK);
 }
 
 static int gdsc_init(struct gdsc *sc)
@@ -428,12 +399,12 @@ static int gdsc_init(struct gdsc *sc)
 	if (ret)
 		return ret;
 
-	/* Force gdsc ON if only ON state is supported */
-	if (sc->pwrsts == PWRSTS_ON) {
-		ret = gdsc_toggle_logic(sc, GDSC_ON, false);
-		if (ret)
-			return ret;
-	}
+	// /* Force gdsc ON if only ON state is supported */
+	// if (sc->pwrsts == PWRSTS_ON) {
+	// 	ret = gdsc_toggle_logic(sc, GDSC_ON, false);
+	// 	if (ret)
+	// 		return ret;
+	// }
 
 	on = gdsc_check_status(sc, GDSC_ON);
 	if (on < 0)
@@ -474,7 +445,7 @@ static int gdsc_init(struct gdsc *sc)
 
 	} else if (sc->flags & ALWAYS_ON) {
 		/* If ALWAYS_ON GDSCs are not ON, turn them ON */
-		gdsc_enable(&sc->pd);
+		_gdsc_enable(sc);
 		on = true;
 	}
 
@@ -483,20 +454,20 @@ static int gdsc_init(struct gdsc *sc)
 	else
 		gdsc_clear_mem_on(sc);
 
-	if (sc->flags & ALWAYS_ON)
-		sc->pd.flags |= GENPD_FLAG_ALWAYS_ON;
-	if (!sc->pd.power_off)
-		sc->pd.power_off = gdsc_disable;
-	if (!sc->pd.power_on)
-		sc->pd.power_on = gdsc_enable;
-	if (sc->flags & HW_CTRL_TRIGGER) {
-		sc->pd.set_hwmode_dev = gdsc_set_hwmode;
-		sc->pd.get_hwmode_dev = gdsc_get_hwmode;
-	}
+	// if (sc->flags & ALWAYS_ON)
+	// 	sc->pd.flags |= GENPD_FLAG_ALWAYS_ON;
+	// if (!sc->pd.power_off)
+	// 	sc->pd.power_off = gdsc_disable;
+	// if (!sc->pd.power_on)
+	// 	sc->pd.power_on = gdsc_enable;
+	// if (sc->flags & HW_CTRL_TRIGGER) {
+	// 	sc->pd.set_hwmode_dev = gdsc_set_hwmode;
+	// 	sc->pd.get_hwmode_dev = gdsc_get_hwmode;
+	// }
 
-	ret = pm_genpd_init(&sc->pd, NULL, !on);
-	if (ret)
-		goto err_disable_supply;
+	// ret = pm_genpd_init(&sc->pd, NULL, !on);
+	// if (ret)
+	// 	goto err_disable_supply;
 
 	return 0;
 
@@ -507,161 +478,68 @@ err_disable_supply:
 	return ret;
 }
 
-static int gdsc_add_subdomain_list(struct dev_pm_domain_list *pd_list,
-				   struct generic_pm_domain *subdomain)
+static int qcom_gdsc_of_xlate(struct power_domain *pd,
+			struct ofnode_phandle_args *args)
 {
-	int i, ret;
+	struct gdsc_desc *desc = (struct gdsc_desc *)dev_get_driver_data(pd->dev);
 
-	for (i = 0; i < pd_list->num_pds; i++) {
-		struct device *dev = pd_list->pd_devs[i];
-		struct generic_pm_domain *genpd = pd_to_genpd(dev->pm_domain);
-
-		ret = pm_genpd_add_subdomain(genpd, subdomain);
-		if (ret)
-			return ret;
+	if (args->args_count != 1) {
+		debug("Invalid args_count: %d\n", args->args_count);
+		return -EINVAL;
 	}
+
+	pd->id = args->args[0];
+
+	if (pd->id > desc->num_gdscs) {
+		dev_err(pd->dev, "Invalid GDSC ID %ld\n", pd->id);
+		return -EINVAL;
+	}
+
+	/* Assign per-GDSC private data */
+	desc->gdsc[pd->id]->regmap = desc->regmap;
+	pd->priv = desc->gdsc[pd->id];
+
+	gdsc_init(desc->gdsc[pd->id]);
 
 	return 0;
 }
 
-static void gdsc_remove_subdomain_list(struct dev_pm_domain_list *pd_list,
-				       struct generic_pm_domain *subdomain)
+static const struct power_domain_ops qcom_gdsc_ops = {
+	.on = gdsc_enable,
+	.off = gdsc_disable,
+	.of_xlate = qcom_gdsc_of_xlate,
+};
+
+U_BOOT_DRIVER(qcom_gdsc) = {
+	.name = "qcom_gdsc",
+	.id = UCLASS_POWER_DOMAIN,
+	.ops = &qcom_gdsc_ops,
+	.flags = DM_FLAG_PRE_RELOC,
+};
+
+int gdsc_register(struct udevice *dev, struct gdsc **gdscs, int num_gdscs,
+		  struct regmap *regmap)
 {
-	int i;
+	int ret;
+	char *name;
+	struct gdsc_desc *desc;
 
-	for (i = 0; i < pd_list->num_pds; i++) {
-		struct device *dev = pd_list->pd_devs[i];
-		struct generic_pm_domain *genpd = pd_to_genpd(dev->pm_domain);
-
-		pm_genpd_remove_subdomain(genpd, subdomain);
-	}
-}
-
-static void gdsc_pm_subdomain_remove(struct gdsc_desc *desc, size_t num)
-{
-	struct device *dev = desc->dev;
-	struct gdsc **scs = desc->scs;
-	int i;
-
-	/* Remove subdomains */
-	for (i = num - 1; i >= 0; i--) {
-		if (!scs[i])
-			continue;
-		if (scs[i]->parent)
-			pm_genpd_remove_subdomain(scs[i]->parent, &scs[i]->pd);
-		else if (!IS_ERR_OR_NULL(dev->pm_domain))
-			pm_genpd_remove_subdomain(pd_to_genpd(dev->pm_domain), &scs[i]->pd);
-		else if (desc->pd_list)
-			gdsc_remove_subdomain_list(desc->pd_list, &scs[i]->pd);
-	}
-}
-
-int gdsc_register(struct gdsc_desc *desc,
-		  struct reset_controller_dev *rcdev, struct regmap *regmap)
-{
-	int i, ret;
-	struct genpd_onecell_data *data;
-	struct device *dev = desc->dev;
-	struct gdsc **scs = desc->scs;
-	size_t num = desc->num;
-
-	data = devm_kzalloc(dev, sizeof(*data), GFP_KERNEL);
-	if (!data)
+	desc = kzalloc(sizeof(*desc), GFP_KERNEL);
+	if (!desc)
 		return -ENOMEM;
 
-	data->domains = devm_kcalloc(dev, num, sizeof(*data->domains),
-				     GFP_KERNEL);
-	if (!data->domains)
+	desc->dev = dev;
+	desc->gdsc = gdscs;
+	desc->num_gdscs = num_gdscs;
+	desc->regmap = regmap;
+
+	name = kzalloc(64, GFP_KERNEL);
+	if (!name)
 		return -ENOMEM;
+	ret = snprintf(name, 64, "%s.%s", desc->dev->name, "gdsc");
+	if (ret < 0)
+		return ret;
 
-	for (i = 0; i < num; i++) {
-		if (!scs[i] || !scs[i]->supply)
-			continue;
-
-		scs[i]->rsupply = devm_regulator_get_optional(dev, scs[i]->supply);
-		if (IS_ERR(scs[i]->rsupply)) {
-			ret = PTR_ERR(scs[i]->rsupply);
-			if (ret != -ENODEV)
-				return ret;
-
-			scs[i]->rsupply = NULL;
-		}
-	}
-
-	data->num_domains = num;
-	for (i = 0; i < num; i++) {
-		if (!scs[i])
-			continue;
-		scs[i]->regmap = regmap;
-		scs[i]->rcdev = rcdev;
-		ret = gdsc_init(scs[i]);
-		if (ret)
-			return ret;
-		data->domains[i] = &scs[i]->pd;
-	}
-
-	/* Add subdomains */
-	for (i = 0; i < num; i++) {
-		if (!scs[i])
-			continue;
-		if (scs[i]->parent)
-			ret = pm_genpd_add_subdomain(scs[i]->parent, &scs[i]->pd);
-		else if (!IS_ERR_OR_NULL(dev->pm_domain))
-			ret = pm_genpd_add_subdomain(pd_to_genpd(dev->pm_domain), &scs[i]->pd);
-		else if (desc->pd_list)
-			ret = gdsc_add_subdomain_list(desc->pd_list, &scs[i]->pd);
-
-		if (ret)
-			goto err_pm_subdomain_remove;
-	}
-
-	return of_genpd_add_provider_onecell(dev->of_node, data);
-
-err_pm_subdomain_remove:
-	gdsc_pm_subdomain_remove(desc, i);
-
-	return ret;
+	return device_bind_with_driver_data(desc->dev, DM_DRIVER_REF(qcom_gdsc),
+					    strdup(name), (ulong)desc, dev_ofnode(dev), NULL);
 }
-
-void gdsc_unregister(struct gdsc_desc *desc)
-{
-	struct device *dev = desc->dev;
-	size_t num = desc->num;
-
-	gdsc_pm_subdomain_remove(desc, num);
-	of_genpd_del_provider(dev->of_node);
-}
-
-/*
- * On SDM845+ the GPU GX domain is *almost* entirely controlled by the GMU
- * running in the CX domain so the CPU doesn't need to know anything about the
- * GX domain EXCEPT....
- *
- * Hardware constraints dictate that the GX be powered down before the CX. If
- * the GMU crashes it could leave the GX on. In order to successfully bring back
- * the device the CPU needs to disable the GX headswitch. There being no sane
- * way to reach in and touch that register from deep inside the GPU driver we
- * need to set up the infrastructure to be able to ensure that the GPU can
- * ensure that the GX is off during this super special case. We do this by
- * defining a GX gdsc with a dummy enable function and a "default" disable
- * function.
- *
- * This allows us to attach with genpd_dev_pm_attach_by_name() in the GPU
- * driver. During power up, nothing will happen from the CPU (and the GMU will
- * power up normally but during power down this will ensure that the GX domain
- * is *really* off - this gives us a semi standard way of doing what we need.
- */
-int gdsc_gx_do_nothing_enable(struct generic_pm_domain *domain)
-{
-	struct gdsc *sc = domain_to_gdsc(domain);
-	int ret = 0;
-
-	/* Enable the parent supply, when controlled through the regulator framework. */
-	if (sc->rsupply)
-		ret = regulator_enable(sc->rsupply);
-
-	/* Do nothing with the GDSC itself */
-
-	return ret;
-}
-EXPORT_SYMBOL_GPL(gdsc_gx_do_nothing_enable);

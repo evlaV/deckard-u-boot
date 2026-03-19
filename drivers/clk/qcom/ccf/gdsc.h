@@ -7,11 +7,15 @@
 #define __QCOM_GDSC_H__
 
 #include <linux/err.h>
-#include <linux/pm_domain.h>
+#include <power-domain.h>
 
 struct regmap;
-struct regulator;
 struct reset_controller_dev;
+
+/* Compat struct for Linux */
+struct compat_power_domain {
+	const char *name;
+};
 
 /**
  * struct gdsc - Globally Distributed Switch Controller
@@ -32,8 +36,8 @@ struct reset_controller_dev;
  * @rcdev: reset controller
  */
 struct gdsc {
-	struct generic_pm_domain	pd;
-	struct generic_pm_domain	*parent;
+	struct compat_power_domain	pd;
+	struct power_domain	*parent;
 	struct regmap			*regmap;
 	unsigned int			gdscr;
 	unsigned int			collapse_ctrl;
@@ -68,26 +72,24 @@ struct gdsc {
 #define RETAIN_FF_ENABLE	BIT(7)
 #define NO_RET_PERIPH	BIT(8)
 #define HW_CTRL_TRIGGER	BIT(9)
-	struct reset_controller_dev	*rcdev;
+	struct reset_ctl		*rcdev;
 	unsigned int			*resets;
 	unsigned int			reset_count;
 
 	const char 			*supply;
-	struct regulator		*rsupply;
+	struct udevice			*rsupply;
 };
 
 struct gdsc_desc {
-	struct device *dev;
-	struct gdsc **scs;
-	size_t num;
-	struct dev_pm_domain_list *pd_list;
+	struct gdsc **gdsc;
+	int num_gdscs;
+	struct udevice *dev;
+	struct regmap *regmap;
 };
 
-#ifdef CONFIG_QCOM_GDSC
-int gdsc_register(struct gdsc_desc *desc, struct reset_controller_dev *,
-		  struct regmap *);
-void gdsc_unregister(struct gdsc_desc *desc);
-int gdsc_gx_do_nothing_enable(struct generic_pm_domain *domain);
+#ifdef CONFIG_CLK_QCOM
+int gdsc_register(struct udevice *dev, struct gdsc **gdscs, int num_gdscs,
+		  struct regmap *regmap);
 #else
 static inline int gdsc_register(struct gdsc_desc *desc,
 				struct reset_controller_dev *rcdev,
