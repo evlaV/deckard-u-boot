@@ -4,11 +4,11 @@
  * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
+#include <linux/bug.h>
 #include <linux/kernel.h>
 #include <linux/bitops.h>
 #include <linux/err.h>
 #include <linux/delay.h>
-#include <linux/export.h>
 #include <linux/clk-provider.h>
 #include <linux/regmap.h>
 
@@ -84,8 +84,11 @@ static int clk_branch_wait(const struct clk_branch *br, bool enabling,
 				return 0;
 			udelay(1);
 		}
-		WARN(1, "%s status stuck at 'o%s'", name,
+		WARN(1, "%s status stuck at 'o%s'\n", name,
 				enabling ? "ff" : "n");
+		u32 val;
+		regmap_read(br->clkr.regmap, br->halt_reg, &val);
+		printf("%s: halt_reg %#x val %#x\n", name, br->halt_reg, val);
 		return -EBUSY;
 	}
 	return 0;

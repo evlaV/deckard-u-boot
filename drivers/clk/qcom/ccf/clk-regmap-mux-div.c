@@ -4,6 +4,7 @@
  * Author: Georgi Djakov <georgi.djakov@linaro.org>
  */
 
+#include <dm/ofnode.h>
 #include <linux/bitops.h>
 #include <linux/delay.h>
 #include <linux/kernel.h>

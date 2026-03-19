@@ -3,6 +3,7 @@ if ARCH_SNAPDRAGON || ARCH_IPQ40XX
 config CLK_QCOM
 	bool
 	depends on CLK && DM_RESET && POWER_DOMAIN
+	select REGMAP if CLK_CCF_FULL
 	def_bool n
 
 menu "Qualcomm clock drivers"

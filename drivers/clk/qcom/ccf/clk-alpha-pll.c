@@ -4,14 +4,17 @@
  * Copyright (c) 2021, 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
+#include <asm/io.h>
+#include <div64.h>
+#include <linux/bug.h>
 #include <linux/kernel.h>
-#include <linux/export.h>
 #include <linux/clk-provider.h>
 #include <linux/regmap.h>
 #include <linux/delay.h>
 
 #include "clk-alpha-pll.h"
 #include "common.h"
+#include "common-uboot.h"
 
 #define PLL_MODE(p)		((p)->offset + 0x0)
 # define PLL_OUTCTRL		BIT(0)

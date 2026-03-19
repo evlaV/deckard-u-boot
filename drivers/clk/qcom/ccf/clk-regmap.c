@@ -3,10 +3,11 @@
  * Copyright (c) 2014, The Linux Foundation. All rights reserved.
  */
 
+#include <dm/ofnode.h>
+#include <dm/device.h>
 #include <linux/device.h>
 #include <linux/clk-provider.h>
 #include <linux/regmap.h>
-#include <linux/export.h>
 
 #include "clk-regmap.h"
 
@@ -94,12 +95,9 @@ EXPORT_SYMBOL_GPL(clk_disable_regmap);
  * clk_regmap struct via this function so that the regmap is initialized
  * and so that the clock is registered with the common clock framework.
  */
-int devm_clk_register_regmap(struct device *dev, struct clk_regmap *rclk)
+int devm_clk_register_regmap(struct udevice *dev, struct clk_regmap *rclk, struct regmap *regmap)
 {
-	if (dev && dev_get_regmap(dev, NULL))
-		rclk->regmap = dev_get_regmap(dev, NULL);
-	else if (dev && dev->parent)
-		rclk->regmap = dev_get_regmap(dev->parent, NULL);
+	rclk->regmap = regmap;
 
 	return devm_clk_hw_register(dev, &rclk->hw);
 }

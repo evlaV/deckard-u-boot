@@ -3,25 +3,21 @@
  * Copyright (c) 2013, 2018, The Linux Foundation. All rights reserved.
  */
 
+#include <div64.h>
 #include <linux/kernel.h>
 #include <linux/bitops.h>
 #include <linux/err.h>
 #include <linux/bug.h>
-#include <linux/export.h>
-#include <linux/clk.h>
+#include <clk.h>
 #include <linux/clk-provider.h>
 #include <linux/delay.h>
 #include <linux/rational.h>
 #include <linux/regmap.h>
 #include <linux/math64.h>
-#include <linux/gcd.h>
-#include <linux/minmax.h>
-#include <linux/slab.h>
-
-#include <asm/div64.h>
 
 #include "clk-rcg.h"
 #include "common.h"
+#include "common-uboot.h"
 
 #define CMD_REG			0x0
 #define CMD_UPDATE		BIT(0)
@@ -133,7 +129,7 @@ static int update_config(struct clk_rcg2 *rcg)
 		udelay(1);
 	}
 
-	WARN(1, "%s: rcg didn't update its configuration.", name);
+	WARN(1, "%s: rcg didn't update its configuration.\n", name);
 	return -EBUSY;
 }
 
@@ -223,7 +219,9 @@ clk_rcg2_recalc_rate(struct clk_hw *hw, unsigned long parent_rate)
 
 	regmap_read(rcg->clkr.regmap, RCG_CFG_OFFSET(rcg), &cfg);
 
-	return __clk_rcg2_recalc_rate(hw, parent_rate, cfg);
+	ulong rate = __clk_rcg2_recalc_rate(hw, parent_rate, cfg);
+	pr_debug("%s: %s: rate %lu parent_rate %lu\n", __func__, clk_hw_get_name(hw), rate, parent_rate);
+	return rate;
 }
 
 static int _freq_tbl_determine_rate(struct clk_hw *hw, const struct freq_tbl *f,
@@ -350,20 +348,29 @@ static int _freq_tbl_fm_determine_rate(struct clk_hw *hw, const struct freq_mult
 	int index;
 
 	f = qcom_find_freq_multi(f, rate);
-	if (!f || !f->confs)
+	if (!f || !f->confs) {
+		dev_err(hw->clk->dev, "%s: couldn't match rate %lu\n", clk_hw_get_name(hw), rate);
 		return -EINVAL;
+	}
+
+	log_debug("%s: %s rate %lu table rate %lu\n", __func__,
+		clk_hw_get_name(hw), rate, f->freq);
 
 	conf = __clk_rcg2_select_conf(hw, f, rate);
 	if (IS_ERR(conf))
 		return PTR_ERR(conf);
 	index = qcom_find_src_index(hw, rcg->parent_map, conf->src);
-	if (index < 0)
+	if (index < 0) {
+		dev_err(hw->clk->dev, "Couldn't find index for src %#x: %d\n", conf->src, index);
 		return index;
+	}
 
 	clk_flags = clk_hw_get_flags(hw);
 	p = clk_hw_get_parent_by_index(hw, index);
-	if (!p)
+	if (!p) {
+		dev_err(hw->clk->dev, "%s: couldn't get parent index %d\n", clk_hw_get_name(hw), index);
 		return -EINVAL;
+	}
 
 	if (clk_flags & CLK_SET_RATE_PARENT) {
 		rate = f->freq;
@@ -1204,120 +1211,6 @@ const struct clk_ops clk_pixel_ops = {
 };
 EXPORT_SYMBOL_GPL(clk_pixel_ops);
 
-static int clk_gfx3d_determine_rate(struct clk_hw *hw,
-				    struct clk_rate_request *req)
-{
-	struct clk_rate_request parent_req = { .min_rate = 0, .max_rate = ULONG_MAX };
-	struct clk_rcg2_gfx3d *cgfx = to_clk_rcg2_gfx3d(hw);
-	struct clk_hw *xo, *p0, *p1, *p2;
-	unsigned long p0_rate;
-	u8 mux_div = cgfx->div;
-	int ret;
-
-	p0 = cgfx->hws[0];
-	p1 = cgfx->hws[1];
-	p2 = cgfx->hws[2];
-	/*
-	 * This function does ping-pong the RCG between PLLs: if we don't
-	 * have at least one fixed PLL and two variable ones,
-	 * then it's not going to work correctly.
-	 */
-	if (WARN_ON(!p0 || !p1 || !p2))
-		return -EINVAL;
-
-	xo = clk_hw_get_parent_by_index(hw, 0);
-	if (req->rate == clk_hw_get_rate(xo)) {
-		req->best_parent_hw = xo;
-		return 0;
-	}
-
-	if (mux_div == 0)
-		mux_div = 1;
-
-	parent_req.rate = req->rate * mux_div;
-
-	/* This has to be a fixed rate PLL */
-	p0_rate = clk_hw_get_rate(p0);
-
-	if (parent_req.rate == p0_rate) {
-		req->rate = req->best_parent_rate = p0_rate;
-		req->best_parent_hw = p0;
-		return 0;
-	}
-
-	if (req->best_parent_hw == p0) {
-		/* Are we going back to a previously used rate? */
-		if (clk_hw_get_rate(p2) == parent_req.rate)
-			req->best_parent_hw = p2;
-		else
-			req->best_parent_hw = p1;
-	} else if (req->best_parent_hw == p2) {
-		req->best_parent_hw = p1;
-	} else {
-		req->best_parent_hw = p2;
-	}
-
-	clk_hw_get_rate_range(req->best_parent_hw,
-			      &parent_req.min_rate, &parent_req.max_rate);
-
-	if (req->min_rate > parent_req.min_rate)
-		parent_req.min_rate = req->min_rate;
-
-	if (req->max_rate < parent_req.max_rate)
-		parent_req.max_rate = req->max_rate;
-
-	ret = __clk_determine_rate(req->best_parent_hw, &parent_req);
-	if (ret)
-		return ret;
-
-	req->rate = req->best_parent_rate = parent_req.rate;
-	req->rate /= mux_div;
-
-	return 0;
-}
-
-static int clk_gfx3d_set_rate_and_parent(struct clk_hw *hw, unsigned long rate,
-		unsigned long parent_rate, u8 index)
-{
-	struct clk_rcg2_gfx3d *cgfx = to_clk_rcg2_gfx3d(hw);
-	struct clk_rcg2 *rcg = &cgfx->rcg;
-	u32 cfg;
-	int ret;
-
-	cfg = rcg->parent_map[index].cfg << CFG_SRC_SEL_SHIFT;
-	/* On some targets, the GFX3D RCG may need to divide PLL frequency */
-	if (cgfx->div > 1)
-		cfg |= ((2 * cgfx->div) - 1) << CFG_SRC_DIV_SHIFT;
-
-	ret = regmap_write(rcg->clkr.regmap, rcg->cmd_rcgr + CFG_REG, cfg);
-	if (ret)
-		return ret;
-
-	return update_config(rcg);
-}
-
-static int clk_gfx3d_set_rate(struct clk_hw *hw, unsigned long rate,
-			      unsigned long parent_rate)
-{
-	/*
-	 * We should never get here; clk_gfx3d_determine_rate() should always
-	 * make us use a different parent than what we're currently using, so
-	 * clk_gfx3d_set_rate_and_parent() should always be called.
-	 */
-	return 0;
-}
-
-const struct clk_ops clk_gfx3d_ops = {
-	.is_enabled = clk_rcg2_is_enabled,
-	.get_parent = clk_rcg2_get_parent,
-	.set_parent = clk_rcg2_set_parent,
-	.recalc_rate = clk_rcg2_recalc_rate,
-	.set_rate = clk_gfx3d_set_rate,
-	.set_rate_and_parent = clk_gfx3d_set_rate_and_parent,
-	.determine_rate = clk_gfx3d_determine_rate,
-};
-EXPORT_SYMBOL_GPL(clk_gfx3d_ops);
-
 static int clk_rcg2_set_force_enable(struct clk_hw *hw)
 {
 	struct clk_rcg2 *rcg = to_clk_rcg2(hw);
@@ -1373,6 +1266,9 @@ static int __clk_rcg2_shared_set_rate(struct clk_hw *hw, unsigned long rate,
 	struct clk_rcg2 *rcg = to_clk_rcg2(hw);
 	const struct freq_tbl *f;
 
+	log_debug("%s: %s rate %lu parent_rate %lu policy %sp\n", __func__,
+		clk_hw_get_name(hw), rate, parent_rate, policy == FLOOR ? "floor" : "ceil");
+
 	switch (policy) {
 	case FLOOR:
 		f = qcom_find_freq_floor(rcg->freq_tbl, rate);
@@ -1383,6 +1279,13 @@ static int __clk_rcg2_shared_set_rate(struct clk_hw *hw, unsigned long rate,
 	default:
 		return -EINVAL;
 	}
+
+	if (!f) {
+		dev_err(hw->clk->dev, "%s: couldn't find frequency for rate %lu\n", clk_hw_get_name(hw), rate);
+		return -EINVAL;
+	}
+
+	log_debug("%s: found freq %p rate %lu\n", __func__, f, f ? f->freq : 10101010);
 
 	/*
 	 * In case clock is disabled, update the M, N and D registers, cache
@@ -1447,6 +1350,8 @@ static int clk_rcg2_shared_enable(struct clk_hw *hw)
 static void clk_rcg2_shared_disable(struct clk_hw *hw)
 {
 	struct clk_rcg2 *rcg = to_clk_rcg2(hw);
+
+	log_debug("%s: %s\n", __func__, clk_hw_get_name(hw));
 
 	/*
 	 * Store current configuration as switching to safe source would clear

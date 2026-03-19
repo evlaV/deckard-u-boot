@@ -3,10 +3,10 @@
  * Copyright (c) 2022, Linaro Ltd.
  */
 
+#include <linux/bug.h>
 #include <linux/clk-provider.h>
 #include <linux/bitfield.h>
 #include <linux/regmap.h>
-#include <linux/export.h>
 
 #include "clk-regmap.h"
 #include "clk-regmap-phy-mux.h"

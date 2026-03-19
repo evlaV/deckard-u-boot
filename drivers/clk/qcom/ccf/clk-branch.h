@@ -6,6 +6,7 @@
 
 #include <linux/bitfield.h>
 #include <linux/clk-provider.h>
+#include <linux/regmap.h>
 
 #include "clk-regmap.h"
 

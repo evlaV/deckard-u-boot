@@ -3,10 +3,10 @@
  * Copyright (c) 2014, The Linux Foundation. All rights reserved.
  */
 
+#include <dm/ofnode.h>
 #include <linux/kernel.h>
 #include <linux/bitops.h>
 #include <linux/regmap.h>
-#include <linux/export.h>
 
 #include "clk-regmap-mux.h"
 

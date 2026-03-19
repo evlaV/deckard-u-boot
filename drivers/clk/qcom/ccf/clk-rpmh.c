@@ -6,15 +6,13 @@
 #include <linux/clk-provider.h>
 #include <linux/err.h>
 #include <linux/kernel.h>
-#include <linux/module.h>
-#include <linux/of.h>
-#include <linux/platform_device.h>
-#include <linux/string_choices.h>
 #include <soc/qcom/cmd-db.h>
 #include <soc/qcom/rpmh.h>
 #include <soc/qcom/tcs.h>
 
 #include <dt-bindings/clock/qcom,rpmh.h>
+
+#include "common-uboot.h"
 
 #define CLK_RPMH_ARC_EN_OFFSET		0
 #define CLK_RPMH_VRM_EN_OFFSET		4
@@ -59,7 +57,7 @@ struct clk_rpmh {
 	u32 last_sent_aggr_state;
 	u32 valid_state_mask;
 	u32 unit;
-	struct device *dev;
+	struct udevice *dev;
 	struct clk_rpmh *peer;
 };
 
@@ -70,7 +68,7 @@ struct clk_rpmh_desc {
 	bool clka_optional;
 };
 
-static DEFINE_MUTEX(rpmh_clk_lock);
+// static DEFINE_MUTEX(rpmh_clk_lock);
 
 #define __DEFINE_CLK_RPMH(_name, _clk_name, _res_name,			\
 			  _res_en_offset, _res_on, _div)		\
@@ -309,6 +307,8 @@ static int clk_rpmh_bcm_set_rate(struct clk_hw *hw, unsigned long rate,
 				 unsigned long parent_rate)
 {
 	struct clk_rpmh *c = to_clk_rpmh(hw);
+
+	printf("%s: %s: rate %lu parent_rate %lu\n", __func__, clk_hw_get_name(hw), rate, parent_rate);
 
 	c->aggr_state = rate / c->unit;
 	/*
@@ -901,7 +901,7 @@ static const struct clk_rpmh_desc clk_rpmh_glymur = {
 	.num_clks = ARRAY_SIZE(glymur_rpmh_clocks),
 };
 
-static struct clk_hw *of_clk_rpmh_hw_get(struct of_phandle_args *clkspec,
+static struct clk_hw *of_clk_rpmh_hw_get(struct ofnode_phandle_args *clkspec,
 					 void *data)
 {
 	struct clk_rpmh_desc *rpmh = data;
@@ -915,14 +915,14 @@ static struct clk_hw *of_clk_rpmh_hw_get(struct of_phandle_args *clkspec,
 	return rpmh->clks[idx];
 }
 
-static int clk_rpmh_probe(struct platform_device *pdev)
+static int clk_rpmh_probe(struct udevice *dev)
 {
 	struct clk_hw **hw_clks;
 	struct clk_rpmh *rpmh_clk;
 	const struct clk_rpmh_desc *desc;
 	int ret, i;
 
-	desc = of_device_get_match_data(&pdev->dev);
+	desc = (void *)dev_get_driver_data(dev);
 	if (!desc)
 		return -ENODEV;
 
@@ -948,7 +948,7 @@ static int clk_rpmh_probe(struct platform_device *pdev)
 			    !strncmp(rpmh_clk->res_name, "clka", sizeof("clka") - 1))
 				continue;
 
-			dev_err(&pdev->dev, "missing RPMh resource address for %s\n",
+			dev_err(dev, "missing RPMh resource address for %s\n",
 				rpmh_clk->res_name);
 			return -ENODEV;
 		}
@@ -956,7 +956,7 @@ static int clk_rpmh_probe(struct platform_device *pdev)
 		data = cmd_db_read_aux_data(rpmh_clk->res_name, &aux_data_len);
 		if (IS_ERR(data)) {
 			ret = PTR_ERR(data);
-			dev_err(&pdev->dev,
+			dev_err(dev,
 				"error reading RPMh aux data for %s (%d)\n",
 				rpmh_clk->res_name, ret);
 			return ret;
@@ -967,77 +967,64 @@ static int clk_rpmh_probe(struct platform_device *pdev)
 			rpmh_clk->unit = le32_to_cpu(data->unit) * 1000ULL;
 
 		rpmh_clk->res_addr += res_addr;
-		rpmh_clk->dev = &pdev->dev;
+		rpmh_clk->dev = dev;
 
-		ret = devm_clk_hw_register(&pdev->dev, hw_clks[i]);
+		ret = devm_clk_hw_register(dev, hw_clks[i]);
 		if (ret) {
-			dev_err(&pdev->dev, "failed to register %s\n", name);
+			dev_err(dev, "failed to register %s\n", name);
 			return ret;
 		}
 	}
 
 	/* typecast to silence compiler warning */
-	ret = devm_of_clk_add_hw_provider(&pdev->dev, of_clk_rpmh_hw_get,
+	ret = devm_of_clk_add_hw_provider(dev, of_clk_rpmh_hw_get,
 					  (void *)desc);
 	if (ret) {
-		dev_err(&pdev->dev, "Failed to add clock provider\n");
+		dev_err(dev, "Failed to add clock provider\n");
 		return ret;
 	}
 
-	dev_dbg(&pdev->dev, "Registered RPMh clocks\n");
+	dev_dbg(dev, "Registered RPMh clocks\n");
 
 	return 0;
 }
 
-static const struct of_device_id clk_rpmh_match_table[] = {
-	{ .compatible = "qcom,glymur-rpmh-clk", .data = &clk_rpmh_glymur},
-	{ .compatible = "qcom,milos-rpmh-clk", .data = &clk_rpmh_milos},
-	{ .compatible = "qcom,qcs615-rpmh-clk", .data = &clk_rpmh_qcs615},
-	{ .compatible = "qcom,qdu1000-rpmh-clk", .data = &clk_rpmh_qdu1000},
-	{ .compatible = "qcom,sa8775p-rpmh-clk", .data = &clk_rpmh_sa8775p},
-	{ .compatible = "qcom,sar2130p-rpmh-clk", .data = &clk_rpmh_sar2130p},
-	{ .compatible = "qcom,sc7180-rpmh-clk", .data = &clk_rpmh_sc7180},
-	{ .compatible = "qcom,sc7280-rpmh-clk", .data = &clk_rpmh_sc7280},
-	{ .compatible = "qcom,sc8180x-rpmh-clk", .data = &clk_rpmh_sc8180x},
-	{ .compatible = "qcom,sc8280xp-rpmh-clk", .data = &clk_rpmh_sc8280xp},
-	{ .compatible = "qcom,sdm845-rpmh-clk", .data = &clk_rpmh_sdm845},
-	{ .compatible = "qcom,sdm670-rpmh-clk", .data = &clk_rpmh_sdm670},
-	{ .compatible = "qcom,sdx55-rpmh-clk",  .data = &clk_rpmh_sdx55},
-	{ .compatible = "qcom,sdx65-rpmh-clk",  .data = &clk_rpmh_sdx65},
-	{ .compatible = "qcom,sdx75-rpmh-clk",  .data = &clk_rpmh_sdx75},
-	{ .compatible = "qcom,sm4450-rpmh-clk", .data = &clk_rpmh_sm4450},
-	{ .compatible = "qcom,sm6350-rpmh-clk", .data = &clk_rpmh_sm6350},
-	{ .compatible = "qcom,sm8150-rpmh-clk", .data = &clk_rpmh_sm8150},
-	{ .compatible = "qcom,sm8250-rpmh-clk", .data = &clk_rpmh_sm8250},
-	{ .compatible = "qcom,sm8350-rpmh-clk", .data = &clk_rpmh_sm8350},
-	{ .compatible = "qcom,sm8450-rpmh-clk", .data = &clk_rpmh_sm8450},
-	{ .compatible = "qcom,sm8550-rpmh-clk", .data = &clk_rpmh_sm8550},
-	{ .compatible = "qcom,sm8650-rpmh-clk", .data = &clk_rpmh_sm8650},
-	{ .compatible = "qcom,sm8750-rpmh-clk", .data = &clk_rpmh_sm8750},
-	{ .compatible = "qcom,x1e80100-rpmh-clk", .data = &clk_rpmh_x1e80100},
+static const struct udevice_id clk_rpmh_match_table[] = {
+	{ .compatible = "qcom,glymur-rpmh-clk", .data = (ulong)&clk_rpmh_glymur},
+	{ .compatible = "qcom,milos-rpmh-clk", .data = (ulong)&clk_rpmh_milos},
+	{ .compatible = "qcom,qcs615-rpmh-clk", .data = (ulong)&clk_rpmh_qcs615},
+	{ .compatible = "qcom,qdu1000-rpmh-clk", .data = (ulong)&clk_rpmh_qdu1000},
+	{ .compatible = "qcom,sa8775p-rpmh-clk", .data = (ulong)&clk_rpmh_sa8775p},
+	{ .compatible = "qcom,sar2130p-rpmh-clk", .data = (ulong)&clk_rpmh_sar2130p},
+	{ .compatible = "qcom,sc7180-rpmh-clk", .data = (ulong)&clk_rpmh_sc7180},
+	{ .compatible = "qcom,sc7280-rpmh-clk", .data = (ulong)&clk_rpmh_sc7280},
+	{ .compatible = "qcom,sc8180x-rpmh-clk", .data = (ulong)&clk_rpmh_sc8180x},
+	{ .compatible = "qcom,sc8280xp-rpmh-clk", .data = (ulong)&clk_rpmh_sc8280xp},
+	{ .compatible = "qcom,sdm845-rpmh-clk", .data = (ulong)&clk_rpmh_sdm845},
+	{ .compatible = "qcom,sdm670-rpmh-clk", .data = (ulong)&clk_rpmh_sdm670},
+	{ .compatible = "qcom,sdx55-rpmh-clk",  .data = (ulong)&clk_rpmh_sdx55},
+	{ .compatible = "qcom,sdx65-rpmh-clk",  .data = (ulong)&clk_rpmh_sdx65},
+	{ .compatible = "qcom,sdx75-rpmh-clk",  .data = (ulong)&clk_rpmh_sdx75},
+	{ .compatible = "qcom,sm4450-rpmh-clk", .data = (ulong)&clk_rpmh_sm4450},
+	{ .compatible = "qcom,sm6350-rpmh-clk", .data = (ulong)&clk_rpmh_sm6350},
+	{ .compatible = "qcom,sm8150-rpmh-clk", .data = (ulong)&clk_rpmh_sm8150},
+	{ .compatible = "qcom,sm8250-rpmh-clk", .data = (ulong)&clk_rpmh_sm8250},
+	{ .compatible = "qcom,sm8350-rpmh-clk", .data = (ulong)&clk_rpmh_sm8350},
+	{ .compatible = "qcom,sm8450-rpmh-clk", .data = (ulong)&clk_rpmh_sm8450},
+	{ .compatible = "qcom,sm8550-rpmh-clk", .data = (ulong)&clk_rpmh_sm8550},
+	{ .compatible = "qcom,sm8650-rpmh-clk", .data = (ulong)&clk_rpmh_sm8650},
+	{ .compatible = "qcom,sm8750-rpmh-clk", .data = (ulong)&clk_rpmh_sm8750},
+	{ .compatible = "qcom,x1e80100-rpmh-clk", .data = (ulong)&clk_rpmh_x1e80100},
 	{ }
 };
-MODULE_DEVICE_TABLE(of, clk_rpmh_match_table);
 
-static struct platform_driver clk_rpmh_driver = {
-	.probe		= clk_rpmh_probe,
-	.driver		= {
-		.name	= "clk-rpmh",
-		.of_match_table = clk_rpmh_match_table,
-	},
+U_BOOT_DRIVER(clk_rpmh) = {
+	.name = "clk-rpmh",
+	.id = UCLASS_NOP,
+	.probe = clk_rpmh_probe,
+	.of_match = clk_rpmh_match_table,
+	.flags = DM_FLAG_DEFAULT_PD_CTRL_OFF,
 };
-
-static int __init clk_rpmh_init(void)
-{
-	return platform_driver_register(&clk_rpmh_driver);
-}
-core_initcall(clk_rpmh_init);
-
-static void __exit clk_rpmh_exit(void)
-{
-	platform_driver_unregister(&clk_rpmh_driver);
-}
-module_exit(clk_rpmh_exit);
 
 MODULE_DESCRIPTION("QCOM RPMh Clock Driver");
 MODULE_LICENSE("GPL v2");
