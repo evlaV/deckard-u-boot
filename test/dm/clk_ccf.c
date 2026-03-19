@@ -109,7 +109,7 @@ static int dm_test_clk_ccf(struct unit_test_state *uts)
 	/* Test the composite of CCF */
 	ret = clk_get_by_id(CLK_ID(dev, SANDBOX_CLK_I2C), &clk);
 	ut_assertok(ret);
-	ut_asserteq_str("i2c", clk->dev->name);
+	ut_asserteq_str("i2c2", clk->dev->name);
 	ut_asserteq(CLK_SET_RATE_UNGATE, clk->flags);
 
 	rate = clk_get_rate(clk);

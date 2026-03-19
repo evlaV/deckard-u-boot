@@ -698,7 +698,7 @@
 			clocks = <&clk_fixed>;
 		};
 
-		osc {
+		xo_board: osc {
 			compatible = "fixed-clock";
 			#clock-cells = <0>;
 			clock-frequency = <20000000>;
@@ -741,6 +741,8 @@
 
 	ccf: clk-ccf {
 		compatible = "sandbox,clk-ccf";
+		clocks = <&xo_board>;
+		clock-names = "osc";
 		#clock-cells = <1>;
 	};
 

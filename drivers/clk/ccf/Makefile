@@ -15,3 +15,4 @@ obj-y += clk.o \
 
 obj-$(CONFIG_CLK_COMPOSITE_CCF) += clk-composite.o
 
+obj-$(CONFIG_SANDBOX_CLK_CCF) += clk_sandbox_ccf_full.o

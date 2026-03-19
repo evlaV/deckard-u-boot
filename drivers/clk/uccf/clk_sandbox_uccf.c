@@ -271,11 +271,11 @@ static int sandbox_clk_ccf_probe(struct udevice *dev)
 
 	reg = BIT(28) | BIT(24) | BIT(16);
 	dev_clk_dm(dev, SANDBOX_CLK_I2C,
-		   sandbox_clk_composite("i2c", i2c_sels, ARRAY_SIZE(i2c_sels),
+		   sandbox_clk_composite("i2c2", i2c_sels, ARRAY_SIZE(i2c_sels),
 					 &reg, CLK_SET_RATE_UNGATE));
 
 	dev_clk_dm(dev, SANDBOX_CLK_I2C_ROOT,
-		   sandbox_clk_gate2("i2c_root", "i2c", base + 0x7c, 0));
+		   sandbox_clk_gate2("i2c_root", "i2c2", base + 0x7c, 0));
 
 	return 0;
 }

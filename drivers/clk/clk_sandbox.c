@@ -166,7 +166,8 @@ int sandbox_clk_query_requested(struct udevice *dev, int id)
 	return priv->requested[id];
 }
 
-int clk_fixed_rate_of_to_plat(struct udevice *dev)
+#if !CONFIG_IS_ENABLED(CLK_CCF_FULL)
+static int clk_fixed_rate_of_to_plat(struct udevice *dev)
 {
 	struct clk_fixed_rate *cplat;
 
@@ -197,3 +198,43 @@ U_BOOT_DRIVER(sandbox_fixed_clock) = {
 	.ops = &clk_fixed_rate_ops,
 	.flags = DM_FLAG_PRE_RELOC,
 };
+#else
+static int clk_fixed_rate_probe(struct udevice *dev)
+{
+	ofnode node = dev_ofnode(dev);
+	const char *clk_name;
+	struct clk_hw *hw;
+	u32 rate = 0;
+	int ret;
+
+	ofnode_read_u32(node, "clock-frequency", &rate);
+
+	clk_name = ofnode_read_string(node, "clock-output-names");
+	if (!clk_name)
+		clk_name = ofnode_get_name(node);
+
+	hw = clk_hw_register_fixed_rate(dev, clk_name, NULL, 0, rate);
+	if (IS_ERR(hw))
+		return PTR_ERR(hw);
+
+	ret = of_clk_add_hw_provider(node, of_clk_hw_simple_get, hw);
+	if (ret) {
+		clk_hw_unregister_fixed_rate(hw);
+		return ret;
+	}
+
+	return 0;
+}
+
+static const struct udevice_id sandbox_clk_fixed_rate_match[] = {
+	{ .compatible = "sandbox,fixed-clock" },
+	{ /* sentinel */ }
+};
+
+U_BOOT_DRIVER(sandbox_fixed_clock) = {
+	.name = "sandbox_fixed_clock",
+	.id = UCLASS_NOP,
+	.of_match = sandbox_clk_fixed_rate_match,
+	.probe = clk_fixed_rate_probe,
+};
+#endif
