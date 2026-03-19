@@ -7,10 +7,9 @@
  * Simple multiplexer clock implementation
  */
 
+#include <dm/devres.h>
 #include <linux/clk-provider.h>
-#include <linux/device.h>
-#include <linux/module.h>
-#include <linux/slab.h>
+#include <linux/compat.h>
 #include <linux/io.h>
 #include <linux/err.h>
 
@@ -26,18 +25,16 @@
 
 static inline u32 clk_mux_readl(struct clk_mux *mux)
 {
-	if (mux->flags & CLK_MUX_BIG_ENDIAN)
-		return ioread32be(mux->reg);
-
+#if CONFIG_IS_ENABLED(SANDBOX)
+	return *(u32 *)mux->reg;
+#else
 	return readl(mux->reg);
+#endif
 }
 
 static inline void clk_mux_writel(struct clk_mux *mux, u32 val)
 {
-	if (mux->flags & CLK_MUX_BIG_ENDIAN)
-		iowrite32be(val, mux->reg);
-	else
-		writel(val, mux->reg);
+	writel(val, mux->reg);
 }
 
 int clk_mux_val_to_index(struct clk_hw *hw, const u32 *table, unsigned int flags,
@@ -146,7 +143,7 @@ const struct clk_ops clk_mux_ro_ops = {
 };
 EXPORT_SYMBOL_GPL(clk_mux_ro_ops);
 
-struct clk_hw *__clk_hw_register_mux(struct device *dev, struct device_node *np,
+struct clk_hw *__clk_hw_register_mux(struct udevice *dev, ofnode np,
 		const char *name, u8 num_parents,
 		const char * const *parent_names,
 		const struct clk_hw **parent_hws,
@@ -194,9 +191,9 @@ struct clk_hw *__clk_hw_register_mux(struct device *dev, struct device_node *np,
 	mux->hw.init = &init;
 
 	hw = &mux->hw;
-	if (dev || !np)
+	if (dev || !ofnode_valid(np))
 		ret = clk_hw_register(dev, hw);
-	else if (np)
+	else if (ofnode_valid(np))
 		ret = of_clk_hw_register(np, hw);
 	if (ret) {
 		kfree(mux);
@@ -207,12 +204,12 @@ struct clk_hw *__clk_hw_register_mux(struct device *dev, struct device_node *np,
 }
 EXPORT_SYMBOL_GPL(__clk_hw_register_mux);
 
-static void devm_clk_hw_release_mux(struct device *dev, void *res)
+static void devm_clk_hw_release_mux(struct udevice *dev, void *res)
 {
 	clk_hw_unregister_mux(*(struct clk_hw **)res);
 }
 
-struct clk_hw *__devm_clk_hw_register_mux(struct device *dev, struct device_node *np,
+struct clk_hw *__devm_clk_hw_register_mux(struct udevice *dev, ofnode np,
 		const char *name, u8 num_parents,
 		const char * const *parent_names,
 		const struct clk_hw **parent_hws,
@@ -241,7 +238,7 @@ struct clk_hw *__devm_clk_hw_register_mux(struct device *dev, struct device_node
 }
 EXPORT_SYMBOL_GPL(__devm_clk_hw_register_mux);
 
-struct clk *clk_register_mux_table(struct device *dev, const char *name,
+struct clk *clk_register_mux_table(struct udevice *dev, const char *name,
 		const char * const *parent_names, u8 num_parents,
 		unsigned long flags, void __iomem *reg, u8 shift, u32 mask,
 		u8 clk_mux_flags, const u32 *table, spinlock_t *lock)
@@ -250,7 +247,7 @@ struct clk *clk_register_mux_table(struct device *dev, const char *name,
 
 	hw = clk_hw_register_mux_table(dev, name, parent_names,
 				       num_parents, flags, reg, shift, mask,
-				       clk_mux_flags, table, lock);
+				       clk_mux_flags, table);
 	if (IS_ERR(hw))
 		return ERR_CAST(hw);
 	return hw->clk;

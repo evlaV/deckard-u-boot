@@ -3,10 +3,13 @@
  * Copyright (c) 2013 NVIDIA CORPORATION.  All rights reserved.
  */
 
+#include <dm/device.h>
+#include <dm/devres.h>
+#include <linux/bug.h>
+#include <linux/compat.h>
 #include <linux/clk-provider.h>
 #include <linux/device.h>
 #include <linux/err.h>
-#include <linux/slab.h>
 
 static u8 clk_composite_get_parent(struct clk_hw *hw)
 {
@@ -234,7 +237,7 @@ static void clk_composite_disable(struct clk_hw *hw)
 	gate_ops->disable(gate_hw);
 }
 
-static struct clk_hw *__clk_hw_register_composite(struct device *dev,
+static struct clk_hw *__clk_hw_register_composite(struct udevice *dev,
 			const char *name, const char * const *parent_names,
 			const struct clk_parent_data *pdata, int num_parents,
 			struct clk_hw *mux_hw, const struct clk_ops *mux_ops,
@@ -351,7 +354,7 @@ err:
 	return hw;
 }
 
-struct clk_hw *clk_hw_register_composite(struct device *dev, const char *name,
+struct clk_hw *clk_hw_register_composite(struct udevice *dev, const char *name,
 			const char * const *parent_names, int num_parents,
 			struct clk_hw *mux_hw, const struct clk_ops *mux_ops,
 			struct clk_hw *rate_hw, const struct clk_ops *rate_ops,
@@ -365,7 +368,7 @@ struct clk_hw *clk_hw_register_composite(struct device *dev, const char *name,
 }
 EXPORT_SYMBOL_GPL(clk_hw_register_composite);
 
-struct clk_hw *clk_hw_register_composite_pdata(struct device *dev,
+struct clk_hw *clk_hw_register_composite_pdata(struct udevice *dev,
 			const char *name,
 			const struct clk_parent_data *parent_data,
 			int num_parents,
@@ -380,7 +383,7 @@ struct clk_hw *clk_hw_register_composite_pdata(struct device *dev,
 					   gate_ops, flags);
 }
 
-struct clk *clk_register_composite(struct device *dev, const char *name,
+struct clk *clk_register_composite(struct udevice *dev, const char *name,
 			const char * const *parent_names, int num_parents,
 			struct clk_hw *mux_hw, const struct clk_ops *mux_ops,
 			struct clk_hw *rate_hw, const struct clk_ops *rate_ops,
@@ -398,7 +401,7 @@ struct clk *clk_register_composite(struct device *dev, const char *name,
 }
 EXPORT_SYMBOL_GPL(clk_register_composite);
 
-struct clk *clk_register_composite_pdata(struct device *dev, const char *name,
+struct clk *clk_register_composite_pdata(struct udevice *dev, const char *name,
 			const struct clk_parent_data *parent_data,
 			int num_parents,
 			struct clk_hw *mux_hw, const struct clk_ops *mux_ops,
@@ -442,12 +445,12 @@ void clk_hw_unregister_composite(struct clk_hw *hw)
 }
 EXPORT_SYMBOL_GPL(clk_hw_unregister_composite);
 
-static void devm_clk_hw_release_composite(struct device *dev, void *res)
+static void devm_clk_hw_release_composite(struct udevice *dev, void *res)
 {
 	clk_hw_unregister_composite(*(struct clk_hw **)res);
 }
 
-static struct clk_hw *__devm_clk_hw_register_composite(struct device *dev,
+static struct clk_hw *__devm_clk_hw_register_composite(struct udevice *dev,
 			const char *name, const char * const *parent_names,
 			const struct clk_parent_data *pdata, int num_parents,
 			struct clk_hw *mux_hw, const struct clk_ops *mux_ops,
@@ -476,7 +479,7 @@ static struct clk_hw *__devm_clk_hw_register_composite(struct device *dev,
 	return hw;
 }
 
-struct clk_hw *devm_clk_hw_register_composite_pdata(struct device *dev,
+struct clk_hw *devm_clk_hw_register_composite_pdata(struct udevice *dev,
 			const char *name,
 			const struct clk_parent_data *parent_data,
 			int num_parents,

@@ -2,12 +2,17 @@
 /*
  * Copyright (C) 2011 Sascha Hauer, Pengutronix <s.hauer@pengutronix.de>
  */
-#include <linux/module.h>
+
+#include <dm/ofnode.h>
+#include <dm/device.h>
+#include <dm/device-internal.h>
+#include <dm/devres.h>
+#include <div64.h>
+#include <linux/compat.h>
 #include <linux/clk-provider.h>
-#include <linux/slab.h>
 #include <linux/err.h>
-#include <linux/of.h>
-#include <linux/platform_device.h>
+
+#include "clk.h"
 
 /*
  * DOC: basic fixed multiplier and divider clock that cannot gate
@@ -78,7 +83,7 @@ const struct clk_ops clk_fixed_factor_ops = {
 };
 EXPORT_SYMBOL_GPL(clk_fixed_factor_ops);
 
-static void devm_clk_hw_register_fixed_factor_release(struct device *dev, void *res)
+static void devm_clk_hw_register_fixed_factor_release(struct udevice *dev, void *res)
 {
 	struct clk_fixed_factor *fix = res;
 
@@ -91,7 +96,7 @@ static void devm_clk_hw_register_fixed_factor_release(struct device *dev, void *
 }
 
 static struct clk_hw *
-__clk_hw_register_fixed_factor(struct device *dev, struct device_node *np,
+__clk_hw_register_fixed_factor(struct udevice *dev, ofnode np,
 		const char *name, const char *parent_name,
 		const struct clk_hw *parent_hw, const struct clk_parent_data *pdata,
 		unsigned long flags, unsigned int mult, unsigned int div,
@@ -162,13 +167,13 @@ __clk_hw_register_fixed_factor(struct device *dev, struct device_node *np,
  * Return: Pointer to fixed factor clk_hw structure that was registered or
  * an error pointer.
  */
-struct clk_hw *devm_clk_hw_register_fixed_factor_index(struct device *dev,
+struct clk_hw *devm_clk_hw_register_fixed_factor_index(struct udevice *dev,
 		const char *name, unsigned int index, unsigned long flags,
 		unsigned int mult, unsigned int div)
 {
 	const struct clk_parent_data pdata = { .index = index };
 
-	return __clk_hw_register_fixed_factor(dev, NULL, name, NULL, NULL, &pdata,
+	return __clk_hw_register_fixed_factor(dev, dev_ofnode(dev), name, NULL, NULL, &pdata,
 					      flags, mult, div, 0, 0, true);
 }
 EXPORT_SYMBOL_GPL(devm_clk_hw_register_fixed_factor_index);
@@ -186,41 +191,41 @@ EXPORT_SYMBOL_GPL(devm_clk_hw_register_fixed_factor_index);
  * Return: Pointer to fixed factor clk_hw structure that was registered or
  * an error pointer.
  */
-struct clk_hw *devm_clk_hw_register_fixed_factor_parent_hw(struct device *dev,
+struct clk_hw *devm_clk_hw_register_fixed_factor_parent_hw(struct udevice *dev,
 		const char *name, const struct clk_hw *parent_hw,
 		unsigned long flags, unsigned int mult, unsigned int div)
 {
 	const struct clk_parent_data pdata = { .index = -1 };
 
-	return __clk_hw_register_fixed_factor(dev, NULL, name, NULL, parent_hw,
+	return __clk_hw_register_fixed_factor(dev, dev_ofnode(dev), name, NULL, parent_hw,
 					      &pdata, flags, mult, div, 0, 0, true);
 }
 EXPORT_SYMBOL_GPL(devm_clk_hw_register_fixed_factor_parent_hw);
 
-struct clk_hw *clk_hw_register_fixed_factor_parent_hw(struct device *dev,
+struct clk_hw *clk_hw_register_fixed_factor_parent_hw(struct udevice *dev,
 		const char *name, const struct clk_hw *parent_hw,
 		unsigned long flags, unsigned int mult, unsigned int div)
 {
 	const struct clk_parent_data pdata = { .index = -1 };
 
-	return __clk_hw_register_fixed_factor(dev, NULL, name, NULL, parent_hw,
+	return __clk_hw_register_fixed_factor(dev, dev_ofnode(dev), name, NULL, parent_hw,
 					      &pdata, flags, mult, div, 0, 0, false);
 }
 EXPORT_SYMBOL_GPL(clk_hw_register_fixed_factor_parent_hw);
 
-struct clk_hw *clk_hw_register_fixed_factor(struct device *dev,
+struct clk_hw *clk_hw_register_fixed_factor(struct udevice *dev,
 		const char *name, const char *parent_name, unsigned long flags,
 		unsigned int mult, unsigned int div)
 {
 	const struct clk_parent_data pdata = { .index = -1 };
 
-	return __clk_hw_register_fixed_factor(dev, NULL, name, parent_name, NULL,
+	return __clk_hw_register_fixed_factor(dev, dev_ofnode(dev), name, parent_name, NULL,
 					      &pdata, flags, mult, div, 0, 0, false);
 }
 EXPORT_SYMBOL_GPL(clk_hw_register_fixed_factor);
 
-struct clk_hw *clk_hw_register_fixed_factor_fwname(struct device *dev,
-		struct device_node *np, const char *name, const char *fw_name,
+struct clk_hw *clk_hw_register_fixed_factor_fwname(struct udevice *dev,
+		ofnode np, const char *name, const char *fw_name,
 		unsigned long flags, unsigned int mult, unsigned int div)
 {
 	const struct clk_parent_data pdata = { .index = -1, .fw_name = fw_name };
@@ -230,8 +235,8 @@ struct clk_hw *clk_hw_register_fixed_factor_fwname(struct device *dev,
 }
 EXPORT_SYMBOL_GPL(clk_hw_register_fixed_factor_fwname);
 
-struct clk_hw *clk_hw_register_fixed_factor_with_accuracy_fwname(struct device *dev,
-		struct device_node *np, const char *name, const char *fw_name,
+struct clk_hw *clk_hw_register_fixed_factor_with_accuracy_fwname(struct udevice *dev,
+		ofnode np, const char *name, const char *fw_name,
 		unsigned long flags, unsigned int mult, unsigned int div,
 		unsigned long acc)
 {
@@ -243,18 +248,18 @@ struct clk_hw *clk_hw_register_fixed_factor_with_accuracy_fwname(struct device *
 }
 EXPORT_SYMBOL_GPL(clk_hw_register_fixed_factor_with_accuracy_fwname);
 
-struct clk_hw *clk_hw_register_fixed_factor_index(struct device *dev,
+struct clk_hw *clk_hw_register_fixed_factor_index(struct udevice *dev,
 		const char *name, unsigned int index, unsigned long flags,
 		unsigned int mult, unsigned int div)
 {
 	const struct clk_parent_data pdata = { .index = index };
 
-	return __clk_hw_register_fixed_factor(dev, NULL, name, NULL, NULL, &pdata,
+	return __clk_hw_register_fixed_factor(dev, dev_ofnode(dev), name, NULL, NULL, &pdata,
 					      flags, mult, div, 0, 0, false);
 }
 EXPORT_SYMBOL_GPL(clk_hw_register_fixed_factor_index);
 
-struct clk *clk_register_fixed_factor(struct device *dev, const char *name,
+struct clk *clk_register_fixed_factor(struct udevice *dev, const char *name,
 		const char *parent_name, unsigned long flags,
 		unsigned int mult, unsigned int div)
 {
@@ -292,19 +297,19 @@ void clk_hw_unregister_fixed_factor(struct clk_hw *hw)
 }
 EXPORT_SYMBOL_GPL(clk_hw_unregister_fixed_factor);
 
-struct clk_hw *devm_clk_hw_register_fixed_factor(struct device *dev,
+struct clk_hw *devm_clk_hw_register_fixed_factor(struct udevice *dev,
 		const char *name, const char *parent_name, unsigned long flags,
 		unsigned int mult, unsigned int div)
 {
 	const struct clk_parent_data pdata = { .index = -1 };
 
-	return __clk_hw_register_fixed_factor(dev, NULL, name, parent_name, NULL,
+	return __clk_hw_register_fixed_factor(dev, dev_ofnode(dev), name, parent_name, NULL,
 			&pdata, flags, mult, div, 0, 0, true);
 }
 EXPORT_SYMBOL_GPL(devm_clk_hw_register_fixed_factor);
 
-struct clk_hw *devm_clk_hw_register_fixed_factor_fwname(struct device *dev,
-		struct device_node *np, const char *name, const char *fw_name,
+struct clk_hw *devm_clk_hw_register_fixed_factor_fwname(struct udevice *dev,
+		ofnode np, const char *name, const char *fw_name,
 		unsigned long flags, unsigned int mult, unsigned int div)
 {
 	const struct clk_parent_data pdata = { .index = -1, .fw_name = fw_name };
@@ -314,8 +319,8 @@ struct clk_hw *devm_clk_hw_register_fixed_factor_fwname(struct device *dev,
 }
 EXPORT_SYMBOL_GPL(devm_clk_hw_register_fixed_factor_fwname);
 
-struct clk_hw *devm_clk_hw_register_fixed_factor_with_accuracy_fwname(struct device *dev,
-		struct device_node *np, const char *name, const char *fw_name,
+struct clk_hw *devm_clk_hw_register_fixed_factor_with_accuracy_fwname(struct udevice *dev,
+		ofnode np, const char *name, const char *fw_name,
 		unsigned long flags, unsigned int mult, unsigned int div,
 		unsigned long acc)
 {
@@ -326,38 +331,38 @@ struct clk_hw *devm_clk_hw_register_fixed_factor_with_accuracy_fwname(struct dev
 			CLK_FIXED_FACTOR_FIXED_ACCURACY, true);
 }
 EXPORT_SYMBOL_GPL(devm_clk_hw_register_fixed_factor_with_accuracy_fwname);
-
-#ifdef CONFIG_OF
-static struct clk_hw *_of_fixed_factor_clk_setup(struct device_node *node)
+static struct clk_hw *_of_fixed_factor_clk_setup(struct udevice *dev)
 {
 	struct clk_hw *hw;
-	const char *clk_name = node->name;
+	const char *clk_name;
+	ofnode node = dev_ofnode(dev);
 	const struct clk_parent_data pdata = { .index = 0 };
 	u32 div, mult;
 	int ret;
 
-	if (of_property_read_u32(node, "clock-div", &div)) {
+	if (ofnode_read_u32(node, "clock-div", &div)) {
 		pr_err("%s Fixed factor clock <%pOFn> must have a clock-div property\n",
-			__func__, node);
+			__func__, &node);
 		return ERR_PTR(-EIO);
 	}
 
-	if (of_property_read_u32(node, "clock-mult", &mult)) {
+	if (ofnode_read_u32(node, "clock-mult", &mult)) {
 		pr_err("%s Fixed factor clock <%pOFn> must have a clock-mult property\n",
-			__func__, node);
+			__func__, &node);
 		return ERR_PTR(-EIO);
 	}
 
-	of_property_read_string(node, "clock-output-names", &clk_name);
+	clk_name = ofnode_read_string(node, "clock-output-names");
+	if (!clk_name)
+		clk_name = ofnode_get_name(node);
 
-	hw = __clk_hw_register_fixed_factor(NULL, node, clk_name, NULL, NULL,
+	hw = __clk_hw_register_fixed_factor(dev, node, clk_name, NULL, NULL,
 					    &pdata, 0, mult, div, 0, 0, false);
 	if (IS_ERR(hw)) {
 		/*
 		 * Clear OF_POPULATED flag so that clock registration can be
 		 * attempted again from probe function.
 		 */
-		of_node_clear_flag(node, OF_POPULATED);
 		return ERR_CAST(hw);
 	}
 
@@ -370,26 +375,7 @@ static struct clk_hw *_of_fixed_factor_clk_setup(struct device_node *node)
 	return hw;
 }
 
-/**
- * of_fixed_factor_clk_setup() - Setup function for simple fixed factor clock
- * @node:	device node for the clock
- */
-void __init of_fixed_factor_clk_setup(struct device_node *node)
-{
-	_of_fixed_factor_clk_setup(node);
-}
-CLK_OF_DECLARE(fixed_factor_clk, "fixed-factor-clock",
-		of_fixed_factor_clk_setup);
-
-static void of_fixed_factor_clk_remove(struct platform_device *pdev)
-{
-	struct clk_hw *clk = platform_get_drvdata(pdev);
-
-	of_clk_del_provider(pdev->dev.of_node);
-	clk_hw_unregister_fixed_factor(clk);
-}
-
-static int of_fixed_factor_clk_probe(struct platform_device *pdev)
+static int of_fixed_factor_clk_probe(struct udevice *dev)
 {
 	struct clk_hw *clk;
 
@@ -397,28 +383,27 @@ static int of_fixed_factor_clk_probe(struct platform_device *pdev)
 	 * This function is not executed when of_fixed_factor_clk_setup
 	 * succeeded.
 	 */
-	clk = _of_fixed_factor_clk_setup(pdev->dev.of_node);
-	if (IS_ERR(clk))
+	clk = _of_fixed_factor_clk_setup(dev);
+	if (IS_ERR(clk)) {
+		printf("%s: %s: err %ld\n", __func__, dev->name, PTR_ERR(clk));
 		return PTR_ERR(clk);
+	}
 
-	platform_set_drvdata(pdev, clk);
+	dev_set_priv(dev, clk);
 
 	return 0;
 }
 
-static const struct of_device_id of_fixed_factor_clk_ids[] = {
-	{ .compatible = "fixed-factor-clock" },
+static const struct udevice_id clk_fixed_factor_match_table[] = {
+	{
+		.compatible = "fixed-factor-clock",
+	},
 	{ }
 };
-MODULE_DEVICE_TABLE(of, of_fixed_factor_clk_ids);
 
-static struct platform_driver of_fixed_factor_clk_driver = {
-	.driver = {
-		.name = "of_fixed_factor_clk",
-		.of_match_table = of_fixed_factor_clk_ids,
-	},
+U_BOOT_DRIVER(clk_fixed_factor) = {
+	.name	= "clk-fixed-factor",
+	.id	= UCLASS_NOP,
 	.probe = of_fixed_factor_clk_probe,
-	.remove = of_fixed_factor_clk_remove,
+	.of_match = clk_fixed_factor_match_table,
 };
-builtin_platform_driver(of_fixed_factor_clk_driver);
-#endif

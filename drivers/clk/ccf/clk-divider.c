@@ -7,10 +7,13 @@
  * Adjustable divider clock implementation
  */
 
+#include <dm/device.h>
+#include <div64.h>
+#include <linux/bug.h>
 #include <linux/clk-provider.h>
+#include <dm/devres.h>
 #include <linux/device.h>
-#include <linux/module.h>
-#include <linux/slab.h>
+#include <linux/kernel.h>
 #include <linux/io.h>
 #include <linux/err.h>
 #include <linux/string.h>
@@ -28,18 +31,16 @@
 
 static inline u32 clk_div_readl(struct clk_divider *divider)
 {
-	if (divider->flags & CLK_DIVIDER_BIG_ENDIAN)
-		return ioread32be(divider->reg);
-
+#if CONFIG_IS_ENABLED(SANDBOX)
+	return *(u32 *)divider->reg;
+#else
 	return readl(divider->reg);
+#endif
 }
 
 static inline void clk_div_writel(struct clk_divider *divider, u32 val)
 {
-	if (divider->flags & CLK_DIVIDER_BIG_ENDIAN)
-		iowrite32be(val, divider->reg);
-	else
-		writel(val, divider->reg);
+	writel(val, divider->reg);
 }
 
 static unsigned int _get_table_maxdiv(const struct clk_div_table *table,
@@ -474,18 +475,12 @@ static int clk_divider_set_rate(struct clk_hw *hw, unsigned long rate,
 {
 	struct clk_divider *divider = to_clk_divider(hw);
 	int value;
-	unsigned long flags = 0;
 	u32 val;
 
 	value = divider_get_val(rate, parent_rate, divider->table,
 				divider->width, divider->flags);
 	if (value < 0)
 		return value;
-
-	if (divider->lock)
-		spin_lock_irqsave(divider->lock, flags);
-	else
-		__acquire(divider->lock);
 
 	if (divider->flags & CLK_DIVIDER_HIWORD_MASK) {
 		val = clk_div_mask(divider->width) << (divider->shift + 16);
@@ -495,11 +490,6 @@ static int clk_divider_set_rate(struct clk_hw *hw, unsigned long rate,
 	}
 	val |= (u32)value << divider->shift;
 	clk_div_writel(divider, val);
-
-	if (divider->lock)
-		spin_unlock_irqrestore(divider->lock, flags);
-	else
-		__release(divider->lock);
 
 	return 0;
 }
@@ -517,8 +507,8 @@ const struct clk_ops clk_divider_ro_ops = {
 };
 EXPORT_SYMBOL_GPL(clk_divider_ro_ops);
 
-struct clk_hw *__clk_hw_register_divider(struct device *dev,
-		struct device_node *np, const char *name,
+struct clk_hw *__clk_hw_register_divider(struct udevice *dev,
+		ofnode np, const char *name,
 		const char *parent_name, const struct clk_hw *parent_hw,
 		const struct clk_parent_data *parent_data, unsigned long flags,
 		void __iomem *reg, u8 shift, u8 width,
@@ -561,7 +551,6 @@ struct clk_hw *__clk_hw_register_divider(struct device *dev,
 	div->shift = shift;
 	div->width = width;
 	div->flags = clk_divider_flags;
-	div->lock = lock;
 	div->hw.init = &init;
 	div->table = table;
 
@@ -591,7 +580,7 @@ EXPORT_SYMBOL_GPL(__clk_hw_register_divider);
  * @table: array of divider/value pairs ending with a div set to 0
  * @lock: shared register lock for this clock
  */
-struct clk *clk_register_divider_table(struct device *dev, const char *name,
+struct clk *clk_register_divider_table(struct udevice *dev, const char *name,
 		const char *parent_name, unsigned long flags,
 		void __iomem *reg, u8 shift, u8 width,
 		unsigned long clk_divider_flags,
@@ -599,7 +588,7 @@ struct clk *clk_register_divider_table(struct device *dev, const char *name,
 {
 	struct clk_hw *hw;
 
-	hw =  __clk_hw_register_divider(dev, NULL, name, parent_name, NULL,
+	hw =  __clk_hw_register_divider(dev, dev_ofnode(dev), name, parent_name, NULL,
 			NULL, flags, reg, shift, width, clk_divider_flags,
 			table, lock);
 	if (IS_ERR(hw))
@@ -639,13 +628,13 @@ void clk_hw_unregister_divider(struct clk_hw *hw)
 }
 EXPORT_SYMBOL_GPL(clk_hw_unregister_divider);
 
-static void devm_clk_hw_release_divider(struct device *dev, void *res)
+static void devm_clk_hw_release_divider(struct udevice *dev, void *res)
 {
 	clk_hw_unregister_divider(*(struct clk_hw **)res);
 }
 
-struct clk_hw *__devm_clk_hw_register_divider(struct device *dev,
-		struct device_node *np, const char *name,
+struct clk_hw *__devm_clk_hw_register_divider(struct udevice *dev,
+		ofnode np, const char *name,
 		const char *parent_name, const struct clk_hw *parent_hw,
 		const struct clk_parent_data *parent_data, unsigned long flags,
 		void __iomem *reg, u8 shift, u8 width,

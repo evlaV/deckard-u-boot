@@ -6,10 +6,9 @@
  * Gated clock implementation
  */
 
+#include <dm/devres.h>
 #include <linux/clk-provider.h>
-#include <linux/device.h>
-#include <linux/module.h>
-#include <linux/slab.h>
+#include <linux/compat.h>
 #include <linux/io.h>
 #include <linux/err.h>
 #include <linux/string.h>
@@ -26,18 +25,20 @@
 
 static inline u32 clk_gate_readl(struct clk_gate *gate)
 {
-	if (gate->flags & CLK_GATE_BIG_ENDIAN)
-		return ioread32be(gate->reg);
-
+#if CONFIG_IS_ENABLED(SANDBOX)
+	return *(u32 *)gate->reg;
+#else
 	return readl(gate->reg);
+#endif
 }
 
 static inline void clk_gate_writel(struct clk_gate *gate, u32 val)
 {
-	if (gate->flags & CLK_GATE_BIG_ENDIAN)
-		iowrite32be(val, gate->reg);
-	else
-		writel(val, gate->reg);
+#if IS_ENABLED(CONFIG_SANDBOX_CLK_CCF)
+	*(u32 *)gate->reg = val;
+#else
+	writel(val, gate->reg);
+#endif
 }
 
 /*
@@ -124,8 +125,8 @@ const struct clk_ops clk_gate_ops = {
 };
 EXPORT_SYMBOL_GPL(clk_gate_ops);
 
-struct clk_hw *__clk_hw_register_gate(struct device *dev,
-		struct device_node *np, const char *name,
+struct clk_hw *__clk_hw_register_gate(struct udevice *dev,
+		ofnode np, const char *name,
 		const char *parent_name, const struct clk_hw *parent_hw,
 		const struct clk_parent_data *parent_data,
 		unsigned long flags,
@@ -168,9 +169,9 @@ struct clk_hw *__clk_hw_register_gate(struct device *dev,
 	gate->hw.init = &init;
 
 	hw = &gate->hw;
-	if (dev || !np)
+	if (dev || !ofnode_valid(np))
 		ret = clk_hw_register(dev, hw);
-	else if (np)
+	else if (ofnode_valid(np))
 		ret = of_clk_hw_register(np, hw);
 	if (ret) {
 		kfree(gate);
@@ -182,7 +183,7 @@ struct clk_hw *__clk_hw_register_gate(struct device *dev,
 }
 EXPORT_SYMBOL_GPL(__clk_hw_register_gate);
 
-struct clk *clk_register_gate(struct device *dev, const char *name,
+struct clk *clk_register_gate(struct udevice *dev, const char *name,
 		const char *parent_name, unsigned long flags,
 		void __iomem *reg, u8 bit_idx,
 		u8 clk_gate_flags, spinlock_t *lock)
@@ -190,7 +191,7 @@ struct clk *clk_register_gate(struct device *dev, const char *name,
 	struct clk_hw *hw;
 
 	hw = clk_hw_register_gate(dev, name, parent_name, flags, reg,
-				  bit_idx, clk_gate_flags, lock);
+				  bit_idx, clk_gate_flags);
 	if (IS_ERR(hw))
 		return ERR_CAST(hw);
 	return hw->clk;
@@ -224,13 +225,13 @@ void clk_hw_unregister_gate(struct clk_hw *hw)
 }
 EXPORT_SYMBOL_GPL(clk_hw_unregister_gate);
 
-static void devm_clk_hw_release_gate(struct device *dev, void *res)
+static void devm_clk_hw_release_gate(struct udevice *dev, void *res)
 {
 	clk_hw_unregister_gate(*(struct clk_hw **)res);
 }
 
-struct clk_hw *__devm_clk_hw_register_gate(struct device *dev,
-		struct device_node *np, const char *name,
+struct clk_hw *__devm_clk_hw_register_gate(struct udevice *dev,
+		ofnode np, const char *name,
 		const char *parent_name, const struct clk_hw *parent_hw,
 		const struct clk_parent_data *parent_data,
 		unsigned long flags,
