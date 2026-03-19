@@ -691,6 +691,10 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 						deckard_setledcolor( ledColor, &g_deckard_devices );
 						deckard_log( "set wait_to_boot led color: %s\n", led_color_to_string ( ledColor ) );
 					}
+					else
+					{
+						deckard_log( "not setting led color, adsp_started" );
+					}
 
 					// We can be a bit less conservative showing the out of battery image on a click.
 					// It's on a user interaction, so no chance of bootloop.
@@ -716,6 +720,10 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 			{
 				// TODO: set LED color based on charge state in this case
 				deckard_setledcolor( LED_COLOR_OFF, &g_deckard_devices );
+			}
+			else
+			{
+				deckard_log( "not turning led off, adsp_started" );
 			}
 		}
 
