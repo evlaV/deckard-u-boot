@@ -4,35 +4,50 @@
  * Sylwester Nawrocki <s.nawrocki@samsung.com>
  */
 
+#ifndef __CLK_CCF_CLK_H__
+#define __CLK_CCF_CLK_H__
+
+#include <dm/ofnode.h>
+
 struct clk_hw;
-struct device;
+struct udevice;
 struct of_phandle_args;
 
-#if defined(CONFIG_OF) && defined(CONFIG_COMMON_CLK)
-struct clk_hw *of_clk_get_hw(struct device_node *np,
+#if CONFIG_IS_ENABLED(CLK_CCF_FULL)
+struct clk_hw *of_clk_get_hw(ofnode np,
 				    int index, const char *con_id);
-#else /* !CONFIG_COMMON_CLK || !CONFIG_OF */
-static inline struct clk_hw *of_clk_get_hw(struct device_node *np,
-				    int index, const char *con_id)
-{
-	return ERR_PTR(-ENOENT);
-}
-#endif
 
-struct clk_hw *clk_find_hw(const char *dev_id, const char *con_id);
-
-#ifdef CONFIG_COMMON_CLK
-struct clk *clk_hw_create_clk(struct device *dev, struct clk_hw *hw,
+struct clk *clk_hw_create_clk(struct udevice *dev, struct clk_hw *hw,
 			      const char *dev_id, const char *con_id);
+int clk_hw_create_clk_uboot(struct clk *clk, struct clk_hw *hw);
 void __clk_put(struct clk *clk);
 #else
-/* All these casts to avoid ifdefs in clkdev... */
-static inline struct clk *
-clk_hw_create_clk(struct device *dev, struct clk_hw *hw, const char *dev_id,
-		  const char *con_id)
+struct clk_hw *of_clk_get_hw(ofnode np,
+				    int index, const char *con_id)
 {
-	return (struct clk *)hw;
+	return NULL;
 }
-static inline void __clk_put(struct clk *clk) { }
-
+struct clk *clk_hw_create_clk(struct udevice *dev, struct clk_hw *hw,
+			      const char *dev_id, const char *con_id)
+{
+	return NULL;
+}
+int clk_hw_create_clk_uboot(struct clk *clk, struct clk_hw *hw)
+{
+	return -ENOSYS;
+}
+void __clk_put(struct clk *clk) { }
 #endif
+
+// Linux compat
+
+#define clk_prepare_lock()
+#define clk_prepare_unlock()
+
+static inline unsigned long clk_enable_lock(void) {
+	return 0;
+}
+
+static inline void clk_enable_unlock(unsigned long flags) { }
+
+#endif /* __CLK_CCF_CLK_H__ */

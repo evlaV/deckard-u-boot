@@ -56,6 +56,10 @@ struct udevice;
  * @data: An optional data field for scenarios where a single integer ID is not
  *	  sufficient. If used, it can be populated through an .of_xlate op and
  *	  processed during the various clock ops.
+ * @clks_node: List entry used to reference this clk consumer from the clk_core
+ *	  it represents. Only used with CCF_FULL
+ * @core: Pointer to the underlying clk_core for this clk handle, used by CCF_FULL
+ *	  to access clk_ops and manage clk state.
  *
  * Clients provide storage for clock handles. The content of the structure is
  * managed solely by the clock API and clock drivers. A clock struct is
@@ -80,6 +84,10 @@ struct clk {
 	 */
 	unsigned long id;
 	unsigned long data;
+#if CONFIG_IS_ENABLED(CLK_CCF_FULL)
+	struct hlist_node clks_node;
+	struct clk_core *core;
+#endif
 };
 
 /**
@@ -657,6 +665,28 @@ bool clk_dev_binded(struct clk *clk);
  * device tree or in platdata
  */
 ulong clk_get_id(const struct clk *clk);
+
+#if CONFIG_IS_ENABLED(CLK_CCF_FULL)
+struct clk *of_clk_get(ofnode np, int index);
+struct clk *of_clk_get_by_name(ofnode np, const char *name);
+struct clk *of_clk_get_from_provider(struct ofnode_phandle_args *clkspec);
+#else
+static inline struct clk *of_clk_get(ofnode np, int index)
+{
+	return ERR_PTR(-ENOENT);
+}
+
+static inline struct clk *of_clk_get_by_name(ofnode np,
+					     const char *name)
+{
+	return ERR_PTR(-ENOENT);
+}
+
+static inline struct clk *of_clk_get_from_provider(struct ofnode_phandle_args *clkspec)
+{
+	return ERR_PTR(-ENOENT);
+}
+#endif
 
 #else /* CONFIG_IS_ENABLED(CLK) */
 

@@ -336,13 +336,13 @@ struct clk_fixed_rate {
 #define CLK_FIXED_RATE_PARENT_ACCURACY	BIT(0)
 
 extern const struct clk_ops clk_fixed_rate_ops;
-struct clk_hw *__clk_hw_register_fixed_rate(struct device *dev,
-		struct device_node *np, const char *name,
+struct clk_hw *__clk_hw_register_fixed_rate(struct udevice *dev,
+		ofnode np, const char *name,
 		const char *parent_name, const struct clk_hw *parent_hw,
 		const struct clk_parent_data *parent_data, unsigned long flags,
 		unsigned long fixed_rate, unsigned long fixed_accuracy,
 		unsigned long clk_fixed_flags, bool devm);
-struct clk *clk_register_fixed_rate(struct device *dev, const char *name,
+struct clk *clk_register_fixed_rate(struct udevice *dev, const char *name,
 		const char *parent_name, unsigned long flags,
 		unsigned long fixed_rate);
 /**
@@ -355,7 +355,7 @@ struct clk *clk_register_fixed_rate(struct device *dev, const char *name,
  * @fixed_rate: non-adjustable clock rate
  */
 #define clk_hw_register_fixed_rate(dev, name, parent_name, flags, fixed_rate)  \
-	__clk_hw_register_fixed_rate((dev), NULL, (name), (parent_name), NULL, \
+	__clk_hw_register_fixed_rate((dev), dev_ofnode(dev), (name), (parent_name), NULL, \
 				     NULL, (flags), (fixed_rate), 0, 0, false)
 
 /**
@@ -368,7 +368,7 @@ struct clk *clk_register_fixed_rate(struct device *dev, const char *name,
  * @fixed_rate: non-adjustable clock rate
  */
 #define devm_clk_hw_register_fixed_rate(dev, name, parent_name, flags, fixed_rate)  \
-	__clk_hw_register_fixed_rate((dev), NULL, (name), (parent_name), NULL, \
+	__clk_hw_register_fixed_rate((dev), dev_ofnode(dev), (name), (parent_name), NULL, \
 				     NULL, (flags), (fixed_rate), 0, 0, true)
 /**
  * devm_clk_hw_register_fixed_rate_parent_data - register fixed-rate clock with
@@ -381,7 +381,7 @@ struct clk *clk_register_fixed_rate(struct device *dev, const char *name,
  */
 #define devm_clk_hw_register_fixed_rate_parent_data(dev, name, parent_data, flags, \
 						    fixed_rate)			   \
-	__clk_hw_register_fixed_rate((dev), NULL, (name), NULL, NULL,		   \
+	__clk_hw_register_fixed_rate((dev), dev_ofnode(dev), (name), NULL, NULL,		   \
 				     (parent_data), (flags), (fixed_rate), 0,	   \
 				     0, true)
 /**
@@ -395,7 +395,7 @@ struct clk *clk_register_fixed_rate(struct device *dev, const char *name,
  */
 #define clk_hw_register_fixed_rate_parent_hw(dev, name, parent_hw, flags,     \
 					     fixed_rate)		      \
-	__clk_hw_register_fixed_rate((dev), NULL, (name), NULL, (parent_hw),  \
+	__clk_hw_register_fixed_rate((dev), dev_ofnode(dev), (name), NULL, (parent_hw),  \
 				     NULL, (flags), (fixed_rate), 0, 0, false)
 /**
  * clk_hw_register_fixed_rate_parent_data - register fixed-rate clock with
@@ -408,7 +408,7 @@ struct clk *clk_register_fixed_rate(struct device *dev, const char *name,
  */
 #define clk_hw_register_fixed_rate_parent_data(dev, name, parent_data, flags, \
 					     fixed_rate)		      \
-	__clk_hw_register_fixed_rate((dev), NULL, (name), NULL, NULL,	      \
+	__clk_hw_register_fixed_rate((dev), dev_ofnode(dev), (name), NULL, NULL,	      \
 				     (parent_data), (flags), (fixed_rate), 0, \
 				     0, false)
 /**
@@ -424,7 +424,7 @@ struct clk *clk_register_fixed_rate(struct device *dev, const char *name,
 #define clk_hw_register_fixed_rate_with_accuracy(dev, name, parent_name,      \
 						 flags, fixed_rate,	      \
 						 fixed_accuracy)	      \
-	__clk_hw_register_fixed_rate((dev), NULL, (name), (parent_name),      \
+	__clk_hw_register_fixed_rate((dev), dev_ofnode(dev), (name), (parent_name),      \
 				     NULL, NULL, (flags), (fixed_rate),       \
 				     (fixed_accuracy), 0, false)
 /**
@@ -439,7 +439,7 @@ struct clk *clk_register_fixed_rate(struct device *dev, const char *name,
  */
 #define clk_hw_register_fixed_rate_with_accuracy_parent_hw(dev, name,	      \
 		parent_hw, flags, fixed_rate, fixed_accuracy)		      \
-	__clk_hw_register_fixed_rate((dev), NULL, (name), NULL, (parent_hw),  \
+	__clk_hw_register_fixed_rate((dev), dev_ofnode(dev), (name), NULL, (parent_hw),  \
 				     NULL, (flags), (fixed_rate),	      \
 				     (fixed_accuracy), 0, false)
 /**
@@ -454,7 +454,7 @@ struct clk *clk_register_fixed_rate(struct device *dev, const char *name,
  */
 #define clk_hw_register_fixed_rate_with_accuracy_parent_data(dev, name,	      \
 		parent_data, flags, fixed_rate, fixed_accuracy)		      \
-	__clk_hw_register_fixed_rate((dev), NULL, (name), NULL, NULL,	      \
+	__clk_hw_register_fixed_rate((dev), dev_ofnode(dev), (name), NULL, NULL,	      \
 				     (parent_data), NULL, (flags),	      \
 				     (fixed_rate), (fixed_accuracy), 0, false)
 /**
@@ -468,14 +468,14 @@ struct clk *clk_register_fixed_rate(struct device *dev, const char *name,
  */
 #define clk_hw_register_fixed_rate_parent_accuracy(dev, name, parent_data,    \
 						   flags, fixed_rate)	      \
-	__clk_hw_register_fixed_rate((dev), NULL, (name), NULL, NULL,      \
+	__clk_hw_register_fixed_rate((dev), dev_ofnode(dev), (name), NULL, NULL,      \
 				     (parent_data), (flags), (fixed_rate), 0,    \
 				     CLK_FIXED_RATE_PARENT_ACCURACY, false)
 
 void clk_unregister_fixed_rate(struct clk *clk);
 void clk_hw_unregister_fixed_rate(struct clk_hw *hw);
 
-void of_fixed_clk_setup(struct device_node *np);
+void of_fixed_clk_setup(ofnode np);
 
 /**
  * struct clk_gate - gating clock
@@ -515,21 +515,21 @@ struct clk_gate {
 #define CLK_GATE_BIG_ENDIAN		BIT(2)
 
 extern const struct clk_ops clk_gate_ops;
-struct clk_hw *__clk_hw_register_gate(struct device *dev,
-		struct device_node *np, const char *name,
+struct clk_hw *__clk_hw_register_gate(struct udevice *dev,
+		ofnode np, const char *name,
 		const char *parent_name, const struct clk_hw *parent_hw,
 		const struct clk_parent_data *parent_data,
 		unsigned long flags,
 		void __iomem *reg, u8 bit_idx,
 		u8 clk_gate_flags, spinlock_t *lock);
-struct clk_hw *__devm_clk_hw_register_gate(struct device *dev,
-		struct device_node *np, const char *name,
+struct clk_hw *__devm_clk_hw_register_gate(struct udevice *dev,
+		ofnode np, const char *name,
 		const char *parent_name, const struct clk_hw *parent_hw,
 		const struct clk_parent_data *parent_data,
 		unsigned long flags,
 		void __iomem *reg, u8 bit_idx,
 		u8 clk_gate_flags, spinlock_t *lock);
-struct clk *clk_register_gate(struct device *dev, const char *name,
+struct clk *clk_register_gate(struct udevice *dev, const char *name,
 		const char *parent_name, unsigned long flags,
 		void __iomem *reg, u8 bit_idx,
 		u8 clk_gate_flags, spinlock_t *lock);
@@ -545,10 +545,10 @@ struct clk *clk_register_gate(struct device *dev, const char *name,
  * @lock: shared register lock for this clock
  */
 #define clk_hw_register_gate(dev, name, parent_name, flags, reg, bit_idx,     \
-			     clk_gate_flags, lock)			      \
-	__clk_hw_register_gate((dev), NULL, (name), (parent_name), NULL,      \
+			     clk_gate_flags)			      \
+	__clk_hw_register_gate((dev), dev_ofnode(dev), (name), (parent_name), NULL,      \
 			       NULL, (flags), (reg), (bit_idx),		      \
-			       (clk_gate_flags), (lock))
+			       (clk_gate_flags), NULL)
 /**
  * clk_hw_register_gate_parent_hw - register a gate clock with the clock
  * framework
@@ -562,10 +562,10 @@ struct clk *clk_register_gate(struct device *dev, const char *name,
  * @lock: shared register lock for this clock
  */
 #define clk_hw_register_gate_parent_hw(dev, name, parent_hw, flags, reg,      \
-				       bit_idx, clk_gate_flags, lock)	      \
-	__clk_hw_register_gate((dev), NULL, (name), NULL, (parent_hw),        \
+				       bit_idx, clk_gate_flags)	      \
+	__clk_hw_register_gate((dev), dev_ofnode(dev), (name), NULL, (parent_hw),        \
 			       NULL, (flags), (reg), (bit_idx),		      \
-			       (clk_gate_flags), (lock))
+			       (clk_gate_flags), NULL)
 /**
  * clk_hw_register_gate_parent_data - register a gate clock with the clock
  * framework
@@ -579,10 +579,10 @@ struct clk *clk_register_gate(struct device *dev, const char *name,
  * @lock: shared register lock for this clock
  */
 #define clk_hw_register_gate_parent_data(dev, name, parent_data, flags, reg,  \
-				       bit_idx, clk_gate_flags, lock)	      \
-	__clk_hw_register_gate((dev), NULL, (name), NULL, NULL, (parent_data), \
+				       bit_idx, clk_gate_flags)	      \
+	__clk_hw_register_gate((dev), dev_ofnode(dev), (name), NULL, NULL, (parent_data), \
 			       (flags), (reg), (bit_idx),		      \
-			       (clk_gate_flags), (lock))
+			       (clk_gate_flags), NULL)
 /**
  * devm_clk_hw_register_gate - register a gate clock with the clock framework
  * @dev: device that is registering this clock
@@ -595,10 +595,10 @@ struct clk *clk_register_gate(struct device *dev, const char *name,
  * @lock: shared register lock for this clock
  */
 #define devm_clk_hw_register_gate(dev, name, parent_name, flags, reg, bit_idx,\
-				  clk_gate_flags, lock)			      \
-	__devm_clk_hw_register_gate((dev), NULL, (name), (parent_name), NULL, \
+				  clk_gate_flags)			      \
+	__devm_clk_hw_register_gate((dev), dev_ofnode(dev), (name), (parent_name), NULL, \
 			       NULL, (flags), (reg), (bit_idx),		      \
-			       (clk_gate_flags), (lock))
+			       (clk_gate_flags), NULL)
 /**
  * devm_clk_hw_register_gate_parent_hw - register a gate clock with the clock
  * framework
@@ -612,11 +612,10 @@ struct clk *clk_register_gate(struct device *dev, const char *name,
  * @lock: shared register lock for this clock
  */
 #define devm_clk_hw_register_gate_parent_hw(dev, name, parent_hw, flags,      \
-					    reg, bit_idx, clk_gate_flags,     \
-					    lock)			      \
-	__devm_clk_hw_register_gate((dev), NULL, (name), NULL, (parent_hw),   \
+					    reg, bit_idx, clk_gate_flags) \
+	__devm_clk_hw_register_gate((dev), dev_ofnode(dev), (name), NULL, (parent_hw),   \
 				    NULL, (flags), (reg), (bit_idx),	      \
-				    (clk_gate_flags), (lock))
+				    (clk_gate_flags), NULL)
 /**
  * devm_clk_hw_register_gate_parent_data - register a gate clock with the
  * clock framework
@@ -630,11 +629,10 @@ struct clk *clk_register_gate(struct device *dev, const char *name,
  * @lock: shared register lock for this clock
  */
 #define devm_clk_hw_register_gate_parent_data(dev, name, parent_data, flags,  \
-					      reg, bit_idx, clk_gate_flags,   \
-					      lock)			      \
-	__devm_clk_hw_register_gate((dev), NULL, (name), NULL, NULL,	      \
+					      reg, bit_idx, clk_gate_flags)  \
+	__devm_clk_hw_register_gate((dev), dev_ofnode(dev), (name), NULL, NULL,	      \
 				    (parent_data), (flags), (reg), (bit_idx), \
-				    (clk_gate_flags), (lock))
+				    (clk_gate_flags), NULL)
 
 void clk_unregister_gate(struct clk *clk);
 void clk_hw_unregister_gate(struct clk_hw *hw);
@@ -734,21 +732,21 @@ int divider_get_val(unsigned long rate, unsigned long parent_rate,
 		const struct clk_div_table *table, u8 width,
 		unsigned long flags);
 
-struct clk_hw *__clk_hw_register_divider(struct device *dev,
-		struct device_node *np, const char *name,
+struct clk_hw *__clk_hw_register_divider(struct udevice *dev,
+		ofnode np, const char *name,
 		const char *parent_name, const struct clk_hw *parent_hw,
 		const struct clk_parent_data *parent_data, unsigned long flags,
 		void __iomem *reg, u8 shift, u8 width,
 		unsigned long clk_divider_flags,
 		const struct clk_div_table *table, spinlock_t *lock);
-struct clk_hw *__devm_clk_hw_register_divider(struct device *dev,
-		struct device_node *np, const char *name,
+struct clk_hw *__devm_clk_hw_register_divider(struct udevice *dev,
+		ofnode np, const char *name,
 		const char *parent_name, const struct clk_hw *parent_hw,
 		const struct clk_parent_data *parent_data, unsigned long flags,
 		void __iomem *reg, u8 shift, u8 width,
 		unsigned long clk_divider_flags,
 		const struct clk_div_table *table, spinlock_t *lock);
-struct clk *clk_register_divider_table(struct device *dev, const char *name,
+struct clk *clk_register_divider_table(struct udevice *dev, const char *name,
 		const char *parent_name, unsigned long flags,
 		void __iomem *reg, u8 shift, u8 width,
 		unsigned long clk_divider_flags,
@@ -763,13 +761,12 @@ struct clk *clk_register_divider_table(struct device *dev, const char *name,
  * @shift: number of bits to shift the bitfield
  * @width: width of the bitfield
  * @clk_divider_flags: divider-specific flags for this clock
- * @lock: shared register lock for this clock
  */
 #define clk_register_divider(dev, name, parent_name, flags, reg, shift, width, \
-			     clk_divider_flags, lock)			       \
+			     clk_divider_flags)			       \
 	clk_register_divider_table((dev), (name), (parent_name), (flags),      \
 				   (reg), (shift), (width),		       \
-				   (clk_divider_flags), NULL, (lock))
+				   (clk_divider_flags), NULL, NULL)
 /**
  * clk_hw_register_divider - register a divider clock with the clock framework
  * @dev: device registering this clock
@@ -780,13 +777,12 @@ struct clk *clk_register_divider_table(struct device *dev, const char *name,
  * @shift: number of bits to shift the bitfield
  * @width: width of the bitfield
  * @clk_divider_flags: divider-specific flags for this clock
- * @lock: shared register lock for this clock
  */
 #define clk_hw_register_divider(dev, name, parent_name, flags, reg, shift,    \
-				width, clk_divider_flags, lock)		      \
-	__clk_hw_register_divider((dev), NULL, (name), (parent_name), NULL,   \
+				width, clk_divider_flags)		      \
+	__clk_hw_register_divider((dev), dev_ofnode(dev), (name), (parent_name), NULL,   \
 				  NULL, (flags), (reg), (shift), (width),     \
-				  (clk_divider_flags), NULL, (lock))
+				  (clk_divider_flags), NULL, NULL)
 /**
  * clk_hw_register_divider_parent_hw - register a divider clock with the clock
  * framework
@@ -798,14 +794,12 @@ struct clk *clk_register_divider_table(struct device *dev, const char *name,
  * @shift: number of bits to shift the bitfield
  * @width: width of the bitfield
  * @clk_divider_flags: divider-specific flags for this clock
- * @lock: shared register lock for this clock
  */
 #define clk_hw_register_divider_parent_hw(dev, name, parent_hw, flags, reg,   \
-					  shift, width, clk_divider_flags,    \
-					  lock)				      \
-	__clk_hw_register_divider((dev), NULL, (name), NULL, (parent_hw),     \
+					  shift, width, clk_divider_flags)	\
+	__clk_hw_register_divider((dev), dev_ofnode(dev), (name), NULL, (parent_hw),     \
 				  NULL, (flags), (reg), (shift), (width),     \
-				  (clk_divider_flags), NULL, (lock))
+				  (clk_divider_flags), NULL, NULL)
 /**
  * clk_hw_register_divider_parent_data - register a divider clock with the clock
  * framework
@@ -817,14 +811,13 @@ struct clk *clk_register_divider_table(struct device *dev, const char *name,
  * @shift: number of bits to shift the bitfield
  * @width: width of the bitfield
  * @clk_divider_flags: divider-specific flags for this clock
- * @lock: shared register lock for this clock
  */
 #define clk_hw_register_divider_parent_data(dev, name, parent_data, flags,    \
 					    reg, shift, width,		      \
-					    clk_divider_flags, lock)	      \
-	__clk_hw_register_divider((dev), NULL, (name), NULL, NULL,	      \
+					    clk_divider_flags)	      \
+	__clk_hw_register_divider((dev), dev_ofnode(dev), (name), NULL, NULL,	      \
 				  (parent_data), (flags), (reg), (shift),     \
-				  (width), (clk_divider_flags), NULL, (lock))
+				  (width), (clk_divider_flags), NULL, NULL)
 /**
  * clk_hw_register_divider_table - register a table based divider clock with
  * the clock framework
@@ -837,14 +830,12 @@ struct clk *clk_register_divider_table(struct device *dev, const char *name,
  * @width: width of the bitfield
  * @clk_divider_flags: divider-specific flags for this clock
  * @table: array of divider/value pairs ending with a div set to 0
- * @lock: shared register lock for this clock
  */
 #define clk_hw_register_divider_table(dev, name, parent_name, flags, reg,     \
-				      shift, width, clk_divider_flags, table, \
-				      lock)				      \
-	__clk_hw_register_divider((dev), NULL, (name), (parent_name), NULL,   \
+				      shift, width, clk_divider_flags, table) \
+	__clk_hw_register_divider((dev), dev_ofnode(dev), (name), (parent_name), NULL,   \
 				  NULL, (flags), (reg), (shift), (width),     \
-				  (clk_divider_flags), (table), (lock))
+				  (clk_divider_flags), (table), NULL)
 /**
  * clk_hw_register_divider_table_parent_hw - register a table based divider
  * clock with the clock framework
@@ -857,15 +848,13 @@ struct clk *clk_register_divider_table(struct device *dev, const char *name,
  * @width: width of the bitfield
  * @clk_divider_flags: divider-specific flags for this clock
  * @table: array of divider/value pairs ending with a div set to 0
- * @lock: shared register lock for this clock
  */
 #define clk_hw_register_divider_table_parent_hw(dev, name, parent_hw, flags,  \
 						reg, shift, width,	      \
-						clk_divider_flags, table,     \
-						lock)			      \
-	__clk_hw_register_divider((dev), NULL, (name), NULL, (parent_hw),     \
+						clk_divider_flags, table) \
+	__clk_hw_register_divider((dev), dev_ofnode(dev), (name), NULL, (parent_hw),     \
 				  NULL, (flags), (reg), (shift), (width),     \
-				  (clk_divider_flags), (table), (lock))
+				  (clk_divider_flags), (table), NULL)
 /**
  * clk_hw_register_divider_table_parent_data - register a table based divider
  * clock with the clock framework
@@ -882,12 +871,11 @@ struct clk *clk_register_divider_table(struct device *dev, const char *name,
  */
 #define clk_hw_register_divider_table_parent_data(dev, name, parent_data,     \
 						  flags, reg, shift, width,   \
-						  clk_divider_flags, table,   \
-						  lock)			      \
-	__clk_hw_register_divider((dev), NULL, (name), NULL, NULL,	      \
+						  clk_divider_flags, table)   \
+	__clk_hw_register_divider((dev), dev_ofnode(dev), (name), NULL, NULL,	      \
 				  (parent_data), (flags), (reg), (shift),     \
 				  (width), (clk_divider_flags), (table),      \
-				  (lock))
+				  NULL)
 /**
  * devm_clk_hw_register_divider - register a divider clock with the clock framework
  * @dev: device registering this clock
@@ -901,10 +889,10 @@ struct clk *clk_register_divider_table(struct device *dev, const char *name,
  * @lock: shared register lock for this clock
  */
 #define devm_clk_hw_register_divider(dev, name, parent_name, flags, reg, shift,    \
-				width, clk_divider_flags, lock)		      \
-	__devm_clk_hw_register_divider((dev), NULL, (name), (parent_name), NULL,   \
+				width, clk_divider_flags)		      \
+	__devm_clk_hw_register_divider((dev), dev_ofnode(dev), (name), (parent_name), NULL,   \
 				  NULL, (flags), (reg), (shift), (width),     \
-				  (clk_divider_flags), NULL, (lock))
+				  (clk_divider_flags), NULL, NULL)
 /**
  * devm_clk_hw_register_divider_parent_hw - register a divider clock with the clock framework
  * @dev: device registering this clock
@@ -919,11 +907,11 @@ struct clk *clk_register_divider_table(struct device *dev, const char *name,
  */
 #define devm_clk_hw_register_divider_parent_hw(dev, name, parent_hw, flags,   \
 					       reg, shift, width,	      \
-					       clk_divider_flags, lock)       \
-	__devm_clk_hw_register_divider((dev), NULL, (name), NULL,	      \
+					       clk_divider_flags)       \
+	__devm_clk_hw_register_divider((dev), dev_ofnode(dev), (name), NULL,	      \
 				       (parent_hw), NULL, (flags), (reg),     \
 				       (shift), (width), (clk_divider_flags), \
-				       NULL, (lock))
+				       NULL, NULL)
 /**
  * devm_clk_hw_register_divider_table - register a table based divider clock
  * with the clock framework (devres variant)
@@ -940,11 +928,11 @@ struct clk *clk_register_divider_table(struct device *dev, const char *name,
  */
 #define devm_clk_hw_register_divider_table(dev, name, parent_name, flags,     \
 					   reg, shift, width,		      \
-					   clk_divider_flags, table, lock)    \
-	__devm_clk_hw_register_divider((dev), NULL, (name), (parent_name),    \
+					   clk_divider_flags, table)    \
+	__devm_clk_hw_register_divider((dev), dev_ofnode(dev), (name), (parent_name),    \
 				       NULL, NULL, (flags), (reg), (shift),   \
 				       (width), (clk_divider_flags), (table), \
-				       (lock))
+				       NULL)
 
 void clk_unregister_divider(struct clk *clk);
 void clk_hw_unregister_divider(struct clk_hw *hw);
@@ -1000,88 +988,86 @@ struct clk_mux {
 extern const struct clk_ops clk_mux_ops;
 extern const struct clk_ops clk_mux_ro_ops;
 
-struct clk_hw *__clk_hw_register_mux(struct device *dev, struct device_node *np,
+struct clk_hw *__clk_hw_register_mux(struct udevice *dev, ofnode np,
 		const char *name, u8 num_parents,
 		const char * const *parent_names,
 		const struct clk_hw **parent_hws,
 		const struct clk_parent_data *parent_data,
 		unsigned long flags, void __iomem *reg, u8 shift, u32 mask,
 		u8 clk_mux_flags, const u32 *table, spinlock_t *lock);
-struct clk_hw *__devm_clk_hw_register_mux(struct device *dev, struct device_node *np,
+struct clk_hw *__devm_clk_hw_register_mux(struct udevice *dev, ofnode np,
 		const char *name, u8 num_parents,
 		const char * const *parent_names,
 		const struct clk_hw **parent_hws,
 		const struct clk_parent_data *parent_data,
 		unsigned long flags, void __iomem *reg, u8 shift, u32 mask,
 		u8 clk_mux_flags, const u32 *table, spinlock_t *lock);
-struct clk *clk_register_mux_table(struct device *dev, const char *name,
+struct clk *clk_register_mux_table(struct udevice *dev, const char *name,
 		const char * const *parent_names, u8 num_parents,
 		unsigned long flags, void __iomem *reg, u8 shift, u32 mask,
 		u8 clk_mux_flags, const u32 *table, spinlock_t *lock);
 
 #define clk_register_mux(dev, name, parent_names, num_parents, flags, reg,    \
-			 shift, width, clk_mux_flags, lock)		      \
+			 shift, width, clk_mux_flags)		      \
 	clk_register_mux_table((dev), (name), (parent_names), (num_parents),  \
 			       (flags), (reg), (shift), BIT((width)) - 1,     \
-			       (clk_mux_flags), NULL, (lock))
+			       (clk_mux_flags), NULL, NULL)
 #define clk_hw_register_mux_table(dev, name, parent_names, num_parents,	      \
 				  flags, reg, shift, mask, clk_mux_flags,     \
-				  table, lock)				      \
-	__clk_hw_register_mux((dev), NULL, (name), (num_parents),	      \
+				  table)				      \
+	__clk_hw_register_mux((dev), dev_ofnode(dev), (name), (num_parents),	      \
 			      (parent_names), NULL, NULL, (flags), (reg),     \
 			      (shift), (mask), (clk_mux_flags), (table),      \
-			      (lock))
+			      NULL)
 #define clk_hw_register_mux_table_parent_data(dev, name, parent_data,	      \
 				  num_parents, flags, reg, shift, mask,	      \
-				  clk_mux_flags, table, lock)		      \
-	__clk_hw_register_mux((dev), NULL, (name), (num_parents),	      \
+				  clk_mux_flags, table)		      \
+	__clk_hw_register_mux((dev), dev_ofnode(dev), (name), (num_parents),	      \
 			      NULL, NULL, (parent_data), (flags), (reg),      \
 			      (shift), (mask), (clk_mux_flags), (table),      \
-			      (lock))
+			      NULL)
 #define clk_hw_register_mux(dev, name, parent_names, num_parents, flags, reg, \
-			    shift, width, clk_mux_flags, lock)		      \
-	__clk_hw_register_mux((dev), NULL, (name), (num_parents),	      \
+			    shift, width, clk_mux_flags)		      \
+	__clk_hw_register_mux((dev), dev_ofnode(dev), (name), (num_parents),	      \
 			      (parent_names), NULL, NULL, (flags), (reg),     \
 			      (shift), BIT((width)) - 1, (clk_mux_flags),     \
-			      NULL, (lock))
+			      NULL, NULL)
 #define clk_hw_register_mux_hws(dev, name, parent_hws, num_parents, flags,    \
-				reg, shift, width, clk_mux_flags, lock)	      \
-	__clk_hw_register_mux((dev), NULL, (name), (num_parents), NULL,	      \
+				reg, shift, width, clk_mux_flags)	      \
+	__clk_hw_register_mux((dev), dev_ofnode(dev), (name), (num_parents), NULL,	      \
 			      (parent_hws), NULL, (flags), (reg), (shift),    \
-			      BIT((width)) - 1, (clk_mux_flags), NULL, (lock))
+			      BIT((width)) - 1, (clk_mux_flags), NULL, NULL)
 #define clk_hw_register_mux_parent_data(dev, name, parent_data, num_parents,  \
 					flags, reg, shift, width,	      \
-					clk_mux_flags, lock)		      \
-	__clk_hw_register_mux((dev), NULL, (name), (num_parents), NULL, NULL, \
+					clk_mux_flags)		      \
+	__clk_hw_register_mux((dev), dev_ofnode(dev), (name), (num_parents), NULL, NULL, \
 			      (parent_data), (flags), (reg), (shift),	      \
-			      BIT((width)) - 1, (clk_mux_flags), NULL, (lock))
+			      BIT((width)) - 1, (clk_mux_flags), NULL, NULL)
 #define clk_hw_register_mux_parent_data_table(dev, name, parent_data,	      \
 					      num_parents, flags, reg, shift, \
-					      width, clk_mux_flags, table,    \
-					      lock)			      \
-	__clk_hw_register_mux((dev), NULL, (name), (num_parents), NULL, NULL, \
+					      width, clk_mux_flags, table) \
+	__clk_hw_register_mux((dev), dev_ofnode(dev), (name), (num_parents), NULL, NULL, \
 			      (parent_data), (flags), (reg), (shift),	      \
-			      BIT((width)) - 1, (clk_mux_flags), table, (lock))
+			      BIT((width)) - 1, (clk_mux_flags), table, NULL)
 #define devm_clk_hw_register_mux(dev, name, parent_names, num_parents, flags, reg, \
-			    shift, width, clk_mux_flags, lock)		      \
-	__devm_clk_hw_register_mux((dev), NULL, (name), (num_parents),	      \
+			    shift, width, clk_mux_flags)		      \
+	__devm_clk_hw_register_mux((dev), dev_ofnode(dev), (name), (num_parents),	      \
 			      (parent_names), NULL, NULL, (flags), (reg),     \
 			      (shift), BIT((width)) - 1, (clk_mux_flags),     \
-			      NULL, (lock))
+			      NULL, NULL)
 #define devm_clk_hw_register_mux_parent_hws(dev, name, parent_hws,	      \
 					    num_parents, flags, reg, shift,   \
-					    width, clk_mux_flags, lock)       \
-	__devm_clk_hw_register_mux((dev), NULL, (name), (num_parents), NULL,  \
+					    width, clk_mux_flags)       \
+	__devm_clk_hw_register_mux((dev), dev_ofnode(dev), (name), (num_parents), NULL,  \
 				   (parent_hws), NULL, (flags), (reg),        \
 				   (shift), BIT((width)) - 1,		      \
-				   (clk_mux_flags), NULL, (lock))
+				   (clk_mux_flags), NULL, NULL)
 #define devm_clk_hw_register_mux_parent_data_table(dev, name, parent_data,    \
 					      num_parents, flags, reg, shift, \
-					      width, clk_mux_flags, table,    \
-					      lock)			      \
-	__devm_clk_hw_register_mux((dev), NULL, (name), (num_parents), NULL,  \
+					      width, clk_mux_flags, table) \
+	__devm_clk_hw_register_mux((dev), dev_ofnode(dev), (name), (num_parents), NULL,  \
 			      NULL, (parent_data), (flags), (reg), (shift),   \
-			      BIT((width)) - 1, (clk_mux_flags), table, (lock))
+			      BIT((width)) - 1, (clk_mux_flags), table, NULL)
 
 int clk_mux_val_to_index(struct clk_hw *hw, const u32 *table, unsigned int flags,
 			 unsigned int val);
@@ -1090,7 +1076,7 @@ unsigned int clk_mux_index_to_val(const u32 *table, unsigned int flags, u8 index
 void clk_unregister_mux(struct clk *clk);
 void clk_hw_unregister_mux(struct clk_hw *hw);
 
-void of_fixed_factor_clk_setup(struct device_node *node);
+void of_fixed_factor_clk_setup(ofnode node);
 
 /**
  * struct clk_fixed_factor - fixed multiplier and divider clock
@@ -1123,43 +1109,43 @@ struct clk_fixed_factor {
 #define to_clk_fixed_factor(_hw) container_of(_hw, struct clk_fixed_factor, hw)
 
 extern const struct clk_ops clk_fixed_factor_ops;
-struct clk *clk_register_fixed_factor(struct device *dev, const char *name,
+struct clk *clk_register_fixed_factor(struct udevice *dev, const char *name,
 		const char *parent_name, unsigned long flags,
 		unsigned int mult, unsigned int div);
 void clk_unregister_fixed_factor(struct clk *clk);
-struct clk_hw *clk_hw_register_fixed_factor(struct device *dev,
+struct clk_hw *clk_hw_register_fixed_factor(struct udevice *dev,
 		const char *name, const char *parent_name, unsigned long flags,
 		unsigned int mult, unsigned int div);
-struct clk_hw *clk_hw_register_fixed_factor_fwname(struct device *dev,
-		struct device_node *np, const char *name, const char *fw_name,
+struct clk_hw *clk_hw_register_fixed_factor_fwname(struct udevice *dev,
+		ofnode np, const char *name, const char *fw_name,
 		unsigned long flags, unsigned int mult, unsigned int div);
-struct clk_hw *clk_hw_register_fixed_factor_with_accuracy_fwname(struct device *dev,
-		struct device_node *np, const char *name, const char *fw_name,
+struct clk_hw *clk_hw_register_fixed_factor_with_accuracy_fwname(struct udevice *dev,
+		ofnode np, const char *name, const char *fw_name,
 		unsigned long flags, unsigned int mult, unsigned int div,
 		unsigned long acc);
-struct clk_hw *clk_hw_register_fixed_factor_index(struct device *dev,
+struct clk_hw *clk_hw_register_fixed_factor_index(struct udevice *dev,
 		const char *name, unsigned int index, unsigned long flags,
 		unsigned int mult, unsigned int div);
 void clk_hw_unregister_fixed_factor(struct clk_hw *hw);
-struct clk_hw *devm_clk_hw_register_fixed_factor(struct device *dev,
+struct clk_hw *devm_clk_hw_register_fixed_factor(struct udevice *dev,
 		const char *name, const char *parent_name, unsigned long flags,
 		unsigned int mult, unsigned int div);
-struct clk_hw *devm_clk_hw_register_fixed_factor_fwname(struct device *dev,
-		struct device_node *np, const char *name, const char *fw_name,
+struct clk_hw *devm_clk_hw_register_fixed_factor_fwname(struct udevice *dev,
+		ofnode np, const char *name, const char *fw_name,
 		unsigned long flags, unsigned int mult, unsigned int div);
-struct clk_hw *devm_clk_hw_register_fixed_factor_with_accuracy_fwname(struct device *dev,
-		struct device_node *np, const char *name, const char *fw_name,
+struct clk_hw *devm_clk_hw_register_fixed_factor_with_accuracy_fwname(struct udevice *dev,
+		ofnode np, const char *name, const char *fw_name,
 		unsigned long flags, unsigned int mult, unsigned int div,
 		unsigned long acc);
-struct clk_hw *devm_clk_hw_register_fixed_factor_index(struct device *dev,
+struct clk_hw *devm_clk_hw_register_fixed_factor_index(struct udevice *dev,
 		const char *name, unsigned int index, unsigned long flags,
 		unsigned int mult, unsigned int div);
 
-struct clk_hw *devm_clk_hw_register_fixed_factor_parent_hw(struct device *dev,
+struct clk_hw *devm_clk_hw_register_fixed_factor_parent_hw(struct udevice *dev,
 		const char *name, const struct clk_hw *parent_hw,
 		unsigned long flags, unsigned int mult, unsigned int div);
 
-struct clk_hw *clk_hw_register_fixed_factor_parent_hw(struct device *dev,
+struct clk_hw *clk_hw_register_fixed_factor_parent_hw(struct udevice *dev,
 		const char *name, const struct clk_hw *parent_hw,
 		unsigned long flags, unsigned int mult, unsigned int div);
 /**
@@ -1211,11 +1197,11 @@ struct clk_fractional_divider {
 #define CLK_FRAC_DIVIDER_BIG_ENDIAN		BIT(1)
 #define CLK_FRAC_DIVIDER_POWER_OF_TWO_PS	BIT(2)
 
-struct clk *clk_register_fractional_divider(struct device *dev,
+struct clk *clk_register_fractional_divider(struct udevice *dev,
 		const char *name, const char *parent_name, unsigned long flags,
 		void __iomem *reg, u8 mshift, u8 mwidth, u8 nshift, u8 nwidth,
 		u8 clk_divider_flags, spinlock_t *lock);
-struct clk_hw *clk_hw_register_fractional_divider(struct device *dev,
+struct clk_hw *clk_hw_register_fractional_divider(struct udevice *dev,
 		const char *name, const char *parent_name, unsigned long flags,
 		void __iomem *reg, u8 mshift, u8 mwidth, u8 nshift, u8 nwidth,
 		u8 clk_divider_flags, spinlock_t *lock);
@@ -1288,33 +1274,33 @@ struct clk_composite {
 
 #define to_clk_composite(_hw) container_of(_hw, struct clk_composite, hw)
 
-struct clk *clk_register_composite(struct device *dev, const char *name,
+struct clk *clk_register_composite(struct udevice *dev, const char *name,
 		const char * const *parent_names, int num_parents,
 		struct clk_hw *mux_hw, const struct clk_ops *mux_ops,
 		struct clk_hw *rate_hw, const struct clk_ops *rate_ops,
 		struct clk_hw *gate_hw, const struct clk_ops *gate_ops,
 		unsigned long flags);
-struct clk *clk_register_composite_pdata(struct device *dev, const char *name,
+struct clk *clk_register_composite_pdata(struct udevice *dev, const char *name,
 		const struct clk_parent_data *parent_data, int num_parents,
 		struct clk_hw *mux_hw, const struct clk_ops *mux_ops,
 		struct clk_hw *rate_hw, const struct clk_ops *rate_ops,
 		struct clk_hw *gate_hw, const struct clk_ops *gate_ops,
 		unsigned long flags);
 void clk_unregister_composite(struct clk *clk);
-struct clk_hw *clk_hw_register_composite(struct device *dev, const char *name,
+struct clk_hw *clk_hw_register_composite(struct udevice *dev, const char *name,
 		const char * const *parent_names, int num_parents,
 		struct clk_hw *mux_hw, const struct clk_ops *mux_ops,
 		struct clk_hw *rate_hw, const struct clk_ops *rate_ops,
 		struct clk_hw *gate_hw, const struct clk_ops *gate_ops,
 		unsigned long flags);
-struct clk_hw *clk_hw_register_composite_pdata(struct device *dev,
+struct clk_hw *clk_hw_register_composite_pdata(struct udevice *dev,
 		const char *name,
 		const struct clk_parent_data *parent_data, int num_parents,
 		struct clk_hw *mux_hw, const struct clk_ops *mux_ops,
 		struct clk_hw *rate_hw, const struct clk_ops *rate_ops,
 		struct clk_hw *gate_hw, const struct clk_ops *gate_ops,
 		unsigned long flags);
-struct clk_hw *devm_clk_hw_register_composite_pdata(struct device *dev,
+struct clk_hw *devm_clk_hw_register_composite_pdata(struct udevice *dev,
 		const char *name, const struct clk_parent_data *parent_data,
 		int num_parents,
 		struct clk_hw *mux_hw, const struct clk_ops *mux_ops,
@@ -1323,12 +1309,12 @@ struct clk_hw *devm_clk_hw_register_composite_pdata(struct device *dev,
 		unsigned long flags);
 void clk_hw_unregister_composite(struct clk_hw *hw);
 
-struct clk *clk_register(struct device *dev, struct clk_hw *hw);
-struct clk *devm_clk_register(struct device *dev, struct clk_hw *hw);
+struct clk *clk_register(struct udevice *dev, struct clk_hw *hw);
+struct clk *devm_clk_register(struct udevice *dev, struct clk_hw *hw);
 
-int __must_check clk_hw_register(struct device *dev, struct clk_hw *hw);
-int __must_check devm_clk_hw_register(struct device *dev, struct clk_hw *hw);
-int __must_check of_clk_hw_register(struct device_node *node, struct clk_hw *hw);
+int __must_check clk_hw_register(struct udevice *dev, struct clk_hw *hw);
+int __must_check devm_clk_hw_register(struct udevice *dev, struct clk_hw *hw);
+int __must_check of_clk_hw_register(ofnode node, struct clk_hw *hw);
 
 void clk_unregister(struct clk *clk);
 
@@ -1340,17 +1326,17 @@ const char *clk_hw_get_name(const struct clk_hw *hw);
 
 /**
  * clk_hw_get_dev() - get device from an hardware clock.
- * @hw: the clk_hw pointer to get the struct device from
+ * @hw: the clk_hw pointer to get the struct udevice from
  *
- * This is a helper to get the struct device associated with a hardware
+ * This is a helper to get the struct udevice associated with a hardware
  * clock. Some clock controllers, such as the one registered with
  * CLK_OF_DECLARE(), may have not provided a device pointer while
  * registering the clock.
  *
- * Return: the struct device associated with the clock, or NULL if there
+ * Return: the struct udevice associated with the clock, or NULL if there
  * is none.
  */
-struct device *clk_hw_get_dev(const struct clk_hw *hw);
+struct udevice *clk_hw_get_dev(const struct clk_hw *hw);
 
 /**
  * clk_hw_get_of_node() - get device_node from a hardware clock.
@@ -1362,18 +1348,13 @@ struct device *clk_hw_get_dev(const struct clk_hw *hw);
  * Return: the struct device_node associated with the clock, or NULL
  * if there is none.
  */
-struct device_node *clk_hw_get_of_node(const struct clk_hw *hw);
-#ifdef CONFIG_COMMON_CLK
+ofnode clk_hw_get_of_node(const struct clk_hw *hw);
 struct clk_hw *__clk_get_hw(struct clk *clk);
-#else
-static inline struct clk_hw *__clk_get_hw(struct clk *clk)
-{
-	return (struct clk_hw *)clk;
-}
-#endif
+
+void clk_put(struct clk *clk);
 
 struct clk *clk_hw_get_clk(struct clk_hw *hw, const char *con_id);
-struct clk *devm_clk_hw_get_clk(struct device *dev, struct clk_hw *hw,
+struct clk *devm_clk_hw_get_clk(struct udevice *dev, struct clk_hw *hw,
 				const char *con_id);
 
 unsigned int clk_hw_get_num_parents(const struct clk_hw *hw);
@@ -1446,33 +1427,35 @@ struct clk_onecell_data {
 
 struct clk_hw_onecell_data {
 	unsigned int num;
-	struct clk_hw *hws[] __counted_by(num);
+	struct clk_hw *hws[];
 };
 
-int of_clk_add_provider(struct device_node *np,
-			struct clk *(*clk_src_get)(struct of_phandle_args *args,
+int of_clk_add_provider(ofnode np,
+			struct clk *(*clk_src_get)(struct ofnode_phandle_args *args,
 						   void *data),
 			void *data);
-int of_clk_add_hw_provider(struct device_node *np,
-			   struct clk_hw *(*get)(struct of_phandle_args *clkspec,
+int of_clk_add_hw_provider(ofnode np,
+			   struct clk_hw *(*get)(struct ofnode_phandle_args *clkspec,
 						 void *data),
 			   void *data);
-int devm_of_clk_add_hw_provider(struct device *dev,
-			   struct clk_hw *(*get)(struct of_phandle_args *clkspec,
+int devm_of_clk_add_hw_provider(struct udevice *dev,
+			   struct clk_hw *(*get)(struct ofnode_phandle_args *clkspec,
 						 void *data),
 			   void *data);
-void of_clk_del_provider(struct device_node *np);
+void of_clk_del_provider(ofnode np);
 
-struct clk *of_clk_src_simple_get(struct of_phandle_args *clkspec,
+struct clk *of_clk_src_simple_get(struct ofnode_phandle_args *clkspec,
 				  void *data);
-struct clk_hw *of_clk_hw_simple_get(struct of_phandle_args *clkspec,
+struct clk_hw *of_clk_hw_simple_get(struct ofnode_phandle_args *clkspec,
 				    void *data);
-struct clk *of_clk_src_onecell_get(struct of_phandle_args *clkspec, void *data);
-struct clk_hw *of_clk_hw_onecell_get(struct of_phandle_args *clkspec,
+struct clk *of_clk_src_onecell_get(struct ofnode_phandle_args *clkspec, void *data);
+struct clk_hw *of_clk_hw_onecell_get(struct ofnode_phandle_args *clkspec,
 				     void *data);
-int of_clk_parent_fill(struct device_node *np, const char **parents,
+int of_clk_parent_fill(ofnode np, const char **parents,
 		       unsigned int size);
-int of_clk_detect_critical(struct device_node *np, int index,
+int of_clk_detect_critical(ofnode np, int index,
 			    unsigned long *flags);
+
+struct clk_hw *of_clk_get_hw_from_clkspec(struct ofnode_phandle_args *clkspec);
 
 #endif /* __LINUX_CLK_PROVIDER_CCF_FULL_H */
