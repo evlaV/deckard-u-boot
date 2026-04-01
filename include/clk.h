@@ -516,6 +516,33 @@ long clk_set_rate(struct clk *clk, ulong rate);
 int clk_set_parent(struct clk *clk, struct clk *parent);
 
 /**
+ * clk_prepare - prepare a clock source
+ * @clk: clock source
+ *
+ * This prepares the clock source for use.
+ *
+ * Must not be called from within atomic context.
+ *
+ * U-Boot: this is a no-op unless CCF_FULL is enabled.
+ */
+int clk_prepare(struct clk *clk);
+
+int clk_prepare_bulk(struct clk_bulk *clks);
+
+/**
+ * clk_unprepare - undo preparation of a clock source
+ * @clk: clock source
+ *
+ * This undoes a previously prepared clock.  The caller must balance
+ * the number of prepare and unprepare calls.
+ *
+ * Must not be called from within atomic context.
+ */
+void clk_unprepare(struct clk *clk);
+
+int clk_unprepare_bulk(struct clk_bulk *clks);
+
+/**
  * clk_enable() - Enable (turn on) a clock.
  * @clk:	A clock struct that was previously successfully requested by
  *		clk_request/get_by_*().
@@ -550,6 +577,47 @@ int clk_disable(struct clk *clk);
  * Return: zero on success, or -ve error code.
  */
 int clk_disable_bulk(struct clk_bulk *bulk);
+
+static inline int clk_prepare_enable(struct clk *clk)
+{
+	int ret;
+
+	ret = clk_prepare(clk);
+	if (!ret)
+		ret = clk_enable(clk);
+
+	return ret;
+}
+
+static inline int clk_disable_unprepare(struct clk *clk)
+{
+	int ret;
+
+	ret = clk_disable(clk);
+	if (!ret)
+		clk_unprepare(clk);
+	return ret;
+}
+
+static inline int clk_prepare_enable_bulk(struct clk_bulk *clks)
+{
+	int ret;
+
+	ret = clk_prepare_bulk(clks);
+	if (!ret)
+		ret = clk_enable_bulk(clks);
+	return ret;
+}
+
+static inline int clk_disable_unprepare_bulk(struct clk_bulk *clks)
+{
+	int ret;
+
+	ret = clk_disable_bulk(clks);
+	if (!ret)
+		ret = clk_unprepare_bulk(clks);
+	return ret;
+}
 
 /**
  * clk_is_match - check if two clk's point to the same hardware clock

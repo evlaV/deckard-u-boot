@@ -838,6 +838,13 @@ struct clk *devm_clk_get(struct udevice *dev, const char *id)
 	return clk;
 }
 
+int clk_prepare(struct clk *clk)
+{
+	return 0;
+}
+
+void clk_unprepare(struct clk *clk) { }
+
 int clk_uclass_post_probe(struct udevice *dev)
 {
 	/*
