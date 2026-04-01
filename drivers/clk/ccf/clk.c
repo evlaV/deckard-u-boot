@@ -718,10 +718,9 @@ EXPORT_SYMBOL_GPL(clk_prepare);
 
 static void clk_core_disable(struct clk_core *core)
 {
+	static int indent = 0;
 	if (!core)
 		return;
-
-	pr_debug("%s disable\n", core->name);
 
 	if (WARN(core->enable_count == 0, "%s already disabled\n", core->name))
 		return;
@@ -733,10 +732,14 @@ static void clk_core_disable(struct clk_core *core)
 	if (--core->enable_count > 0)
 		return;
 
+	pr_debug("%*sDisable %s\n", indent * 2, indent ? " " : "", core->name);
+	indent++;
+
 	if (core->ops->disable)
 		core->ops->disable(core->hw);
 
 	clk_core_disable(core->parent);
+	indent--;
 }
 
 #define clk_core_disable_lock(core) clk_core_disable(core)
@@ -767,35 +770,40 @@ EXPORT_SYMBOL_GPL(clk_disable);
 
 static int clk_core_enable(struct clk_core *core)
 {
+	static int indent = 0;
 	int ret = 0;
 
 	if (!core)
 		return 0;
 
 	if (!clk_core_is_prepared(core) && core->ops->prepare) {
-		pr_debug("%s: enable without prepare!", core->name);
+		pr_debug("%s: enable without prepare!\n", core->name);
 		ret = clk_core_prepare(core);
-		if (ret)
+		if (ret) {
 			return ret;
+		}
 	}
 
+	indent++;
 	if (core->enable_count == 0) {
 		ret = clk_core_enable(core->parent);
-
 		if (ret)
-			return ret;
+			goto out;
 
 		if (core->ops->enable)
 			ret = core->ops->enable(core->hw);
 
 		if (ret) {
 			clk_core_disable(core->parent);
-			return ret;
+			goto out;
 		}
 	}
 
 	core->enable_count++;
-	return 0;
+out:
+	indent--;
+	pr_debug("%*sEnable %s\n", indent * 2, indent ? " " : "", core->name);
+	return ret;
 }
 
 #define clk_core_enable_lock(core) clk_core_enable(core)
