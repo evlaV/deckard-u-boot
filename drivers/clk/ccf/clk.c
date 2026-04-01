@@ -54,7 +54,15 @@ struct clk_parent_map {
 	struct clk_core		*core;
 	const char		*fw_name;
 	const char		*name;
-	int			index;
+	int			index : 20;
+	/*
+	 * U-Boot: Avoid repeatedly trying to probe
+	 * missing clock parents. Since we lazily
+	 * probe clock providers, if we get an error
+	 * then trying again later will never work since
+	 * we don't support loadable modules.
+	 */
+	int			error : 12;
 };
 
 struct clk_core {
@@ -286,12 +294,28 @@ static void clk_core_fill_parent_index(struct clk_core *core, u8 index)
 	/* Only cache it if it's not an error */
 	if (!IS_ERR(parent))
 		entry->core = parent;
+	/*
+	 * U-Boot: save the error so we avoid trying to get this parent again.
+	 * -EPROBE_DEFER probably means the parent is in the same clock device
+	 * and just isn't available yet.
+	 */
+	else if (PTR_ERR(parent) != -EPROBE_DEFER) {
+		entry->error = PTR_ERR(parent);
+	}
 }
 
 static struct clk_core *clk_core_get_parent_by_index(struct clk_core *core,
 							 u8 index)
 {
 	if (!core || index >= core->num_parents || !core->parents)
+		return NULL;
+
+	/*
+	 * U-Boot: if we failed to get a parent before we don't need to
+	 * try again, unlike Linux we don't have modules.
+	 * The only reason this might happen is due to a driver issue.
+	 */
+	if (core->parents[index].error)
 		return NULL;
 
 	if (!core->parents[index].core)
@@ -1957,7 +1981,11 @@ static int __clk_core_init(struct clk_core *core)
 		}
 	}
 
-	clk_core_reparent_orphans_nolock();
+	/*
+	 * U-Boot: since we probe clk providers on-demand it's enough to only reparent
+	 * orphans when adding providers not for every single clock.
+	 */
+	//clk_core_reparent_orphans_nolock();
 out_list_del:
 	if (ret)
 		hlist_del(&core->hashtable_node);
