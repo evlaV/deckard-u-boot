@@ -5,17 +5,17 @@
 #
 
 obj-$(CONFIG_$(PHASE_)CLK) += clk-uclass.o
+obj-$(CONFIG_$(PHASE_)CLK) += clk-common.o
 obj-$(CONFIG_$(PHASE_)CLK_GPIO) += clk-gpio.o
 obj-$(CONFIG_$(PHASE_)CLK_STUB) += clk-stub.o
 
 # Full Linux CCF support
-obj-$(CONFIG_$(PHASE_)CLK_CCF_FULL) += ccf/
-
+ifdef CONFIG_CLK_CCF_FULL
+obj-y += ccf/
+else
 # U-Boot basic fixed clocks, full CCF has a
 # different and incompatible implementation
-ifndef CONFIG_CLK_CCF_FULL
 obj-y += basic/
-
 # U-Boot/IMX "micro" CCF port
 obj-$(CONFIG_$(PHASE_)CLK_CCF) += uccf/
 endif

@@ -40,6 +40,9 @@
 #if CONFIG_IS_ENABLED(CLK_CCF_FULL)
 #include "clk-provider-ccf_full.h"
 #else
+/* Forward-declare clk_hw so we can compile code that references it even though it's unused*/
+struct clk_hw;
+
 #include "clk-provider-uccf.h"
 #endif
 
