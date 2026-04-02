@@ -100,10 +100,10 @@ static int dm_test_clk(struct unit_test_state *uts)
 	rate = sandbox_clk_test_get_rate(dev_test, SANDBOX_CLK_TEST_ID_FIXED);
 	ut_asserteq(1234, rate);
 
-	ut_asserteq(0, sandbox_clk_test_set_rate(dev_test,
+	ut_asserteq(1000, sandbox_clk_test_set_rate(dev_test,
 						 SANDBOX_CLK_TEST_ID_SPI,
 						 1000));
-	ut_asserteq(0, sandbox_clk_test_set_rate(dev_test,
+	ut_asserteq(2000, sandbox_clk_test_set_rate(dev_test,
 						 SANDBOX_CLK_TEST_ID_I2C,
 						 2000));
 
@@ -112,10 +112,10 @@ static int dm_test_clk(struct unit_test_state *uts)
 	ut_asserteq(2000, sandbox_clk_test_get_rate(dev_test,
 						    SANDBOX_CLK_TEST_ID_I2C));
 
-	ut_asserteq(1000, sandbox_clk_test_set_rate(dev_test,
+	ut_asserteq(10000, sandbox_clk_test_set_rate(dev_test,
 						    SANDBOX_CLK_TEST_ID_SPI,
 						    10000));
-	ut_asserteq(2000, sandbox_clk_test_set_rate(dev_test,
+	ut_asserteq(20000, sandbox_clk_test_set_rate(dev_test,
 						    SANDBOX_CLK_TEST_ID_I2C,
 						    20000));
 

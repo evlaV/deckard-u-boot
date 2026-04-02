@@ -44,7 +44,6 @@ static ulong sandbox_clk_round_rate(struct clk *clk, ulong rate)
 static long sandbox_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct sandbox_clk_priv *priv = dev_get_priv(clk->dev);
-	ulong old_rate;
 	ulong id = clk_get_id(clk);
 
 	if (!priv->probed)
@@ -56,10 +55,9 @@ static long sandbox_clk_set_rate(struct clk *clk, ulong rate)
 	if (!rate)
 		return -EINVAL;
 
-	old_rate = priv->rate[id];
 	priv->rate[id] = rate;
 
-	return old_rate;
+	return rate;
 }
 
 static int sandbox_clk_enable(struct clk *clk)
@@ -166,7 +164,6 @@ int sandbox_clk_query_requested(struct udevice *dev, int id)
 	return priv->requested[id];
 }
 
-#if !CONFIG_IS_ENABLED(CLK_CCF_FULL)
 static int clk_fixed_rate_of_to_plat(struct udevice *dev)
 {
 	struct clk_fixed_rate *cplat;
@@ -198,43 +195,3 @@ U_BOOT_DRIVER(sandbox_fixed_clock) = {
 	.ops = &clk_fixed_rate_ops,
 	.flags = DM_FLAG_PRE_RELOC,
 };
-#else
-static int clk_fixed_rate_probe(struct udevice *dev)
-{
-	ofnode node = dev_ofnode(dev);
-	const char *clk_name;
-	struct clk_hw *hw;
-	u32 rate = 0;
-	int ret;
-
-	ofnode_read_u32(node, "clock-frequency", &rate);
-
-	clk_name = ofnode_read_string(node, "clock-output-names");
-	if (!clk_name)
-		clk_name = ofnode_get_name(node);
-
-	hw = clk_hw_register_fixed_rate(dev, clk_name, NULL, 0, rate);
-	if (IS_ERR(hw))
-		return PTR_ERR(hw);
-
-	ret = of_clk_add_hw_provider(node, of_clk_hw_simple_get, hw);
-	if (ret) {
-		clk_hw_unregister_fixed_rate(hw);
-		return ret;
-	}
-
-	return 0;
-}
-
-static const struct udevice_id sandbox_clk_fixed_rate_match[] = {
-	{ .compatible = "sandbox,fixed-clock" },
-	{ /* sentinel */ }
-};
-
-U_BOOT_DRIVER(sandbox_fixed_clock) = {
-	.name = "sandbox_fixed_clock",
-	.id = UCLASS_NOP,
-	.of_match = sandbox_clk_fixed_rate_match,
-	.probe = clk_fixed_rate_probe,
-};
-#endif

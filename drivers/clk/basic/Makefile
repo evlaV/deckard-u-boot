@@ -5,3 +5,4 @@
 
 obj-$(CONFIG_$(PHASE_)CLK) += clk_fixed_rate.o
 obj-$(CONFIG_$(PHASE_)CLK) += clk_fixed_factor.o
+obj-$(CONFIG_SANDBOX) += clk_sandbox.o
