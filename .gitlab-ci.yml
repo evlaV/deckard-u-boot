@@ -316,6 +316,11 @@ sandbox64 with clang test.py:
     OVERRIDE: "-O clang-20"
   <<: *buildman_and_testpy_dfn
 
+sandbox64_ccf_full test.py:
+  variables:
+    TEST_PY_BD: "sandbox64_ccf_full"
+  <<: *buildman_and_testpy_dfn
+
 sandbox64_lwip test.py:
   variables:
     TEST_PY_BD: "sandbox64_lwip"
