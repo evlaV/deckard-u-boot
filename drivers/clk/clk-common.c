@@ -23,6 +23,8 @@
 #include <linux/clk-provider.h>
 #include <linux/err.h>
 
+#include <linux/clk/clk-conf.h>
+#include "ccf/clk.h"
 #include "clk-common.h"
 
 #if CONFIG_IS_ENABLED(OF_REAL)
@@ -33,14 +35,21 @@ int clk_get_by_index(struct udevice *dev, int index, struct clk *clk)
 
 int clk_get_by_index_nodev(ofnode node, int index, struct clk *clk)
 {
-	struct ofnode_phandle_args args;
-	int ret;
+	if (CONFIG_IS_ENABLED(CLK_CCF_FULL)) {
+		struct clk_hw *hw;
 
-	ret = ofnode_parse_phandle_with_args(node, "clocks", "#clock-cells", 0,
-					     index, &args);
+		hw = of_clk_get_hw(node, index, NULL);
+		return clk_hw_create_clk_uboot(clk, hw);
+	} else {
+		struct ofnode_phandle_args args;
+		int ret;
 
-	return clk_get_by_index_tail(ret, node, &args, "clocks",
-				     index, clk);
+		ret = ofnode_parse_phandle_with_args(node, "clocks", "#clock-cells", 0,
+						index, &args);
+
+		return clk_get_by_index_tail(ret, node, &args, "clocks",
+					index, clk);
+	}
 }
 
 int clk_get_bulk(struct udevice *dev, struct clk_bulk *bulk)
@@ -78,7 +87,16 @@ bulk_get_err:
 
 int clk_get_by_name(struct udevice *dev, const char *name, struct clk *clk)
 {
-	return clk_get_by_name_nodev(dev_ofnode(dev), name, clk);
+	if (CONFIG_IS_ENABLED(CLK_CCF_FULL)) {
+		struct clk_hw *hw;
+
+		hw = of_clk_get_hw(dev_ofnode(dev), 0, name);
+		if (IS_ERR(hw))
+			return -ENOENT;
+		return clk_hw_create_clk_uboot(clk, hw);
+	} else {
+		return clk_get_by_name_nodev(dev_ofnode(dev), name, clk);
+	}
 }
 #endif /* OF_REAL */
 
@@ -140,13 +158,17 @@ int clk_set_defaults(struct udevice *dev, enum clk_defaults_stage stage)
 
 	debug("%s(%s)\n", __func__, dev_read_name(dev));
 
-	ret = clk_set_default_parents(dev, stage);
-	if (ret)
-		return ret;
+	if (CONFIG_IS_ENABLED(CLK_CCF_FULL)) {
+		return of_clk_set_defaults(dev_ofnode(dev), false);
+	} else {
+		ret = clk_set_default_parents(dev, stage);
+		if (ret)
+			return ret;
 
-	ret = clk_set_default_rates(dev, stage);
-	if (ret < 0)
-		return ret;
+		ret = clk_set_default_rates(dev, stage);
+		if (ret < 0)
+			return ret;
+	}
 
 	return 0;
 }
@@ -218,3 +240,16 @@ int clk_disable_bulk(struct clk_bulk *bulk)
 
 	return 0;
 }
+
+#if CONFIG_IS_ENABLED(CLK_CCF_FULL)
+long clk_get_parent_rate(struct clk *clk)
+{
+	struct clk *pclk;
+
+	if (!clk)
+		return -EINVAL;
+
+	pclk = clk_get_parent(clk);
+	return clk_get_rate(pclk);
+}
+#endif

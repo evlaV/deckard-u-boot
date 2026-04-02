@@ -4,7 +4,6 @@
 # Wolfgang Denk, DENX Software Engineering, wd@denx.de.
 #
 
-obj-$(CONFIG_$(PHASE_)CLK) += clk-uclass.o
 obj-$(CONFIG_$(PHASE_)CLK) += clk-common.o
 obj-$(CONFIG_$(PHASE_)CLK_GPIO) += clk-gpio.o
 obj-$(CONFIG_$(PHASE_)CLK_STUB) += clk-stub.o
@@ -16,6 +15,7 @@ else
 # U-Boot basic fixed clocks, full CCF has a
 # different and incompatible implementation
 obj-y += basic/
+obj-$(CONFIG_$(PHASE_)CLK) += clk-uclass.o
 # U-Boot/IMX "micro" CCF port
 obj-$(CONFIG_$(PHASE_)CLK_CCF) += uccf/
 endif
