@@ -8,9 +8,11 @@
 # Otherwise buildman thinks this isn't an ARM platform
 CONFIG_ARM=y
 
+CONFIG_CLK_CCF_FULL=y
+
 # Address where U-Boot will be loaded
 CONFIG_TEXT_BASE=0xa7000000
-CONFIG_REMAKE_ELF=y
+CONFIG_QCOM_GENERATE_MBN=y
 
 CONFIG_DEFAULT_DEVICE_TREE="qcom/sm8650-hdk"
 
