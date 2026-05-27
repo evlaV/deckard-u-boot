@@ -39,7 +39,7 @@ static int ufs_qcom_enable_clks(struct ufs_qcom_priv *priv)
 	if (priv->is_clks_enabled)
 		return 0;
 
-	err = clk_enable_bulk(&priv->clks);
+	err = clk_prepare_enable_bulk(&priv->clks);
 	if (err)
 		return err;
 

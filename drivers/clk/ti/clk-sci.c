@@ -84,7 +84,7 @@ static ulong ti_sci_clk_get_rate(struct clk *clk)
 	return current_freq;
 }
 
-static ulong ti_sci_clk_set_rate(struct clk *clk, ulong rate)
+static long ti_sci_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct ti_sci_clk_data *data = dev_get_priv(clk->dev);
 	const struct ti_sci_handle *sci = data->sci;
@@ -196,7 +196,7 @@ static const struct udevice_id ti_sci_clk_of_match[] = {
 	{ /* sentinel */ },
 };
 
-static struct clk_ops ti_sci_clk_ops = {
+static struct clk_ops_uboot ti_sci_clk_ops = {
 	.of_xlate = ti_sci_clk_of_xlate,
 	.get_rate = ti_sci_clk_get_rate,
 	.set_rate = ti_sci_clk_set_rate,

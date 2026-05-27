@@ -65,7 +65,7 @@
 #define CDU_MUX_WIDTH 2
 #define CDU_EN_BIT 0
 
-extern const struct clk_ops adi_clk_ops;
+extern const struct clk_ops_uboot adi_clk_ops;
 
 struct clk *sc5xx_cgu_pll(const char *name, const char *parent_name,
 			  void __iomem *base, u8 shift, u8 width, u32 m_offset, bool half_m);

@@ -591,7 +591,7 @@ static int meson_clk_msr_probe(struct udevice *dev)
 	return 0;
 }
 
-static struct clk_ops meson_clk_msr_ops = {
+static struct clk_ops_uboot meson_clk_msr_ops = {
 	.of_xlate = meson_clk_msr_xlate,
 	.dump = meson_clk_msr_dump,
 };

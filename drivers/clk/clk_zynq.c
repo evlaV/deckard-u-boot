@@ -312,7 +312,7 @@ static unsigned long zynq_clk_calc_peripheral_two_divs(ulong rate,
 	return best_rate;
 }
 
-static ulong zynq_clk_set_peripheral_rate(struct zynq_clk_priv *priv,
+static long zynq_clk_set_peripheral_rate(struct zynq_clk_priv *priv,
 					  enum zynq_clk id, ulong rate,
 					  bool two_divs)
 {
@@ -347,7 +347,7 @@ static ulong zynq_clk_set_peripheral_rate(struct zynq_clk_priv *priv,
 	return new_rate;
 }
 
-static ulong zynq_clk_set_gem_rate(struct zynq_clk_priv *priv, enum zynq_clk id,
+static long zynq_clk_set_gem_rate(struct zynq_clk_priv *priv, enum zynq_clk id,
 				   ulong rate)
 {
 	struct clk *parent;
@@ -402,7 +402,7 @@ static ulong zynq_clk_get_rate(struct clk *clk)
 	}
 }
 
-static ulong zynq_clk_set_rate(struct clk *clk, ulong rate)
+static long zynq_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct zynq_clk_priv *priv = dev_get_priv(clk->dev);
 	enum zynq_clk id = clk->id;
@@ -500,7 +500,7 @@ static void zynq_clk_dump(struct udevice *dev)
 }
 #endif
 
-static struct clk_ops zynq_clk_ops = {
+static struct clk_ops_uboot zynq_clk_ops = {
 	.get_rate = zynq_clk_get_rate,
 #ifndef CONFIG_XPL_BUILD
 	.set_rate = zynq_clk_set_rate,

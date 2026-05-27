@@ -278,11 +278,11 @@ struct mtk_cg_priv {
 	int gates_offs;
 };
 
-extern const struct clk_ops mtk_clk_apmixedsys_ops;
-extern const struct clk_ops mtk_clk_fixed_pll_ops;
-extern const struct clk_ops mtk_clk_topckgen_ops;
-extern const struct clk_ops mtk_clk_infrasys_ops;
-extern const struct clk_ops mtk_clk_gate_ops;
+extern const struct clk_ops_uboot mtk_clk_apmixedsys_ops;
+extern const struct clk_ops_uboot mtk_clk_fixed_pll_ops;
+extern const struct clk_ops_uboot mtk_clk_topckgen_ops;
+extern const struct clk_ops_uboot mtk_clk_infrasys_ops;
+extern const struct clk_ops_uboot mtk_clk_gate_ops;
 
 int mtk_common_clk_init(struct udevice *dev,
 			const struct mtk_clk_tree *tree);

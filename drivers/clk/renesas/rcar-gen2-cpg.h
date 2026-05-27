@@ -43,6 +43,6 @@ struct gen2_clk_priv {
 int gen2_clk_probe(struct udevice *dev);
 int gen2_clk_remove(struct udevice *dev);
 
-extern const struct clk_ops gen2_clk_ops;
+extern const struct clk_ops_uboot gen2_clk_ops;
 
 #endif

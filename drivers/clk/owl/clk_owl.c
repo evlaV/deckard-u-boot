@@ -166,7 +166,7 @@ static ulong owl_get_sd_clk_rate(struct owl_clk_priv *priv, int sd_index)
 	return (parent_rate / div);
 }
 
-static ulong owl_set_sd_clk_rate(struct owl_clk_priv *priv, ulong rate,
+static long owl_set_sd_clk_rate(struct owl_clk_priv *priv, ulong rate,
 				 int sd_index)
 {
 	uint div, val;
@@ -208,7 +208,7 @@ static ulong owl_clk_get_rate(struct clk *clk)
 	return rate;
 }
 
-static ulong owl_clk_set_rate(struct clk *clk, ulong rate)
+static long owl_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct owl_clk_priv *priv = dev_get_priv(clk->dev);
 	ulong new_rate;
@@ -238,7 +238,7 @@ static int owl_clk_probe(struct udevice *dev)
 	return 0;
 }
 
-static const struct clk_ops owl_clk_ops = {
+static const struct clk_ops_uboot owl_clk_ops = {
 	.enable = owl_clk_enable,
 	.disable = owl_clk_disable,
 	.get_rate = owl_clk_get_rate,

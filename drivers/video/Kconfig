@@ -859,6 +859,13 @@ config BACKLIGHT_SAMSUNG_CMC623
 	  Say Y to enable the backlight driver for Samsung CMC623 image converter
 	  chip's PWM output to control backlight brightness.
 
+config BACKLIGHT_SY7758
+	bool "SY7758 Backlight Driver"
+	depends on BACKLIGHT
+	select DM_I2C
+	help
+	  Say Y to enable the SY7758 I2C Backlight Driver
+
 source "drivers/video/ti/Kconfig"
 
 source "drivers/video/exynos/Kconfig"

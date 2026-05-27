@@ -247,7 +247,7 @@ int rockchip_usb2phy_clk_disable(struct clk *clk)
 	return 0;
 }
 
-static struct clk_ops rockchip_usb2phy_clk_ops = {
+static struct clk_ops_uboot rockchip_usb2phy_clk_ops = {
 	.enable = rockchip_usb2phy_clk_enable,
 	.disable = rockchip_usb2phy_clk_disable,
 	.round_rate = rockchip_usb2phy_clk_round_rate

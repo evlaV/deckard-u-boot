@@ -21,7 +21,7 @@ __weak ulong imx8_clk_get_rate(struct clk *clk)
 	return 0;
 }
 
-__weak ulong imx8_clk_set_rate(struct clk *clk, unsigned long rate)
+__weak long imx8_clk_set_rate(struct clk *clk, unsigned long rate)
 {
 	return 0;
 }
@@ -78,7 +78,7 @@ static void imx8_clk_dump(struct udevice *dev)
 }
 #endif
 
-static struct clk_ops imx8_clk_ops = {
+static struct clk_ops_uboot imx8_clk_ops = {
 	.set_rate = imx8_clk_set_rate,
 	.get_rate = imx8_clk_get_rate,
 	.enable = imx8_clk_enable,

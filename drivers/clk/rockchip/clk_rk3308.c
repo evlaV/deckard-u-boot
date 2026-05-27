@@ -1007,7 +1007,7 @@ static ulong rk3308_clk_get_rate(struct clk *clk)
 	return rate;
 }
 
-static ulong rk3308_clk_set_rate(struct clk *clk, ulong rate)
+static long rk3308_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct rk3308_clk_priv *priv = dev_get_priv(clk->dev);
 	ulong ret = 0;
@@ -1126,7 +1126,7 @@ static int __maybe_unused rk3308_clk_set_parent(struct clk *clk, struct clk *par
 }
 #endif
 
-static struct clk_ops rk3308_clk_ops = {
+static struct clk_ops_uboot rk3308_clk_ops = {
 	.get_rate = rk3308_clk_get_rate,
 	.set_rate = rk3308_clk_set_rate,
 #if CONFIG_IS_ENABLED(OF_REAL)

@@ -24,9 +24,11 @@
 #include <linux/clk-provider.h>
 #include <linux/err.h>
 
-static inline const struct clk_ops *clk_dev_ops(struct udevice *dev)
+#include "clk-common.h"
+
+static inline const struct clk_ops_uboot *clk_dev_ops(struct udevice *dev)
 {
-	return (const struct clk_ops *)dev->driver->ops;
+	return (const struct clk_ops_uboot *)dev->driver->ops;
 }
 
 struct clk *dev_get_clk_ptr(struct udevice *dev)
@@ -75,13 +77,13 @@ static int clk_of_xlate_default(struct clk *clk,
 	return 0;
 }
 
-static int clk_get_by_index_tail(int ret, ofnode node,
+int clk_get_by_index_tail(int ret, ofnode node,
 				 struct ofnode_phandle_args *args,
 				 const char *list_name, int index,
 				 struct clk *clk)
 {
 	struct udevice *dev_clk;
-	const struct clk_ops *ops;
+	const struct clk_ops_uboot *ops;
 
 	assert(clk);
 	clk->dev = NULL;
@@ -115,6 +117,7 @@ err:
 
 	return log_msg_ret("prop", ret);
 }
+#endif /* OF_REAL */
 
 static int clk_get_by_indexed_prop(struct udevice *dev, const char *prop_name,
 				   int index, struct clk *clk)
@@ -140,56 +143,6 @@ static int clk_get_by_indexed_prop(struct udevice *dev, const char *prop_name,
 				     index, clk);
 }
 
-int clk_get_by_index(struct udevice *dev, int index, struct clk *clk)
-{
-	return clk_get_by_index_nodev(dev_ofnode(dev), index, clk);
-}
-
-int clk_get_by_index_nodev(ofnode node, int index, struct clk *clk)
-{
-	struct ofnode_phandle_args args;
-	int ret;
-
-	ret = ofnode_parse_phandle_with_args(node, "clocks", "#clock-cells", 0,
-					     index, &args);
-
-	return clk_get_by_index_tail(ret, node, &args, "clocks",
-				     index, clk);
-}
-
-int clk_get_bulk(struct udevice *dev, struct clk_bulk *bulk)
-{
-	int i, ret, err, count;
-
-	bulk->count = 0;
-
-	count = dev_count_phandle_with_args(dev, "clocks", "#clock-cells", 0);
-	if (count < 1)
-		return count;
-
-	bulk->clks = devm_kcalloc(dev, count, sizeof(struct clk), GFP_KERNEL);
-	if (!bulk->clks)
-		return -ENOMEM;
-
-	for (i = 0; i < count; i++) {
-		ret = clk_get_by_index(dev, i, &bulk->clks[i]);
-		if (ret < 0)
-			goto bulk_get_err;
-
-		++bulk->count;
-	}
-
-	return 0;
-
-bulk_get_err:
-	err = clk_release_all(bulk->clks, bulk->count);
-	if (err)
-		debug("%s: could not release all clocks for %s\n",
-		      __func__, dev_read_name(dev));
-
-	return ret;
-}
-
 static struct clk *clk_set_default_get_by_id(struct clk *clk)
 {
 	struct clk *c = clk;
@@ -207,7 +160,7 @@ static struct clk *clk_set_default_get_by_id(struct clk *clk)
 	return c;
 }
 
-static int clk_set_default_parents(struct udevice *dev,
+int clk_set_default_parents(struct udevice *dev,
 				   enum clk_defaults_stage stage)
 {
 	struct clk clk, parent_clk, *c, *p;
@@ -290,7 +243,7 @@ static int clk_set_default_parents(struct udevice *dev,
 	return 0;
 }
 
-static int clk_set_default_rates(struct udevice *dev,
+int clk_set_default_rates(struct udevice *dev,
 				 enum clk_defaults_stage stage)
 {
 	struct clk clk, *c;
@@ -372,60 +325,6 @@ fail:
 	return ret;
 }
 
-int clk_set_defaults(struct udevice *dev, enum clk_defaults_stage stage)
-{
-	int ret;
-
-	if (!dev_has_ofnode(dev))
-		return 0;
-
-	/*
-	 * To avoid setting defaults twice, don't set them before relocation.
-	 * However, still set them for SPL. And still set them if explicitly
-	 * asked.
-	 */
-	if (!(IS_ENABLED(CONFIG_XPL_BUILD) || (gd->flags & GD_FLG_RELOC)))
-		if (stage != CLK_DEFAULTS_POST_FORCE)
-			return 0;
-
-	debug("%s(%s)\n", __func__, dev_read_name(dev));
-
-	ret = clk_set_default_parents(dev, stage);
-	if (ret)
-		return ret;
-
-	ret = clk_set_default_rates(dev, stage);
-	if (ret < 0)
-		return ret;
-
-	return 0;
-}
-
-int clk_get_by_name(struct udevice *dev, const char *name, struct clk *clk)
-{
-	return clk_get_by_name_nodev(dev_ofnode(dev), name, clk);
-}
-#endif /* OF_REAL */
-
-int clk_get_by_name_nodev(ofnode node, const char *name, struct clk *clk)
-{
-	int index = 0;
-
-	debug("%s(node=%s, name=%s, clk=%p)\n", __func__,
-		ofnode_get_name(node), name, clk);
-	clk->dev = NULL;
-
-	if (name) {
-		index = ofnode_stringlist_search(node, "clock-names", name);
-		if (index < 0) {
-			debug("fdt_stringlist_search() failed: %d\n", index);
-			return index;
-		}
-	}
-
-	return clk_get_by_index_nodev(node, index, clk);
-}
-
 const char *
 clk_resolve_parent_clk(struct udevice *dev, const char *name)
 {
@@ -444,29 +343,9 @@ clk_resolve_parent_clk(struct udevice *dev, const char *name)
 	return clk.dev->name;
 }
 
-int clk_release_all(struct clk *clk, unsigned int count)
-{
-	unsigned int i;
-	int ret;
-
-	for (i = 0; i < count; i++) {
-		debug("%s(clk[%u]=%p)\n", __func__, i, &clk[i]);
-
-		/* check if clock has been previously requested */
-		if (!clk[i].dev)
-			continue;
-
-		ret = clk_disable(&clk[i]);
-		if (ret && ret != -ENOSYS)
-			return ret;
-	}
-
-	return 0;
-}
-
 int clk_request(struct udevice *dev, struct clk *clk)
 {
-	const struct clk_ops *ops;
+	const struct clk_ops_uboot *ops;
 
 	debug("%s(dev=%s, clk=%p)\n", __func__, dev_read_name(dev), clk);
 	if (!clk)
@@ -483,7 +362,7 @@ int clk_request(struct udevice *dev, struct clk *clk)
 
 ulong clk_get_rate(struct clk *clk)
 {
-	const struct clk_ops *ops;
+	const struct clk_ops_uboot *ops;
 
 	debug("%s(clk=%p)\n", __func__, clk);
 	if (!clk_valid(clk))
@@ -515,9 +394,9 @@ struct clk *clk_get_parent(struct clk *clk)
 	return pclk;
 }
 
-ulong clk_get_parent_rate(struct clk *clk)
+long clk_get_parent_rate(struct clk *clk)
 {
-	const struct clk_ops *ops;
+	const struct clk_ops_uboot *ops;
 	struct clk *pclk;
 
 	debug("%s(clk=%p)\n", __func__, clk);
@@ -541,7 +420,7 @@ ulong clk_get_parent_rate(struct clk *clk)
 
 ulong clk_round_rate(struct clk *clk, ulong rate)
 {
-	const struct clk_ops *ops;
+	const struct clk_ops_uboot *ops;
 
 	debug("%s(clk=%p, rate=%lu)\n", __func__, clk, rate);
 	if (!clk_valid(clk))
@@ -586,9 +465,9 @@ static void clk_clean_rate_cache(struct clk *clk)
 	}
 }
 
-ulong clk_set_rate(struct clk *clk, ulong rate)
+long clk_set_rate(struct clk *clk, ulong rate)
 {
-	const struct clk_ops *ops;
+	const struct clk_ops_uboot *ops;
 	struct clk *clkp;
 
 	debug("%s(clk=%p, rate=%lu)\n", __func__, clk, rate);
@@ -621,7 +500,7 @@ ulong clk_set_rate(struct clk *clk, ulong rate)
 
 int clk_set_parent(struct clk *clk, struct clk *parent)
 {
-	const struct clk_ops *ops;
+	const struct clk_ops_uboot *ops;
 	int ret;
 
 	debug("%s(clk=%p, parent=%p)\n", __func__, clk, parent);
@@ -659,7 +538,7 @@ int clk_set_parent(struct clk *clk, struct clk *parent)
 
 int clk_enable(struct clk *clk)
 {
-	const struct clk_ops *ops;
+	const struct clk_ops_uboot *ops;
 	struct clk *clkp = NULL;
 	int ret;
 
@@ -705,22 +584,9 @@ int clk_enable(struct clk *clk)
 	return 0;
 }
 
-int clk_enable_bulk(struct clk_bulk *bulk)
-{
-	int i, ret;
-
-	for (i = 0; i < bulk->count; i++) {
-		ret = clk_enable(&bulk->clks[i]);
-		if (ret < 0 && ret != -ENOSYS)
-			return ret;
-	}
-
-	return 0;
-}
-
 int clk_disable(struct clk *clk)
 {
-	const struct clk_ops *ops;
+	const struct clk_ops_uboot *ops;
 	struct clk *clkp = NULL;
 	int ret;
 
@@ -770,19 +636,6 @@ int clk_disable(struct clk *clk)
 	return 0;
 }
 
-int clk_disable_bulk(struct clk_bulk *bulk)
-{
-	int i, ret;
-
-	for (i = 0; i < bulk->count; i++) {
-		ret = clk_disable(&bulk->clks[i]);
-		if (ret < 0 && ret != -ENOSYS)
-			return ret;
-	}
-
-	return 0;
-}
-
 int clk_get_by_id(ulong id, struct clk **clkp)
 {
 	struct udevice *dev;
@@ -822,21 +675,12 @@ bool clk_is_match(const struct clk *p, const struct clk *q)
 	return false;
 }
 
-struct clk *devm_clk_get(struct udevice *dev, const char *id)
+int clk_prepare(struct clk *clk)
 {
-	int rc;
-	struct clk *clk;
-
-	clk = devm_kzalloc(dev, sizeof(*clk), GFP_KERNEL);
-	if (unlikely(!clk))
-		return ERR_PTR(-ENOMEM);
-
-	rc = clk_get_by_name(dev, id, clk);
-	if (rc)
-		return ERR_PTR(rc);
-
-	return clk;
+	return 0;
 }
+
+void clk_unprepare(struct clk *clk) { }
 
 int clk_uclass_post_probe(struct udevice *dev)
 {

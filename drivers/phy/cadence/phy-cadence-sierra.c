@@ -555,7 +555,7 @@ static int cdns_sierra_pll_mux_set_parent(struct clk *clk, struct clk *parent)
 	return ret;
 }
 
-static const struct clk_ops cdns_sierra_pll_mux_ops = {
+static const struct clk_ops_uboot cdns_sierra_pll_mux_ops = {
 	.set_parent = cdns_sierra_pll_mux_set_parent,
 };
 

@@ -87,7 +87,7 @@ static int clk_wzrd_enable(struct clk *clk)
 	return ret;
 }
 
-static unsigned long clk_wzrd_set_rate(struct clk *clk, ulong rate)
+static long clk_wzrd_set_rate(struct clk *clk, ulong rate)
 {
 	struct clkwzd *priv = dev_get_priv(clk->dev);
 	u64 div;
@@ -105,7 +105,7 @@ static unsigned long clk_wzrd_set_rate(struct clk *clk, ulong rate)
 	return 0;
 }
 
-static struct clk_ops clk_wzrd_ops = {
+static struct clk_ops_uboot clk_wzrd_ops = {
 	.enable = clk_wzrd_enable,
 	.set_rate = clk_wzrd_set_rate,
 };

@@ -708,7 +708,7 @@ static ulong cv1800b_clk_get_rate(struct clk *clk)
 	return clk_get_rate(c);
 }
 
-static ulong cv1800b_clk_set_rate(struct clk *clk, ulong rate)
+static long cv1800b_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct clk *c;
 	int err = clk_get_by_id(CV1800B_CLK_ID_TRANSFORM(clk->id), &c);
@@ -731,7 +731,7 @@ static int cv1800b_clk_set_parent(struct clk *clk, struct clk *parent)
 	return clk_set_parent(c, p);
 }
 
-const struct clk_ops cv1800b_clk_ops = {
+const struct clk_ops_uboot cv1800b_clk_ops = {
 	.enable = cv1800b_clk_enable,
 	.disable = cv1800b_clk_disable,
 	.get_rate = cv1800b_clk_get_rate,

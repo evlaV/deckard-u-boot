@@ -495,7 +495,7 @@ static ulong rk3188_clk_get_rate(struct clk *clk)
 	return new_rate;
 }
 
-static ulong rk3188_clk_set_rate(struct clk *clk, ulong rate)
+static long rk3188_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct rk3188_clk_priv *priv = dev_get_priv(clk->dev);
 	struct rk3188_cru *cru = priv->cru;
@@ -531,7 +531,7 @@ static ulong rk3188_clk_set_rate(struct clk *clk, ulong rate)
 	return new_rate;
 }
 
-static struct clk_ops rk3188_clk_ops = {
+static struct clk_ops_uboot rk3188_clk_ops = {
 	.get_rate	= rk3188_clk_get_rate,
 	.set_rate	= rk3188_clk_set_rate,
 };

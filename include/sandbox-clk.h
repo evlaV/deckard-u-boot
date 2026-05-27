@@ -21,6 +21,9 @@ enum {
 	SANDBOX_CLK_USDHC2_SEL,
 	SANDBOX_CLK_I2C,
 	SANDBOX_CLK_I2C_ROOT,
+
+	_SANDBOX_CLK_MAX,
+	SANDBOX_CLK_MAX = _SANDBOX_CLK_MAX,
 };
 
 enum sandbox_pllv3_type {
@@ -58,7 +61,7 @@ static inline struct clk *sandbox_clk_gate(const char *name, const char *parent,
 				 reg, bit_idx, clk_gate_flags, NULL);
 }
 
-struct clk *sandbox_clk_register_gate2(struct device *dev, const char *name,
+struct clk *sandbox_clk_register_gate2(struct udevice *dev, const char *name,
 				       const char *parent_name,
 				       unsigned long flags,
 				       void __iomem *reg, u8 bit_idx,

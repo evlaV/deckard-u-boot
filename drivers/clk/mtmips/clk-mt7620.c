@@ -105,7 +105,7 @@ static int mt7620_clk_disable(struct clk *clk)
 	return mt7620_clkcfg1_rmw(priv, BIT(clk->id), 0);
 }
 
-const struct clk_ops mt7620_clk_ops = {
+const struct clk_ops_uboot mt7620_clk_ops = {
 	.enable = mt7620_clk_enable,
 	.disable = mt7620_clk_disable,
 	.get_rate = mt7620_clk_get_rate,

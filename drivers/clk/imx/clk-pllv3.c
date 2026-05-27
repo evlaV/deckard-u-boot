@@ -55,7 +55,7 @@ static ulong clk_pllv3_genericv2_get_rate(struct clk *clk)
 	return (div == 0) ? parent_rate * 22 : parent_rate * 20;
 }
 
-static ulong clk_pllv3_genericv2_set_rate(struct clk *clk, ulong rate)
+static long clk_pllv3_genericv2_set_rate(struct clk *clk, ulong rate)
 {
 	struct clk_pllv3 *pll = to_clk_pllv3(clk);
 	unsigned long parent_rate = clk_get_parent_rate(clk);
@@ -79,7 +79,7 @@ static ulong clk_pllv3_generic_get_rate(struct clk *clk)
 	return (div == 1) ? parent_rate * 22 : parent_rate * 20;
 }
 
-static ulong clk_pllv3_generic_set_rate(struct clk *clk, ulong rate)
+static long clk_pllv3_generic_set_rate(struct clk *clk, ulong rate)
 {
 	struct clk_pllv3 *pll = to_clk_pllv3(clk);
 	unsigned long parent_rate = clk_get_parent_rate(clk);
@@ -140,14 +140,14 @@ static int clk_pllv3_generic_disable(struct clk *clk)
 	return 0;
 }
 
-static const struct clk_ops clk_pllv3_generic_ops = {
+static const struct clk_ops_uboot clk_pllv3_generic_ops = {
 	.get_rate	= clk_pllv3_generic_get_rate,
 	.enable		= clk_pllv3_generic_enable,
 	.disable	= clk_pllv3_generic_disable,
 	.set_rate	= clk_pllv3_generic_set_rate,
 };
 
-static const struct clk_ops clk_pllv3_genericv2_ops = {
+static const struct clk_ops_uboot clk_pllv3_genericv2_ops = {
 	.get_rate	= clk_pllv3_genericv2_get_rate,
 	.enable		= clk_pllv3_generic_enable,
 	.disable	= clk_pllv3_generic_disable,
@@ -163,7 +163,7 @@ static ulong clk_pllv3_sys_get_rate(struct clk *clk)
 	return parent_rate * div / 2;
 }
 
-static ulong clk_pllv3_sys_set_rate(struct clk *clk, ulong rate)
+static long clk_pllv3_sys_set_rate(struct clk *clk, ulong rate)
 {
 	struct clk_pllv3 *pll = to_clk_pllv3(clk);
 	unsigned long parent_rate = clk_get_parent_rate(clk);
@@ -193,7 +193,7 @@ static ulong clk_pllv3_sys_set_rate(struct clk *clk, ulong rate)
 	return 0;
 }
 
-static const struct clk_ops clk_pllv3_sys_ops = {
+static const struct clk_ops_uboot clk_pllv3_sys_ops = {
 	.enable		= clk_pllv3_generic_enable,
 	.disable	= clk_pllv3_generic_disable,
 	.get_rate	= clk_pllv3_sys_get_rate,
@@ -218,7 +218,7 @@ static ulong clk_pllv3_av_get_rate(struct clk *clk)
 	return parent_rate * div + (unsigned long)temp64;
 }
 
-static ulong clk_pllv3_av_set_rate(struct clk *clk, ulong rate)
+static long clk_pllv3_av_set_rate(struct clk *clk, ulong rate)
 {
 	struct clk_pllv3 *pll = to_clk_pllv3(clk);
 	unsigned long parent_rate = clk_get_parent_rate(clk);
@@ -261,7 +261,7 @@ static ulong clk_pllv3_av_set_rate(struct clk *clk, ulong rate)
 	return 0;
 }
 
-static const struct clk_ops clk_pllv3_av_ops = {
+static const struct clk_ops_uboot clk_pllv3_av_ops = {
 	.enable		= clk_pllv3_generic_enable,
 	.disable	= clk_pllv3_generic_disable,
 	.get_rate	= clk_pllv3_av_get_rate,
@@ -275,7 +275,7 @@ static ulong clk_pllv3_enet_get_rate(struct clk *clk)
 	return pll->ref_clock;
 }
 
-static const struct clk_ops clk_pllv3_enet_ops = {
+static const struct clk_ops_uboot clk_pllv3_enet_ops = {
 	.enable	= clk_pllv3_generic_enable,
 	.disable	= clk_pllv3_generic_disable,
 	.get_rate	= clk_pllv3_enet_get_rate,

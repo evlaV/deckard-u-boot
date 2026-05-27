@@ -143,7 +143,7 @@ ulong imx8_clk_get_rate(struct clk *clk)
 	return rate;
 }
 
-ulong imx8_clk_set_rate(struct clk *clk, unsigned long rate)
+long imx8_clk_set_rate(struct clk *clk, unsigned long rate)
 {
 	sc_pm_clk_t pm_clk;
 	u32 new_rate = rate;

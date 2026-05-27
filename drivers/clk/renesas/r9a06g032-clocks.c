@@ -843,7 +843,7 @@ static ulong r9a06g032_div_get_rate(struct clk *clk)
 	return DIV_ROUND_UP(parent_rate, div);
 }
 
-static ulong r9a06g032_div_set_rate(struct clk *clk, ulong rate)
+static long r9a06g032_div_set_rate(struct clk *clk, ulong rate)
 {
 	struct r9a06g032_priv *clocks = dev_get_priv(clk->dev);
 	const struct r9a06g032_clkdesc *desc = r9a06g032_clk_get(clk);
@@ -1019,7 +1019,7 @@ static ulong r9a06g032_clk_get_rate(struct clk *clk)
 	return ret;
 }
 
-static ulong r9a06g032_clk_set_rate(struct clk *clk, ulong rate)
+static long r9a06g032_clk_set_rate(struct clk *clk, ulong rate)
 {
 	const struct r9a06g032_clkdesc *desc = r9a06g032_clk_get(clk);
 	ulong ret = 0;
@@ -1049,7 +1049,7 @@ static int r9a06g032_clk_of_xlate(struct clk *clk, struct ofnode_phandle_args *a
 	return 0;
 }
 
-static const struct clk_ops r9a06g032_clk_ops = {
+static const struct clk_ops_uboot r9a06g032_clk_ops = {
 	.enable		= r9a06g032_clk_enable,
 	.disable	= r9a06g032_clk_disable,
 	.get_rate	= r9a06g032_clk_get_rate,

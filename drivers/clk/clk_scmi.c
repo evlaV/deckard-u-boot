@@ -284,7 +284,7 @@ static ulong scmi_clk_get_rate(struct clk *clk)
 	return (ulong)(((u64)out.rate_msb << 32) | out.rate_lsb);
 }
 
-static ulong __scmi_clk_set_rate(struct clk *clk, ulong rate)
+static long __scmi_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct scmi_clk_rate_set_in in = {
 		.clock_id = clk_get_id(clk),
@@ -309,7 +309,7 @@ static ulong __scmi_clk_set_rate(struct clk *clk, ulong rate)
 	return scmi_clk_get_rate(clk);
 }
 
-static ulong scmi_clk_set_rate(struct clk *clk, ulong rate)
+static long scmi_clk_set_rate(struct clk *clk, ulong rate)
 {
 	u32 ctrl_flags;
 	int ret;
@@ -420,7 +420,7 @@ static int scmi_clk_set_parent(struct clk *clk, struct clk *parent)
 	return 0;
 }
 
-static const struct clk_ops scmi_clk_ops = {
+static const struct clk_ops_uboot scmi_clk_ops = {
 	.enable = scmi_clk_enable,
 	.disable = scmi_clk_disable,
 	.get_rate = scmi_clk_get_rate,

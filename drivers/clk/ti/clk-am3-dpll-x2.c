@@ -30,7 +30,7 @@ static ulong clk_ti_am3_dpll_x2_get_rate(struct clk *clk)
 	return rate;
 }
 
-const struct clk_ops clk_ti_am3_dpll_x2_ops = {
+const struct clk_ops_uboot clk_ti_am3_dpll_x2_ops = {
 	.get_rate = clk_ti_am3_dpll_x2_get_rate,
 };
 

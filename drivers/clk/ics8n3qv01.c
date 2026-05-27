@@ -106,7 +106,7 @@ static int ics8n3qv01_calc_parameters(uint fout, uint *_mint, uint *_mfrac,
 	return 0;
 }
 
-static ulong ics8n3qv01_set_rate(struct clk *clk, ulong fout)
+static long ics8n3qv01_set_rate(struct clk *clk, ulong fout)
 {
 	struct ics8n3qv01_priv *priv = dev_get_priv(clk->dev);
 	uint n, mint, mfrac;
@@ -196,7 +196,7 @@ static int ics8n3qv01_disable(struct clk *clk)
 	return 0;
 }
 
-static const struct clk_ops ics8n3qv01_ops = {
+static const struct clk_ops_uboot ics8n3qv01_ops = {
 	.get_rate = ics8n3qv01_get_rate,
 	.set_rate = ics8n3qv01_set_rate,
 	.enable = ics8n3qv01_enable,

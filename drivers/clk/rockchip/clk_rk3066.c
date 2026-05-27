@@ -540,7 +540,7 @@ static ulong rk3066_clk_get_rate(struct clk *clk)
 	return new_rate;
 }
 
-static ulong rk3066_clk_set_rate(struct clk *clk, ulong rate)
+static long rk3066_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct rk3066_clk_priv *priv = dev_get_priv(clk->dev);
 	struct rk3066_cru *cru = priv->cru;
@@ -625,7 +625,7 @@ static int rk3066_clk_disable(struct clk *clk)
 	return 0;
 }
 
-static struct clk_ops rk3066_clk_ops = {
+static struct clk_ops_uboot rk3066_clk_ops = {
 	.disable	= rk3066_clk_disable,
 	.enable	= rk3066_clk_enable,
 	.get_rate	= rk3066_clk_get_rate,

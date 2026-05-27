@@ -211,7 +211,7 @@ static int clk_pll14xx_wait_lock(struct clk_pll14xx *pll)
 			LOCK_TIMEOUT_US);
 }
 
-static ulong clk_pll1416x_set_rate(struct clk *clk, unsigned long drate)
+static long clk_pll1416x_set_rate(struct clk *clk, unsigned long drate)
 {
 	struct clk_pll14xx *pll = to_clk_pll14xx(dev_get_clk_ptr(clk->dev));
 	const struct imx_pll14xx_rate_table *rate;
@@ -276,7 +276,7 @@ static ulong clk_pll1416x_set_rate(struct clk *clk, unsigned long drate)
 	return clk_pll1416x_recalc_rate(clk);
 }
 
-static ulong clk_pll1443x_set_rate(struct clk *clk, unsigned long drate)
+static long clk_pll1443x_set_rate(struct clk *clk, unsigned long drate)
 {
 	struct clk_pll14xx *pll = to_clk_pll14xx(dev_get_clk_ptr(clk->dev));
 	const struct imx_pll14xx_rate_table *rate;
@@ -372,14 +372,14 @@ static int clk_pll14xx_unprepare(struct clk *clk)
 	return 0;
 }
 
-static const struct clk_ops clk_pll1416x_ops = {
+static const struct clk_ops_uboot clk_pll1416x_ops = {
 	.enable		= clk_pll14xx_prepare,
 	.disable	= clk_pll14xx_unprepare,
 	.set_rate	= clk_pll1416x_set_rate,
 	.get_rate	= clk_pll1416x_recalc_rate,
 };
 
-static const struct clk_ops clk_pll1443x_ops = {
+static const struct clk_ops_uboot clk_pll1443x_ops = {
 	.enable		= clk_pll14xx_prepare,
 	.disable	= clk_pll14xx_unprepare,
 	.set_rate	= clk_pll1443x_set_rate,

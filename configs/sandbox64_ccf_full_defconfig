@@ -1,0 +1,5 @@
+#include "sandbox64_defconfig"
+
+CONFIG_ARCH_SANDBOX=y
+CONFIG_CLK_CCF_FULL=y
+CONFIG_CLK_CCF_FULL_COMPAT=y

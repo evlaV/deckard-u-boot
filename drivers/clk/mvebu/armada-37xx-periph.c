@@ -384,7 +384,7 @@ static ulong find_best_div(const struct clk_div_table *t0,
 	return best_rate;
 }
 
-static ulong armada_37xx_periph_clk_set_rate(struct clk *clk, ulong req_rate)
+static long armada_37xx_periph_clk_set_rate(struct clk *clk, ulong req_rate)
 {
 	struct a37xx_periphclk *priv = dev_get_priv(clk->dev);
 	const struct clk_periph *periph_clk = &priv->clks[clk->id];
@@ -599,7 +599,7 @@ static int armada_37xx_periph_clk_probe(struct udevice *dev)
 	return 0;
 }
 
-static const struct clk_ops armada_37xx_periph_clk_ops = {
+static const struct clk_ops_uboot armada_37xx_periph_clk_ops = {
 	.get_rate = armada_37xx_periph_clk_get_rate,
 	.set_rate = armada_37xx_periph_clk_set_rate,
 	.set_parent = armada_37xx_periph_clk_set_parent,

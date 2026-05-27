@@ -49,6 +49,7 @@ static const struct pinconf_param msm_conf_params[] = {
 	{ "bias-disable", PIN_CONFIG_BIAS_DISABLE, 0 },
 	{ "bias-pull-up", PIN_CONFIG_BIAS_PULL_UP, 3 },
 	{ "bias-pull-down", PIN_CONFIG_BIAS_PULL_UP, 1 },
+	{ "output-enable", PIN_CONFIG_OUTPUT_ENABLE, 1, },
 	{ "output-high", PIN_CONFIG_OUTPUT, 1, },
 	{ "output-low", PIN_CONFIG_OUTPUT, 0, },
 };
@@ -143,7 +144,10 @@ static int msm_pinmux_set(struct udevice *dev, unsigned int pin_selector,
 			  unsigned int func_selector)
 {
 	struct msm_pinctrl_priv *priv = dev_get_priv(dev);
+	struct msm_pin_data *pin_data = &priv->data->pin_data;
 	int func = priv->data->get_function_mux(pin_selector, func_selector);
+	u32 mask = TLMM_FUNC_SEL_MASK | TLMM_GPIO_OE_MASK;
+	u32 val = func << 2;
 
 	if (func < 0)
 		return func;
@@ -152,11 +156,21 @@ static int msm_pinmux_set(struct udevice *dev, unsigned int pin_selector,
 		return -EPERM;
 
 	/* Always NOP for special pins, assume they're in the correct state */
-	if (qcom_is_special_pin(&priv->data->pin_data, pin_selector))
+	if (qcom_is_special_pin(pin_data, pin_selector))
 		return 0;
 
+	/*
+	 * Newer platforms support muxing pins between DSPs and the AP via "egpio", if this pin is
+	 * egpio capable then we must set the egpio enable bit to take control of it.
+	 */
+	if (pin_data->egpio_present &&
+	    readl(priv->base + GPIO_CONFIG_REG(priv, pin_selector)) & BIT(pin_data->egpio_present)) {
+		mask |= BIT(pin_data->egpio_enable);
+		val |= BIT(pin_data->egpio_enable);
+	}
+
 	clrsetbits_le32(priv->base + GPIO_CONFIG_REG(priv, pin_selector),
-			TLMM_FUNC_SEL_MASK | TLMM_GPIO_OE_MASK, func << 2);
+			mask, val);
 	return 0;
 }
 
@@ -198,6 +212,8 @@ static int msm_pinconf_set(struct udevice *dev, unsigned int pin_selector,
 			   unsigned int param, unsigned int argument)
 {
 	struct msm_pinctrl_priv *priv = dev_get_priv(dev);
+	struct msm_pin_data *pin_data = &priv->data->pin_data;
+	u32 mask;
 
 	if (msm_pinctrl_is_reserved(dev, pin_selector))
 		return -EPERM;
@@ -216,14 +232,28 @@ static int msm_pinconf_set(struct udevice *dev, unsigned int pin_selector,
 			     TLMM_GPIO_PULL_MASK);
 		break;
 	case PIN_CONFIG_BIAS_PULL_UP:
+		argument = argument ? 3 : argument; // Set both bits for pull up!
+		mask = TLMM_GPIO_PULL_MASK;
+
+		/* Some SoCs have an additional bit to pull up i2c capable pins, ensure we set it too. */
+		if (pin_data->i2c_pull && argument) {
+			argument |= BIT(pin_data->i2c_pull);
+			mask |= BIT(pin_data->i2c_pull);
+		}
 		clrsetbits_le32(priv->base + GPIO_CONFIG_REG(priv, pin_selector),
-				TLMM_GPIO_PULL_MASK, argument);
+				mask, argument);
 		break;
 	case PIN_CONFIG_OUTPUT:
 		writel(argument << GPIO_OUT_SHIFT,
 		       priv->base + GPIO_IN_OUT_REG(priv, pin_selector));
 		setbits_le32(priv->base + GPIO_CONFIG_REG(priv, pin_selector),
 			     TLMM_GPIO_OE_MASK);
+		break;
+	case PIN_CONFIG_OUTPUT_ENABLE:
+		// FIXME: we should read the pins current pull direction and set it to avoid
+		// glitches
+		clrsetbits_le32(priv->base + GPIO_CONFIG_REG(priv, pin_selector),
+				TLMM_GPIO_OE_MASK, argument ? TLMM_GPIO_OE_MASK : 0);
 		break;
 	default:
 		return 0;

@@ -42,7 +42,7 @@ static int sam9x60_sckc_of_xlate(struct clk *clk,
 	return 0;
 }
 
-static const struct clk_ops sam9x60_sckc_ops = {
+static const struct clk_ops_uboot sam9x60_sckc_ops = {
 	.of_xlate = sam9x60_sckc_of_xlate,
 	.get_rate = clk_generic_get_rate,
 };
@@ -64,7 +64,7 @@ static int sam9x60_td_slck_set_parent(struct clk *clk, struct clk *parent)
 	return 0;
 }
 
-static const struct clk_ops sam9x60_td_slck_ops = {
+static const struct clk_ops_uboot sam9x60_td_slck_ops = {
 	.get_rate = clk_generic_get_rate,
 	.set_parent = sam9x60_td_slck_set_parent,
 };

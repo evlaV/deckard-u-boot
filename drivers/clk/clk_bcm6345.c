@@ -42,7 +42,7 @@ static int bcm6345_clk_disable(struct clk *clk)
 	return 0;
 }
 
-static struct clk_ops bcm6345_clk_ops = {
+static struct clk_ops_uboot bcm6345_clk_ops = {
 	.disable = bcm6345_clk_disable,
 	.enable = bcm6345_clk_enable,
 };

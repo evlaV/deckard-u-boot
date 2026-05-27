@@ -146,7 +146,7 @@ ulong sandbox_clk_test_round_rate(struct udevice *dev, int id, ulong rate);
  * @id:		The test device's clock ID to configure.
  * @return:	The new rate of the clock.
  */
-ulong sandbox_clk_test_set_rate(struct udevice *dev, int id, ulong rate);
+long sandbox_clk_test_set_rate(struct udevice *dev, int id, ulong rate);
 /**
  * sandbox_clk_test_enable - Ask the sandbox clock test device to enable a
  * clock.

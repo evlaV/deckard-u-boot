@@ -708,7 +708,7 @@ static ulong hsdk_cgu_get_rate(struct clk *sclk)
 	return clk->map[sclk->id].get_rate(sclk);
 }
 
-static ulong hsdk_cgu_set_rate(struct clk *sclk, ulong rate)
+static long hsdk_cgu_set_rate(struct clk *sclk, ulong rate)
 {
 	struct hsdk_cgu_clk *clk = dev_get_priv(sclk->dev);
 
@@ -734,7 +734,7 @@ static int hsdk_cgu_disable(struct clk *sclk)
 	return -EINVAL;
 }
 
-static const struct clk_ops hsdk_cgu_ops = {
+static const struct clk_ops_uboot hsdk_cgu_ops = {
 	.set_rate = hsdk_cgu_set_rate,
 	.get_rate = hsdk_cgu_get_rate,
 	.disable = hsdk_cgu_disable,

@@ -573,7 +573,7 @@ static uint32_t ast2600_configure_ddr(struct ast2600_scu *scu, ulong rate)
 	return ast2600_get_pll_rate(scu, ASPEED_CLK_MPLL);
 }
 
-static ulong ast2600_clk_set_rate(struct clk *clk, ulong rate)
+static long ast2600_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct ast2600_clk_priv *priv = dev_get_priv(clk->dev);
 	ulong new_rate;
@@ -1161,7 +1161,7 @@ static void ast2600_clk_dump(struct udevice *dev)
 }
 #endif
 
-static const struct clk_ops ast2600_clk_ops = {
+static const struct clk_ops_uboot ast2600_clk_ops = {
 	.get_rate = ast2600_clk_get_rate,
 	.set_rate = ast2600_clk_set_rate,
 	.enable = ast2600_clk_enable,

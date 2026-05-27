@@ -184,7 +184,7 @@ int mpfs_clk_register_periphs(struct udevice *dev, struct regmap *regmap)
 	return 0;
 }
 
-const struct clk_ops mpfs_periph_clk_ops = {
+const struct clk_ops_uboot mpfs_periph_clk_ops = {
 	.enable = mpfs_periph_clk_enable,
 	.disable = mpfs_periph_clk_disable,
 	.get_rate = mpfs_periph_clk_recalc_rate,

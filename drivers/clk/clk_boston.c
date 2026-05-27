@@ -54,7 +54,7 @@ static ulong clk_boston_get_rate(struct clk *clk)
 	return (in_rate * mul * 1000000) / div;
 }
 
-const struct clk_ops clk_boston_ops = {
+const struct clk_ops_uboot clk_boston_ops = {
 	.get_rate = clk_boston_get_rate,
 };
 

@@ -300,6 +300,8 @@ static int dm_test_restore(struct device_node *of_root)
 	return 0;
 }
 
+void clk_ccf_reset(void);
+
 /**
  * test_pre_run() - Handle any preparation needed to run a test
  *
@@ -349,6 +351,10 @@ static int test_pre_run(struct unit_test_state *uts, struct unit_test *test)
 	 * UTF_DM and non-UTF_DM tests to coexist happily.
 	 */
 	usb_kbd_remove_for_test();
+
+#if CONFIG_IS_ENABLED(CLK_CCF_FULL)
+		clk_ccf_reset();
+#endif
 
 	if (test->flags & UTF_DM)
 		ut_assertok(dm_test_pre_run(uts));

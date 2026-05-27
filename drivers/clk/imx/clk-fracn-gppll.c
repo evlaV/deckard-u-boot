@@ -225,7 +225,7 @@ static int clk_fracn_gppll_wait_lock(struct clk_fracn_gppll *pll)
 				  val & LOCK_STATUS, LOCK_TIMEOUT_US);
 }
 
-static ulong clk_fracn_gppll_set_rate(struct clk *clk, unsigned long drate)
+static long clk_fracn_gppll_set_rate(struct clk *clk, unsigned long drate)
 {
 	struct clk_fracn_gppll *pll = to_clk_fracn_gppll(clk);
 	const struct imx_fracn_gppll_rate_table *rate;
@@ -325,7 +325,7 @@ static int clk_fracn_gppll_unprepare(struct clk *clk)
 	return 0;
 }
 
-static const struct clk_ops clk_fracn_gppll_ops = {
+static const struct clk_ops_uboot clk_fracn_gppll_ops = {
 	.enable		= clk_fracn_gppll_prepare,
 	.disable	= clk_fracn_gppll_unprepare,
 	.get_rate	= clk_fracn_gppll_recalc_rate,

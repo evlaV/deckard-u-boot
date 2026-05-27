@@ -171,7 +171,7 @@ static ulong cdce9xx_clk_get_rate(struct clk *clk)
 	return parent_rate / pdiv;
 }
 
-static ulong cdce9xx_clk_set_rate(struct clk *clk, ulong rate)
+static long cdce9xx_clk_set_rate(struct clk *clk, ulong rate)
 {
 	u32 parent_rate;
 	int pdiv;
@@ -232,7 +232,7 @@ static const struct udevice_id cdce9xx_clk_of_match[] = {
 	{ /* sentinel */ },
 };
 
-static const struct clk_ops cdce9xx_clk_ops = {
+static const struct clk_ops_uboot cdce9xx_clk_ops = {
 	.request = cdce9xx_clk_request,
 	.get_rate = cdce9xx_clk_get_rate,
 	.set_rate = cdce9xx_clk_set_rate,

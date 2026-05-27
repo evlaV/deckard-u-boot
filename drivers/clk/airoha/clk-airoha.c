@@ -400,7 +400,7 @@ err:
 	return -EINVAL;
 }
 
-static ulong airoha_clk_set_rate(struct clk *clk, ulong rate)
+static long airoha_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct airoha_clk_priv *priv = dev_get_priv(clk->dev);
 	struct airoha_clk_soc_data *data = priv->data;
@@ -497,7 +497,7 @@ apply:
 	return rate;
 }
 
-const struct clk_ops airoha_clk_ops = {
+const struct clk_ops_uboot airoha_clk_ops = {
 	.enable = airoha_clk_enable,
 	.disable = airoha_clk_disable,
 	.get_rate = airoha_clk_get_rate,

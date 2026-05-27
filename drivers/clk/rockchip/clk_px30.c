@@ -1126,7 +1126,7 @@ static ulong px30_clk_get_pll_rate(struct px30_clk_priv *priv,
 	return rkclk_pll_get_rate(&cru->pll[pll_id], &cru->mode, pll_id);
 }
 
-static ulong px30_clk_set_pll_rate(struct px30_clk_priv *priv,
+static long px30_clk_set_pll_rate(struct px30_clk_priv *priv,
 				   enum px30_pll_id pll_id, ulong hz)
 {
 	struct px30_cru *cru = priv->cru;
@@ -1271,7 +1271,7 @@ static ulong px30_clk_get_rate(struct clk *clk)
 	return rate;
 }
 
-static ulong px30_clk_set_rate(struct clk *clk, ulong rate)
+static long px30_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct px30_clk_priv *priv = dev_get_priv(clk->dev);
 	ulong ret = 0;
@@ -1422,7 +1422,7 @@ static int px30_clk_enable(struct clk *clk)
 	return -ENOENT;
 }
 
-static struct clk_ops px30_clk_ops = {
+static struct clk_ops_uboot px30_clk_ops = {
 	.get_rate = px30_clk_get_rate,
 	.set_rate = px30_clk_set_rate,
 #if CONFIG_IS_ENABLED(OF_REAL)
@@ -1561,7 +1561,7 @@ static ulong px30_pmuclk_get_gpll_rate(struct px30_pmuclk_priv *priv)
 	return rkclk_pll_get_rate(&pmucru->pll, &pmucru->pmu_mode, GPLL);
 }
 
-static ulong px30_pmuclk_set_gpll_rate(struct px30_pmuclk_priv *priv, ulong hz)
+static long px30_pmuclk_set_gpll_rate(struct px30_pmuclk_priv *priv, ulong hz)
 {
 	struct px30_pmucru *pmucru = priv->pmucru;
 	ulong pclk_pmu_rate;
@@ -1710,7 +1710,7 @@ static ulong px30_pmuclk_get_rate(struct clk *clk)
 	return rate;
 }
 
-static ulong px30_pmuclk_set_rate(struct clk *clk, ulong rate)
+static long px30_pmuclk_set_rate(struct clk *clk, ulong rate)
 {
 	struct px30_pmuclk_priv *priv = dev_get_priv(clk->dev);
 	ulong ret = 0;
@@ -1736,7 +1736,7 @@ static ulong px30_pmuclk_set_rate(struct clk *clk, ulong rate)
 	return ret;
 }
 
-static struct clk_ops px30_pmuclk_ops = {
+static struct clk_ops_uboot px30_pmuclk_ops = {
 	.get_rate = px30_pmuclk_get_rate,
 	.set_rate = px30_pmuclk_set_rate,
 };

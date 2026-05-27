@@ -153,7 +153,7 @@ static ulong at91_slow_clk_get_rate(struct clk *clk)
 	return CFG_SYS_AT91_SLOW_CLOCK;
 }
 
-static struct clk_ops at91_slow_clk_ops = {
+static struct clk_ops_uboot at91_slow_clk_ops = {
 	.enable = at91_slow_clk_enable,
 	.get_rate = at91_slow_clk_get_rate,
 };
@@ -176,7 +176,7 @@ static ulong at91_master_clk_get_rate(struct clk *clk)
 	return gd->arch.mck_rate_hz;
 }
 
-static struct clk_ops at91_master_clk_ops = {
+static struct clk_ops_uboot at91_master_clk_ops = {
 	.get_rate = at91_master_clk_get_rate,
 };
 
@@ -210,7 +210,7 @@ static ulong main_osc_clk_get_rate(struct clk *clk)
 	return gd->arch.main_clk_rate_hz;
 }
 
-static struct clk_ops main_osc_clk_ops = {
+static struct clk_ops_uboot main_osc_clk_ops = {
 	.enable = main_osc_clk_enable,
 	.get_rate = main_osc_clk_get_rate,
 };
@@ -251,7 +251,7 @@ static ulong plla_clk_get_rate(struct clk *clk)
 	return gd->arch.plla_rate_hz;
 }
 
-static struct clk_ops plla_clk_ops = {
+static struct clk_ops_uboot plla_clk_ops = {
 	.enable = plla_clk_enable,
 	.get_rate = plla_clk_get_rate,
 };
@@ -300,7 +300,7 @@ static ulong at91_plladiv_clk_get_rate(struct clk *clk)
 	return clk_rate;
 }
 
-static ulong at91_plladiv_clk_set_rate(struct clk *clk, ulong rate)
+static long at91_plladiv_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct pmc_plat *plat = dev_get_plat(clk->dev);
 	struct at91_pmc *pmc = plat->reg_base;
@@ -324,7 +324,7 @@ static ulong at91_plladiv_clk_set_rate(struct clk *clk, ulong rate)
 	return 0;
 }
 
-static struct clk_ops at91_plladiv_clk_ops = {
+static struct clk_ops_uboot at91_plladiv_clk_ops = {
 	.enable = at91_plladiv_clk_enable,
 	.get_rate = at91_plladiv_clk_get_rate,
 	.set_rate = at91_plladiv_clk_set_rate,
@@ -392,7 +392,7 @@ static ulong system_clk_get_rate(struct clk *clk)
 	return clk_get_rate(&clk_dev);
 }
 
-static ulong system_clk_set_rate(struct clk *clk, ulong rate)
+static long system_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct clk clk_dev;
 	int ret;
@@ -431,7 +431,7 @@ static int system_clk_enable(struct clk *clk)
 	return 0;
 }
 
-static struct clk_ops system_clk_ops = {
+static struct clk_ops_uboot system_clk_ops = {
 	.of_xlate = at91_clk_of_xlate,
 	.get_rate = system_clk_get_rate,
 	.set_rate = system_clk_set_rate,
@@ -527,7 +527,7 @@ static ulong periph_get_rate(struct clk *clk)
 	return clk_get_rate(&clk_dev);
 }
 
-static struct clk_ops periph_clk_ops = {
+static struct clk_ops_uboot periph_clk_ops = {
 	.of_xlate = at91_clk_of_xlate,
 	.enable = periph_clk_enable,
 	.get_rate = periph_get_rate,
@@ -633,7 +633,7 @@ static ulong utmi_clk_get_rate(struct clk *clk)
 	return UTMI_RATE;
 }
 
-static struct clk_ops utmi_clk_ops = {
+static struct clk_ops_uboot utmi_clk_ops = {
 	.enable = utmi_clk_enable,
 	.get_rate = utmi_clk_get_rate,
 };
@@ -694,7 +694,7 @@ static ulong sama5d4_h32mx_clk_get_rate(struct clk *clk)
 	return rate;
 }
 
-static struct clk_ops sama5d4_h32mx_clk_ops = {
+static struct clk_ops_uboot sama5d4_h32mx_clk_ops = {
 	.get_rate = sama5d4_h32mx_clk_get_rate,
 };
 
@@ -775,7 +775,7 @@ static ulong generic_clk_get_rate(struct clk *clk)
 	return clk_get_rate(&parent) / (gckdiv + 1);
 }
 
-static ulong generic_clk_set_rate(struct clk *clk, ulong rate)
+static long generic_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct pmc_plat *plat = dev_get_plat(clk->dev);
 	struct at91_pmc *pmc = plat->reg_base;
@@ -842,7 +842,7 @@ static ulong generic_clk_set_rate(struct clk *clk, ulong rate)
 	return 0;
 }
 
-static struct clk_ops generic_clk_ops = {
+static struct clk_ops_uboot generic_clk_ops = {
 	.of_xlate = at91_clk_of_xlate,
 	.get_rate = generic_clk_get_rate,
 	.set_rate = generic_clk_set_rate,
@@ -909,7 +909,7 @@ static ulong at91_usb_clk_get_rate(struct clk *clk)
 	return clk_get_rate(&source) / (usbdiv + 1);
 }
 
-static ulong at91_usb_clk_set_rate(struct clk *clk, ulong rate)
+static long at91_usb_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct pmc_plat *plat = dev_get_plat(clk->dev);
 	struct at91_pmc *pmc = plat->reg_base;
@@ -967,7 +967,7 @@ static ulong at91_usb_clk_set_rate(struct clk *clk, ulong rate)
 	return 0;
 }
 
-static struct clk_ops at91_usb_clk_ops = {
+static struct clk_ops_uboot at91_usb_clk_ops = {
 	.get_rate = at91_usb_clk_get_rate,
 	.set_rate = at91_usb_clk_set_rate,
 };

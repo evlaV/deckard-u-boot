@@ -15,7 +15,7 @@
 struct ofnode_phandle_args;
 
 /**
- * struct clk_ops - The functions that a clock driver must implement.
+ * struct clk_ops_uboot - The functions that a clock driver must implement.
  * @of_xlate: Translate a client's device-tree (OF) clock specifier.
  * @request: Request a translated clock.
  * @round_rate: Adjust a rate to the exact rate a clock can provide.
@@ -28,13 +28,13 @@ struct ofnode_phandle_args;
  *
  * The individual methods are described more fully below.
  */
-struct clk_ops {
+struct clk_ops_uboot {
 	int (*of_xlate)(struct clk *clock,
 			struct ofnode_phandle_args *args);
 	int (*request)(struct clk *clock);
 	ulong (*round_rate)(struct clk *clk, ulong rate);
 	ulong (*get_rate)(struct clk *clk);
-	ulong (*set_rate)(struct clk *clk, ulong rate);
+	long (*set_rate)(struct clk *clk, ulong rate);
 	int (*set_parent)(struct clk *clk, struct clk *parent);
 	int (*enable)(struct clk *clk);
 	int (*disable)(struct clk *clk);

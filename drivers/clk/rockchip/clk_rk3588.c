@@ -1328,7 +1328,7 @@ static ulong rk3588_uart_get_rate(struct rk3588_clk_priv *priv, ulong clk_id)
 	}
 }
 
-static ulong rk3588_uart_set_rate(struct rk3588_clk_priv *priv,
+static long rk3588_uart_set_rate(struct rk3588_clk_priv *priv,
 				  ulong clk_id, ulong rate)
 {
 	struct rk3588_cru *cru = priv->cru;
@@ -1437,7 +1437,7 @@ static ulong rk3588_pciephy_get_rate(struct rk3588_clk_priv *priv, ulong clk_id)
 		return OSC_HZ;
 }
 
-static ulong rk3588_pciephy_set_rate(struct rk3588_clk_priv *priv,
+static long rk3588_pciephy_set_rate(struct rk3588_clk_priv *priv,
 				     ulong clk_id, ulong rate)
 {
 	struct rk3588_cru *cru = priv->cru;
@@ -1648,7 +1648,7 @@ static ulong rk3588_clk_get_rate(struct clk *clk)
 	return rate;
 };
 
-static ulong rk3588_clk_set_rate(struct clk *clk, ulong rate)
+static long rk3588_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct rk3588_clk_priv *priv = dev_get_priv(clk->dev);
 	ulong ret = 0;
@@ -1910,7 +1910,7 @@ static int rk3588_clk_set_parent(struct clk *clk, struct clk *parent)
 }
 #endif
 
-static struct clk_ops rk3588_clk_ops = {
+static struct clk_ops_uboot rk3588_clk_ops = {
 	.get_rate = rk3588_clk_get_rate,
 	.set_rate = rk3588_clk_set_rate,
 #if (CONFIG_IS_ENABLED(OF_CONTROL)) || (!CONFIG_IS_ENABLED(OF_PLATDATA))
@@ -2085,7 +2085,7 @@ static ulong rk3588_scru_clk_get_rate(struct clk *clk)
 	}
 }
 
-static ulong rk3588_scru_clk_set_rate(struct clk *clk, ulong rate)
+static long rk3588_scru_clk_set_rate(struct clk *clk, ulong rate)
 {
 	u32 div, sel;
 
@@ -2138,7 +2138,7 @@ static int rk3588_scru_clk_probe(struct udevice *dev)
 	return 0;
 }
 
-static const struct clk_ops rk3588_scru_clk_ops = {
+static const struct clk_ops_uboot rk3588_scru_clk_ops = {
 	.get_rate = rk3588_scru_clk_get_rate,
 	.set_rate = rk3588_scru_clk_set_rate,
 };

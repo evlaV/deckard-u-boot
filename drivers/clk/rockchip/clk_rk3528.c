@@ -245,7 +245,7 @@ static ulong rk3528_ppll_matrix_get_rate(struct rk3528_clk_priv *priv,
 	return DIV_TO_RATE(priv->ppll_hz, div);
 }
 
-static ulong rk3528_ppll_matrix_set_rate(struct rk3528_clk_priv *priv,
+static long rk3528_ppll_matrix_set_rate(struct rk3528_clk_priv *priv,
 					 ulong clk_id, ulong rate)
 {
 	struct rk3528_cru *cru = priv->cru;
@@ -398,7 +398,7 @@ static ulong rk3528_cgpll_matrix_get_rate(struct rk3528_clk_priv *priv,
 	return is_halfdiv ? DIV_TO_RATE(prate * 2, (3 + 2 * div) - 1) : DIV_TO_RATE(prate, div);
 }
 
-static ulong rk3528_cgpll_matrix_set_rate(struct rk3528_clk_priv *priv,
+static long rk3528_cgpll_matrix_set_rate(struct rk3528_clk_priv *priv,
 					  ulong clk_id, ulong rate)
 {
 	struct rk3528_cru *cru = priv->cru;
@@ -1198,7 +1198,7 @@ static ulong rk3528_uart_get_rate(struct rk3528_clk_priv *priv, ulong clk_id)
 	return rate;
 }
 
-static ulong rk3528_uart_set_rate(struct rk3528_clk_priv *priv,
+static long rk3528_uart_set_rate(struct rk3528_clk_priv *priv,
 				  ulong clk_id, ulong rate)
 {
 	struct rk3528_cru *cru = priv->cru;
@@ -1420,7 +1420,7 @@ static ulong rk3528_clk_get_rate(struct clk *clk)
 	return rate;
 };
 
-static ulong rk3528_clk_set_rate(struct clk *clk, ulong rate)
+static long rk3528_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct rk3528_clk_priv *priv = dev_get_priv(clk->dev);
 	ulong ret = 0;
@@ -1544,7 +1544,7 @@ static ulong rk3528_clk_set_rate(struct clk *clk, ulong rate)
 	return ret;
 };
 
-static struct clk_ops rk3528_clk_ops = {
+static struct clk_ops_uboot rk3528_clk_ops = {
 	.get_rate = rk3528_clk_get_rate,
 	.set_rate = rk3528_clk_set_rate,
 };

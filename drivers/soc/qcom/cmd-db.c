@@ -7,6 +7,7 @@
 #define pr_fmt(fmt) "cmd-db: " fmt
 
 #include <asm/system.h>
+#include <asm/armv8/mmu.h>
 #include <dm.h>
 #include <dm/ofnode.h>
 #include <dm/device_compat.h>
@@ -14,6 +15,7 @@
 #include <linux/types.h>
 #include <linux/ioport.h>
 #include <linux/byteorder/generic.h>
+#include <linux/sizes.h>
 
 #include <soc/qcom/cmd-db.h>
 
@@ -248,6 +250,12 @@ static int cmd_db_bind(struct udevice *dev)
 	}
 
 	/* On SM8550/SM8650 and newer SoCs cmd-db might not be mapped */
+	if (current_el() == 2) {
+		// Explicitly unmap the pages before/after so we don't get hit by a zealous XPU
+		mmu_change_region_attr((phys_addr_t)base - SZ_4K, SZ_4K, PTE_TYPE_FAULT);
+		mmu_change_region_attr((phys_addr_t)base + size, SZ_4K, PTE_TYPE_FAULT);
+	}
+
 	mmu_map_region((phys_addr_t)base, (phys_size_t)size, false);
 
 	cmd_db_header = base;

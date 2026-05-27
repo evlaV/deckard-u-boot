@@ -68,7 +68,7 @@ static ulong sam9x60_usb_clk_get_rate(struct clk *clk)
 	return parent_rate / (usbdiv + 1);
 }
 
-static ulong sam9x60_usb_clk_set_rate(struct clk *clk, ulong rate)
+static long sam9x60_usb_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct sam9x60_usb *usb = to_sam9x60_usb(clk);
 	ulong parent_rate = clk_get_parent_rate(clk);
@@ -89,7 +89,7 @@ static ulong sam9x60_usb_clk_set_rate(struct clk *clk, ulong rate)
 	return parent_rate / usbdiv;
 }
 
-static const struct clk_ops sam9x60_usb_ops = {
+static const struct clk_ops_uboot sam9x60_usb_ops = {
 	.set_parent = sam9x60_usb_clk_set_parent,
 	.set_rate = sam9x60_usb_clk_set_rate,
 	.get_rate = sam9x60_usb_clk_get_rate,

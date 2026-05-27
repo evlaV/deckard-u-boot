@@ -12,7 +12,7 @@ static int clk_sun6i_rtc_enable(struct clk *clk)
 	return 0;
 }
 
-static const struct clk_ops clk_sun6i_rtc_ops = {
+static const struct clk_ops_uboot clk_sun6i_rtc_ops = {
 	.enable = clk_sun6i_rtc_enable,
 };
 

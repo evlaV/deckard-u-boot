@@ -746,7 +746,7 @@ static ulong versal_clk_get_rate(struct clk *clk)
 	return clk_rate;
 }
 
-static ulong versal_clk_set_rate(struct clk *clk, ulong rate)
+static long versal_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct versal_clk_priv *priv = dev_get_priv(clk->dev);
 	u32 id = clk_get_id(clk);
@@ -803,7 +803,7 @@ static int versal_clk_enable(struct clk *clk)
 	return 0;
 }
 
-static struct clk_ops versal_clk_ops = {
+static struct clk_ops_uboot versal_clk_ops = {
 	.set_rate = versal_clk_set_rate,
 	.get_rate = versal_clk_get_rate,
 	.enable = versal_clk_enable,

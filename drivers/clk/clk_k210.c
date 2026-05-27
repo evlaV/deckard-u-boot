@@ -863,7 +863,7 @@ again:
 	return 0;
 }
 
-static ulong k210_pll_set_rate(struct k210_clk_priv *priv, int id, ulong rate,
+static long k210_pll_set_rate(struct k210_clk_priv *priv, int id, ulong rate,
 			       ulong rate_in)
 {
 	int err;
@@ -902,7 +902,7 @@ static ulong k210_pll_set_rate(struct k210_clk_priv *priv, int id, ulong rate,
 	return k210_pll_get_rate(priv, id, rate);
 }
 #else
-static ulong k210_pll_set_rate(struct k210_clk_priv *priv, int id, ulong rate,
+static long k210_pll_set_rate(struct k210_clk_priv *priv, int id, ulong rate,
 			       ulong rate_in)
 {
 	return -ENOSYS;
@@ -1109,7 +1109,7 @@ static int k210_clk_set_parent(struct clk *clk, struct clk *parent)
 				      parent->id);
 }
 
-static ulong k210_clk_set_rate(struct clk *clk, unsigned long rate)
+static long k210_clk_set_rate(struct clk *clk, unsigned long rate)
 {
 	int parent, ret, err;
 	ulong rate_in, val;
@@ -1290,7 +1290,7 @@ static void k210_clk_dump(struct udevice *dev)
 }
 #endif
 
-static const struct clk_ops k210_clk_ops = {
+static const struct clk_ops_uboot k210_clk_ops = {
 	.request = k210_clk_request,
 	.set_rate = k210_clk_set_rate,
 	.get_rate = k210_clk_get_rate,

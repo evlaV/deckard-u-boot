@@ -384,7 +384,7 @@ static ulong rk3568_pmuclk_get_rate(struct clk *clk)
 	return rate;
 }
 
-static ulong rk3568_pmuclk_set_rate(struct clk *clk, ulong rate)
+static long rk3568_pmuclk_set_rate(struct clk *clk, ulong rate)
 {
 	struct rk3568_pmuclk_priv *priv = dev_get_priv(clk->dev);
 	ulong ret = 0;
@@ -457,7 +457,7 @@ static int rk3568_pmuclk_set_parent(struct clk *clk, struct clk *parent)
 	}
 }
 
-static struct clk_ops rk3568_pmuclk_ops = {
+static struct clk_ops_uboot rk3568_pmuclk_ops = {
 	.get_rate = rk3568_pmuclk_get_rate,
 	.set_rate = rk3568_pmuclk_set_rate,
 	.set_parent = rk3568_pmuclk_set_parent,
@@ -646,7 +646,7 @@ static ulong rk3568_cpll_div_get_rate(struct rk3568_clk_priv *priv,
 	return DIV_TO_RATE(priv->cpll_hz, div);
 }
 
-static ulong rk3568_cpll_div_set_rate(struct rk3568_clk_priv *priv,
+static long rk3568_cpll_div_set_rate(struct rk3568_clk_priv *priv,
 				      ulong clk_id, ulong rate)
 {
 	struct rk3568_cru *cru = priv->cru;
@@ -1333,7 +1333,7 @@ static ulong rk3568_crypto_get_rate(struct rk3568_clk_priv *priv, ulong clk_id)
 	}
 }
 
-static ulong rk3568_crypto_set_rate(struct rk3568_clk_priv *priv,
+static long rk3568_crypto_set_rate(struct rk3568_clk_priv *priv,
 				    ulong clk_id, ulong rate)
 {
 	struct rk3568_cru *cru = priv->cru;
@@ -2240,7 +2240,7 @@ static ulong rk3568_uart_get_rate(struct rk3568_clk_priv *priv, ulong clk_id)
 	}
 }
 
-static ulong rk3568_uart_set_rate(struct rk3568_clk_priv *priv,
+static long rk3568_uart_set_rate(struct rk3568_clk_priv *priv,
 				  ulong clk_id, ulong rate)
 {
 	struct rk3568_cru *cru = priv->cru;
@@ -2491,7 +2491,7 @@ static ulong rk3568_clk_get_rate(struct clk *clk)
 	return rate;
 };
 
-static ulong rk3568_clk_set_rate(struct clk *clk, ulong rate)
+static long rk3568_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct rk3568_clk_priv *priv = dev_get_priv(clk->dev);
 	ulong ret = 0;
@@ -2854,7 +2854,7 @@ static int rk3568_clk_set_parent(struct clk *clk, struct clk *parent)
 }
 #endif
 
-static struct clk_ops rk3568_clk_ops = {
+static struct clk_ops_uboot rk3568_clk_ops = {
 	.get_rate = rk3568_clk_get_rate,
 	.set_rate = rk3568_clk_set_rate,
 #if (CONFIG_IS_ENABLED(OF_CONTROL)) || (!CONFIG_IS_ENABLED(OF_PLATDATA))

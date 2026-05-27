@@ -84,7 +84,7 @@ static int clk_programmable_set_parent(struct clk *clk, struct clk *parent)
 	return 0;
 }
 
-static ulong clk_programmable_set_rate(struct clk *clk, ulong rate)
+static long clk_programmable_set_rate(struct clk *clk, ulong rate)
 {
 	struct clk_programmable *prog = to_clk_programmable(clk);
 	const struct clk_programmable_layout *layout = prog->layout;
@@ -120,7 +120,7 @@ static ulong clk_programmable_set_rate(struct clk *clk, ulong rate)
 	return parent_rate >> shift;
 }
 
-static const struct clk_ops programmable_ops = {
+static const struct clk_ops_uboot programmable_ops = {
 	.get_rate = clk_programmable_get_rate,
 	.set_parent = clk_programmable_set_parent,
 	.set_rate = clk_programmable_set_rate,

@@ -56,6 +56,10 @@ struct udevice;
  * @data: An optional data field for scenarios where a single integer ID is not
  *	  sufficient. If used, it can be populated through an .of_xlate op and
  *	  processed during the various clock ops.
+ * @clks_node: List entry used to reference this clk consumer from the clk_core
+ *	  it represents. Only used with CCF_FULL
+ * @core: Pointer to the underlying clk_core for this clk handle, used by CCF_FULL
+ *	  to access clk_ops and manage clk state.
  *
  * Clients provide storage for clock handles. The content of the structure is
  * managed solely by the clock API and clock drivers. A clock struct is
@@ -80,6 +84,10 @@ struct clk {
 	 */
 	unsigned long id;
 	unsigned long data;
+#if CONFIG_IS_ENABLED(CLK_CCF_FULL)
+	struct hlist_node clks_node;
+	struct clk_core *core;
+#endif
 };
 
 /**
@@ -469,7 +477,7 @@ struct clk *clk_get_parent(struct clk *clk);
  *
  * Return: clock rate in Hz, or -ve error code.
  */
-ulong clk_get_parent_rate(struct clk *clk);
+long clk_get_parent_rate(struct clk *clk);
 
 /**
  * clk_round_rate() - Adjust a rate to the exact rate a clock can provide
@@ -502,7 +510,7 @@ ulong clk_round_rate(struct clk *clk, ulong rate);
  *
  * Return: new rate, or -ve error code.
  */
-ulong clk_set_rate(struct clk *clk, ulong rate);
+long clk_set_rate(struct clk *clk, ulong rate);
 
 /**
  * clk_set_parent() - Set current clock parent.
@@ -514,6 +522,33 @@ ulong clk_set_rate(struct clk *clk, ulong rate);
  * Return: new rate, or -ve error code.
  */
 int clk_set_parent(struct clk *clk, struct clk *parent);
+
+/**
+ * clk_prepare - prepare a clock source
+ * @clk: clock source
+ *
+ * This prepares the clock source for use.
+ *
+ * Must not be called from within atomic context.
+ *
+ * U-Boot: this is a no-op unless CCF_FULL is enabled.
+ */
+int clk_prepare(struct clk *clk);
+
+int clk_prepare_bulk(struct clk_bulk *clks);
+
+/**
+ * clk_unprepare - undo preparation of a clock source
+ * @clk: clock source
+ *
+ * This undoes a previously prepared clock.  The caller must balance
+ * the number of prepare and unprepare calls.
+ *
+ * Must not be called from within atomic context.
+ */
+void clk_unprepare(struct clk *clk);
+
+int clk_unprepare_bulk(struct clk_bulk *clks);
 
 /**
  * clk_enable() - Enable (turn on) a clock.
@@ -550,6 +585,47 @@ int clk_disable(struct clk *clk);
  * Return: zero on success, or -ve error code.
  */
 int clk_disable_bulk(struct clk_bulk *bulk);
+
+static inline int clk_prepare_enable(struct clk *clk)
+{
+	int ret;
+
+	ret = clk_prepare(clk);
+	if (!ret)
+		ret = clk_enable(clk);
+
+	return ret;
+}
+
+static inline int clk_disable_unprepare(struct clk *clk)
+{
+	int ret;
+
+	ret = clk_disable(clk);
+	if (!ret)
+		clk_unprepare(clk);
+	return ret;
+}
+
+static inline int clk_prepare_enable_bulk(struct clk_bulk *clks)
+{
+	int ret;
+
+	ret = clk_prepare_bulk(clks);
+	if (!ret)
+		ret = clk_enable_bulk(clks);
+	return ret;
+}
+
+static inline int clk_disable_unprepare_bulk(struct clk_bulk *clks)
+{
+	int ret;
+
+	ret = clk_disable_bulk(clks);
+	if (!ret)
+		ret = clk_unprepare_bulk(clks);
+	return ret;
+}
 
 /**
  * clk_is_match - check if two clk's point to the same hardware clock
@@ -589,6 +665,28 @@ bool clk_dev_binded(struct clk *clk);
  * device tree or in platdata
  */
 ulong clk_get_id(const struct clk *clk);
+
+#if CONFIG_IS_ENABLED(CLK_CCF_FULL)
+struct clk *of_clk_get(ofnode np, int index);
+struct clk *of_clk_get_by_name(ofnode np, const char *name);
+struct clk *of_clk_get_from_provider(struct ofnode_phandle_args *clkspec);
+#else
+static inline struct clk *of_clk_get(ofnode np, int index)
+{
+	return ERR_PTR(-ENOENT);
+}
+
+static inline struct clk *of_clk_get_by_name(ofnode np,
+					     const char *name)
+{
+	return ERR_PTR(-ENOENT);
+}
+
+static inline struct clk *of_clk_get_from_provider(struct ofnode_phandle_args *clkspec)
+{
+	return ERR_PTR(-ENOENT);
+}
+#endif
 
 #else /* CONFIG_IS_ENABLED(CLK) */
 

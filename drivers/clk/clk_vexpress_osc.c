@@ -38,7 +38,7 @@ static ulong vexpress_osc_clk_get_rate(struct clk *clk)
 }
 
 #ifndef CONFIG_XPL_BUILD
-static ulong vexpress_osc_clk_set_rate(struct clk *clk, ulong rate)
+static long vexpress_osc_clk_set_rate(struct clk *clk, ulong rate)
 {
 	int err;
 	u32 buffer[2];
@@ -62,7 +62,7 @@ static ulong vexpress_osc_clk_set_rate(struct clk *clk, ulong rate)
 }
 #endif
 
-static struct clk_ops vexpress_osc_clk_ops = {
+static struct clk_ops_uboot vexpress_osc_clk_ops = {
 	.get_rate = vexpress_osc_clk_get_rate,
 #ifndef CONFIG_XPL_BUILD
 	.set_rate = vexpress_osc_clk_set_rate,

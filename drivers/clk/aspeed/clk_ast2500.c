@@ -468,7 +468,7 @@ static ulong ast2500_enable_sdclk(struct ast2500_scu *scu)
 	return 0;
 }
 
-static ulong ast2500_clk_set_rate(struct clk *clk, ulong rate)
+static long ast2500_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct ast2500_clk_priv *priv = dev_get_priv(clk->dev);
 
@@ -534,7 +534,7 @@ static int ast2500_clk_enable(struct clk *clk)
 	return 0;
 }
 
-static const struct clk_ops ast2500_clk_ops = {
+static const struct clk_ops_uboot ast2500_clk_ops = {
 	.get_rate = ast2500_clk_get_rate,
 	.set_rate = ast2500_clk_set_rate,
 	.enable = ast2500_clk_enable,

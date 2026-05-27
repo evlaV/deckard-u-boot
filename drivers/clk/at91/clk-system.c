@@ -69,7 +69,7 @@ static int clk_system_disable(struct clk *clk)
 	return 0;
 }
 
-static const struct clk_ops system_ops = {
+static const struct clk_ops_uboot system_ops = {
 	.enable = clk_system_enable,
 	.disable = clk_system_disable,
 	.get_rate = clk_generic_get_rate,

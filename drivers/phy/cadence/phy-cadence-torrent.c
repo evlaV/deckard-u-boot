@@ -669,7 +669,7 @@ static int cdns_torrent_derived_refclk_disable(struct clk *clk)
 	return 0;
 }
 
-static const struct clk_ops cdns_torrent_derived_refclk_ops = {
+static const struct clk_ops_uboot cdns_torrent_derived_refclk_ops = {
 	.of_xlate = cdns_torrent_derived_refclk_of_xlate,
 	.enable = cdns_torrent_derived_refclk_enable,
 	.disable = cdns_torrent_derived_refclk_disable,

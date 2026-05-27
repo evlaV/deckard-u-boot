@@ -22,6 +22,7 @@
 #include <soc/qcom/geni-se.h>
 #include <soc/qcom/qup-fw-load.h>
 #include <dm/device_compat.h>
+#include <scsi.h>
 
 struct qup_se_rsc {
 	phys_addr_t base;
@@ -426,6 +427,10 @@ static int find_qupfw_part(struct udevice **blk_dev, struct disk_partition *part
 	struct blk_desc *desc;
 	int ret, partnum;
 
+#if CONFIG_IS_ENABLED(SCSI)
+	scsi_scan(false);
+#endif
+
 	uclass_foreach_dev_probe(UCLASS_BLK, *blk_dev) {
 		if (device_get_uclass_id(*blk_dev) != UCLASS_BLK)
 			continue;
@@ -563,7 +568,7 @@ static int qcom_geni_fw_initialise(void)
 	return 0;
 }
 
-EVENT_SPY_SIMPLE(EVT_LAST_STAGE_INIT, qcom_geni_fw_initialise);
+EVENT_SPY_SIMPLE(EVT_DM_POST_INIT_R, qcom_geni_fw_initialise);
 
 static const struct udevice_id geni_ids[] = {
 	{ .compatible = "qcom,geni-se-qup" },

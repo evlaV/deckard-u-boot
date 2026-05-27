@@ -166,6 +166,6 @@ struct gen3_clk_priv {
 
 int gen3_cpg_bind(struct udevice *parent);
 
-extern const struct clk_ops gen3_clk_ops;
+extern const struct clk_ops_uboot gen3_clk_ops;
 
 #endif

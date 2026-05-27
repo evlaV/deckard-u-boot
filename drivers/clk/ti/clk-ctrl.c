@@ -132,7 +132,7 @@ static int clk_ti_ctrl_of_to_plat(struct udevice *dev)
 	return 0;
 }
 
-static struct clk_ops clk_ti_ctrl_ops = {
+static struct clk_ops_uboot clk_ti_ctrl_ops = {
 	.of_xlate = clk_ti_ctrl_of_xlate,
 	.enable = clk_ti_ctrl_enable,
 	.disable = clk_ti_ctrl_disable,

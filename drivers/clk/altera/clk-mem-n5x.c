@@ -113,7 +113,7 @@ static int socfpga_mem_clk_of_to_plat(struct udevice *dev)
 	return 0;
 }
 
-static struct clk_ops socfpga_mem_clk_ops = {
+static struct clk_ops_uboot socfpga_mem_clk_ops = {
 	.enable		= socfpga_mem_clk_enable
 };
 

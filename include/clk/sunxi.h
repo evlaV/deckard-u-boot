@@ -85,4 +85,12 @@ struct ccu_plat {
 	const struct ccu_desc *desc;
 };
 
+<<<<<<< HEAD
+||||||| constructed fake ancestor
+extern struct clk_ops sunxi_clk_ops;
+
+=======
+extern struct clk_ops_uboot sunxi_clk_ops;
+
+>>>>>>> clk: rename clk_ops to clk_ops_uboot
 #endif /* _CLK_SUNXI_H */

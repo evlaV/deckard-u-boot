@@ -401,7 +401,7 @@ static ulong wiz_div_clk_set_rate(struct clk *clk, ulong rate)
 	return parent_rate >> div;
 }
 
-const struct clk_ops wiz_div_clk_ops = {
+const struct clk_ops_uboot wiz_div_clk_ops = {
 	.get_rate = wiz_div_clk_get_rate,
 	.set_rate = wiz_div_clk_set_rate,
 };
@@ -460,7 +460,7 @@ static int wiz_clk_xlate(struct clk *clk, struct ofnode_phandle_args *args)
 	return 0;
 }
 
-static const struct clk_ops wiz_clk_mux_ops = {
+static const struct clk_ops_uboot wiz_clk_mux_ops = {
 	.set_parent = wiz_clk_mux_set_parent,
 	.of_xlate = wiz_clk_xlate,
 };
@@ -567,7 +567,7 @@ static int wiz_phy_en_refclk_disable(struct clk *clk)
 	return 0;
 }
 
-static const struct clk_ops wiz_clk_ops = {
+static const struct clk_ops_uboot wiz_clk_ops = {
 	.set_parent = wiz_clk_set_parent,
 	.of_xlate = wiz_clk_of_xlate,
 	.enable = wiz_phy_en_refclk_enable,

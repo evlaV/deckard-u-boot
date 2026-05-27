@@ -300,7 +300,7 @@ static ulong jh7110_pllx_recalc_rate(struct clk *clk)
 	return refclk;
 }
 
-static ulong jh7110_pllx_set_rate(struct clk *clk, ulong drate)
+static long jh7110_pllx_set_rate(struct clk *clk, ulong drate)
 {
 	struct clk_jh7110_pllx *pll = to_clk_pllx(dev_get_clk_ptr(clk->dev));
 	const struct starfive_pllx_rate *rate;
@@ -314,7 +314,7 @@ static ulong jh7110_pllx_set_rate(struct clk *clk, ulong drate)
 	return jh7110_pllx_recalc_rate(clk);
 }
 
-static const struct clk_ops jh7110_clk_pllx_ops = {
+static const struct clk_ops_uboot jh7110_clk_pllx_ops = {
 	.set_rate	= jh7110_pllx_set_rate,
 	.get_rate	= jh7110_pllx_recalc_rate,
 };

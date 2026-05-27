@@ -121,14 +121,14 @@ ulong clk_stm32_get_rate_by_index(struct udevice *dev, int index)
 	return 0;
 }
 
-static const struct clk_ops *clk_dev_ops(struct udevice *dev)
+static const struct clk_ops_uboot *clk_dev_ops(struct udevice *dev)
 {
-	return (const struct clk_ops *)dev->driver->ops;
+	return (const struct clk_ops_uboot *)dev->driver->ops;
 }
 
 static int stm32_clk_endisable(struct clk *clk, bool enable)
 {
-	const struct clk_ops *ops;
+	const struct clk_ops_uboot *ops;
 	struct clk *c = NULL;
 
 	if (!clk->id || clk_get_by_id(clk->id, &c))
@@ -153,7 +153,7 @@ static int stm32_clk_disable(struct clk *clk)
 
 static ulong stm32_clk_get_rate(struct clk *clk)
 {
-	const struct clk_ops *ops;
+	const struct clk_ops_uboot *ops;
 	struct clk *c = NULL;
 
 	if (!clk->id || clk_get_by_id(clk->id, &c))
@@ -166,9 +166,9 @@ static ulong stm32_clk_get_rate(struct clk *clk)
 	return ops->get_rate(c);
 }
 
-static ulong stm32_clk_set_rate(struct clk *clk, unsigned long clk_rate)
+static long stm32_clk_set_rate(struct clk *clk, unsigned long clk_rate)
 {
-	const struct clk_ops *ops;
+	const struct clk_ops_uboot *ops;
 	struct clk *c = NULL;
 
 	if (!clk->id || clk_get_by_id(clk->id, &c))
@@ -181,7 +181,7 @@ static ulong stm32_clk_set_rate(struct clk *clk, unsigned long clk_rate)
 	return ops->set_rate(c, clk_rate);
 }
 
-const struct clk_ops stm32_clk_ops = {
+const struct clk_ops_uboot stm32_clk_ops = {
 	.enable = stm32_clk_enable,
 	.disable = stm32_clk_disable,
 	.get_rate = stm32_clk_get_rate,
@@ -239,7 +239,7 @@ static int clk_stm32_gate_disable(struct clk *clk)
 	return 0;
 }
 
-static const struct clk_ops clk_stm32_gate_ops = {
+static const struct clk_ops_uboot clk_stm32_gate_ops = {
 	.enable = clk_stm32_gate_enable,
 	.disable = clk_stm32_gate_disable,
 	.get_rate = clk_generic_get_rate,
@@ -304,11 +304,11 @@ clk_stm32_register_composite(struct udevice *dev,
 	struct clk_stm32_gate *gate = NULL;
 	struct clk_divider *div = NULL;
 	struct clk *mux_clk = NULL;
-	const struct clk_ops *mux_ops = NULL;
+	const struct clk_ops_uboot *mux_ops = NULL;
 	struct clk *gate_clk = NULL;
-	const struct clk_ops *gate_ops = NULL;
+	const struct clk_ops_uboot *gate_ops = NULL;
 	struct clk *div_clk = NULL;
-	const struct clk_ops *div_ops = NULL;
+	const struct clk_ops_uboot *div_ops = NULL;
 	struct stm32mp_rcc_priv *priv = dev_get_priv(dev);
 	const struct clk_stm32_clock_data *data = priv->clock_data;
 	int i, ret;

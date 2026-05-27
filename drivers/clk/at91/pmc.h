@@ -98,7 +98,7 @@ extern const struct clk_programmable_layout at91rm9200_programmable_layout;
 extern const struct clk_programmable_layout at91sam9g45_programmable_layout;
 extern const struct clk_programmable_layout at91sam9x5_programmable_layout;
 
-extern const struct clk_ops at91_clk_ops;
+extern const struct clk_ops_uboot at91_clk_ops;
 
 struct clk *at91_clk_main_rc(void __iomem *reg, const char *name,
 			const char *parent_name);

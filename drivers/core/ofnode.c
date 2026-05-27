@@ -1070,7 +1070,7 @@ int ofnode_parse_phandle_with_args(ofnode node, const char *list_name,
 						     ofnode_to_offset(node),
 						     list_name, cells_name,
 						     cell_count, index, &args);
-		if (ret)
+		if (ret < 0)
 			return ret;
 		ofnode_from_fdtdec_phandle_args(node, &args, out_args);
 	}
@@ -1103,7 +1103,7 @@ int oftree_parse_phandle_with_args(oftree tree, ofnode node, const char *list_na
 						     ofnode_to_offset(node),
 						     list_name, cells_name,
 						     cell_count, index, &args);
-		if (ret)
+		if (ret < 0)
 			return ret;
 		ofnode_from_fdtdec_phandle_args(node, &args, out_args);
 	}

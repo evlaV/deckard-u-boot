@@ -569,7 +569,7 @@ static ulong rv1108_clk_get_rate(struct clk *clk)
 	}
 }
 
-static ulong rv1108_clk_set_rate(struct clk *clk, ulong rate)
+static long rv1108_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct rv1108_clk_priv *priv = dev_get_priv(clk->dev);
 	ulong new_rate;
@@ -622,7 +622,7 @@ static ulong rv1108_clk_set_rate(struct clk *clk, ulong rate)
 	return new_rate;
 }
 
-static const struct clk_ops rv1108_clk_ops = {
+static const struct clk_ops_uboot rv1108_clk_ops = {
 	.get_rate	= rv1108_clk_get_rate,
 	.set_rate	= rv1108_clk_set_rate,
 };

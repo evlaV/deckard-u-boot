@@ -13,7 +13,7 @@
 
 #include "clk.h"
 
-static struct clk_ops imxrt1020_clk_ops = {
+static struct clk_ops_uboot imxrt1020_clk_ops = {
 	.set_rate = ccf_clk_set_rate,
 	.get_rate = ccf_clk_get_rate,
 	.enable = ccf_clk_enable,

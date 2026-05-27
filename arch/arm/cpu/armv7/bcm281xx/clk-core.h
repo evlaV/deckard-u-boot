@@ -35,7 +35,7 @@ extern struct clk_lookup arch_clk_tbl[];
 extern unsigned int arch_clk_tbl_array_size;
 
 /**
- * struct clk_ops - standard clock operations
+ * struct clk_ops_uboot - standard clock operations
  * @enable: enable/disable clock, see clk_enable() and clk_disable()
  * @set_rate: set the clock rate, see clk_set_rate().
  * @get_rate: get the clock rate, see clk_get_rate().
@@ -47,7 +47,7 @@ extern unsigned int arch_clk_tbl_array_size;
  * enable in struct clk.
  *
  */
-struct clk_ops {
+struct clk_ops_uboot {
 	int (*enable) (struct clk *c, int enable);
 	int (*set_rate) (struct clk *c, unsigned long rate);
 	unsigned long (*get_rate) (struct clk *c);
@@ -65,7 +65,7 @@ struct clk {
 	unsigned long div;
 
 	struct clk_src *src;
-	struct clk_ops *ops;
+	struct clk_ops_uboot *ops;
 
 	unsigned long ccu_clk_mgr_base;
 	int sel;
@@ -483,9 +483,9 @@ static inline struct ref_clock *to_ref_clk(struct clk *clock)
 	return container_of(clock, struct ref_clock, clk);
 }
 
-extern struct clk_ops peri_clk_ops;
-extern struct clk_ops ccu_clk_ops;
-extern struct clk_ops bus_clk_ops;
-extern struct clk_ops ref_clk_ops;
+extern struct clk_ops_uboot peri_clk_ops;
+extern struct clk_ops_uboot ccu_clk_ops;
+extern struct clk_ops_uboot bus_clk_ops;
+extern struct clk_ops_uboot ref_clk_ops;
 
 extern int clk_get_and_enable(char *clkstr);

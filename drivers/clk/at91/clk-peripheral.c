@@ -77,7 +77,7 @@ static int clk_peripheral_disable(struct clk *clk)
 	return 0;
 }
 
-static const struct clk_ops peripheral_ops = {
+static const struct clk_ops_uboot peripheral_ops = {
 	.enable = clk_peripheral_enable,
 	.disable = clk_peripheral_disable,
 	.get_rate = clk_generic_get_rate,
@@ -168,7 +168,7 @@ static ulong clk_sam9x5_peripheral_get_rate(struct clk *clk)
 	return parent_rate >> shift;
 }
 
-static ulong clk_sam9x5_peripheral_set_rate(struct clk *clk, ulong rate)
+static long clk_sam9x5_peripheral_set_rate(struct clk *clk, ulong rate)
 {
 	struct clk_sam9x5_peripheral *periph = to_clk_sam9x5_peripheral(clk);
 	ulong parent_rate = clk_get_parent_rate(clk);
@@ -204,7 +204,7 @@ static ulong clk_sam9x5_peripheral_set_rate(struct clk *clk, ulong rate)
 	return parent_rate >> shift;
 }
 
-static const struct clk_ops sam9x5_peripheral_ops = {
+static const struct clk_ops_uboot sam9x5_peripheral_ops = {
 	.enable = clk_sam9x5_peripheral_enable,
 	.disable = clk_sam9x5_peripheral_disable,
 	.get_rate = clk_sam9x5_peripheral_get_rate,
