@@ -724,13 +724,13 @@ static __maybe_unused void dsi_pll_7nm_vco_dump(struct clk_hw *hw)
 
 }
 
-static const struct clk_ops_new clk_ops_dsi_pll_7nm_vco = {
+static const struct clk_ops clk_ops_dsi_pll_7nm_vco = {
 	.determine_rate = dsi_pll_7nm_clk_determine_rate,
 	.set_rate = dsi_pll_7nm_vco_set_rate,
 	.recalc_rate = dsi_pll_7nm_vco_recalc_rate,
 	.enable = dsi_pll_7nm_vco_prepare,
 	.disable = dsi_pll_7nm_vco_unprepare,
-	.dump = dsi_pll_7nm_vco_dump,
+	// .dump = dsi_pll_7nm_vco_dump,
 };
 
 /*
@@ -867,7 +867,7 @@ static int pll_7nm_register(struct dsi_pll_7nm *pll_7nm, struct clk_hw **provide
 			&pll_7nm->clk_hw, CLK_SET_RATE_PARENT,
 			pll_7nm->phy->pll_base +
 				REG_DSI_7nm_PHY_PLL_PLL_OUTDIV_RATE,
-			0, 2, CLK_DIVIDER_POWER_OF_TWO, NULL);
+			0, 2, CLK_DIVIDER_POWER_OF_TWO);
 	if (IS_ERR(pll_out_div)) {
 		ret = PTR_ERR(pll_out_div);
 		goto fail;
@@ -879,7 +879,7 @@ static int pll_7nm_register(struct dsi_pll_7nm *pll_7nm, struct clk_hw **provide
 	pll_bit = devm_clk_hw_register_divider_parent_hw(dev, clk_name,
 			pll_out_div, CLK_SET_RATE_PARENT,
 			pll_7nm->phy->base + REG_DSI_7nm_PHY_CMN_CLK_CFG0,
-			0, 4, CLK_DIVIDER_ONE_BASED, &pll_7nm->postdiv_lock);
+			0, 4, CLK_DIVIDER_ONE_BASED);
 	if (IS_ERR(pll_bit)) {
 		ret = PTR_ERR(pll_bit);
 		goto fail;
@@ -937,7 +937,7 @@ static int pll_7nm_register(struct dsi_pll_7nm *pll_7nm, struct clk_hw **provide
 					pll_by_2_bit,
 				}), 2, 0, pll_7nm->phy->base +
 					REG_DSI_7nm_PHY_CMN_CLK_CFG1,
-				0, 1, 0, &pll_7nm->pclk_mux_lock);
+				0, 1, 0);
 		if (IS_ERR(hw)) {
 			ret = PTR_ERR(hw);
 			goto fail;
@@ -952,7 +952,7 @@ static int pll_7nm_register(struct dsi_pll_7nm *pll_7nm, struct clk_hw **provide
 	hw = devm_clk_hw_register_divider_parent_hw(dev, clk_name,
 			phy_pll_out_dsi_parent, 0,
 			pll_7nm->phy->base + REG_DSI_7nm_PHY_CMN_CLK_CFG0,
-			4, 4, CLK_DIVIDER_ONE_BASED, &pll_7nm->postdiv_lock);
+			4, 4, CLK_DIVIDER_ONE_BASED);
 	if (IS_ERR(hw)) {
 		ret = PTR_ERR(hw);
 		goto fail;
