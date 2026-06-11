@@ -91,6 +91,16 @@ static int mpq3367_regulator_probe(struct udevice *dev)
 		return ret;
 	}
 
+	// Check i2c by reading id
+	dm_gpio_set_value(&pdata->en, 1);
+	udelay(2000);
+	ret = dm_i2c_read(pdata->i2c, MPQ3367_ID_REG, &regval, 1);
+	if (ret) {
+		dev_err(dev, "i2c read id failed: %d\n", ret);
+		dm_gpio_free(dev, &pdata->en);
+		return ret;
+	}
+
 	dm_gpio_set_value(&pdata->en, 0);
 
 	pdata->enabled = 0;
