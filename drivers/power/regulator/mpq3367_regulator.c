@@ -76,6 +76,7 @@ static int mpq3367_regulator_probe(struct udevice *dev)
 {
 	struct mpq3367_regulator_pdata *pdata = dev_get_plat(dev);
 	int ret;
+	u8 regval;
 
 	ret = gpio_request_by_name(dev, "enable-gpios", 0, &pdata->en,
 				   GPIOD_IS_OUT);
