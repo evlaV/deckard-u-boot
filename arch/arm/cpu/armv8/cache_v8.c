@@ -1004,6 +1004,11 @@ static u64 set_one_region(u64 start, u64 size, u64 attrs, bool flag, int level)
 	u64 levelsize = 1ULL << levelshift;
 	u64 *pte = find_pte(start, level);
 
+	/* Trying to unmap a region which is part of an already unmapped block, nothing to do */
+	if (pte_type(pte) == PTE_TYPE_FAULT && attrs == PTE_TYPE_FAULT && size < levelsize) {
+		return size;
+	}
+
 	/* Can we can just modify the current level block/page? */
 	if (is_aligned(start, size, levelsize)) {
 		if (attrs == PTE_TYPE_FAULT) {
