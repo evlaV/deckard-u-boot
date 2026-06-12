@@ -520,6 +520,11 @@ bool deckard_adb_mode_enabled( void )
 	return ( env_get_ulong( "adb-mode", 10, 0 ) != 0 ); // defaults to off
 }
 
+bool deckard_steam_reset_enabled( void )
+{
+	return ( env_get_ulong( "steamreset", 10, 0 ) != 0 ); // defaults to off
+}
+
 int deckard_write_string_to_vidconsole(const char * str)
 {
 	//this stdio_get_by_name will probe the vidconsole if it is not already probed

@@ -446,6 +446,7 @@ static void menu_display_statusline(struct menu *m)
 	struct bootmenu_entry *entry;
 	struct bootmenu_data *menu;
 	char *bootmenu_title;
+	char *bootmenu_info;
 	if (menu_default_choice(m, (void *)&entry) < 0)
 		return;
 
@@ -458,7 +459,9 @@ static void menu_display_statusline(struct menu *m)
 	printf("                                %s", bootmenu_title ? bootmenu_title : "SteamOS");
 	puts(ANSI_CLEAR_LINE_TO_END);
 	printf(ANSI_CURSOR_POSITION, menu->rowoffset + 3, 1);
-	puts(ANSI_CLEAR_LINE);
+	bootmenu_info = env_get("bootmenu_info");
+	printf("                   %s", bootmenu_info ? bootmenu_info : "");
+	puts(ANSI_CLEAR_LINE_TO_END);
 
 	/* First 3 lines are bootmenu header + 2 empty lines between entries */
 	printf(ANSI_CURSOR_POSITION, menu->rowoffset + menu->count + 5, 1);

@@ -448,6 +448,17 @@ int ft_board_setup(void *fdt, struct bd_info *bd)
 		}
 	}
 
+	if(deckard_steam_reset_enabled())
+	{
+		//userspace will just look for the existence of this file or not, we set it to 1 just for readability
+		ret = fdt_setprop_string(fdt, nodeoffset, "u-boot,steamreset", "1");
+		if (ret < 0) {
+			deckard_log("WARNING: could not set u-boot,steamreset %s.\n",
+				fdt_strerror(ret));
+			return ret;
+		}
+	}
+
 #ifdef ALLOW_OLD_ROOTFS_NAME_FALLBACK
 	/* add old rootfs fallback capability */
 	//this will indicate that u-boot has the ability to fall back to old rootfs
@@ -849,6 +860,9 @@ static void deckard_do_bootmenu(void)
 
 	mdelay(500);
 	
+	env_set("factoryreset", "");
+	env_set("steamreset", "");
+
 	int bootmenu_run_again = 0;
 	do
 	{

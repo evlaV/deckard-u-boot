@@ -9,5 +9,6 @@
 
 int deckard_bootmenu_populate(void);
 int deckard_bootmenu_handle_actions(void);
+int deckard_bootmenu_clear_all_entries(void);
 
 #endif

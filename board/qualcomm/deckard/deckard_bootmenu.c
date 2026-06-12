@@ -75,6 +75,20 @@ static int parse_os_info(char *buf, size_t bufsz,
 	return 1;
 }
 
+#define MAX_BOOTMENU_ENTRIES 32
+int deckard_bootmenu_clear_all_entries()
+{
+	char tmpstr[16]; 
+
+	for(int bootmenu_idx=0; bootmenu_idx < MAX_BOOTMENU_ENTRIES; bootmenu_idx++)
+	{
+		snprintf(tmpstr,16,"bootmenu_%d",bootmenu_idx);
+		env_set(tmpstr, "");
+	}
+
+	return 0;
+}
+
 int deckard_bootmenu_set_entry(int * bootmenu_idx, char * str)
 {
 	char tmpstr[16]; 
@@ -175,7 +189,7 @@ int deckard_bootmenu_populate(void)
 	char previous_slot_menu_str[256] = {0};
 	int usb_boot_mode = 0;
 
-	env_set("factoryreset", "");
+	deckard_bootmenu_clear_all_entries();
 
 	usb_boot_mode = booted_from_usb();
 
@@ -193,21 +207,41 @@ int deckard_bootmenu_populate(void)
 
 		//normal boot
 		env_set("bootmenu_title", "SteamOS");
+		env_set("bootmenu_info", ""); //add info below the title
+
 		//add new entries and function will increment 
 		int bootmenu_entry_idx = 0;
-		deckard_bootmenu_set_entry(&bootmenu_entry_idx,current_slot_menu_str);
-		deckard_bootmenu_set_entry(&bootmenu_entry_idx,previous_slot_menu_str);
-		deckard_bootmenu_create_usb_entries(&bootmenu_entry_idx); 
-		deckard_bootmenu_set_entry(&bootmenu_entry_idx,"  -- ERASE USER DATA FROM FRAME --=setenv slottarget current && setenv factoryreset 1");
-		if(env_get_ulong("bootmenuadvanced", 10, 0))
+
+		int showing_confirmation_page = 0;
+
+		if( env_get_ulong("steamreset", 10, 0) )
 		{
-			env_set("bootmenuadvanced", ""); //clear var
-			deckard_bootmenu_set_entry(&bootmenu_entry_idx,"ADB mode enable=setenv adb-mode 1");
-			//put more stuff here as needed
+			env_set("bootmenu_info",  "Repair Steam Installation?");
+			deckard_bootmenu_set_entry(&bootmenu_entry_idx," No=setenv steamreset 0 && setenv bootmenu_run_again 1");
+			deckard_bootmenu_set_entry(&bootmenu_entry_idx," Yes=setenv steamreset 1");
+			showing_confirmation_page = 1;
 		}
-		else
+
+		if( env_get_ulong("factoryreset", 10, 0) )
 		{
-			deckard_bootmenu_set_entry(&bootmenu_entry_idx,"Advanced=setenv bootmenuadvanced 1 && setenv bootmenu_run_again 1");
+			env_set("bootmenu_info",  "Erase User Data?");
+			deckard_bootmenu_set_entry(&bootmenu_entry_idx," No=setenv factoryreset 0 && setenv bootmenu_run_again 1");
+			deckard_bootmenu_set_entry(&bootmenu_entry_idx," Yes=setenv factoryreset 1");
+			showing_confirmation_page = 1;
+		}
+
+		if( !showing_confirmation_page )
+		{
+			deckard_bootmenu_set_entry(&bootmenu_entry_idx,current_slot_menu_str);
+			deckard_bootmenu_set_entry(&bootmenu_entry_idx,previous_slot_menu_str);
+			deckard_bootmenu_create_usb_entries(&bootmenu_entry_idx); 
+			deckard_bootmenu_set_entry(&bootmenu_entry_idx,"Repair Steam Installation=setenv slottarget current && setenv steamreset 1 && setenv bootmenu_run_again 1");
+			deckard_bootmenu_set_entry(&bootmenu_entry_idx,"Erase User Data=setenv slottarget current && setenv factoryreset 1 && setenv bootmenu_run_again 1");
+
+			if(env_get_ulong("adb-mode", 10, 0))
+				deckard_bootmenu_set_entry(&bootmenu_entry_idx,"ADB mode [enabled]=setenv adb-mode 0 && setenv bootmenu_run_again 1");
+			else
+				deckard_bootmenu_set_entry(&bootmenu_entry_idx,"ADB mode=setenv adb-mode 1 && setenv bootmenu_run_again 1");
 		}
 	}
 
