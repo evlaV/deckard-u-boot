@@ -601,20 +601,39 @@ static uint32_t partition_entries_offset(struct blk_desc *desc)
 	return offset_blks;
 }
 
-int gpt_fill_header(struct blk_desc *desc, gpt_header *gpt_h, char *str_guid,
-		    int parts_count)
+static int gpt_num_partition_entries(struct blk_desc *desc)
 {
+	ALLOC_CACHE_ALIGN_BUFFER_PAD(gpt_header, gpt_head, 1, desc->blksz);
+	gpt_entry *gpt_e = NULL;
+	int is_valid;
+
+	is_valid = find_valid_gpt(desc, gpt_head, &gpt_e);
+	if (is_valid && gpt_head->num_partition_entries)
+		return gpt_head->num_partition_entries;
+
+	return GPT_ENTRY_NUMBERS;
+}
+
+int gpt_fill_header(struct blk_desc *desc, gpt_header *gpt_h, char *str_guid,
+		    int parts_count, int num_partition_entries)
+{
+	int pte_lbas;
+	int gpt_h_lbas;
+
+	gpt_h_lbas = BLOCK_CNT(sizeof(gpt_header), desc);
+	pte_lbas = BLOCK_CNT(num_partition_entries * sizeof(gpt_entry), desc);
+
 	gpt_h->signature = cpu_to_le64(GPT_HEADER_SIGNATURE_UBOOT);
 	gpt_h->revision = cpu_to_le32(GPT_HEADER_REVISION_V1);
 	gpt_h->header_size = cpu_to_le32(sizeof(gpt_header));
 	gpt_h->my_lba = cpu_to_le64(1);
-	gpt_h->alternate_lba = cpu_to_le64(desc->lba - 1);
-	gpt_h->last_usable_lba = cpu_to_le64(desc->lba - 34);
+	gpt_h->alternate_lba = cpu_to_le64(desc->lba - gpt_h_lbas);
+	gpt_h->last_usable_lba = cpu_to_le64(desc->lba - gpt_h_lbas - pte_lbas - 1);
 	gpt_h->partition_entry_lba =
 		cpu_to_le64(partition_entries_offset(desc));
 	gpt_h->first_usable_lba =
-		cpu_to_le64(le64_to_cpu(gpt_h->partition_entry_lba) + 32);
-	gpt_h->num_partition_entries = cpu_to_le32(GPT_ENTRY_NUMBERS);
+		cpu_to_le64(le64_to_cpu(gpt_h->partition_entry_lba) + pte_lbas);
+	gpt_h->num_partition_entries = cpu_to_le32(num_partition_entries);
 	gpt_h->sizeof_partition_entry = cpu_to_le32(sizeof(gpt_entry));
 	gpt_h->header_crc32 = 0;
 	gpt_h->partition_entry_array_crc32 = 0;
@@ -630,7 +649,10 @@ int gpt_restore(struct blk_desc *desc, char *str_disk_guid,
 {
 	gpt_header *gpt_h;
 	gpt_entry *gpt_e;
+	int num_partition_entries;
 	int ret, size;
+
+	num_partition_entries = gpt_num_partition_entries(desc);
 
 	size = PAD_TO_BLOCKSIZE(sizeof(gpt_header), desc);
 	gpt_h = malloc_cache_aligned(size);
@@ -640,7 +662,7 @@ int gpt_restore(struct blk_desc *desc, char *str_disk_guid,
 	}
 	memset(gpt_h, 0, size);
 
-	size = PAD_TO_BLOCKSIZE(GPT_ENTRY_NUMBERS * sizeof(gpt_entry),
+	size = PAD_TO_BLOCKSIZE(num_partition_entries * sizeof(gpt_entry),
 				desc);
 	gpt_e = malloc_cache_aligned(size);
 	if (gpt_e == NULL) {
@@ -651,7 +673,8 @@ int gpt_restore(struct blk_desc *desc, char *str_disk_guid,
 	memset(gpt_e, 0, size);
 
 	/* Generate Primary GPT header (LBA1) */
-	ret = gpt_fill_header(desc, gpt_h, str_disk_guid, parts_count);
+	ret = gpt_fill_header(desc, gpt_h, str_disk_guid, parts_count,
+			      num_partition_entries);
 	if (ret)
 		goto err;
 
