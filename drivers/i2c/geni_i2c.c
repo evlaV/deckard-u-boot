@@ -197,6 +197,22 @@ skip_fill:
 	return -ETIMEDOUT;
 }
 
+static void geni_i2c_fifo_drain(struct geni_i2c_priv *geni)
+{
+	u32 rxstatus = readl(geni->base + SE_GENI_RX_FIFO_STATUS);
+	u32 status = readl(geni->base + SE_GENI_M_IRQ_STATUS);
+	u32 rxcnt = rxstatus & RX_FIFO_WC_MSK;
+	u32 rx;
+	int i;
+
+	/* Drain any remaining data in the RX FIFO */
+	for (i = 0; i < rxcnt; i++)
+		rx = readl(geni->base + SE_GENI_RX_FIFOn);
+
+	/* Clear the IRQ status */
+	writel(status, geni->base + SE_GENI_M_IRQ_CLEAR);
+}
+
 static int geni_i2c_fifo_rx_drain(struct geni_i2c_priv *geni, struct i2c_msg *msg)
 {
 	ulong start = get_timer(0);
@@ -540,6 +556,16 @@ static int geni_i2c_probe(struct udevice *dev)
 	return geni_i2c_clk_map_idx(geni, I2C_SPEED_STANDARD_RATE);
 }
 
+static int geni_i2c_remove(struct udevice *dev)
+{
+	struct geni_i2c_priv *geni = dev_get_priv(dev);
+
+	geni_i2c_fifo_drain(geni);
+	geni_i2c_disable_clocks(dev, geni);
+
+	return 0;
+}
+
 static int geni_i2c_set_bus_speed(struct udevice *dev, unsigned int clk_freq)
 {
 	struct geni_i2c_priv *geni = dev_get_priv(dev);
@@ -563,8 +589,10 @@ U_BOOT_DRIVER(i2c_geni) = {
 	.id	= UCLASS_I2C,
 	.of_match = geni_i2c_ids,
 	.probe	= geni_i2c_probe,
+	.remove	= geni_i2c_remove,
 	.priv_auto = sizeof(struct geni_i2c_priv),
 	.ops	= &geni_i2c_ops,
+	.flags	= DM_FLAG_ACTIVE_DMA,
 };
 
 static const struct udevice_id geni_i2c_master_hub_ids[] = {
