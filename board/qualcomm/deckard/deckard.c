@@ -598,7 +598,7 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 	static const int k_ADSP_MaxHeartbeatWaitMS = 1000; // 1s (measured: ~20-50ms nominal )
 	static const int k_ADSP_RestartIntervalMS = 30 * 1000; // 30s. should be > k_ADSP_MaxStartWaitMS
 
-	static const int k_AutoPowerOffDelayMS = 30 * 1000; // 30s.
+	static int k_AutoPowerOffDelayMS = 30 * 1000; // 30s.
 
 	while ( true )
 	{
@@ -768,6 +768,11 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 				deckard_log_overwrite( "Battery: %d%%, %dmV, %dmA", soc,avg_vcell,avg_current );
 				fflush(stdout);
 			}
+
+			 /* we may want to reduce the waiting time to auto poweroff */
+			int vol_up_button = ( button_get_state( pdevices->btn_vol_up ) == BUTTON_ON );
+			if (vol_up_button)
+				k_AutoPowerOffDelayMS = 1 * 1000;
 
 			// Check Auto-Poweroff condition
 			bool wantsPoweroff;
