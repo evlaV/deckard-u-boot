@@ -697,3 +697,41 @@ void enable_caches(void)
 	}
 	dcache_enable();
 }
+
+/*
+ * By default LMBs memory map is populated from the board bi_dram[] array, however
+ * this won't properly account for reserved memory we unmap since we take an optimised
+ * approach which may unmap gaps in between.
+ *
+ * Rather than dance around trying to align these things let's just populate LMBs memory
+ * map from the actual in-use pagetables. This ensures LMB won't allocate memory which
+ * isn't actually mapped in the pagetable.
+ *
+ * This effectively makes the pagetable the source of truth, but there may still be issues
+ * with the LMB memory map going out of sync if some memory is unmapped later.
+ */
+static bool pte_add_lmb(u64 start_attrs, u64 end, int va_bits, int level, void *priv)
+{
+	u64 _addr = start_attrs & GENMASK_ULL(va_bits, PAGE_SHIFT);
+#define DEFAULT_ATTRS (PTE_BLOCK_MEMTYPE(MT_NORMAL) | PTE_BLOCK_INNER_SHARE)
+
+	/* Skip unmapped regions */
+	if (!start_attrs || !(start_attrs & PTE_TYPE_VALID))
+		return false;
+
+	/* Skip XN regions, right now this is just U-Boot data but generally it indicates
+	 * the memory is being used for a specific purpose
+	 */
+	if ((start_attrs & (DEFAULT_ATTRS | PTE_BLOCK_UXN | PTE_BLOCK_PXN)) != DEFAULT_ATTRS)
+		return false;
+
+	lmb_add(_addr, end - _addr);
+
+	return false;
+}
+
+void lmb_arch_add_memory(void)
+{
+	// dump_pagetable(gd->arch.tlb_addr, get_tcr(NULL, NULL));
+	walk_pagetable(gd->arch.tlb_addr, get_tcr(NULL, NULL), &pte_add_lmb, NULL);
+}
