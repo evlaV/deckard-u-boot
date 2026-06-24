@@ -12,6 +12,7 @@
 #include <log.h>
 #include <video_bridge.h>
 #include <linux/delay.h>
+#include <drm/display/drm_dsc.h>
 
 int video_bridge_set_backlight(struct udevice *dev, int percent)
 {
@@ -42,6 +43,17 @@ int video_bridge_get_display_timing(struct udevice *dev,
 		return -ENOSYS;
 
 	return ops->get_display_timing(dev, timings);
+}
+
+int video_bridge_get_dsc_config(struct udevice *dev,
+				    struct drm_dsc_config *dsc)
+{
+	struct video_bridge_ops *ops = video_bridge_get_ops(dev);
+
+	if (!ops->get_dsc_config)
+		return -ENOSYS;
+
+	return ops->get_dsc_config(dev, dsc);
 }
 
 int video_bridge_check_attached(struct udevice *dev)

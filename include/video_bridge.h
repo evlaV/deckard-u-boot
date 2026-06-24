@@ -8,6 +8,7 @@
 #define __VIDEO_BRIDGE
 
 #include <asm/gpio.h>
+#include <drm/display/drm_dsc.h>
 
 /**
  * struct video_bridge_priv - uclass information for video bridges
@@ -66,6 +67,20 @@ struct video_bridge_ops {
 	int (*get_display_timing)(struct udevice *dev,
 				  struct display_timing *timing);
 
+
+	/**
+	 * get_dsc_config() - Get Display Stream Compression (DSC) config from bridge.
+	 *
+	 * @dev:	Bridge device containing the linked display timings
+	 * @dsc:	Place to put dsc config
+	 * @return 0 if OK, -ve on error
+	 *
+	 * This call it totally optional and useful mainly for integrated
+	 * bridges with fixed output device.
+	 */
+	int (*get_dsc_config)(struct udevice *dev,
+				  struct drm_dsc_config *dsc);
+
 	/**
 	 * read_edid() - Read information from EDID
 	 *
@@ -120,6 +135,10 @@ int video_bridge_check_attached(struct udevice *dev);
  */
 int video_bridge_get_display_timing(struct udevice *dev,
 				    struct display_timing *timing);
+
+int video_bridge_get_dsc_config(struct udevice *dev,
+				    struct drm_dsc_config *dsc);
+
 /**
  * video_bridge_read_edid() - Read information from EDID
  *

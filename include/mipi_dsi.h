@@ -208,6 +208,8 @@ struct mipi_dsi_device {
 	unsigned int lanes;
 	enum mipi_dsi_pixel_format format;
 	unsigned long mode_flags;
+	struct drm_dsc_config *dsc;
+	unsigned int dsc_slice_per_pkt;
 };
 
 /**
