@@ -26,6 +26,8 @@ obj-$(CONFIG_$(PHASE_)SIMPLE_PANEL) += simple_panel.o
 obj-$(CONFIG_VIDEO_LOGO) += u_boot_logo.bmp.o
 obj-$(CONFIG_$(PHASE_)BMP) += bmp.o
 
+obj-$(CONFIG_VIDEO_DSC_HELPER) += drm_dsc_helper.o
+
 endif
 
 obj-$(CONFIG_BACKLIGHT_AAT2870) += aat2870_backlight.o

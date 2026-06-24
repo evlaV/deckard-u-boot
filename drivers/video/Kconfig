@@ -116,6 +116,11 @@ config VIDEO_DAMAGE
 
 	  It is also used by VIDEO_COPY to identify which regions changed.
 
+config VIDEO_DSC_HELPER
+	bool
+	help
+	  Helpers for configuring Display Stream Compression (DSC) panels.
+
 config BACKLIGHT_PWM
 	bool "Generic PWM based Backlight Driver"
 	depends on BACKLIGHT && DM_PWM
