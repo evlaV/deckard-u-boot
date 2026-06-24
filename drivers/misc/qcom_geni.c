@@ -531,7 +531,7 @@ static int qcom_geni_fw_tz_load(char *fw_name, void *buf, size_t size)
 	mem_size = ALIGN(fw_size, SZ_4K);
 	ret = lmb_alloc_mem(LMB_MEM_ALLOC_ANY, SZ_4K, &mem_phys, mem_size, LMB_NONE);
 	if (ret < 0)
-		return -ENOMEM;
+		return ret;
 
 	ret = qcom_mdt_load(&firmware, fw_name, SCM_PAS_ID_QUPFW, (void *)mem_phys,
 			    mem_phys, mem_size, NULL);
