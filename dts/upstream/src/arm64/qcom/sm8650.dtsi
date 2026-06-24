@@ -9,6 +9,7 @@
 #include <dt-bindings/clock/qcom,sm8650-dispcc.h>
 #include <dt-bindings/clock/qcom,sm8650-gcc.h>
 #include <dt-bindings/clock/qcom,sm8650-gpucc.h>
+#include <dt-bindings/clock/qcom,sm8550-lpasscc.h>
 #include <dt-bindings/clock/qcom,sm8650-tcsr.h>
 #include <dt-bindings/clock/qcom,sm8650-videocc.h>
 #include <dt-bindings/dma/qcom-gpi.h>
@@ -3249,6 +3250,31 @@
 				status = "disabled";
 			};
 
+			uart3: serial@a8c000 {
+				compatible = "qcom,geni-uart";
+				reg = <0 0x00a8c000 0 0x4000>;
+
+				interrupts = <GIC_SPI 356 IRQ_TYPE_LEVEL_HIGH 0>;
+
+				clocks = <&gcc GCC_QUPV3_WRAP1_S3_CLK>;
+				clock-names = "se";
+
+				interconnects = <&clk_virt MASTER_QUP_CORE_1 QCOM_ICC_TAG_ALWAYS
+						 &clk_virt SLAVE_QUP_CORE_1 QCOM_ICC_TAG_ALWAYS>,
+						 <&gem_noc MASTER_APPSS_PROC QCOM_ICC_TAG_ACTIVE_ONLY
+						 &config_noc SLAVE_QUP_1 QCOM_ICC_TAG_ACTIVE_ONLY>,
+						 <&aggre1_noc MASTER_QUP_1 QCOM_ICC_TAG_ALWAYS
+						 &mc_virt  SLAVE_EBI1 QCOM_ICC_TAG_ALWAYS>;
+				interconnect-names = "qup-core",
+						     "qup-config",
+						     "qup-memory";
+
+				pinctrl-0 = <&qup_uart3_default>;
+				pinctrl-names = "default";
+
+				status = "okay";
+			};
+
 			i2c4: i2c@a90000 {
 				compatible = "qcom,geni-i2c";
 				reg = <0 0x00a90000 0 0x4000>;
@@ -4811,6 +4837,16 @@
 			status = "disabled";
 		};
 
+		lpass_audiocc: clock-controller@6bc0000 {
+			reg = <0 0x06bc0000 0 0x38000>;
+			compatible = "qcom,sm8550-audiocc";
+			clocks = <&bi_tcxo_div2>;
+			clock-names = "bi_tcxo";
+			power-domains = <&lpass_aoncc LPASS_AON_CC_LPASS_AUDIO_HM_GDSCR>;
+			#clock-cells = <1>;
+			status = "reserved"; /* owned by ADSP */
+		};
+
 		swr2: soundwire@6d30000 {
 			compatible = "qcom,soundwire-v2.0.0";
 			reg = <0 0x06d30000 0 0x10000>;
@@ -4856,6 +4892,17 @@
 			#clock-cells = <0>;
 			clock-output-names = "fsgen";
 			#sound-dai-cells = <1>;
+		};
+
+		lpass_aoncc: clock-controller@6e00000 {
+			reg = <0 0x06e00000 0 0x38000>;
+			compatible = "qcom,sm8550-aoncc";
+			clocks = <&bi_tcxo_div2>;
+			clock-names = "bi_tcxo";
+			#clock-cells = <1>;
+			#power-domain-cells = <1>;
+			power-domains = <&rpmhpd RPMHPD_LCX>; /* check this? */
+			status = "reserved"; /* owned by ADSP */
 		};
 
 		lpass_tlmm: pinctrl@6e80000 {
@@ -4973,6 +5020,144 @@
 					bias-bus-hold;
 				};
 			};
+
+			i2s2_active: i2s2-active {
+				clk {
+					pins = "gpio10";
+					function = "i2s2_clk";
+					drive-strength = <8>;
+					bias-disable;
+					output-high;
+				};
+
+				ws {
+					pins = "gpio11";
+					function = "i2s2_ws";
+					drive-strength = <8>;
+					output-high;
+				};
+
+				data {
+					pins = "gpio15", "gpio16";
+					function = "i2s2_data";
+					drive-strength = <8>;
+					bias-disable;
+					output-high;
+				};
+			};
+		};
+
+		lpass_corecc: clock-controller@7b08000 {
+			compatible = "qcom,sm8550-lpasscorecc";
+			reg = <0 0x07b08000 0 0x4f000>;
+			clocks = <&bi_tcxo_div2>;
+			clock-names = "bi_tcxo";
+			power-domains = <&lpass_hm LPASS_CORE_HM_GDSCR>;
+			#clock-cells = <1>;
+			status = "reserved"; /* owned by ADSP */
+		};
+
+		lpass_hm: clock-controller@7e00000 {
+			compatible = "qcom,sm8550-lpasshm";
+			reg = <0 0x07e00000 0 0xa000>;
+			clocks = <&bi_tcxo_div2>;
+			clock-names = "bi_tcxo";
+			#clock-cells = <1>;
+			#power-domain-cells = <1>;
+			power-domains = <&rpmhpd RPMHPD_LCX>; /* check this? */
+			status = "reserved"; /* owned by ADSP */
+		};
+
+		lpass_wsa_2ch_lpaif: lpaif@6a00000 {
+			compatible = "qcom,lpaif-v5";
+			reg = <0 0x06a00000 0 0x2b000>;
+			interrupts = <GIC_SPI 162 IRQ_TYPE_LEVEL_HIGH 0>;
+			#sound-dai-cells = <1>;
+
+			power-domains = <&lpass_aoncc LPASS_AON_CC_LPASS_AUDIO_HM_GDSCR>;
+
+			status = "reserved"; /* owned by ADSP */
+		};
+
+		lpass_aud_lpaif: lpaif@6a40000 {
+			compatible = "qcom,lpaif-v5";
+			reg = <0 0x06a40000 0 0x2b000>;
+			interrupts = <GIC_SPI 196 IRQ_TYPE_LEVEL_HIGH 0>;
+			#sound-dai-cells = <1>;
+
+			power-domains = <&lpass_aoncc LPASS_AON_CC_LPASS_AUDIO_HM_GDSCR>;
+
+			status = "reserved"; /* owned by ADSP */
+		};
+
+		lpass_rxtx_lpaif: lpaif@6b40000 {
+			compatible = "qcom,lpaif-v5";
+			reg = <0 0x06b40000 0 0x2b000>;
+			interrupts = <GIC_SPI 180 IRQ_TYPE_LEVEL_HIGH 0>;
+			#sound-dai-cells = <1>;
+
+			power-domains = <&lpass_aoncc LPASS_AON_CC_LPASS_AUDIO_HM_GDSCR>;
+
+			status = "reserved"; /* owned by ADSP */
+		};
+
+		lpass_wsa_lpaif: lpaif@6b80000 {
+			compatible = "qcom,lpaif-v5";
+			reg = <0 0x06b80000 0 0x2b000>;
+			interrupts = <GIC_SPI 179 IRQ_TYPE_LEVEL_HIGH 0>;
+			#sound-dai-cells = <1>;
+
+			power-domains = <&lpass_aoncc LPASS_AON_CC_LPASS_AUDIO_HM_GDSCR>;
+
+			status = "reserved"; /* owned by ADSP */
+		};
+
+		lpass_va_lpaif: lpaif@6d00000 {
+			compatible = "qcom,lpaif-v5";
+			reg = <0 0x06d00000 0 0x2b000>;
+			interrupts = <GIC_SPI 176 IRQ_TYPE_LEVEL_HIGH 0>;
+			#sound-dai-cells = <1>;
+
+			power-domains = <&rpmhpd RPMHPD_LCX>; /* check this? */
+
+			status = "reserved"; /* owned by ADSP */
+		};
+
+		lpass_hdmitx: lpaif@7be8000 {
+			compatible = "qcom,lpaif-hdmi";
+			reg = <0 0x07be8000 0 0x7000>,
+			      <0 0x07b88000 0 0x1000>;
+			interrupts = <GIC_SPI 268 IRQ_TYPE_LEVEL_HIGH 0>;
+			#sound-dai-cells = <1>;
+
+			clocks = <&lpass_corecc LPASS_CORE_CC_SYSNOC_MPORT_CORE_CLK>;
+
+			iommus = <&apps_smmu 0x1105 0>;
+
+			dma-coherent;
+
+			power-domains = <&lpass_hm LPASS_CORE_HM_GDSCR>;
+
+			status = "reserved"; /* owned by ADSP */
+		};
+
+		lpass_core_lpaif: lpaif@7d00000 {
+			compatible = "qcom,lpaif-v5";
+			reg = <0 0x07d00000 0 0x2b000>;
+			interrupts = <GIC_SPI 160 IRQ_TYPE_LEVEL_HIGH 0>;
+			#sound-dai-cells = <1>;
+
+			clocks = <&lpass_corecc LPASS_CORE_CC_SYSNOC_MPORT_CORE_CLK>;
+
+			iommus = <&apps_smmu 0x1100 0>,
+				 <&apps_smmu 0x1101 0>,
+				 <&apps_smmu 0x1102 0>;
+
+			dma-coherent;
+
+			power-domains = <&lpass_hm LPASS_CORE_HM_GDSCR>;
+
+			status = "reserved"; /* owned by ADSP */
 		};
 
 		lpass_lpiaon_noc: interconnect@7400000 {
@@ -6772,6 +6957,13 @@
 				bias-disable;
 			};
 
+			qup_uart3_default: uart3-default {
+				pins = "gpio46", "gpio47";
+				function = "qup1_se3";
+				drive-strength = <2>;
+				bias-disable;
+			};
+
 			qup_spi4_cs: qup-spi4-cs-state {
 				pins = "gpio51";
 				function = "qup1_se4";
@@ -7808,6 +8000,119 @@
 					};
 				};
 			};
+		};
+
+		_cdsp: cdsp@32300000 {
+			compatible = "qcom,sm8650-hexagon";
+			reg = <0 0x32300000 0 0x50000>;
+			reg-names = "base";//, "haltreq";
+			clocks = <&gcc GCC_TURING_CFG_AHB_CLK>;
+				 //<&gcc GCC_TURING_Q6_AXI_CLK>;
+			clock-names = "cfg_ahb";//, "q6_axi";
+
+			interrupts-extended = <&ipcc IPCC_CLIENT_CDSP 0 IRQ_TYPE_EDGE_RISING>,
+					      <&ipcc IPCC_CLIENT_CDSP 1 IRQ_TYPE_EDGE_RISING>,
+					      <&ipcc IPCC_CLIENT_CDSP 2 IRQ_TYPE_EDGE_RISING>,
+					      <&ipcc IPCC_CLIENT_CDSP 3 IRQ_TYPE_EDGE_RISING>;
+			mboxes = <&ipcc IPCC_CLIENT_CDSP 0>,
+				 <&ipcc IPCC_CLIENT_CDSP 1>,
+				 <&ipcc IPCC_CLIENT_CDSP 2>,
+				 <&ipcc IPCC_CLIENT_CDSP 3>;
+
+			power-domains = <&rpmhpd RPMHPD_CX>,
+					<&rpmhpd RPMHPD_MXC>,
+					<&rpmhpd RPMHPD_NSP>,
+					<&rpmhpd RPMHPD_NSP2>;
+			power-domain-names = "cx",
+					     "mxc",
+					     "nsp",
+					     "nsp2";
+			required-opps = <&rpmhpd_opp_nom>,
+					<&rpmhpd_opp_nom>,
+					<&rpmhpd_opp_nom>,
+					<&rpmhpd_opp_nom>;
+
+			interconnects = <&nsp_noc MASTER_CDSP_PROC 0 &mc_virt SLAVE_EBI1 0>;
+			interconnect-names = "mem";
+
+			//interconnects = <&nsp_noc MASTER_CDSP_PROC 0 &mc_virt SLAVE_EBI1 0>;
+					// <&nsp_noc MASTER_VAPSS_CDSP_1 &mc_virt SLAVE_EBI1 0>;
+			//interconnect-names = "mem";//, "dma";
+
+			iommus = <&apps_smmu 0xc00 0x0>, // CDSP
+				 <&apps_smmu 0xc20 0x0>; // UBWCDMA
+
+			//core-max-rate = <1497600000>;
+		};
+
+		adsp: adsp@6800000 {
+			compatible = "qcom,sm8650-hexagon";
+			reg = <0 0x06800000 0 0x50000>,
+			      <0 0x06eeb000 0 4>;
+			reg-names = "base", "evb_sel";
+
+			interrupts-extended = <&ipcc IPCC_CLIENT_LPASS 0 IRQ_TYPE_EDGE_RISING>,
+					      <&ipcc IPCC_CLIENT_LPASS 1 IRQ_TYPE_EDGE_RISING>,
+					      <&ipcc IPCC_CLIENT_LPASS 2 IRQ_TYPE_EDGE_RISING>,
+					      <&ipcc IPCC_CLIENT_LPASS 3 IRQ_TYPE_EDGE_RISING>;
+			mboxes = <&ipcc IPCC_CLIENT_LPASS 0>,
+				 <&ipcc IPCC_CLIENT_LPASS 1>,
+				 <&ipcc IPCC_CLIENT_LPASS 2>,
+				 <&ipcc IPCC_CLIENT_LPASS 3>;
+
+			clocks = <&lpass_aoncc LPASS_AON_CC_LPI_NOC_HS_CLK>,
+				 <&lpass_aoncc LPASS_AON_CC_Q6_AXIM_CLK>;
+			clock-names = "lpi_noc_hs", "q6_axim";
+
+			power-domains = <&rpmhpd RPMHPD_LCX>,
+					<&rpmhpd RPMHPD_LMX>;
+			power-domain-names = "lcx",
+					     "lmx";
+			required-opps = <&rpmhpd_opp_nom>, <&rpmhpd_opp_nom>;
+
+			interconnects = <&lpass_lpicx_noc MASTER_LPASS_PROC QCOM_ICC_TAG_ALWAYS
+					 &mc_virt SLAVE_EBI1 QCOM_ICC_TAG_ALWAYS>;
+			interconnect-names = "mem";
+
+			// missing: power domains
+			iommus =  <&apps_smmu 0x1000 0x0>, // ADSP
+				  <&apps_smmu 0x1060 0x0>, // LPMLA_0 config ?
+				  <&apps_smmu 0x1068 0x0>, // LPMLA_0 act/wgt/out ?
+				  <&apps_smmu 0x10e4 0x0>, // ASC bus client 0
+				  <&apps_smmu 0x10e5 0x0>; // ASC bus client 1
+			//core-max-rate = <1401600000>;
+		};
+
+		cvp: cvp@ab00000 {
+			compatible = "qcom,sm8650-xtensa";
+			reg = <0 0x0ab00000 0 0xf0000>;
+			interrupts = <GIC_SPI 234 IRQ_TYPE_LEVEL_HIGH 0>;
+			// watchdog interrupt: 235
+			clocks = <&gcc GCC_VIDEO_AXI1_CLK>,
+				 <&videocc VIDEO_CC_MVS1C_CLK>,
+				 <&videocc VIDEO_CC_MVS1_CLK>;
+			clock-names = "iface", "core", "hw";
+
+			iommus = <&apps_smmu 0x1920 0>, // nonpix? (firmware)
+				 <&apps_smmu 0x1922 0>; // firmware
+
+			power-domains = <&rpmhpd RPMHPD_MXC>,
+					<&rpmhpd RPMHPD_MMCX>,
+					<&videocc VIDEO_CC_MVS1C_GDSC>,
+					<&videocc VIDEO_CC_MVS1_GDSC>;
+			required-opps = <&rpmhpd_opp_nom>, <&rpmhpd_opp_nom>,
+					<&rpmhpd_opp_nom>, <&rpmhpd_opp_nom>;
+			power-domain-names = "mxc",
+					     "mmcx",
+					     "ctrl",
+					     "hw";
+
+			resets = <&gcc GCC_VIDEO_AXI1_CLK_ARES>,
+				 //<&videocc VIDEO_CC_XO_CLK_ARES>,
+				 <&videocc VIDEO_CC_MVS1C_CLK_ARES>;
+			reset-names = "bus",
+				      //"xo",
+				      "core";
 		};
 	};
 
