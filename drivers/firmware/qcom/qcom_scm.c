@@ -220,7 +220,7 @@ void qcom_scm_pas_metadata_release(struct qcom_scm_pas_metadata *ctx)
 	if (!ctx->ptr)
 		return;
 
-	lmb_free(ctx->phys, ctx->size);
+	lmb_free(ctx->phys, ctx->size, LMB_NONE);
 
 	ctx->ptr = NULL;
 	ctx->phys = 0;
