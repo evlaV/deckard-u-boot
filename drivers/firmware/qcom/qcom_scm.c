@@ -187,8 +187,8 @@ int qcom_scm_pas_init_image(u32 peripheral, const void *metadata, size_t size,
 	 * If we pass a buffer that is already part of an SHM Bridge to this
 	 * call, it will fail.
 	 */
-	mdata_phys = lmb_alloc(size, SZ_4K);
-	if (!mdata_phys)
+	ret = lmb_alloc_mem(LMB_MEM_ALLOC_ANY, SZ_4K, &mdata_phys, size, LMB_NONE);
+	if (ret < 0)
 		return -ENOMEM;
 	mdata_buf = (void *)mdata_phys;
 
