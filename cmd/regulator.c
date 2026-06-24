@@ -214,6 +214,12 @@ static void do_status_line(struct udevice *dev, int status)
 	bool enabled;
 
 	pdata = dev_get_uclass_plat(dev);
+
+	if (!device_active(dev)) {
+		printf("%-20s\tstatus=%d\n", pdata->name, status);
+		return;
+	}
+
 	enabled = regulator_get_enable(dev);
 	value = regulator_get_value(dev);
 	current = regulator_get_current(dev);
