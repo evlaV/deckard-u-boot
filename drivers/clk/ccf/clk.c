@@ -275,7 +275,7 @@ static void clk_core_fill_parent_index(struct clk_core *core, u8 index)
 	struct clk_parent_map *entry = &core->parents[index];
 	struct clk_core *parent;
 
-	if (entry->hw) {
+	if (!IS_ERR_OR_NULL(entry->hw)) {
 		parent = entry->hw->core;
 	} else {
 		parent = clk_core_get(core, index);
