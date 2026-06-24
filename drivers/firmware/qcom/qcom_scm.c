@@ -201,7 +201,7 @@ int qcom_scm_pas_init_image(u32 peripheral, const void *metadata, size_t size,
 	ret = qcom_scm_call(&desc, &res);
 
 	if (ret < 0 || !ctx) {
-		lmb_free(mdata_phys, size);
+		lmb_free(mdata_phys, size, LMB_NONE);
 	} else if (ctx) {
 		ctx->ptr = mdata_buf;
 		ctx->phys = mdata_phys;
