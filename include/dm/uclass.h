@@ -358,6 +358,30 @@ int uclass_get_device_by_endpoint(enum uclass_id class_id, struct udevice *dev,
 				  int port_idx, int ep_idx, struct udevice **target);
 
 /**
+ * uclass_find_device_by_endpoint() - find a uclass device for a remote endpoint
+ *
+ * This searches through the parents of the specified remote endpoint
+ * for the first device matching the uclass. Said otherwise, this helper
+ * goes through the graph (endpoint) representation and searches for
+ * matching devices. Endpoints can be subnodes of the "port" node or
+ * subnodes of ports identified with a reg property, themselves in a
+ * "ports" container.
+ *
+ * The device is NOT probed!
+ *
+ * @class_id: uclass ID to look up
+ * @dev: Device to start from
+ * @port_idx: Index of the port to follow, -1 if there is a single 'port'
+ *            node without reg.
+ * @ep_idx: Index of the endpoint to follow, -1 if there is a single 'endpoint'
+ *          node without reg.
+ * @target: Returns pointer to the first device matching the expected uclass.
+ * Return: 0 if OK, -ve on error
+ */
+int uclass_find_device_by_endpoint(enum uclass_id class_id, struct udevice *dev,
+				  int port_idx, int ep_idx, struct udevice **target);
+
+/**
  * uclass_first_device() - Get the first device in a uclass
  *
  * The device returned is probed if necessary, and ready for use
