@@ -616,6 +616,7 @@ static int qcom_geni_fw_initialise(void)
 		ret = qcom_geni_fw_tz_load(part_info.name, fw_buf, fw_size);
 		if (!ret)
 			return 0;
+		pr_warn("Loading QUP fw through TZ failed, falling back to manual. err=%d\n", ret);
 	}
 
 	/*
