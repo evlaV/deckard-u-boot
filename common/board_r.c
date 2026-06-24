@@ -626,6 +626,7 @@ static void initcall_run_r(void)
 	INITCALL(noncached_init);
 #endif
 	INITCALL(initr_of_live);
+	INITCALL(initr_lmb);
 #if CONFIG_IS_ENABLED(DM)
 	INITCALL(initr_dm);
 #endif
@@ -644,7 +645,6 @@ static void initcall_run_r(void)
 #if CONFIG_IS_ENABLED(CLOCKS)
 	INITCALL(set_cpu_clk_info);
 #endif
-	INITCALL(initr_lmb);
 #if CONFIG_IS_ENABLED(EFI_LOADER)
 	INITCALL(efi_memory_init);
 #endif
