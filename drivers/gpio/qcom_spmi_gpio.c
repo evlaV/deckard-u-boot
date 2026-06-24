@@ -694,7 +694,8 @@ static int qcom_spmi_pmic_gpio_probe(struct udevice *dev)
 	struct gpio_dev_priv *uc_priv = dev_get_uclass_priv(dev);
 	struct qcom_spmi_pmic_gpio_data *plat = dev_get_plat(dev);
 	struct ofnode_phandle_args args;
-	int i, ret;
+	char *name, *pmic_name;
+	int i, namelen, ret;
 	u64 pid;
 
 	plat->dev = dev;
@@ -719,11 +720,25 @@ static int qcom_spmi_pmic_gpio_probe(struct udevice *dev)
 
 	uc_priv->gpio_count = plat->pin_count;
 
-	uc_priv->bank_name = strchr(dev_read_string(dev, "compatible"), ',');
-	if (uc_priv->bank_name)
-		uc_priv->bank_name += 1; /* skip the , */
-	else
-		uc_priv->bank_name = dev->name;
+	pmic_name = strdup(strchr(dev_read_string(dev, "compatible"), ','));
+	if (pmic_name) {
+		pmic_name += 1; /* skip the , */
+		i = strchr(pmic_name, '-') - pmic_name;
+		pmic_name[i] = '\0';
+	} else {
+		pmic_name = strdup(dev->name);
+	}
+
+	namelen = strlen(pmic_name) + 32;
+	name = malloc(namelen);
+	ret = snprintf(name, namelen, "%s@%x-gpio", pmic_name, (int)(dev_read_addr(plat->pmic) >> 20));
+	/* Should really never happen */
+	if (ret >= namelen)
+		name[namelen - 1] = '\0';
+
+	/* We alloc'd in both */
+	free(pmic_name);
+	uc_priv->bank_name = name;
 
 	plat->pads = calloc(plat->pin_count, sizeof(struct spmi_pmic_gpio_pad));
 	if (!plat->pads)
