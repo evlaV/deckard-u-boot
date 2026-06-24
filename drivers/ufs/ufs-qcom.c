@@ -316,7 +316,7 @@ static u32 ufs_qcom_get_core_clk_unipro_max_freq(struct ufs_hba *hba)
 		goto fallback;
 
 	/* Try parsing the opps */
-	if (!ofnode_parse_phandle_with_args(node, "required-opps",
+	if (!ofnode_parse_phandle_with_args(node, "operating-points-v2",
 					    NULL, 0, 0, &opp_table) &&
 	    ofnode_device_is_compatible(opp_table.node, "operating-points-v2")) {
 		ofnode opp_node;
@@ -548,7 +548,6 @@ static int ufs_qcom_init(struct ufs_hba *hba)
 {
 	struct ufs_qcom_priv *priv = dev_get_priv(hba->dev);
 	struct udevice *dev = hba->dev;
-	struct clk clk;
 	u32 max_freq;
 	long rate;
 	int err;
@@ -558,25 +557,25 @@ static int ufs_qcom_init(struct ufs_hba *hba)
 	/* Get maximum frequency for core_clk_unipro from device tree */
 	max_freq = ufs_qcom_get_core_clk_unipro_max_freq(hba);
 
-	/* Get and configure core_clk_unipro */
-	err = clk_get_by_name(dev, "core_clk_unipro", &clk);
-	if (err) {
-		dev_err(dev, "Failed to get core_clk_unipro: %d\n", err);
-		return err;
-	}
-
-	rate = clk_set_rate(&clk, max_freq);
-	if (rate < 0) {
-		dev_err(dev, "Failed to set core_clk_unipro rate to %u Hz: %ld\n",
-			max_freq, rate);
-	}
-
 	/* Get all clocks */
 	err = clk_get_bulk(dev, &priv->clks);
 	if (err) {
 		dev_err(dev, "clk_get_bulk failed: %d\n", err);
 		return err;
 	}
+
+	int unipro_idx = ofnode_stringlist_search(dev_ofnode(dev), "clock-names", "core_clk_unipro");
+	if (unipro_idx < 0) {
+		dev_err(dev, "Failed to get core_clk_unipro: %d\n", err);
+		return err;
+	}
+
+	rate = clk_set_rate(&priv->clks.clks[unipro_idx], max_freq);
+	if (rate < 0) {
+		dev_err(dev, "Failed to set core_clk_unipro rate to %u Hz: %ld\n",
+			max_freq, rate);
+	}
+	dev_info(dev, "Set core_clk_unipro rate to %u Hz\n", max_freq);
 
 	/* Enable clocks */
 	err = ufs_qcom_enable_clks(priv);
