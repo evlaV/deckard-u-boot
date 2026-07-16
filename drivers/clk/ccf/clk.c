@@ -292,7 +292,7 @@ static void clk_core_fill_parent_index(struct clk_core *core, u8 index)
 		parent = ERR_PTR(-EPROBE_DEFER);
 
 	/* Only cache it if it's not an error */
-	if (!IS_ERR(parent))
+	if (!IS_ERR_OR_NULL(parent))
 		entry->core = parent;
 	/*
 	 * U-Boot: save the error so we avoid trying to get this parent again.
