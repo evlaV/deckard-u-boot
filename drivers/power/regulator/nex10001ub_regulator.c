@@ -112,15 +112,15 @@ static int nex100011ub_regulator_probe(struct udevice *dev)
 	struct nex100011ub_regulator_pdata *priv = dev_get_priv(dev);
 	int ret;
 
-	ret = gpio_request_by_name(dev, "enp-gpios", 0, &priv->biasp_gpio, GPIOD_IS_OUT);
+	ret = gpio_request_by_name(dev, "biasp-gpios", 0, &priv->biasp_gpio, GPIOD_IS_OUT);
 	if (ret) {
-		dev_err(dev, "enp gpio get failed.\n");
+		dev_err(dev, "biasp gpio get failed.\n");
 		return ret;
 	}
 
-	ret = gpio_request_by_name(dev, "enn-gpios", 0, &priv->biasn_gpio, GPIOD_IS_OUT);
+	ret = gpio_request_by_name(dev, "biasn-gpios", 0, &priv->biasn_gpio, GPIOD_IS_OUT);
 	if (ret) {
-		dev_err(dev, "enn gpio get failed.\n");
+		dev_err(dev, "biasn gpio get failed.\n");
 		return ret;
 	}
 
@@ -145,7 +145,7 @@ static const struct dm_regulator_ops nex100011ub_regulator_ops = {
 };
 
 static const struct udevice_id nex100011ub_regulator_ids[] = {
-	{ .compatible = "nexperia,nex10000ub", },
+	{ .compatible = "nexperia,nex100011ub", },
 	{ },
 };
 
@@ -157,5 +157,3 @@ U_BOOT_DRIVER(nex100011ub_regulator) = {
 	.priv_auto	= sizeof(struct nex100011ub_regulator_pdata),
 	.probe = nex100011ub_regulator_probe,
 };
-
-// subnode crap again ...

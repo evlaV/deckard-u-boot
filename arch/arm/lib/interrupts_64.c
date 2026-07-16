@@ -110,7 +110,7 @@ struct stack_frame {
 static void print_sym(unsigned long lr)
 {
 	/* Print the symbol address and the offset to the LR */
-	printf("\t<%#016lx> %pS\n", lr,
+	printf("\t<%#016lx> %pS\n", lr - (gd->flags & GD_FLG_RELOC ? gd->reloc_off : 0),
 	       (void *)lr);
 }
 

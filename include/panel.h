@@ -103,8 +103,6 @@ struct panel_ops {
 	 */
 	int (*get_modes)(struct udevice *dev,
 			 const struct drm_display_mode **modes);
-
-	void (*dump)(struct udevice *dev);
 };
 
 #define panel_get_ops(dev)	((struct panel_ops *)(dev)->driver->ops)

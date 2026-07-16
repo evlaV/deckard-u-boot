@@ -3,8 +3,6 @@
 # (C) Copyright 2000-2007
 # Wolfgang Denk, DENX Software Engineering, wd@denx.de.
 
-ccflags-y += -DLOG_DEBUG
-
 ifdef CONFIG_DM
 obj-$(CONFIG_$(PHASE_)BACKLIGHT) += backlight-uclass.o
 obj-$(CONFIG_BACKLIGHT_GPIO) += backlight_gpio.o
@@ -70,7 +68,6 @@ obj-$(CONFIG_VIDEO_LCD_LG_LD070WX3) += lg-ld070wx3.o
 obj-$(CONFIG_VIDEO_LCD_LG_LH400WV3) += lg-lh400wv3-sd04.o
 obj-$(CONFIG_VIDEO_LCD_MOT) += mot-panel.o
 obj-$(CONFIG_VIDEO_LCD_NOVATEK_NT35510) += novatek-nt35510.o
-obj-$(CONFIG_VIDEO_LCD_DECKARD_PANEL) += panel-deckard.o
 obj-$(CONFIG_VIDEO_LCD_ORISETECH_OTM8009A) += orisetech_otm8009a.o
 obj-$(CONFIG_VIDEO_LCD_RAYDIUM_RM68200) += raydium-rm68200.o
 obj-$(CONFIG_VIDEO_LCD_RENESAS_R61307) += renesas-r61307.o

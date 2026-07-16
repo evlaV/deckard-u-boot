@@ -606,8 +606,6 @@ static const struct freq_tbl ftbl_disp_cc_mdss_mdp_clk_src_sm8650[] = {
 	F(325000000, P_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
 	F(402000000, P_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
 	F(514000000, P_DISP_CC_PLL0_OUT_MAIN, 3, 0, 0),
-	/* Overclock! */
-	// F(690000000, P_DISP_CC_PLL0_OUT_MAIN, 2, 0, 0),
 	{ }
 };
 
@@ -1679,8 +1677,8 @@ static struct clk_regmap *disp_cc_sm8550_clocks[] = {
 	[DISP_CC_MDSS_DPTX1_PIXEL1_CLK_SRC] = &disp_cc_mdss_dptx1_pixel1_clk_src.clkr,
 	[DISP_CC_MDSS_DPTX1_USB_ROUTER_LINK_INTF_CLK] =
 		&disp_cc_mdss_dptx1_usb_router_link_intf_clk.clkr,
-	// [DISP_CC_MDSS_DPTX2_AUX_CLK] = &disp_cc_mdss_dptx2_aux_clk.clkr,
-	// [DISP_CC_MDSS_DPTX2_AUX_CLK_SRC] = &disp_cc_mdss_dptx2_aux_clk_src.clkr,
+	[DISP_CC_MDSS_DPTX2_AUX_CLK] = &disp_cc_mdss_dptx2_aux_clk.clkr,
+	[DISP_CC_MDSS_DPTX2_AUX_CLK_SRC] = &disp_cc_mdss_dptx2_aux_clk_src.clkr,
 	[DISP_CC_MDSS_DPTX2_CRYPTO_CLK] = &disp_cc_mdss_dptx2_crypto_clk.clkr,
 	[DISP_CC_MDSS_DPTX2_LINK_CLK] = &disp_cc_mdss_dptx2_link_clk.clkr,
 	[DISP_CC_MDSS_DPTX2_LINK_CLK_SRC] = &disp_cc_mdss_dptx2_link_clk_src.clkr,

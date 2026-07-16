@@ -4,7 +4,6 @@
  */
 
 #define pr_fmt(fmt) "[dsi-phy] %s: "fmt"\n", __func__
-// #define LOG_DEBUG
 
 #include <dm/device.h>
 #include <dm/device_compat.h>

@@ -3,15 +3,12 @@
  * Copyright (C) 2025 Linaro Ltd.
  */
 
-#define LOG_DEBUG
-
 #include <asm/gpio.h>
 #include <dm.h>
 #include <dm/device_compat.h>
 #include <i2c.h>
 #include <linux/delay.h>
 #include <power/regulator.h>
-#include <cyclic.h>
 
 // MPQ3367 register addresses
 #define MPQ3367_FUNC1_SET_REG   0x00
@@ -26,44 +23,10 @@
 #define MPQ3367_I2C_CHIP	0x38
 
 struct mpq3367_regulator_pdata {
-	struct cyclic_info cyclic;
-	struct udevice *dev;
 	struct udevice *i2c;
 	struct gpio_desc en;
 	bool enabled;
 };
-
-static void mpq3367_check_status(struct cyclic_info *c)
-{
-	struct mpq3367_regulator_pdata *pdata = container_of(c, struct mpq3367_regulator_pdata, cyclic);
-	struct udevice *dev = pdata->dev;
-	int ret;
-	u8 regval = 0;
-	u8 mode;
-
-	if (!pdata->enabled)
-		return;
-
-	ret = dm_i2c_read(pdata->i2c, MPQ3367_FUNC1_SET_REG, &regval, 1);
-	if (ret) {
-		dev_err(dev, "i2c read ctl0 failed: %d\n", ret);
-		return;
-	}
-
-	mode = (regval >> MPQ3367_DIMMING_SHIFT) & MPQ3367_DIMMING_MASK;
-	if (mode != MPQ3367_PWM_DIMMING) {
-		dev_dbg(dev, "Wrong mode %#x\n", mode);
-		regval &= ~(MPQ3367_DIMMING_MASK << MPQ3367_DIMMING_SHIFT);
-		regval |= MPQ3367_PWM_DIMMING << MPQ3367_DIMMING_SHIFT;
-
-		ret = dm_i2c_write(pdata->i2c, MPQ3367_FUNC1_SET_REG, &regval, 1);
-		if (ret) {
-			dev_err(dev, "i2c write ctl0 failed: %d\n", ret);
-		}
-
-		cyclic_unregister(&pdata->cyclic);
-	}
-}
 
 static int mpq3367_regulator_set_enable(struct udevice *dev, bool enable)
 {
@@ -96,9 +59,6 @@ static int mpq3367_regulator_set_enable(struct udevice *dev, bool enable)
 
 		pdata->enabled = 1;
 
-		/* When the regulator is enabled check for brownouts every second */
-		cyclic_register(&pdata->cyclic, mpq3367_check_status, 1000 * 1000, "MPQ3367-status");
-
 		return 0;
 	}
 
@@ -117,8 +77,6 @@ static int mpq3367_regulator_probe(struct udevice *dev)
 	struct mpq3367_regulator_pdata *pdata = dev_get_plat(dev);
 	int ret;
 	u8 regval;
-
-	pdata->dev = dev;
 
 	ret = gpio_request_by_name(dev, "enable-gpios", 0, &pdata->en,
 				   GPIOD_IS_OUT);

@@ -1341,8 +1341,6 @@
 		dual-panel;
 		low-fps-support;
 
-		rotation = <180>;
-
 		pinctrl-0 = <&display_resx1>, <&display_resx2>;
 		pinctrl-names = "default";
 

@@ -55,11 +55,6 @@ struct msm_dsi_cfg_handler {
 	u32 minor;
 };
 
-struct qcom_mdss_parent_plat {
-	/* MDP max clock rate */
-	unsigned long core_clk_max_rate;
-};
-
 #define FIELD(val, name) (((val) & name ## __MASK) >> name ## __SHIFT)
 
 //enum cb_err mdss_dsi_config(struct edid *edid, uint32_t num_of_lanes, uint32_t bpp);
@@ -77,12 +72,5 @@ void msm_dsi_phy_pll_save_state(struct msm_dsi_phy *phy);
 int msm_dsi_phy_pll_restore_state(struct msm_dsi_phy *phy);
 // void msm_dsi_phy_snapshot(struct msm_disp_state *disp_state, struct msm_dsi_phy *phy);
 bool msm_dsi_phy_set_continuous_clock(struct msm_dsi_phy *phy, bool enable);
-
-/* Poll error interrupts in video_sync cb */
-void qcom_dsi_video_sync(struct udevice *dsi_bridge);
-
-void qcom_dsi_do_dump(struct udevice *dev);
-
-void qcom_dpu_dump_state(struct udevice *dev);
 
 #endif

@@ -579,7 +579,7 @@ config SPL_DM_REGULATOR_NEX10001UB
 
 config DM_REGULATOR_MPQ3367
 	bool "Enable driver for MPQ3367 Power Regulator"
-	depends on DM_REGULATOR && CYCLIC
+	depends on DM_REGULATOR
 	help
 	The MPQ3367 provides a step-up converter with 6 channel current sources
 

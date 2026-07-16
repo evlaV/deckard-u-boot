@@ -36,15 +36,15 @@ struct wt0600_priv {
 	struct gpio_desc reset_gpio;
 
 	/* Dummy second panel device for dual-DSI */
-	bool secondary;
+	bool dummy;
 };
 
 static const struct display_timing default_timing = {
 	.pixelclock.typ		= 2 * (720 + 100 + 8 + 40) * (2560 + 15 + 8 + 2) * 60,
-	.hactive.typ		= 2 * 720,
-	.hfront_porch.typ	= 2 * 100,
-	.hback_porch.typ	= 2 * 40,
-	.hsync_len.typ		= 2 * 8,
+	.hactive.typ		= 1440,
+	.hfront_porch.typ	= 100,
+	.hback_porch.typ	= 40,
+	.hsync_len.typ		= 8,
 
 	.vactive.typ		= 2560,
 	.vfront_porch.typ	= 15,
@@ -67,24 +67,26 @@ static struct mipi_dsi_panel_plat *wt0600_get_dsi1_plat(struct udevice *dev)
 	return dev_get_plat(dummy);
 }
 
-// Only called for second interface (since in sync mode cmds sent to DSI0 are ignored and DSI1 triggers both)
+// Never called for dummy device!!
 static int wt0600_on(struct udevice *dev)
 {
 	struct mipi_dsi_panel_plat *plat = dev_get_plat(dev);
-	// struct mipi_dsi_panel_plat *plat_dsi1 = wt0600_get_dsi1_plat(dev);
+	struct mipi_dsi_panel_plat *plat_dsi1 = wt0600_get_dsi1_plat(dev);
 
 	// log_debug("%s:%d: %s\n", __FILE__, __LINE__, __func__);
 
-	// if (!plat_dsi1)
-	// 	return -ENOENT;
+	if (!plat_dsi1)
+		return -ENOENT;
+
+	// FIXME: maybe need to do this on BOTH DSI controllers?
 
 	// Linux driver does set_display_on first?? wtf??
 	mipi_dsi_dcs_set_display_on(plat->device);
-	// mipi_dsi_dcs_set_display_on(plat_dsi1->device);
+	mipi_dsi_dcs_set_display_on(plat_dsi1->device);
 	mdelay(150);
 
 	mipi_dsi_dcs_exit_sleep_mode(plat->device);
-	// mipi_dsi_dcs_exit_sleep_mode(plat_dsi1->device);
+	mipi_dsi_dcs_exit_sleep_mode(plat_dsi1->device);
 	mdelay(50);
 
 	return 0;
@@ -119,7 +121,7 @@ static int wt0600_enable_backlight(struct udevice *dev)
 {
 	struct wt0600_priv *priv = dev_get_priv(dev);
 
-	if (!priv->secondary)
+	if (priv->dummy)
 		return 0;
 
 	wt0600_on(dev);
@@ -131,7 +133,7 @@ static int wt0600_set_backlight(struct udevice *dev, int percent)
 {
 	struct wt0600_priv *priv = dev_get_priv(dev);
 
-	if (!priv->secondary)
+	if (priv->dummy)
 		return 0;
 	
 	return backlight_set_brightness(priv->backlight, percent);
@@ -148,22 +150,22 @@ static int wt0600_get_display_timing(struct udevice *dev,
 // We make it a child so we can easily find it to send DSI commands
 static int wt0600_bind(struct udevice *dev)
 {
-	int ret = 0;
+	int ret;
 	const struct driver *drv;
 
-	// /* Don't get in a recursive loop! */
-	// if (dev_get_driver_data(dev))
-	// 	return 0;
+	/* Don't get in a recursive loop! */
+	if (dev_get_driver_data(dev))
+		return 0;
 
-	// drv = lists_driver_lookup_name("wt0600");
-	// if (!drv) {
-	// 	dev_err(dev, "Couldn't find panel driver???\n");
-	// 	return -ENOENT;
-	// }
+	drv = lists_driver_lookup_name("wt0600");
+	if (!drv) {
+		dev_err(dev, "Couldn't find panel driver???\n");
+		return -ENOENT;
+	}
 
-	// ret = device_bind_with_driver_data(dev, drv, "dummy_panel", 1, dev_ofnode(dev), NULL);
-	// if (ret)
-	// 	dev_err(dev, "Failed to bind dummy panel!\n");
+	ret = device_bind_with_driver_data(dev, drv, "dummy_panel", 1, dev_ofnode(dev), NULL);
+	if (ret)
+		dev_err(dev, "Failed to bind dummy panel!\n");
 
 	return ret;
 }
@@ -175,7 +177,7 @@ static int wt0600_probe(struct udevice *dev)
 	int ret;
 
 	priv->dev = dev;
-	priv->secondary = dev_get_driver_data(dev);
+	priv->dummy = dev_get_driver_data(dev);
 
 	/* fill characteristics of DSI data link */
 	plat->lanes = 4;
@@ -183,8 +185,7 @@ static int wt0600_probe(struct udevice *dev)
 	plat->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_BURST |
 			MIPI_DSI_CLOCK_NON_CONTINUOUS | MIPI_DSI_MODE_LPM;
 
-	/* do all the important stuff on the second panel */
-	if (!priv->secondary)
+	if (priv->dummy)
 		return 0;
 
 	ret = gpio_request_by_name(dev, "reset-gpios", 0,
@@ -199,7 +200,6 @@ static int wt0600_probe(struct udevice *dev)
 		ret = device_get_supply_regulator(dev, wt0600_supplies[i], &priv->regulators[i]);
 		if (ret) {
 			dev_err(dev, "Failed to get supply regulator %s: %d\n", wt0600_supplies[i], ret);
-			dm_gpio_free(dev, &priv->reset_gpio);
 			return ret;
 		}
 	}

@@ -8,7 +8,6 @@
 
 #define LOG_CATEGORY LOGC_BOARD
 #define pr_fmt(fmt) "QCOM: " fmt
-#define LOG_DEBUG
 
 #include <asm/armv8/mmu.h>
 #include <asm/gpio.h>

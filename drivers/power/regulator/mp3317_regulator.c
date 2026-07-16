@@ -6,8 +6,6 @@
 #include <asm/gpio.h>
 #include <dm.h>
 #include <dm/device_compat.h>
-#include <dm/device-internal.h>
-#include <dm/lists.h>
 #include <i2c.h>
 #include <linux/delay.h>
 #include <power/regulator.h>
@@ -258,15 +256,11 @@ static int mp3317_regulator_set_enable(struct udevice *dev, bool enable)
 {
 	struct mp3317_regulator_pdata *pdata = dev_get_plat(dev);
 
-	/* We are the regulator node, call through the parent! */
-	if (dev_get_driver_data(dev))
-		return mp3317_regulator_set_enable(dev_get_parent(dev), enable);
-
 	if (enable) {
 		if (pdata->enabled)
 			return 0;
 
-		// dm_gpio_set_value(&pdata->en, 1);
+		dm_gpio_set_value(&pdata->en, 1);
 
 		udelay(20000);
 
@@ -280,40 +274,11 @@ static int mp3317_regulator_set_enable(struct udevice *dev, bool enable)
 	if (!pdata->enabled)
 		return 0;
 
-	// dm_gpio_set_value(&pdata->en, 0);
+	dm_gpio_set_value(&pdata->en, 0);
 
 	pdata->enabled = 0;
 
 	return 0;
-}
-
-/* Bind the actual regulator driver to the regulator node */
-static int mp3317_regulator_bind(struct udevice *dev)
-{
-	ofnode regulator_node = ofnode_first_subnode(ofnode_first_subnode(dev_ofnode(dev)));
-	struct driver *drv;
-	bool subnode = true;
-	const char *name;
-
-	if (!ofnode_valid(regulator_node)) {
-		dev_dbg(dev, "No regulator subnode?");
-		subnode = false;
-		regulator_node = dev_ofnode(dev);
-	}
-
-	drv = lists_driver_lookup_name("mp3317_regulator");
-	if (!drv) {
-		dev_err(dev, "Couldn't find panel driver???\n");
-		return -ENOENT;
-	}
-
-	name = ofnode_read_string(regulator_node, "regulator-name");
-	if (!name)
-		name = ofnode_get_name(regulator_node);
-
-	int ret = device_bind_with_driver_data(dev, drv, name, subnode, regulator_node, NULL);
-	printf("%s: bound %s -- %d\n", __func__, name, ret);
-	return ret;
 }
 
 static int mp3317_regulator_probe(struct udevice *dev)
@@ -323,10 +288,10 @@ static int mp3317_regulator_probe(struct udevice *dev)
 	int ret, slave_addr;
 	u8 regval;
 
-	ret = gpio_request_by_name(dev, "en-gpios", 0, &pdata->en,
+	ret = gpio_request_by_name(dev, "enable-gpios", 0, &pdata->en,
 				   GPIOD_IS_OUT);
 	if (ret) {
-		dev_err(dev, "get en-gpio failed.\n");
+		dev_err(dev, "get enable-gpio failed.\n");
 		return ret;
 	}
 
@@ -340,18 +305,17 @@ static int mp3317_regulator_probe(struct udevice *dev)
 		return ret;
 	}
 
-	/* reset */
-	dm_gpio_set_value(&pdata->en, 0);
-	udelay(20000);
+	// Check i2c by reading ctl
 	dm_gpio_set_value(&pdata->en, 1);
-	udelay(20000);
-
+	udelay(2000);
 	ret = dm_i2c_read(pdata->i2c, MP3317_MODE_CTL, &regval, 1);
 	if (ret) {
 		dev_err(dev, "i2c read ctl failed: %d\n", ret);
 		dm_gpio_free(dev, &pdata->en);
 		return ret;
 	}
+
+	dm_gpio_set_value(&pdata->en, 0);
 
 	pdata->enabled = 0;
 
@@ -363,21 +327,15 @@ static const struct dm_regulator_ops mp3317_regulator_ops = {
 };
 
 static const struct udevice_id mp3317_regulator_ids[] = {
-	{ .compatible = "mps,mp3317" },
+	{ .compatible = "monolithicpower,mp3317" },
 	{ },
-};
-
-U_BOOT_DRIVER(mp3317_regulator_parent) = {
-	.name = "mp3317_regulator_parent",
-	.id = UCLASS_NOP,
-	.of_match = mp3317_regulator_ids,
-	.plat_auto	= sizeof(struct mp3317_regulator_pdata),
-	.probe = mp3317_regulator_probe,
-	.bind = mp3317_regulator_bind,
 };
 
 U_BOOT_DRIVER(mp3317_regulator) = {
 	.name = "mp3317_regulator",
 	.id = UCLASS_REGULATOR,
 	.ops = &mp3317_regulator_ops,
+	.of_match = mp3317_regulator_ids,
+	.plat_auto	= sizeof(struct mp3317_regulator_pdata),
+	.probe = mp3317_regulator_probe,
 };

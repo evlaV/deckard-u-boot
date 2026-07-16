@@ -6,8 +6,6 @@
  * used by u-boot on platforms where the SMMU can't be disabled.
  */
 
-#define LOG_DEBUG
-
 #include <log.h>
 #include <cpu_func.h>
 #include <dm.h>
@@ -423,7 +421,6 @@ static int qcom_smmu_probe(struct udevice *dev)
 	INIT_LIST_HEAD(&priv->devices);
 
 	//priv->disable = current_el() > 1;
-	printf("[SMMU] init in EL%u\n", current_el());
 
 	/* Read SMMU config */
 	val = gr0_readl(priv, ARM_SMMU_GR0_ID0);
@@ -435,7 +432,7 @@ static int qcom_smmu_probe(struct udevice *dev)
 	priv->cb_pg_offset = 1
 			     << (FIELD_GET(ARM_SMMU_ID1_NUMPAGENDXB, val) + 1);
 
-	// dump_boot_mappings(priv);
+	dump_boot_mappings(priv);
 
 	return 0;
 }
