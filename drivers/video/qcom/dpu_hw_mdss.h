@@ -118,6 +118,31 @@ enum dpu_sspp {
 	SSPP_MAX
 };
 
+static inline const char *dpu_sspp_str(enum dpu_sspp sspp)
+{
+	switch (sspp) {
+	case SSPP_VIG0: return "VIG0";
+	case SSPP_VIG1: return "VIG1";
+	case SSPP_VIG2: return "VIG2";
+	case SSPP_VIG3: return "VIG3";
+	case SSPP_RGB0: return "RGB0";
+	case SSPP_RGB1: return "RGB1";
+	case SSPP_RGB2: return "RGB2";
+	case SSPP_RGB3: return "RGB3";
+	case SSPP_DMA0: return "DMA0";
+	case SSPP_DMA1: return "DMA1";
+	case SSPP_DMA2: return "DMA2";
+	case SSPP_DMA3: return "DMA3";
+	case SSPP_DMA4: return "DMA4";
+	case SSPP_DMA5: return "DMA5";
+	case SSPP_CURSOR0: return "CURSOR0";
+	case SSPP_CURSOR1: return "CURSOR1";
+	default: break;
+	}
+
+	return "UNKNOWN";
+}
+
 enum dpu_sspp_type {
 	SSPP_TYPE_VIG,
 	SSPP_TYPE_RGB,
@@ -249,6 +274,25 @@ enum dpu_intf_type {
 	/* virtual interfaces */
 	INTF_WB = 0x100,
 };
+
+static inline const char *intf_type_str(enum dpu_intf_type type)
+{
+	switch (type) {
+	case INTF_NONE: return "NONE";
+	case INTF_DSI: return "DSI";
+	case INTF_HDMI: return "HDMI";
+	case INTF_LCDC: return "LCDC";
+	/* old eDP found on 8x74 and 8x84 */
+	case INTF_EDP: return "EDP";
+	/* both DP and eDP,  handled by the new DP driver */
+	case INTF_DP: return "DP";
+
+	/* virtual interfaces */
+	case INTF_WB: return "WB";
+	}
+
+	return "UNKNOWN";
+}
 
 enum dpu_intf_mode {
 	INTF_MODE_NONE = 0,
