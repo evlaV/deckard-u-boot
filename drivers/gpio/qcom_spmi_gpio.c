@@ -722,16 +722,15 @@ static int qcom_spmi_pmic_gpio_probe(struct udevice *dev)
 
 	pmic_name = strdup(strchr(dev_read_string(dev, "compatible"), ','));
 	if (pmic_name) {
-		pmic_name += 1; /* skip the , */
 		i = strchr(pmic_name, '-') - pmic_name;
 		pmic_name[i] = '\0';
 	} else {
 		pmic_name = strdup(dev->name);
 	}
 
-	namelen = strlen(pmic_name) + 32;
+	namelen = strlen(pmic_name + 1) + 32;
 	name = malloc(namelen);
-	ret = snprintf(name, namelen, "%s@%x-gpio", pmic_name, (int)(dev_read_addr(plat->pmic) >> 20));
+	ret = snprintf(name, namelen, "%s@%x-gpio", pmic_name + 1, (int)(dev_read_addr(plat->pmic) >> 20));
 	/* Should really never happen */
 	if (ret >= namelen)
 		name[namelen - 1] = '\0';

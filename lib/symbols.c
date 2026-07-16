@@ -28,6 +28,8 @@ extern const unsigned int symbols_markers[];
 
 #define symbols_address(n) (symbols_offsets[n] + 0UL)
 
+DECLARE_GLOBAL_DATA_PTR;
+
 /*
  * expand a compressed symbol data into the resulting uncompressed string,
  * given the offset to where the symbol is in the compressed stream.

@@ -8,6 +8,7 @@ config VIDEO_QCOM
 	bool "Enable Qualcomm video support"
 	depends on VIDEO && VIDEO_MIPI_DSI && VIDEO_BRIDGE && ARCH_SNAPDRAGON
 	select DISPLAY
+	select VIDEO_DSC_HELPER
 	help
 	  Enable Qualcomm Video Processing Unit video support.
 

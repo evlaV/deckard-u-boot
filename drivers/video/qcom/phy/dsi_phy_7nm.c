@@ -4,6 +4,7 @@
  */
 
 #define pr_fmt(fmt) "[7nm-phy] %s "fmt"\n", __func__
+// #define LOG_DEBUG
 
 #include <dm/devres.h>
 #include <dm/device_compat.h>

@@ -5,6 +5,7 @@
 
 #define LOG_CATEGORY LOGC_BOARD
 #define pr_fmt(fmt) "QCOM-DRAM: " fmt
+#define LOG_DEBUG
 
 #include <asm-generic/unaligned.h>
 #include <dm.h>

@@ -47,10 +47,10 @@ void panic(const char *fmt, ...)
 	vprintf(fmt, args);
 	va_end(args);
 
-	if (CONFIG_IS_ENABLED(FRAMEPOINTER)) {
-		puts("\n");
-		unwind_stack();
-	}
+#if CONFIG_IS_ENABLED(FRAMEPOINTER)
+	puts("\n");
+	unwind_stack();
+#endif
 
 #endif
 	panic_finish();

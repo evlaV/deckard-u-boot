@@ -4,7 +4,9 @@
  *
  */
 
+#define pr_fmt(fmt) "[DSI] "fmt
 #define LOG_CATEGORY UCLASS_VIDEO_BRIDGE
+// #define LOG_DEBUG
 
 #include <clk.h>
 #include <dm.h>
@@ -26,6 +28,7 @@
 #include <linux/iopoll.h>
 #include <linux/printk.h>
 #include <power/regulator.h>
+#include <drm/display/drm_dsc_helper.h>
 
 //#include "mdssreg.h"
 #include "qcom_mipi_dsi.h"
@@ -60,6 +63,16 @@
 
 #define DSI_RESET_TOGGLE_DELAY_MS 20
 
+#define DSI_ERR_STATE_ACK			0x0000
+#define DSI_ERR_STATE_TIMEOUT			0x0001
+#define DSI_ERR_STATE_DLN0_PHY			0x0002
+#define DSI_ERR_STATE_FIFO			0x0004
+#define DSI_ERR_STATE_MDP_FIFO_UNDERFLOW	0x0008
+#define DSI_ERR_STATE_INTERLEAVE_OP_CONTENTION	0x0010
+#define DSI_ERR_STATE_PLL_UNLOCKED		0x0020
+
+#define DSI_REG_FRAME_COUNT 0x398
+
 /* for bridge */
 struct qcom_dsi_priv {
 	struct mipi_dsi_device device;
@@ -92,6 +105,11 @@ struct qcom_dsi_priv {
 struct qcom_mipi_dsi {
 	struct mipi_dsi_host dsi_host;
 	struct mipi_dsi_device *device;
+	struct drm_dsc_config *dsc;
+	struct cyclic_info cyclic;
+	unsigned int dsc_slice_per_pkt;
+	u32 err_work_state;
+	u32 fifo_err;
 	void __iomem *base;
 	int id;
 	unsigned int lane_mbps; /* per lane */
@@ -174,6 +192,25 @@ static inline void dsi_flush_cache(uintptr_t addr, int length)
 	flush_dcache_range((unsigned long)start_addr, (unsigned long)end_addr);
 }
 
+static void dsi_intr_ctrl(struct qcom_mipi_dsi *msm_host, u32 mask, int enable)
+{
+	u32 intr;
+	unsigned long flags;
+
+	spin_lock_irqsave(&msm_host->intr_lock, flags);
+	intr = dsi_read(msm_host->base + REG_DSI_INTR_CTRL);
+
+	if (enable)
+		intr |= mask;
+	else
+		intr &= ~mask;
+
+	// dev_dbg(msm_host->dsi_host.dev, "intr=%x enable=%d\n", intr, enable);
+
+	dsi_write(msm_host->base + REG_DSI_INTR_CTRL, intr);
+	spin_unlock_irqrestore(&msm_host->intr_lock, flags);
+}
+
 #define REG_DSI_VBIF_CTRL	(0x01C8)
 static int dsi_cmds2buf_tx(struct mipi_dsi_host *host,
 			   const struct mipi_dsi_msg *msg)
@@ -246,7 +283,7 @@ static int dsi_cmds2buf_tx(struct mipi_dsi_host *host,
 
 	dsi_write(base + REG_DSI_TRIG_DMA, 0x1);
 
-	debug("%s: %#x (ret=%d)\n", __func__, packet.payload ? packet.payload[0] : packet.header[0], ret);
+	pr_debug("%s: %#x (ret=%d)\n", __func__, data[0], ret);
 	return ret < 0 ? ret : packet.size;
 }
 
@@ -384,7 +421,7 @@ int msm_dsi_host_cmd_rx(struct mipi_dsi_host *host,
 	int rlen = msg->rx_len;
 	u8 *buf;
 
-	debug("Dsi RX\n");
+	// debug("Dsi RX\n");
 	if (rlen <= 2) {
 		short_response = 1;
 		pkt_size = rlen;
@@ -420,6 +457,12 @@ int msm_dsi_host_cmd_rx(struct mipi_dsi_host *host,
 			return -EINVAL;
 		}
 
+		ret = dsi_tx_wait_done(host);
+		if (ret < 0) {
+			pr_err("%s: Set max pkt size failed tx_wait_done, %d\n",
+				__func__, ret);
+		}
+
 		/* 8650 is 6g_v2 MSM_DSI_VER_MAJOR_6G, MSM_DSI_6G_VER_MINOR_V2_8_0
 		if ((cfg_hnd->major == MSM_DSI_VER_MAJOR_6G) &&
 			(cfg_hnd->minor >= MSM_DSI_6G_VER_MINOR_V1_1)) {
@@ -441,6 +484,12 @@ int msm_dsi_host_cmd_rx(struct mipi_dsi_host *host,
 		} else if (ret < msg->tx_len) {
 			pr_err("%s: Read cmd Tx failed, too short: %d\n", __func__, ret);
 			return -EIO;
+		}
+
+		ret = dsi_tx_wait_done(host);
+		if (ret < 0) {
+			pr_err("%s: Read cmd Tx failed tx_wait_done, %d\n",
+				__func__, ret);
 		}
 
 		/*
@@ -628,10 +677,73 @@ dsi_get_cmd_fmt(const enum mipi_dsi_pixel_format mipi_fmt)
 	}
 }
 
+bool regdump_read_decode(u64 addr);
+
+static void qcom_dsi_dump_regs(struct qcom_mipi_dsi *host)
+{
+	printf("\n====== DSI%d ======\n", host->id);
+	regdump_read_decode((u64)host->base + REG_DSI_STATUS0);
+	regdump_read_decode((u64)host->base + REG_DSI_FIFO_STATUS);
+	printf("\n");
+	regdump_read_decode((u64)host->base + REG_DSI_ACK_ERR_STATUS);
+	regdump_read_decode((u64)host->base + REG_DSI_ACTIVE_H);
+	regdump_read_decode((u64)host->base + REG_DSI_ACTIVE_HSYNC);
+	regdump_read_decode((u64)host->base + REG_DSI_ACTIVE_V);
+	regdump_read_decode((u64)host->base + REG_DSI_ACTIVE_VSYNC_HPOS);
+	regdump_read_decode((u64)host->base + REG_DSI_ACTIVE_VSYNC_VPOS);
+	regdump_read_decode((u64)host->base + REG_DSI_CLK_CTRL);
+	regdump_read_decode((u64)host->base + REG_DSI_CLKOUT_TIMING_CTRL);
+	regdump_read_decode((u64)host->base + REG_DSI_CLK_STATUS);
+	regdump_read_decode((u64)host->base + REG_DSI_CMD_CFG0);
+	regdump_read_decode((u64)host->base + REG_DSI_CMD_CFG1);
+	regdump_read_decode((u64)host->base + REG_DSI_CMD_DMA_CTRL);
+	regdump_read_decode((u64)host->base + REG_DSI_CMD_MDP_STREAM0_CTRL);
+	regdump_read_decode((u64)host->base + REG_DSI_CMD_MDP_STREAM0_TOTAL);
+	regdump_read_decode((u64)host->base + REG_DSI_CMD_MODE_MDP_CTRL2);
+	regdump_read_decode((u64)host->base + REG_DSI_COMMAND_COMPRESSION_MODE_CTRL);
+	regdump_read_decode((u64)host->base + REG_DSI_COMMAND_COMPRESSION_MODE_CTRL2);
+	regdump_read_decode((u64)host->base + REG_DSI_CPHY_MODE_CTRL);
+	regdump_read_decode((u64)host->base + REG_DSI_CTRL);
+	regdump_read_decode((u64)host->base + REG_DSI_DLN0_PHY_ERR);
+	regdump_read_decode((u64)host->base + REG_DSI_LANE_STATUS);
+	regdump_read_decode((u64)host->base + REG_DSI_DMA_BASE);
+	regdump_read_decode((u64)host->base + REG_DSI_DMA_LEN);
+	regdump_read_decode((u64)host->base + REG_DSI_EOT_PACKET_CTRL);
+	regdump_read_decode((u64)host->base + REG_DSI_ERR_INT_MASK0);
+	regdump_read_decode((u64)host->base + REG_DSI_INTR_CTRL);
+	regdump_read_decode((u64)host->base + REG_DSI_LANE_CTRL);
+	regdump_read_decode((u64)host->base + REG_DSI_LANE_SWAP_CTRL);
+	regdump_read_decode((u64)host->base + REG_DSI_T_CLK_PRE_EXTEND);
+	regdump_read_decode((u64)host->base + REG_DSI_TEST_PATTERN_GEN_CTRL);
+	regdump_read_decode((u64)host->base + REG_DSI_TIMEOUT_STATUS);
+	regdump_read_decode((u64)host->base + REG_DSI_TOTAL);
+	regdump_read_decode((u64)host->base + REG_DSI_TRIG_CTRL);
+	regdump_read_decode((u64)host->base + REG_DSI_TRIG_DMA);
+	regdump_read_decode((u64)host->base + REG_DSI_VBIF_CTRL);
+	regdump_read_decode((u64)host->base + REG_DSI_VID_CFG0);
+	regdump_read_decode((u64)host->base + REG_DSI_VID_CFG1);
+	regdump_read_decode((u64)host->base + REG_DSI_VIDEO_COMPRESSION_MODE_CTRL);
+
+	printf("\n");
+}
+
+void qcom_dsi_do_dump(struct udevice *dev)
+{
+	struct qcom_mipi_dsi *host = dev_get_priv(dev);
+
+	printf("\n====== DSI%d ======\n", host->id);
+	printf("Frame count: %u\n", dsi_read(host->base + DSI_REG_FRAME_COUNT));
+	printf("C-PHY mode: %d\n", dsi_read(host->base + REG_DSI_CPHY_MODE_CTRL));
+	qcom_dsi_dump_regs(host);
+	// regdump_read_decode((u64)host->base + REG_DSI_ERR_INT_MASK0);
+	// regdump_read_decode((u64)host->base + REG_DSI_FIFO_STATUS);
+	// regdump_read_decode((u64)host->base + REG_DSI_STATUS0);
+	// regdump_read_decode((u64)host->base + REG_DSI_DLN0_PHY_ERR);
+}
+
 bool msm_dsi_host_is_wide_bus_enabled(struct qcom_mipi_dsi *priv)
 {
-	#define DSC_ENABLED false
-	return DSC_ENABLED &&
+	return priv->dsc &&
 		(priv->cfg_hnd.major == MSM_DSI_VER_MAJOR_6G &&
 		 priv->cfg_hnd.minor >= MSM_DSI_6G_VER_MINOR_V2_5_0);
 }
@@ -647,6 +759,63 @@ bool msm_dsi_host_is_wide_bus_enabled(struct qcom_mipi_dsi *priv)
 // }
 
 /**** PHY_OPS_END *****/
+
+static void dsi_update_dsc_timing(struct qcom_mipi_dsi *msm_host, bool is_cmd_mode)
+{
+	struct drm_dsc_config *dsc = msm_host->dsc;
+	u32 reg, reg_ctrl, reg_ctrl2;
+	u32 slice_per_intf, total_bytes_per_intf;
+	u32 pkt_per_line;
+	u32 eol_byte_num;
+	u32 bytes_per_pkt;
+
+	dev_dbg(msm_host->device->dev, "%s\n", __func__);
+
+	/* first calculate dsc parameters and then program
+	 * compress mode registers
+	 */
+	slice_per_intf = dsc->slice_count;
+
+	total_bytes_per_intf = dsc->slice_chunk_size * slice_per_intf;
+	bytes_per_pkt = dsc->slice_chunk_size * msm_host->dsc_slice_per_pkt;
+
+	eol_byte_num = total_bytes_per_intf % 3;
+	pkt_per_line = slice_per_intf / msm_host->dsc_slice_per_pkt;
+
+	if (is_cmd_mode) /* packet data type */
+		reg = DSI_COMMAND_COMPRESSION_MODE_CTRL_STREAM0_DATATYPE(MIPI_DSI_DCS_LONG_WRITE);
+	else
+		reg = DSI_VIDEO_COMPRESSION_MODE_CTRL_DATATYPE(MIPI_DSI_COMPRESSED_PIXEL_STREAM);
+
+	/* DSI_VIDEO_COMPRESSION_MODE & DSI_COMMAND_COMPRESSION_MODE
+	 * registers have similar offsets, so for below common code use
+	 * DSI_VIDEO_COMPRESSION_MODE_XXXX for setting bits
+	 *
+	 * pkt_per_line is log2 encoded, >>1 works for supported values (1,2,4)
+	 */
+	if (pkt_per_line > 4)
+		dev_warn(msm_host->device->dev, "pkt_per_line too big");
+	reg |= DSI_VIDEO_COMPRESSION_MODE_CTRL_PKT_PER_LINE(pkt_per_line >> 1);
+	reg |= DSI_VIDEO_COMPRESSION_MODE_CTRL_EOL_BYTE_NUM(eol_byte_num);
+	reg |= DSI_VIDEO_COMPRESSION_MODE_CTRL_EN;
+
+	if (is_cmd_mode) {
+		reg_ctrl = dsi_read(msm_host->base + REG_DSI_COMMAND_COMPRESSION_MODE_CTRL);
+		reg_ctrl2 = dsi_read(msm_host->base + REG_DSI_COMMAND_COMPRESSION_MODE_CTRL2);
+
+		reg_ctrl &= ~0xffff;
+		reg_ctrl |= reg;
+
+		reg_ctrl2 &= ~DSI_COMMAND_COMPRESSION_MODE_CTRL2_STREAM0_SLICE_WIDTH__MASK;
+		reg_ctrl2 |= DSI_COMMAND_COMPRESSION_MODE_CTRL2_STREAM0_SLICE_WIDTH(dsc->slice_chunk_size);
+
+		dsi_write(msm_host->base + REG_DSI_COMMAND_COMPRESSION_MODE_CTRL, reg_ctrl);
+		dsi_write(msm_host->base + REG_DSI_COMMAND_COMPRESSION_MODE_CTRL2, reg_ctrl2);
+	} else {
+		reg |= DSI_VIDEO_COMPRESSION_MODE_CTRL_WC(bytes_per_pkt);
+		dsi_write(msm_host->base + REG_DSI_VIDEO_COMPRESSION_MODE_CTRL, reg);
+	}
+}
 
 static void dsi_ctrl_enable(struct qcom_mipi_dsi *priv,
 			struct msm_dsi_phy_shared_timings *phy_shared_timings, struct msm_dsi_phy *phy)
@@ -726,7 +895,7 @@ static void dsi_ctrl_enable(struct qcom_mipi_dsi *priv,
 
 	data = DSI_CLKOUT_TIMING_CTRL_T_CLK_POST(phy_shared_timings->clk_post) |
 		DSI_CLKOUT_TIMING_CTRL_T_CLK_PRE(phy_shared_timings->clk_pre);
-	dev_dbg(device->dev, "Writing DSI_CLKOUT_TIMING_CTRL: %#x (post %u, pre %u)\n", data, phy_shared_timings->clk_post, phy_shared_timings->clk_pre);
+	dev_dbg(device->dev, "Writing phy clout timings: (post %u, pre %u)\n", phy_shared_timings->clk_post, phy_shared_timings->clk_pre);
 	dsi_write(priv->base + REG_DSI_CLKOUT_TIMING_CTRL, data);
 
 	if ((cfg_hnd->major == MSM_DSI_VER_MAJOR_6G) &&
@@ -743,8 +912,10 @@ static void dsi_ctrl_enable(struct qcom_mipi_dsi *priv,
 	/* allow only ack-err-status to generate interrupt */
 	dsi_write(priv->base + REG_DSI_ERR_INT_MASK0, 0x13ff3fe0);
 
-	/* U-Boot: disable all interrupts! */
-	// dsi_write(priv->base + REG_DSI_INTR_CTRL, 0);
+	/* U-Boot: disable all interrupts except error */
+	dsi_write(priv->base + REG_DSI_INTR_CTRL, DSI_IRQ_MASK_ERROR);
+	// dsi_intr_ctrl(priv, DSI_IRQ_MASK_ERROR, 1);
+	// dsi_intr_ctrl(priv, UINT32_MAX, 0);
 
 	dsi_write(priv->base + REG_DSI_CLK_CTRL, DSI_CLK_CTRL_ENABLE_CLKS);
 
@@ -780,19 +951,81 @@ static void dsi_ctrl_enable(struct qcom_mipi_dsi *priv,
 
 	if (phy->cphy_mode)
 		dsi_write(priv->base + REG_DSI_CPHY_MODE_CTRL, BIT(0));
+
+
+	// qcom_dsi_dump_regs(priv);
 }
+
+static int dsi_populate_dsc_params(struct qcom_mipi_dsi *msm_host, struct drm_dsc_config *dsc)
+{
+	int ret;
+
+	if (dsc->bits_per_pixel & 0xf) {
+		dev_err(msm_host->device->dev, "DSI does not support fractional bits_per_pixel\n");
+		return -EINVAL;
+	}
+
+	switch (dsc->bits_per_component) {
+	case 8:
+	case 10:
+	case 12:
+		/*
+		 * Only 8, 10, and 12 bpc are supported for DSC 1.1 block.
+		 * If additional bpc values need to be supported, update
+		 * this quard with the appropriate DSC version verification.
+		 */
+		break;
+	default:
+		dev_err(msm_host->device->dev,
+			      "Unsupported bits_per_component value: %d\n",
+			      dsc->bits_per_component);
+		return -EOPNOTSUPP;
+	}
+
+	dsc->simple_422 = 0;
+	dsc->convert_rgb = 1;
+	dsc->vbr_enable = 0;
+
+	drm_dsc_set_const_params(dsc);
+	drm_dsc_set_rc_buf_thresh(dsc);
+
+	/* DPU supports only pre-SCR panels */
+	ret = drm_dsc_setup_rc_params(dsc, DRM_DSC_1_1_PRE_SCR);
+	if (ret) {
+		dev_err(msm_host->device->dev, "could not find DSC RC parameters\n");
+		return ret;
+	}
+
+	dsc->initial_scale_value = drm_dsc_initial_scale_value(dsc);
+	dsc->line_buf_depth = dsc->bits_per_component + 1;
+
+	return drm_dsc_compute_rc_parameters(dsc);
+}
+
+/**
+ * msm_dsc_get_bytes_per_line() - calculate bytes per line
+ * @dsc: Pointer to drm dsc config struct
+ * Returns: Integer value representing bytes per line. DSI and DP need
+ *          to perform further calculations to turn this into pclk_per_intf,
+ *          such as dividing by different values depending on if widebus is enabled.
+ */
+static inline u32 msm_dsc_get_bytes_per_line(const struct drm_dsc_config *dsc)
+{
+	return dsc->slice_count * dsc->slice_chunk_size;
+}
+
+#define dsi_timing_htotal(t, hactive) (hactive + t->hfront_porch.typ + t->hback_porch.typ + t->hsync_len.typ)
 
 static void dsi_timing_setup(struct qcom_mipi_dsi *dsi, struct display_timing *timings)
 {
 	void __iomem *base = dsi->base;
 	u32 hs_start = 0, vs_start = 0; /* take sync start as 0 */
 	u32 hactive = timings->hactive.typ;
-
-	if (true) // dual dsi!
-		hactive /= 2;
+	bool wide_bus_enabled = msm_dsi_host_is_wide_bus_enabled(dsi);
+	int ret;
 
 	// 1080 + 20 + 20 + 2
-	u32 h_total = hactive + timings->hfront_porch.typ + timings->hback_porch.typ + timings->hsync_len.typ;
+	u32 h_total = dsi_timing_htotal(timings, hactive);
 	u32 v_total = timings->vactive.typ + timings->vfront_porch.typ + timings->vback_porch.typ + timings->vsync_len.typ;
 
 	// (1080 + 20 + 2) - (1080 + 20) = 2 ~= hs_start + hs_len = 0 + 2
@@ -807,7 +1040,67 @@ static void dsi_timing_setup(struct qcom_mipi_dsi *dsi, struct display_timing *t
 	u32 hdisplay = hactive;
 	u32 wc;
 
+	if (IS_BONDED_DSI()) {
+		h_total /= 2;
+		hs_end /= 2;
+		ha_start /= 2;
+		ha_end /= 2;
+		hdisplay /= 2;
+	}
+
+	if (dsi->dsc) {
+		struct drm_dsc_config *dsc = dsi->dsc;
+		u32 bytes_per_pclk;
+
+		/* update dsc params with timing params */
+		if (!dsc || !timings->hactive.typ || !timings->vactive.typ) {
+			pr_err("DSI: invalid input: pic_width: %d pic_height: %d\n",
+			       timings->hactive.typ, timings->vactive.typ);
+			return;
+		}
+
+		dsc->pic_width = hdisplay;
+		dsc->pic_height = timings->vactive.typ;
+		dev_dbg(dsi->device->dev, "%s: DSC Mode %dx%d\n", __func__, dsc->pic_width, dsc->pic_height);
+
+		/* we do the calculations for dsc parameters here so that
+		 * panel can use these parameters
+		 */
+		ret = dsi_populate_dsc_params(dsi, dsc);
+		if (ret) {
+			dev_err(dsi->dsi_host.dev, "Couldn't populate DSC params! %d\n", ret);
+			return;
+		}
+
+		/*
+		 * DPU sends 3 bytes per pclk cycle to DSI. If widebus is
+		 * enabled, bus width is extended to 6 bytes.
+		 *
+		 * Calculate the number of pclks needed to transmit one line of
+		 * the compressed data.
+
+		 * The back/font porch and pulse width are kept intact. For
+		 * VIDEO mode they represent timing parameters rather than
+		 * actual data transfer, see the documentation for
+		 * dsi_adjust_pclk_for_compression(). For CMD mode they are
+		 * unused anyway.
+		 */
+		h_total -= hdisplay;
+		if (wide_bus_enabled && !(dsi->device->mode_flags & MIPI_DSI_MODE_VIDEO))
+			bytes_per_pclk = 6;
+		else
+			bytes_per_pclk = 3;
+
+		hdisplay = DIV_ROUND_UP(msm_dsc_get_bytes_per_line(dsi->dsc), bytes_per_pclk);
+
+		h_total += hdisplay;
+		ha_end = ha_start + hdisplay;
+	}
+
 	if (dsi->device->mode_flags & MIPI_DSI_MODE_VIDEO) {
+		if (dsi->dsc)
+			dsi_update_dsc_timing(dsi, false);
+
 		dsi_write(base + REG_DSI_ACTIVE_H,
 			DSI_ACTIVE_H_START(ha_start) |
 			DSI_ACTIVE_H_END(ha_end));
@@ -826,8 +1119,17 @@ static void dsi_timing_setup(struct qcom_mipi_dsi *dsi, struct display_timing *t
 			DSI_ACTIVE_VSYNC_VPOS_START(vs_start) |
 			DSI_ACTIVE_VSYNC_VPOS_END(vs_end));
 	} else {		/* command mode */
+		if (dsi->dsc)
+			dsi_update_dsc_timing(dsi, true);
+
 		/* image data and 1 byte write_memory_start cmd */
-		wc = hdisplay * mipi_dsi_pixel_format_to_bpp(dsi->device->format) / 8 + 1;
+		if (!dsi->dsc)
+			wc = hdisplay * mipi_dsi_pixel_format_to_bpp(dsi->device->format) / 8 + 1;
+		else
+			/*
+			 * When DSC is enabled, WC = slice_chunk_size * slice_per_pkt + 1.
+			 */
+			wc = dsi->dsc->slice_chunk_size * dsi->dsc_slice_per_pkt + 1;
 
 		dsi_write(base + REG_DSI_CMD_MDP_STREAM0_CTRL,
 			DSI_CMD_MDP_STREAM0_CTRL_WORD_COUNT(wc) |
@@ -870,6 +1172,139 @@ static void dsi_sw_reset(struct qcom_mipi_dsi *dsi)
 		dsi_write(dsi->base + REG_DSI_CTRL, ctrl);
 		wmb();	/* make sure dsi controller enabled again */
 	}
+}
+
+/* error polling */
+static void dsi_err_worker(struct qcom_mipi_dsi *msm_host)
+{
+	u32 status = msm_host->err_work_state;
+
+	// dev_dbg(msm_host->dsi_host.dev, "err status=%#x (fifo status=%#x)\n", status, msm_host->fifo_err);
+	if (status & DSI_ERR_STATE_MDP_FIFO_UNDERFLOW) {
+		dev_warn(msm_host->dsi_host.dev, "Doing soft reset\n");
+		dsi_sw_reset(msm_host);
+	}
+
+	/* It is safe to clear here because error irq is disabled. */
+	msm_host->err_work_state = 0;
+
+	/* enable dsi error interrupt */
+	dsi_intr_ctrl(msm_host, DSI_IRQ_MASK_ERROR, 1);
+}
+
+static void dsi_ack_err_status(struct qcom_mipi_dsi *msm_host)
+{
+	u32 status;
+
+	status = dsi_read(msm_host->base + REG_DSI_ACK_ERR_STATUS);
+
+	if (status) {
+		dsi_write(msm_host->base + REG_DSI_ACK_ERR_STATUS, status);
+		/* Writing of an extra 0 needed to clear error bits */
+		dsi_write(msm_host->base + REG_DSI_ACK_ERR_STATUS, 0);
+		msm_host->err_work_state |= DSI_ERR_STATE_ACK;
+	}
+}
+
+static void dsi_timeout_status(struct qcom_mipi_dsi *msm_host)
+{
+	u32 status;
+
+	status = dsi_read(msm_host->base + REG_DSI_TIMEOUT_STATUS);
+
+	if (status) {
+		dsi_write(msm_host->base + REG_DSI_TIMEOUT_STATUS, status);
+		msm_host->err_work_state |= DSI_ERR_STATE_TIMEOUT;
+	}
+}
+
+static void dsi_dln0_phy_err(struct qcom_mipi_dsi *msm_host)
+{
+	u32 status;
+
+	status = dsi_read(msm_host->base + REG_DSI_DLN0_PHY_ERR);
+
+	if (status & (DSI_DLN0_PHY_ERR_DLN0_ERR_ESC |
+			DSI_DLN0_PHY_ERR_DLN0_ERR_SYNC_ESC |
+			DSI_DLN0_PHY_ERR_DLN0_ERR_CONTROL |
+			DSI_DLN0_PHY_ERR_DLN0_ERR_CONTENTION_LP0 |
+			DSI_DLN0_PHY_ERR_DLN0_ERR_CONTENTION_LP1)) {
+		dsi_write(msm_host->base + REG_DSI_DLN0_PHY_ERR, status);
+		msm_host->err_work_state |= DSI_ERR_STATE_DLN0_PHY;
+	}
+}
+
+static void dsi_fifo_status(struct qcom_mipi_dsi *msm_host)
+{
+	u32 status;
+
+	status = dsi_read(msm_host->base + REG_DSI_FIFO_STATUS);
+
+	/* fifo underflow, overflow */
+	if (status) {
+		dsi_write(msm_host->base + REG_DSI_FIFO_STATUS, status);
+		msm_host->err_work_state |= DSI_ERR_STATE_FIFO;
+		msm_host->fifo_err = status;
+		if (status & DSI_FIFO_STATUS_CMD_MDP_FIFO_UNDERFLOW)
+			msm_host->err_work_state |=
+					DSI_ERR_STATE_MDP_FIFO_UNDERFLOW;
+	} else {
+		msm_host->fifo_err = 0;
+	}
+}
+
+static void dsi_status(struct qcom_mipi_dsi *msm_host)
+{
+	u32 status;
+
+	status = dsi_read(msm_host->base + REG_DSI_STATUS0);
+
+	if (status & DSI_STATUS0_INTERLEAVE_OP_CONTENTION) {
+		dsi_write(msm_host->base + REG_DSI_STATUS0, status);
+		msm_host->err_work_state |=
+			DSI_ERR_STATE_INTERLEAVE_OP_CONTENTION;
+	}
+}
+
+static void dsi_clk_status(struct qcom_mipi_dsi *msm_host)
+{
+	u32 status;
+
+	status = dsi_read(msm_host->base + REG_DSI_CLK_STATUS);
+
+	if (status & DSI_CLK_STATUS_PLL_UNLOCKED) {
+		dsi_write(msm_host->base + REG_DSI_CLK_STATUS, status);
+		msm_host->err_work_state |= DSI_ERR_STATE_PLL_UNLOCKED;
+	}
+}
+
+/* Some error states can just be cleared and the hw will recover */
+void qcom_dsi_video_sync(struct udevice *dsi_bridge)
+{
+	struct qcom_dsi_priv *bpriv = dev_get_priv(dsi_bridge);
+	struct qcom_mipi_dsi *msm_host;
+
+	if (!bpriv->dsi_host)
+		return;
+
+	msm_host = dev_get_priv(bpriv->dsi_host);
+
+	// if (msm_host->fifo_err) {
+	// 	dev_err(msm_host->dsi_host.dev, "Stopping err poll\n");
+	// 	cyclic_unregister(cyclic);
+	// }
+
+	/* disable dsi error interrupt */
+	dsi_intr_ctrl(msm_host, DSI_IRQ_MASK_ERROR, 0);
+
+	dsi_clk_status(msm_host);
+	dsi_fifo_status(msm_host);
+	dsi_ack_err_status(msm_host);
+	dsi_timeout_status(msm_host);
+	dsi_status(msm_host);
+	dsi_dln0_phy_err(msm_host);
+
+	dsi_err_worker(msm_host);
 }
 
 
@@ -922,7 +1357,6 @@ static int dsi_get_version(const void __iomem *base, u32 *major, u32 *minor)
 	}
 }
 
-
 static int qcom_mipi_dsi_init(struct udevice *dev,
 			    struct mipi_dsi_device *device,
 			    struct display_timing *timings,
@@ -941,6 +1375,8 @@ static int qcom_mipi_dsi_init(struct udevice *dev,
 	dsi->phy_ops = phy_ops;
 	dsi->max_data_lanes = max_data_lanes;
 	dsi->device = device;
+	dsi->dsc = device->dsc;
+	dsi->dsc_slice_per_pkt = device->dsc_slice_per_pkt;
 	dsi->dsi_host.dev = dev;
 	dsi->dsi_host.ops = &qcom_mipi_dsi_host_ops;
 	device->host = &dsi->dsi_host;
@@ -957,6 +1393,11 @@ static int qcom_mipi_dsi_init(struct udevice *dev,
 	/* For bonded DSI the primary DSI controller initialises everything */
 	if (IS_BONDED_DSI() && dsi->id != DSI_0)
 		return 0;
+
+	if (IS_BONDED_DSI() && !GET_DSI(DSI_1)) {
+		dev_err(dev, "DSI1 not probed yet!\n");
+		return -EAGAIN;
+	}
 
 	ret = phy_ops->init(device);
 	if (ret)
@@ -975,7 +1416,7 @@ static int qcom_mipi_dsi_init(struct udevice *dev,
 		struct qcom_dsi_priv *sdsi_bridge = (struct qcom_dsi_priv *)(host_to_dsi(GET_DSI(DSI_1))->device);
 		struct msm_dsi_phy *sdsi_phy = dev_get_priv(sdsi_bridge->phy.dev);
 
-		dev_dbg(sdsi->device->dev, "Setting up secondary DSI! phy %p\n", sdsi_phy);
+		dev_dbg(sdsi->device->dev, "Bonded DSI init!\n");
 
 		dsi_timing_setup(sdsi, timings);
 		dsi_sw_reset(sdsi);
@@ -1010,13 +1451,14 @@ static int qcom_mipi_dsi_probe(struct udevice *dev)
 	dsi->id = dev_seq(dev);
 
 	qcom_dsi_globals.dsi[dsi->id] = &dsi->dsi_host;
-	dev_info(dev, "%s: DSI%d host prob!\n", __func__, dsi->id);
+	dev_info(dev, "%s\n", __func__);
 
 	qcom_dsi_globals.bonded_dsi |= dev_read_bool(dev, "qcom,dual-dsi-mode");
 	qcom_dsi_globals.sync_needed |= dev_read_bool(dev, "qcom,sync-dual-dsi");
 
 	/* check hardware version */
 	dsi_get_version(dsi->base, &dsi->cfg_hnd.major, &dsi->cfg_hnd.minor);
+	dev_dbg(dev, "DSI version %#x.%#x\n", dsi->cfg_hnd.major, dsi->cfg_hnd.minor);
 	if (dsi->cfg_hnd.minor != MSM_DSI_6G_VER_MINOR_V2_8_0) { // sm8650
 		dev_err(dev, "DSI version %#x.%#x not supported\n", dsi->cfg_hnd.major, dsi->cfg_hnd.minor);
 		dev_dbg(dev, "remove and unbind all DSI child\n");
@@ -1061,34 +1503,96 @@ U_BOOT_DRIVER(qcom_mipi_dsi) = {
 	.flags = DM_FLAG_LEAVE_PD_ON,
 };
 
+/**
+ * dsi_adjust_pclk_for_compression() - Adjust the pclk rate for compression case
+ * @mode: The selected mode for the DSI output
+ * @dsc: DRM DSC configuration for this DSI output
+ *
+ * Adjust the pclk rate by calculating a new hdisplay proportional to
+ * the compression ratio such that:
+ *     new_hdisplay = old_hdisplay * compressed_bpp / uncompressed_bpp
+ *
+ * Porches do not need to be adjusted:
+ * - For VIDEO mode they are not compressed by DSC and are passed as is.
+ * - For CMD mode there are no actual porches. Instead these fields
+ *   currently represent the overhead to the image data transfer. As such, they
+ *   are calculated for the final mode parameters (after the compression) and
+ *   are not to be adjusted too.
+ *
+ *  FIXME: Reconsider this if/when CMD mode handling is rewritten to use
+ *  transfer time and data overhead as a starting point of the calculations.
+ */
+static unsigned long dsi_adjust_pclk_for_compression(const struct display_timing *timings,
+		const struct drm_dsc_config *dsc)
+{
+	int hdisplay, new_hdisplay, new_htotal, htotal;
+
+	/*
+	 * For bonded DSI, split hdisplay across two links and round up each
+	 * half separately, passing the full hdisplay would only round up once.
+	 * This also aligns with the hdisplay we program later in
+	 * dsi_timing_setup()
+	 */
+	hdisplay = timings->hactive.typ;
+	if (IS_BONDED_DSI())
+		hdisplay /= 2;
+
+	new_hdisplay = DIV_ROUND_UP(hdisplay * drm_dsc_get_bpp_int(dsc),
+				    dsc->bits_per_component * 3);
+
+	if (IS_BONDED_DSI())
+		new_hdisplay *= 2;
+
+	htotal = dsi_timing_htotal(timings, timings->hactive.typ);
+	new_htotal = htotal - timings->hactive.typ + new_hdisplay;
+
+	return mult_frac(timings->pixelclock.typ, new_htotal, htotal);
+
+	// int new_hdisplay = DIV_ROUND_UP(timings->hactive.typ * drm_dsc_get_bpp_int(dsc),
+	// 		dsc->bits_per_component * 3);
+
+	// int htotal = dsi_timing_htotal(timings, timings->hactive.typ);
+	// int new_htotal = htotal - timings->hactive.typ + new_hdisplay;
+	// pr_info("PCLK-DSC: htotal: %d new_htotal: %d\n", htotal, new_htotal);
+
+	// return mult_frac(timings->pixelclock.typ * 1000u, new_htotal, htotal);
+}
+
 static int dsi_phy_calc_clk_req(struct qcom_dsi_priv *dsi, struct msm_dsi_phy_clk_request *clk_req)
 {
 	struct mipi_dsi_panel_plat *mplat = dev_get_plat(dsi->panel);
+	struct msm_dsi_phy *phy = dev_get_priv(dsi->phy.dev);
 	u32 pixelclock = dsi->timings.pixelclock.typ;
 	u32 bpp = mipi_dsi_pixel_format_to_bpp(mplat->format);
 	u64 pclk_rate = pixelclock;
 	u64 byteclk_rate;
 
-	// FIXME: DSC support
+	if (dsi->device.dsc)
+		pclk_rate = dsi_adjust_pclk_for_compression(&dsi->timings, dsi->device.dsc);
 
 	if (IS_BONDED_DSI())
 		pclk_rate /= 2;
 
-	// if (cphy_mode)
-	//	byteclk_rate = mult_frac(pclk_rate, bpp, 16 * mplat->lanes);
-	// else
-	byteclk_rate = mult_frac(pclk_rate, bpp, 8 * mplat->lanes);
+	// printf("FORCING PCLK RATE %u (calculated %llu)\n", 243149748, pclk_rate);
+	// 	 // 144218277
+	// pclk_rate = 243149748;
+
+	if (phy->cphy_mode)
+		byteclk_rate = mult_frac(pclk_rate, bpp, 16 * mplat->lanes);
+	else
+		byteclk_rate = mult_frac(pclk_rate, bpp, 8 * mplat->lanes);
 
 	dsi->pixel_clk_rate = pclk_rate;
 	dsi->byte_clk_rate = byteclk_rate;
 
-	// if (cphy_mode)
-	//	clk_req->bitclk_rate = byteclk_rate * 7;
-	// else
-	clk_req->bitclk_rate = byteclk_rate * 8;
+	if (phy->cphy_mode)
+		clk_req->bitclk_rate = byteclk_rate * 7;
+	else
+		clk_req->bitclk_rate = byteclk_rate * 8;
+
 	clk_req->escclk_rate = 19200000; // FIXME: less would be nice perhaps but eh
 
-	dev_dbg(dsi->device.dev, "%s: DSI %d calculated bitclk_rate: %lu\n", __func__, DSI_ID(dsi), clk_req->bitclk_rate);
+	dev_dbg(dsi->device.dev, "%s: calculated pclk: %llu bitclk: %lu\n", __func__, pclk_rate, clk_req->bitclk_rate);
 
 	return 0;
 }
@@ -1235,14 +1739,48 @@ static int qcom_dsi_attach(struct udevice *dev)
 	struct qcom_dsi_priv *priv = dev_get_priv(dev);
 	struct mipi_dsi_device *device = &priv->device;
 	struct mipi_dsi_panel_plat *mplat;
+	struct udevice *panel = NULL;
+	ofnode pn;
 	int ret;
 
-	ret = uclass_get_device(UCLASS_PANEL, dev_seq(dev), &priv->panel);
-	// ret = uclass_get_device_by_endpoint(UCLASS_PANEL, dev, 1, -1, &priv->panel);
+	dev_info(dev, "%s\n", __func__);
+
+	// ret = uclass_get_device(UCLASS_PANEL, priv->id, &priv->panel);
+	// // ret = uclass_get_device_by_endpoint(UCLASS_PANEL, dev, 1, -1, &priv->panel);
+	// if (ret) {
+	// 	dev_err(dev, "panel@%d device error %d\n", priv->id, ret);
+	// 	return ret;
+	// }
+
+	ret = uclass_find_device_by_endpoint(UCLASS_PANEL, dev, 1, -1, &panel);
 	if (ret) {
-		dev_err(dev, "panel device error %d\n", ret);
+		dev_err(dev, "Couldn't find panel! %d\n", ret);
 		return ret;
 	}
+
+	/* If the panel is our direct child then we are allll good */
+	if (ofnode_equal(dev_ofnode(panel), ofnode_find_subnode(dev_ofnode(dev), "panel"))) {
+		priv->panel = panel;
+	} else {
+		/*
+		* If not but we have a valid panel device then we're doing dual-dsi... bind a second panel device since
+		* U-Boot can't handle a single panel with two DSI interfaces :/
+		*/
+		dev_info(dev, "Binding dummy panel for dual-DSI\n");
+		ret = device_bind_with_driver_data(dev, panel->driver, "panel@1", 1, dev_ofnode(panel), &priv->panel);
+		if (ret) {
+			dev_err(dev, "Failed to bind dummy panel for dual-DSI! %d\n", ret);
+			return ret;
+		}
+	}
+
+	pn = dev_ofnode(priv->panel);
+	dev_info(dev, "Got panel %s: %pOF\n", priv->panel->name, &pn);
+
+	/* We need to actually probe the panel :) */
+	ret = device_probe(priv->panel);
+	if (ret)
+		return ret;
 
 	mplat = dev_get_plat(priv->panel);
 	mplat->device = device;
@@ -1281,10 +1819,24 @@ static int qcom_dsi_get_display_timing(struct udevice *dev, struct display_timin
 	return 0;
 }
 
+static int qcom_dsi_get_dsc_config(struct udevice *dev, struct drm_dsc_config *dsc)
+{
+	struct qcom_dsi_priv *priv = dev_get_priv(dev);
+
+	if (!priv->device.dsc)
+		return -ENOENT;
+
+	memcpy(dsc, priv->device.dsc, sizeof(struct drm_dsc_config));
+
+	return 0;
+}
+
 static int qcom_dsi_set_backlight(struct udevice *dev, int percent)
 {
 	struct qcom_dsi_priv *priv = dev_get_priv(dev);
 	int ret;
+
+	dev_info(dev, "%s: %d\n", __func__, percent);
 
 	if (percent) {
 		ret = panel_enable_backlight(priv->panel);
@@ -1297,12 +1849,34 @@ static int qcom_dsi_set_backlight(struct udevice *dev, int percent)
 
 static int qcom_dsi_bind(struct udevice *dev)
 {
-	int ret;
+	int ret, id;
+	char *name;
+	struct udevice *host;
+#define NAMELEN (strlen(NAMEFMT) + 1)
 
-	ret = device_bind_driver_to_node(dev, "qcom_mipi_dsi", "mdss_dsi",
-					 dev_ofnode(dev), NULL);
+#define NAMEFMT "DSI%d-bridge"
+	id = dev_seq(dev);
+	name = malloc(NAMELEN);
+	if (!name)
+		return -ENOMEM;
+	snprintf(name, NAMELEN, NAMEFMT, id);
+	device_set_name(dev, name);
+	free(name);
+
+#undef NAMEFMT
+#define NAMEFMT "DSI%d-host"
+	name = malloc(NAMELEN);
+	if (!name)
+		return -ENOMEM;
+	snprintf(name, NAMELEN, NAMEFMT, id);
+
+	ret = device_bind_driver_to_node(dev, "qcom_mipi_dsi", strdup(name),
+					 dev_ofnode(dev), &host);
+	free(name);
 	if (ret)
 		return ret;
+
+	device_set_name_alloced(host);
 
 	return dm_scan_fdt_dev(dev);
 }
@@ -1350,7 +1924,7 @@ static int qcom_dsi_probe(struct udevice *dev)
 		goto err_reg;
 	}
 	ret = clk_get_by_name(dev, "byte_intf", &priv->byte_intf_clk);
-	if (ret) {
+	if (ret < 0 && ret != -ENOENT) {
 		dev_err(dev, "byte_intf clock get error %d\n", ret);
 		goto err_reg;
 	}
@@ -1381,7 +1955,7 @@ static int qcom_dsi_probe(struct udevice *dev)
 	clk_enable(&priv->iface_clk);
 	clk_enable(&priv->bus_clk);
 
-	debug("DSI bridge probe done!\n");
+	debug("DSI%d bridge probe done!\n", DSI_ID(priv));
 
 	return 0;
 err_reg:
@@ -1438,6 +2012,7 @@ static int qcom_dsi_remove(struct udevice *dev)
 struct video_bridge_ops qcom_dsi_ops = {
 	.attach = qcom_dsi_attach,
 	.get_display_timing = qcom_dsi_get_display_timing,
+	.get_dsc_config = qcom_dsi_get_dsc_config,
 	.set_backlight = qcom_dsi_set_backlight,
 };
 
