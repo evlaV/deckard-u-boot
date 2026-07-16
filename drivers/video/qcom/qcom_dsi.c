@@ -872,6 +872,134 @@ static void dsi_sw_reset(struct qcom_mipi_dsi *dsi)
 	}
 }
 
+/* error polling */
+static void dsi_err_worker(struct qcom_mipi_dsi *msm_host)
+{
+	u32 status = msm_host->err_work_state;
+
+	// dev_dbg(msm_host->dsi_host.dev, "err status=%#x (fifo status=%#x)\n", status, msm_host->fifo_err);
+	if (status & DSI_ERR_STATE_MDP_FIFO_UNDERFLOW) {
+		dev_warn(msm_host->dsi_host.dev, "Doing soft reset\n");
+		dsi_sw_reset(msm_host);
+	}
+
+	/* It is safe to clear here because error irq is disabled. */
+	msm_host->err_work_state = 0;
+
+	/* enable dsi error interrupt */
+	dsi_intr_ctrl(msm_host, DSI_IRQ_MASK_ERROR, 1);
+}
+
+static void dsi_ack_err_status(struct qcom_mipi_dsi *msm_host)
+{
+	u32 status;
+
+	status = dsi_read(msm_host->base + REG_DSI_ACK_ERR_STATUS);
+
+	if (status) {
+		dsi_write(msm_host->base + REG_DSI_ACK_ERR_STATUS, status);
+		/* Writing of an extra 0 needed to clear error bits */
+		dsi_write(msm_host->base + REG_DSI_ACK_ERR_STATUS, 0);
+		msm_host->err_work_state |= DSI_ERR_STATE_ACK;
+	}
+}
+
+static void dsi_timeout_status(struct qcom_mipi_dsi *msm_host)
+{
+	u32 status;
+
+	status = dsi_read(msm_host->base + REG_DSI_TIMEOUT_STATUS);
+
+	if (status) {
+		dsi_write(msm_host->base + REG_DSI_TIMEOUT_STATUS, status);
+		msm_host->err_work_state |= DSI_ERR_STATE_TIMEOUT;
+	}
+}
+
+static void dsi_dln0_phy_err(struct qcom_mipi_dsi *msm_host)
+{
+	u32 status;
+
+	status = dsi_read(msm_host->base + REG_DSI_DLN0_PHY_ERR);
+
+	if (status & (DSI_DLN0_PHY_ERR_DLN0_ERR_ESC |
+			DSI_DLN0_PHY_ERR_DLN0_ERR_SYNC_ESC |
+			DSI_DLN0_PHY_ERR_DLN0_ERR_CONTROL |
+			DSI_DLN0_PHY_ERR_DLN0_ERR_CONTENTION_LP0 |
+			DSI_DLN0_PHY_ERR_DLN0_ERR_CONTENTION_LP1)) {
+		dsi_write(msm_host->base + REG_DSI_DLN0_PHY_ERR, status);
+		msm_host->err_work_state |= DSI_ERR_STATE_DLN0_PHY;
+	}
+}
+
+static void dsi_fifo_status(struct qcom_mipi_dsi *msm_host)
+{
+	u32 status;
+
+	status = dsi_read(msm_host->base + REG_DSI_FIFO_STATUS);
+
+	/* fifo underflow, overflow */
+	if (status) {
+		dsi_write(msm_host->base + REG_DSI_FIFO_STATUS, status);
+		msm_host->err_work_state |= DSI_ERR_STATE_FIFO;
+		msm_host->fifo_err = status;
+		if (status & DSI_FIFO_STATUS_CMD_MDP_FIFO_UNDERFLOW)
+			msm_host->err_work_state |=
+					DSI_ERR_STATE_MDP_FIFO_UNDERFLOW;
+	} else {
+		msm_host->fifo_err = 0;
+	}
+}
+
+static void dsi_status(struct qcom_mipi_dsi *msm_host)
+{
+	u32 status;
+
+	status = dsi_read(msm_host->base + REG_DSI_STATUS0);
+
+	if (status & DSI_STATUS0_INTERLEAVE_OP_CONTENTION) {
+		dsi_write(msm_host->base + REG_DSI_STATUS0, status);
+		msm_host->err_work_state |=
+			DSI_ERR_STATE_INTERLEAVE_OP_CONTENTION;
+	}
+}
+
+static void dsi_clk_status(struct qcom_mipi_dsi *msm_host)
+{
+	u32 status;
+
+	status = dsi_read(msm_host->base + REG_DSI_CLK_STATUS);
+
+	if (status & DSI_CLK_STATUS_PLL_UNLOCKED) {
+		dsi_write(msm_host->base + REG_DSI_CLK_STATUS, status);
+		msm_host->err_work_state |= DSI_ERR_STATE_PLL_UNLOCKED;
+	}
+}
+
+/* Some error states can just be cleared and the hw will recover */
+void qcom_dsi_video_sync(struct udevice *dsi_bridge)
+{
+	struct qcom_dsi_priv *bpriv = dev_get_priv(dsi_bridge);
+	struct qcom_mipi_dsi *msm_host;
+
+	if (!bpriv->dsi_host)
+		return;
+
+	msm_host = dev_get_priv(bpriv->dsi_host);
+
+	/* disable dsi error interrupt */
+	dsi_intr_ctrl(msm_host, DSI_IRQ_MASK_ERROR, 0);
+
+	dsi_clk_status(msm_host);
+	dsi_fifo_status(msm_host);
+	dsi_ack_err_status(msm_host);
+	dsi_timeout_status(msm_host);
+	dsi_status(msm_host);
+	dsi_dln0_phy_err(msm_host);
+
+	dsi_err_worker(msm_host);
+}
+
 
 static int dsi_get_version(const void __iomem *base, u32 *major, u32 *minor)
 {
