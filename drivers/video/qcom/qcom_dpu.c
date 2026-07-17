@@ -1026,6 +1026,7 @@ int qcom_dpu_probe(struct udevice *dev)
 	struct video_priv *uc_priv = dev_get_uclass_priv(dev);
 	struct display_timing timings;
 	u32 fb_stride;
+	int core_clk_idx;
 	int ret;
 
 	priv->dpu_base = dev_remap_addr_name(dev, "mdp");
@@ -1041,6 +1042,17 @@ int qcom_dpu_probe(struct udevice *dev)
 		dev_err(dev, "clk bulk get error %d\n", ret);
 		return ret;
 	}
+
+	core_clk_idx = ofnode_stringlist_search(dev_ofnode(dev), "clock-names", "core");
+	if (core_clk_idx < 0) {
+		dev_err(dev, "Failed to find core clock: %d\n", core_clk_idx);
+		return core_clk_idx;
+	}
+
+	/* Set the MDP core clock to its highest rate */
+	clk_set_rate(&priv->bulk.clks[core_clk_idx], UINT32_MAX);
+
+	pr_debug("DPU core clocked at: %lu\n", clk_get_rate(&priv->bulk.clks[core_clk_idx]));
 
 	ret = clk_enable_bulk(&priv->bulk);
 	if (ret) {
