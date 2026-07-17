@@ -119,10 +119,13 @@ static int dpu_hw_intf_init_resources(struct dpu_phys_encoder *rm,
 	rm->plane.y2 = height;
 	rm->plane.x1 = 0;
 	rm->plane.x2 = width;
-	/* Shift the plane for the secondary intf */
-	if (rm->split_role == ENC_ROLE_PRIMARY) {
-		rm->plane.x1 += width;
-		rm->plane.x2 += width;
+	/* Shift the plane for the secondary encoder */
+	if (enc_is_split(rm)) {
+		/* If the panels are upside then swap the left/right SSPPs */
+		if ((req->rotation == 180 && enc_is_primary(rm)) || (req->rotation != 180 && !enc_is_primary(rm))) {
+			rm->plane.x1 += width;
+			rm->plane.x2 += width;
+		}
 	}
 
 	/* Pick the intf */
@@ -348,6 +351,7 @@ int dpu_hw_get_encoder_topology(const struct dpu_resource_request *req, bool dua
 	topology->num_sspp = 1;
 	topology->num_encs = 1;
 	topology->num_ctl = 1;
+	topology->encs[0].split_role = ENC_ROLE_SOLO;
 
 	if (dual_dsi) {
 		topology->num_encs = 2;
@@ -355,10 +359,8 @@ int dpu_hw_get_encoder_topology(const struct dpu_resource_request *req, bool dua
 		topology->encs[1].split_role = ENC_ROLE_SECONDARY;
 
 		/* Figure out if we need to use quad pipe topology with DSC merge */
-		if (req->dsc && topology->dsc_merge)
+		if (topology->dsc_merge)
 			topology->num_sspp = 2;
-	} else {
-		topology->encs[0].split_role = ENC_ROLE_SOLO;
 	}
 
 	topology->encs[0].ctl = ctl;

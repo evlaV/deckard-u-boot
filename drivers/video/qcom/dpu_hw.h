@@ -310,6 +310,7 @@ struct dpu_resource_request {
 	enum dpu_intf_type intf_type;
 	unsigned long core_clk_max_rate;
 	const struct dpu_mdss_cfg *cat;
+	int rotation;
 };
 
 #define enc_is_primary(enc) (enc->split_role < ENC_ROLE_SECONDARY)
