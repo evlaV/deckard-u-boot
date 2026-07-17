@@ -341,7 +341,7 @@ static int dpu_hw_intf_init_resources(struct dpu_phys_encoder *rm,
 int dpu_hw_get_encoder_topology(const struct dpu_resource_request *req, bool dual_dsi, struct dpu_topology *topology)
 {
 	struct dpu_hw_sspp *sspp = &topology->sspp[0];
-	struct dpu_hw_ctl *ctl = &topology->ctl[0];
+	struct dpu_hw_ctl *ctl = &topology->ctl;
 	int ret;
 
 	/* Check if we need more than 1 DSC encoder per panel (accounting with width being the total width in dual-DSI case) */
@@ -350,7 +350,6 @@ int dpu_hw_get_encoder_topology(const struct dpu_resource_request *req, bool dua
 
 	topology->num_sspp = 1;
 	topology->num_encs = 1;
-	topology->num_ctl = 1;
 	topology->encs[0].split_role = ENC_ROLE_SOLO;
 
 	if (dual_dsi) {
@@ -375,13 +374,10 @@ int dpu_hw_get_encoder_topology(const struct dpu_resource_request *req, bool dua
 		return 0;
 	}
 
-	/* If quad pipe, configure a second CTL and SSPP for the second encoder */
-	if (topology->dsc_merge) {
-		// ctl = &topology->ctl[1];
+	/* If using dsc_merge, assume we want a second SSPP for the second encoder */
+	if (topology->dsc_merge)
 		sspp = &topology->sspp[1];
-	}
 
-	/* Set the CTL and SSPP for the second encoder */
 	topology->encs[1].ctl = ctl;
 	topology->encs[1].sspp = sspp;
 
@@ -393,8 +389,6 @@ int dpu_hw_get_encoder_topology(const struct dpu_resource_request *req, bool dua
 	printf("\nDPU Topology%s:\n", topology->dsc_merge ? " (DSC Merge)" : "");
 	dump_encoder_topology(&topology->encs[0]);
 	dump_encoder_topology(&topology->encs[1]);
-
-	// FIXME: assert num_ctl/sspp/enc = 2 for dsc_merge
 
 	return 0;
 }

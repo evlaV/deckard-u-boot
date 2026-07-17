@@ -288,8 +288,7 @@ struct dpu_topology {
 	/* These can be shared between the encoders */
 	int num_sspp;
 	struct dpu_hw_sspp sspp[2];
-	int num_ctl;
-	struct dpu_hw_ctl ctl[2];
+	struct dpu_hw_ctl ctl;
 	/*
 	 * Indicates quad pipe with DSC merge ->
 	 * CTL per-INTF if false and
@@ -308,7 +307,6 @@ struct dpu_resource_request {
 	// u8 bpp;
 	void *dpu_base;
 	enum dpu_intf_type intf_type;
-	unsigned long core_clk_max_rate;
 	const struct dpu_mdss_cfg *cat;
 	int rotation;
 };
