@@ -73,4 +73,7 @@ int msm_dsi_phy_pll_restore_state(struct msm_dsi_phy *phy);
 // void msm_dsi_phy_snapshot(struct msm_disp_state *disp_state, struct msm_dsi_phy *phy);
 bool msm_dsi_phy_set_continuous_clock(struct msm_dsi_phy *phy, bool enable);
 
+/* Poll error interrupts in video_sync cb */
+void qcom_dsi_video_sync(struct udevice *dsi_bridge);
+
 #endif
