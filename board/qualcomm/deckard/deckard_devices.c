@@ -219,6 +219,9 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices )
 			pon_poff_reason.trigger,
 			pon_poff_reason.pon_reason);
 		
+		//set smpl env var if we had a SMPL type trigger for reboot, or delete the env var
+		env_update("pon_trigger_smpl", pon_poff_reason.trigger_data.smpl ? "1" : "");
+		
 		//TODO: integrate with above logic potentially?
 		if( pon_poff_reason.reboot_command_reason == REBOOT_COMMAND_REASON_BOOTLOADER )
 		{

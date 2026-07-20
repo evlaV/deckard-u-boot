@@ -44,13 +44,22 @@ enum reboot_command_reason_t
 	REBOOT_COMMAND_REASON_USB           = 0x05,
  };
 
- struct pon_on_off_reason {
+struct pon_on_off_reason {
 	enum pon_reset_type type;
 	enum pon_reset_trigger trigger;
 	struct {
-		uint32_t sid;                /* slave id */
-		uint32_t pid;                /* peripheral id */
-		uint32_t irq;                /* interrupt */
+		uint32_t hard_reset : 1;   /* Hard reset event trigger */
+		uint32_t smpl : 1;         /* SMPL trigger */             
+		uint32_t rtc : 1;          /* RTC trigger */             
+		uint32_t dc_chg : 1;       /* DC Charger trigger */             
+		uint32_t usb_chg : 1;      /* USB Charger trigger */             
+		uint32_t pon1 : 1;         /* PON1 trigger */
+		uint32_t cblpwr : 1;       /* CBL_PWR1_N trigger */
+		uint32_t kpdpwr : 1;       /* KPDPWR_N trigger */
+		uint32_t known_rsn : 1;    /* known reason. If unknown read sid, pid and irq field */
+		uint32_t sid;              /* slave id */
+		uint32_t pid;              /* peripheral id */
+		uint32_t irq;              /* interrupt */
 	} trigger_data;
 	int pon_reason;
 	int pon_boot1_poff_reason;

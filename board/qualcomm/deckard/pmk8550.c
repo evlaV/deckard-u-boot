@@ -254,68 +254,102 @@ int pmk8550_get_on_off_reason(struct pon_on_off_reason *reason)
 
 	for(i = 0; i < PON_EVENT_LOG_AREA_SIZE - 2; i += 4) {
 		switch (pon_events[i + 2]) {
-		case PM_PON_EVENT_RESET_TYPE:
-			data = pon_events[i + 1] | pon_events[i];
+			case PM_PON_EVENT_RESET_TYPE:
+				data = pon_events[i + 1] | pon_events[i];
 
-			// Only use first one
-			if (reason->type)
-				continue;
+				// Only use first one
+				if (reason->type)
+					continue;
 
-			switch (data) {
-			case 1:
-				reason->type = PON_RESET_TYPE_WARM;
+				switch (data) {
+					case 1:
+						reason->type = PON_RESET_TYPE_WARM;
+						break;
+					case 4:
+						reason->type = PON_RESET_TYPE_SHUTDOWN;
+						break;
+					case 7:
+						reason->type = PON_RESET_TYPE_HARD_RESET;
+						break;
+					default:
+						reason->type = PON_RESET_TYPE_PON;
+				}
 				break;
-			case 4:
-				reason->type = PON_RESET_TYPE_SHUTDOWN;
-				break;
-			case 7:
-				reason->type = PON_RESET_TYPE_HARD_RESET;
-				break;
-			default:
-				reason->type = PON_RESET_TYPE_PON;
-			}
-			break;
-		case PM_PON_EVENT_RESET_TRIGGER:
-			data = pon_events[i + 1] | pon_events[i];
 
-			// Only use first one
-			if (reason->trigger)
-				continue;
+			case PM_PON_EVENT_RESET_TRIGGER:
+				data = pon_events[i + 1] | pon_events[i];
 
-			switch (data) {
-			case PON_PBS_KEYPD_PWR_N_S2_RSN:
-			case PON_PBS_KEYPD_PWR_N_RSN:
-				reason->trigger = PON_RESET_TRIGGER_KPDPWR;
-				break;
-			case PON_PBS_RESIN_N_S2_RSN :
-			case PON_PBS_RESIN_N_DEB_RSN :
-				reason->trigger = PON_RESET_TRIGGER_RESIN;
-				break;
-			case PON_PBS_KPDPWR_AND_RESIN_RSN :
-				reason->trigger = PON_RESET_TRIGGER_KPDPWR_AND_RESIN;
-				break;
-			case PON_PBS_PMIC_WD_RSN :
-				reason->trigger = PON_RESET_TRIGGER_PMIC_WD;
-				break;
-			case PON_PBS_PS_HOLD_RSN:
-				reason->trigger = PON_RESET_TRIGGER_PS_HOLD;
-				break;
-			case PON_PBS_SW_RST_RSN :
-				reason->trigger = PON_RESET_TRIGGER_SOFT;
-				break;
-			default:
-				reason->trigger = PON_RESET_TRIGGER_OTHER;
-				break;
-			}
+				// Only use first one
+				if (reason->trigger)
+					continue;
 
-			reason->trigger_data.sid = (data & 0xF000) >> 12;
-			reason->trigger_data.pid = (data & 0x0FF0) >> 4;
-			reason->trigger_data.irq = data & 0x7;
+				switch (data) {
+					case PON_PBS_KEYPD_PWR_N_S2_RSN:
+					case PON_PBS_KEYPD_PWR_N_RSN:
+						reason->trigger = PON_RESET_TRIGGER_KPDPWR;
+						break;
+					case PON_PBS_RESIN_N_S2_RSN :
+					case PON_PBS_RESIN_N_DEB_RSN :
+						reason->trigger = PON_RESET_TRIGGER_RESIN;
+						break;
+					case PON_PBS_KPDPWR_AND_RESIN_RSN :
+						reason->trigger = PON_RESET_TRIGGER_KPDPWR_AND_RESIN;
+						break;
+					case PON_PBS_PMIC_WD_RSN :
+						reason->trigger = PON_RESET_TRIGGER_PMIC_WD;
+						break;
+					case PON_PBS_PS_HOLD_RSN:
+						reason->trigger = PON_RESET_TRIGGER_PS_HOLD;
+						break;
+					case PON_PBS_SW_RST_RSN :
+						reason->trigger = PON_RESET_TRIGGER_SOFT;
+						break;
+					default:
+						reason->trigger = PON_RESET_TRIGGER_OTHER;
+						break;
+				}
+				
+				reason->trigger_data.sid = (data & 0xF000) >> 12;
+				reason->trigger_data.pid = (data & 0x0FF0) >> 4;
+				reason->trigger_data.irq = data & 0x7;
 
-			break;
+				break;
+
+			case PM_PON_EVENT_PON_TRIGGER:
+				data = pon_events[i + 1] | pon_events[i];	
+				reason->trigger_data.known_rsn = true;
+				switch (data) {
+					case PON_PBS_KEYPD_PWR_N_RSN:  
+						reason->trigger_data.kpdpwr = true;
+						break;
+					case PON_PBS_SMPL_RSN: 
+						reason->trigger_data.smpl = true;
+						break;
+					case PON_PBS_PON1_RSN:
+						reason->trigger_data.pon1 = true;
+						break;
+					case PON_PBS_CBLPWR_RSN:
+						reason->trigger_data.cblpwr = true;
+						break;
+					case PON_PBS_SYS_OK_RSN: 
+						reason->trigger_data.usb_chg = true;
+						break;
+					case PON_PBS_RTC_ALARM_RSN:
+						reason->trigger_data.rtc = true;
+						break;
+					default:
+						reason->trigger_data.known_rsn = false;
+						break;      
+				}
+
+				reason->trigger_data.sid = (data & 0xF000) >> 12;
+				reason->trigger_data.pid = (data & 0x0FF0) >> 4;
+				reason->trigger_data.irq = data & 0x7;
+
+				break;
 		}
 
-		if (reason->type && reason->trigger)
+		if (reason->type && reason->trigger && reason->trigger_data.known_rsn)
 			break;
 	}
 
@@ -331,6 +365,20 @@ int pmk8550_get_on_off_reason(struct pon_on_off_reason *reason)
 	deckard_log("register pon_reason 0x%x: 0x%02X\n", PON_AOP_PON_REASON1, reason->pon_reason );
 	deckard_log("register pon_boot1_poff_reason 0x%X: 0x%02X\n", PON_AOP_BOOT1_POFF_REASON1, reason->pon_boot1_poff_reason );
 	deckard_log("register pon_boot1_off_reason 0x%X: 0x%02X\n", PON_AOP_BOOT1_OFF_REASON, reason->pon_boot1_off_reason );
+	if(reason->trigger_data.known_rsn)
+	{
+		deckard_log("pon_trigger: kpdpwr=%d, smpl=%d, pon1=%d, clbpwr=%d, usb_chg=%d, rtc=%d\n",
+											reason->trigger_data.kpdpwr,								
+											reason->trigger_data.smpl,
+											reason->trigger_data.pon1,
+											reason->trigger_data.cblpwr,
+											reason->trigger_data.usb_chg,
+											reason->trigger_data.rtc);
+	}
+	else
+	{
+		deckard_log("pon_trigger: other\n");
+	}
 
 	if (!IS_ENABLED(CONFIG_SPL_BUILD))
 	{
