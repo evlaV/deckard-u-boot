@@ -97,6 +97,7 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices );
 void deckard_setledcolor( LedColor color, deckard_devices_t * pdevices );
 bool deckard_factory_mode_enabled( void );
 bool deckard_adb_mode_enabled( void );
+bool deckard_pon_trigger_smpl( void );
 bool deckard_steam_reset_enabled( void );
 
 int deckard_unbind_usb(void);

@@ -448,6 +448,17 @@ int ft_board_setup(void *fdt, struct bd_info *bd)
 		}
 	}
 
+	if(deckard_pon_trigger_smpl())
+	{
+		//userspace will just look for the existence of this file or not, we set it to 1 just for readability
+		ret = fdt_setprop_string(fdt, nodeoffset, "u-boot,pon-trigger-smpl", "1");
+		if (ret < 0) {
+			deckard_log("WARNING: could not set u-boot,pon-trigger-smpl %s.\n",
+				fdt_strerror(ret));
+			return ret;
+		}
+	}
+
 	if(deckard_steam_reset_enabled())
 	{
 		//userspace will just look for the existence of this file or not, we set it to 1 just for readability

@@ -220,8 +220,8 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices )
 			pon_poff_reason.pon_reason);
 		
 		//set smpl env var if we had a SMPL type trigger for reboot, or delete the env var
-		env_update("pon_trigger_smpl", pon_poff_reason.trigger_data.smpl ? "1" : "");
-		
+		env_set_ulong("pon_trigger_smpl", pon_poff_reason.trigger_data.smpl ? 1 : 0);
+
 		//TODO: integrate with above logic potentially?
 		if( pon_poff_reason.reboot_command_reason == REBOOT_COMMAND_REASON_BOOTLOADER )
 		{
@@ -521,6 +521,11 @@ bool deckard_factory_mode_enabled( void )
 bool deckard_adb_mode_enabled( void )
 {
 	return ( env_get_ulong( "adb-mode", 10, 0 ) != 0 ); // defaults to off
+}
+
+bool deckard_pon_trigger_smpl( void )
+{
+	return ( env_get_ulong( "pon_trigger_smpl", 10, 0 ) != 0 ); // defaults to off
 }
 
 bool deckard_steam_reset_enabled( void )
