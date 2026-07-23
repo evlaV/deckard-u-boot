@@ -3,6 +3,8 @@
  * Copyright (c) 2013, 2018, The Linux Foundation. All rights reserved.
  */
 
+#define LOG_DEBUG
+
 #include <div64.h>
 #include <linux/kernel.h>
 #include <linux/bitops.h>

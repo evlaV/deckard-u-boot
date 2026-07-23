@@ -7,6 +7,7 @@
  */
 
 #define pr_fmt(fmt) "[CLK] "fmt
+#define LOG_DEBUG
 
 #include <clk.h>
 #include <clk-uclass.h>
