@@ -33,6 +33,8 @@ typedef struct ADSP_State_t
     bool battery_ok_for_userspace;
     bool inhibit_poweroff;
     int fuel_gauge_internal;
+    unsigned pdo_volt; // V
+    unsigned pdo_cur; // mA
 } ADSP_State_t;
 
 void deckard_adsp_state_clear( ADSP_State_t * payload );
