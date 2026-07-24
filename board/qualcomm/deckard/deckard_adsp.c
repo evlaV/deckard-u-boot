@@ -38,6 +38,8 @@ typedef union ADSP_PayloadOut_t {
 		uint32_t fuel_gauge_internal : 8;  // 255 is invalid
 		uint32_t battery_ok_for_userspace : 1;
 		uint32_t inhibit_poweroff : 1; // inhibit poweroff?
+		uint32_t pdo_volt : 4; // V
+		uint32_t pdo_cur : 5; // mA / 100
     } bits;
 } ADSP_PayloadOut_t;
 
@@ -137,6 +139,8 @@ void deckard_adsp_read( ADSP_State_t * payload )
 		payload->battery_ok_for_userspace = data.bits.battery_ok_for_userspace;
 		payload->inhibit_poweroff = data.bits.inhibit_poweroff;
 		payload->fuel_gauge_internal = data.bits.fuel_gauge_internal;
+		payload->pdo_volt = data.bits.pdo_volt * 1000;
+		payload->pdo_cur = data.bits.pdo_cur * 100;
 	}
 	else
 	{
