@@ -349,7 +349,7 @@ int deckard_battery_get_vfocv(struct udevice *max17320)
 {
 	uint8_t reg[2];
 	if ( pmic_read(max17320, VFOCV_REG, reg, 2) ) {
-		deckard_log("failed to get battery OCV\n");
+		deckard_log("failed to get battery OCV for %s\n",max17320->name);
 		return -EIO;
 	}
 
