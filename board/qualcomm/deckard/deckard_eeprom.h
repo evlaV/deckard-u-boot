@@ -8,6 +8,7 @@
 #define __DECKARD_EEPROM_H
 
 #include <init.h>
+#include <stdbool.h>
 
 // BOOTLODAER DATA //
 #define EEPROM_BOOTLOADER_EXPECTED_VERSION (0x00000001)
@@ -19,6 +20,12 @@
 #define EEPROM_UNLOCKED                    (0xFF)
 #define EEPROM_BOOTLOADER_ADDRESS_START    (0x000)
 #define EEPROM_CORE_ADDRESS_START          (0x100)
+
+// CORE DATA //
+#define EEPROM_CORE_MAGIC_NUMBER           (0x45f731ea)
+#define EEPROM_MAC_ADDR_LEN                (6)
+#define EEPROM_VALVE_SN_STRING_LEN         (14)
+#define EEPROM_CONFIG_STRING_LEN           (32)
 
 typedef struct
 {
@@ -56,6 +63,29 @@ typedef struct
 } __attribute__((packed)) eeprom_bootloader_t;
 #endif // EEPROM_BOOTLOADER_EXPECTED_VERSION
 
+// Layout of the "core" EEPROM partition, common prefix only.
+// EV2/EV3, DV1 and DV2/PV/MP each append different trailing fields (serial
+// numbers, prox calibration, etc), but every revision shares this same
+// header through mac_addr_ble_valid, so we only declare what we need.
+typedef struct
+{
+    eeprom_header_t hdr;
+
+    char mpcba_sn[EEPROM_VALVE_SN_STRING_LEN];
+    uint8_t mpcba_sn_valid;
+
+    char unit_sn[EEPROM_VALVE_SN_STRING_LEN];
+    uint8_t unit_sn_valid;
+    char unit_config[EEPROM_CONFIG_STRING_LEN];
+    uint8_t unit_config_valid;
+
+    uint8_t mac_addr_wifi[EEPROM_MAC_ADDR_LEN];
+    uint8_t mac_addr_wifi_valid;
+    uint8_t mac_addr_ble[EEPROM_MAC_ADDR_LEN];
+    uint8_t mac_addr_ble_valid;
+} __attribute__((packed)) eeprom_core_t;
+
 void deckard_eeprom_init(void);
+bool deckard_eeprom_get_wifi_mac_address(uint8_t mac[EEPROM_MAC_ADDR_LEN]);
 
 #endif
