@@ -495,6 +495,28 @@ int ft_board_setup(void *fdt, struct bd_info *bd)
 		}
 	}
 
+	/* Override the wifi chip's MAC address with the one programmed into the EEPROM */
+	{
+		uint8_t wifi_mac_addr[EEPROM_MAC_ADDR_LEN];
+
+		if (deckard_eeprom_get_wifi_mac_address(wifi_mac_addr)) {
+			int wifi_offset = fdt_node_offset_by_compatible(fdt, -1, "pci17cb,1107");
+
+			if (wifi_offset < 0) {
+				deckard_log("WARNING: could not find wifi node to set local-mac-address: %s.\n",
+					   fdt_strerror(wifi_offset));
+			} else {
+				ret = fdt_setprop(fdt, wifi_offset, "local-mac-address",
+						   wifi_mac_addr, EEPROM_MAC_ADDR_LEN);
+				if (ret < 0) {
+					deckard_log("WARNING: could not set wifi local-mac-address: %s.\n",
+						   fdt_strerror(ret));
+					return ret;
+				}
+			}
+		}
+	}
+
 	ft_board_debug_fixup(fdt,bd);
 
 	return 0;

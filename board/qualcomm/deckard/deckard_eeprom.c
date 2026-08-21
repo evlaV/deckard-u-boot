@@ -6,9 +6,14 @@
 #include <i2c.h>
 #include <i2c_eeprom.h>
 #include <env.h>
+#include <net.h>
+#include <string.h>
 #include "deckard_log.h"
 
 DECLARE_GLOBAL_DATA_PTR;
+
+static uint8_t s_wifi_mac_addr[EEPROM_MAC_ADDR_LEN];
+static bool s_wifi_mac_addr_valid;
 
 // These are taken directly from Deckard EEPROM user space tool
 static eeprom_checksum_t _eeprom_calculate_checksum(uint8_t *data, uint32_t len)
@@ -111,6 +116,25 @@ void deckard_eeprom_init(void)
 		}
 	}
 
+	// The "core" partition layout varies by board revision past mac_addr_ble,
+	// so we only read/validate the common header here to pull out mac_addr_wifi.
+	eeprom_core_t eeprom_core;
+	ret = i2c_eeprom_read(dev, EEPROM_CORE_ADDRESS_START, (uint8_t *)&eeprom_core, sizeof(eeprom_core_t));
+	if (ret) {
+		deckard_log("%s: Could not read EEPROM core partition\n", __func__);
+	} else if (eeprom_core.hdr.magic_number != EEPROM_CORE_MAGIC_NUMBER) {
+		deckard_log("EEPROM core partition magic number invalid ( %x, expected %x )\n",
+			    eeprom_core.hdr.magic_number, EEPROM_CORE_MAGIC_NUMBER);
+	} else if (eeprom_core.mac_addr_wifi_valid != EEPROM_VALID) {
+		deckard_log("EEPROM mac_addr_wifi not valid\n");
+	} else if (!is_valid_ethaddr(eeprom_core.mac_addr_wifi)) {
+		deckard_log("EEPROM mac_addr_wifi is not a valid ethernet address\n");
+	} else {
+		memcpy(s_wifi_mac_addr, eeprom_core.mac_addr_wifi, EEPROM_MAC_ADDR_LEN);
+		s_wifi_mac_addr_valid = true;
+		deckard_log("EEPROM wifi mac address: %pM\n", s_wifi_mac_addr);
+	}
+
 	// test code for eeprom strap
 	path_strap = fdt_getprop(gd->fdt_blob, node, "eeprom-strap", NULL);
 	if (!path) {
@@ -134,4 +158,13 @@ void deckard_eeprom_init(void)
 	if (ret) {
 		deckard_log("%s: Could not read EEPROM\n", __func__);
 	}
+}
+
+bool deckard_eeprom_get_wifi_mac_address(uint8_t mac[EEPROM_MAC_ADDR_LEN])
+{
+	if (!s_wifi_mac_addr_valid)
+		return false;
+
+	memcpy(mac, s_wifi_mac_addr, EEPROM_MAC_ADDR_LEN);
+	return true;
 }
