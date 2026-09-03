@@ -517,6 +517,19 @@ int ft_board_setup(void *fdt, struct bd_info *bd)
 		}
 	}
 
+	/*
+	 * Publish the immutable EEPROM identity (board revision, serial numbers,
+	 * ...) at /board-info so userspace can read it from
+	 * /proc/device-tree/board-info/ instead of going out over i2c.
+	 *
+	 * Deliberately non-fatal: identity data is not needed to boot, so a
+	 * failure here should not stop us handing the kernel an otherwise good
+	 * device tree.
+	 */
+	ret = deckard_eeprom_fixup_board_info(fdt);
+	if (ret < 0)
+		deckard_log("WARNING: could not publish EEPROM board info: %d\n", ret);
+
 	ft_board_debug_fixup(fdt,bd);
 
 	return 0;
