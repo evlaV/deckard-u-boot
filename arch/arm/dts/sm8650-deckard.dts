@@ -19,7 +19,7 @@
 		serial0 = &uart15;
 		serial1 = &uart14;
 		eeprom-core = &eeprom_core;
-		eeprom-strap = &eeprom_strap;
+		eeprom-strap-v2 = &eeprom_strap_v2;
 	};
 
 	chosen {
@@ -650,12 +650,21 @@
 // Custom Connector I2C
 &i2c2 {
 	status = "okay";
-	// BOOT EEPROM
+	// PADDLE EEPROM - pre-EV3.3 layout. Still described because the part is
+	// fitted on those boards, but u-boot does not read it
 	eeprom_strap: eeprom@50 {
 		compatible  = "atmel,24c32";
 		status      = "okay";
 		reg         = <0x50>;
 		//wp-gpios = <&tlmm 139 GPIO_ACTIVE_HIGH>;
+		vcc-supply  = <&vreg_l15b_1p8>;
+	};
+
+	// PADDLE EEPROM - 256 Bytes on 0x51 added in EV3.3
+	eeprom_strap_v2: eeprom@51 {
+		compatible  = "atmel,24c04";
+		status      = "okay";
+		reg         = <0x51>;
 		vcc-supply  = <&vreg_l15b_1p8>;
 	};
 
