@@ -972,3 +972,14 @@ void deckard_display_image( boot_intention_t boot_intention )
 	}
 }
 
+int deckard_fuel_gauge_enter_ship_mode(void)
+{
+	deckard_devices_t * pdevices = get_deckard_devices_handle();
+	int ret = 0;
+	if(pdevices)
+		ret = deckard_battery_set_ship_mode(pdevices->max17320);
+	else
+		return -1;
+
+	return ret;
+}

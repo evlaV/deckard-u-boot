@@ -128,4 +128,7 @@ static const u16 max1730x_regs[] = {
 	[TEMP1_REG] = 0x134,
 };
 
+/* CONFIG register bits for MAX17330 & MAX17332 & MAX17335 */
+#define MAX17330_CONFIG_SHIP (1 << 7)
+
 #endif /* __MAX17042_FG_H_ */

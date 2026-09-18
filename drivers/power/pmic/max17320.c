@@ -15,6 +15,8 @@ static int max17320_write(struct udevice *dev, uint reg, const uint8_t *buff,
 {
 	int ret;
 
+	pr_err("max17320_write dm_i2c_write max1730x_regs[reg] = 0x%02x , buff = 0x%02x\n",max1730x_regs[reg], buff[0]);
+
 	ret = dm_i2c_write(dev, max1730x_regs[reg], buff, len);
 	if (ret)
 		pr_err("write error to device: %p register: %#x!\n", dev, reg);

@@ -83,6 +83,8 @@ enum combined_serial_console_state_t {
 	SERIAL_ON__USB_ON__VID_ON    = 7,
 };
 
+deckard_devices_t * get_deckard_devices_handle(void);
+
 void console_state_set_flags(uint8_t console_mask);
 void console_state_clear_flags(uint8_t console_mask);
 void console_state_activate(void);
@@ -116,5 +118,5 @@ int display_turn_off_force(void);
 void deckard_display_image( boot_intention_t boot_intention );
 
 void deckard_disable_watchdog(void);
-
+int deckard_fuel_gauge_enter_ship_mode(void);
 #endif
