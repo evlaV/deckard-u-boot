@@ -230,6 +230,14 @@ int deckard_bootmenu_populate(void)
 			showing_confirmation_page = 1;
 		}
 
+		if( env_get_ulong("shipmode", 10, 0) )
+		{
+			env_set("bootmenu_info",  "Enable Battery Ship Mode and Power Off?");
+			deckard_bootmenu_set_entry(&bootmenu_entry_idx," No=setenv shipmode 0 && setenv bootmenu_run_again 1");
+			deckard_bootmenu_set_entry(&bootmenu_entry_idx," Yes=setenv shipmode 1");
+			showing_confirmation_page = 1;
+		}
+
 		if( !showing_confirmation_page )
 		{
 			deckard_bootmenu_set_entry(&bootmenu_entry_idx,current_slot_menu_str);
@@ -242,6 +250,8 @@ int deckard_bootmenu_populate(void)
 				deckard_bootmenu_set_entry(&bootmenu_entry_idx,"ADB mode [enabled]=setenv adb-mode 0 && setenv bootmenu_run_again 1");
 			else
 				deckard_bootmenu_set_entry(&bootmenu_entry_idx,"ADB mode=setenv adb-mode 1 && setenv bootmenu_run_again 1");
+
+			deckard_bootmenu_set_entry(&bootmenu_entry_idx,"Battery Ship Mode=setenv shipmode 1 && setenv bootmenu_run_again 1");
 		}
 	}
 
@@ -283,6 +293,11 @@ static int do_factory_reset(void)
 	return 0;
 }
 
+static int do_shipmode_enter(void)
+{
+	
+	return 0;
+}
 
 int deckard_bootmenu_handle_actions(void)
 {
@@ -295,6 +310,14 @@ int deckard_bootmenu_handle_actions(void)
 		deckard_log("do_factory_reset\n");
 		do_factory_reset();
 	}
+
+	const char * shipmode = env_get("shipmode");
+	if ( shipmode && !strcmp(shipmode, "1") )
+	{
+		deckard_log("do_shipmode_enter\n");
+		do_shipmode_enter();
+	}
+
 
 	const char * slottarget = env_get("slottarget");
 	if ( slottarget )
