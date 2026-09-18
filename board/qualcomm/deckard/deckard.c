@@ -65,6 +65,11 @@ static enum deckard_efi_mode {
 	EFI_MODE_PERMANENT,
 } g_deckard_efi_mode = EFI_MODE_DISABLED;
 
+deckard_devices_t * get_deckard_devices_handle(void)
+{
+	return &g_deckard_devices;
+}
+
 bool deckard_efi_enabled(void) {
 	return g_deckard_efi_mode != EFI_MODE_DISABLED;
 }

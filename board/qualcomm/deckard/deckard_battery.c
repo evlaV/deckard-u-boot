@@ -391,3 +391,20 @@ int deckard_battery_get_avg_current(struct udevice *max17320)
 	return avg_current;
 }
 
+
+int deckard_battery_set_ship_mode(struct udevice *max17320)
+{
+	uint8_t reg2[2];
+	int len;
+
+	if(!max17320)
+		return -EINVAL;
+
+	reg2[0] = 0x90; reg2[1] = 0x00; len = 2;
+	if ( pmic_write(max17320, CONFIG_REG, reg2, len) ) {
+		deckard_log("failed to set fg ship mode\n");
+		return -EIO;
+	}
+
+	return 0;
+}

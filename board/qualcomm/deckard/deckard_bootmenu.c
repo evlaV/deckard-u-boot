@@ -2,6 +2,7 @@
 #include "deckard_bootmenu.h"
 #include "deckard_disk.h"
 #include "deckard_log.h"
+#include "deckard_devices.h"
 
 #include <command.h>
 #include <env.h>
@@ -15,7 +16,7 @@
 #include <vsprintf.h>
 #include <fs.h>
 #include <usb.h>
-
+#include <linux/delay.h>
 
 static int deckard_build_slot_menu_items(char * current_slot_menu_str, int current_slot_menu_str_sz, char * previous_slot_menu_str, int previous_slot_menu_str_sz);
 
@@ -295,6 +296,10 @@ static int do_factory_reset(void)
 
 static int do_shipmode_enter(void)
 {
+	if( deckard_fuel_gauge_enter_ship_mode() )
+		deckard_log("failed to enter ship mode\n");
+
+	mdelay(2000);
 	
 	return 0;
 }
