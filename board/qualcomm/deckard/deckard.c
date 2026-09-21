@@ -576,6 +576,24 @@ bool g_dnl_board_usb_cable_connected(void)
 // trap in uboot while we wait for power button to be pushed
 // we should charge and do various things here like light up the LED's etc
 
+typedef enum
+{
+    QPH_STATE_1,
+    QPH_STATE_2,
+    QPH_STATE_1_REQUESTED,
+    QPH_STATE_2_WAIT_FOR_AICL,
+    QPH_STATE_2_REQUESTED,
+    QPH_STATE_COUNT,
+} qph_state_t;
+
+static char *qph_state_str[] = {
+	[QPH_STATE_1] = "Normal Charge",
+	[QPH_STATE_2] = "Fast Charge",
+	[QPH_STATE_1_REQUESTED] = "Fast to Normal Charge",
+	[QPH_STATE_2_WAIT_FOR_AICL] = "Normal to Fast Charge",
+	[QPH_STATE_2_REQUESTED] = "Fast Charge Enabling",
+};
+
 static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_devices_t * pdevices )
 {
 	printf("\n");
@@ -803,7 +821,15 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 			// Print out battery status
 			if ( adsp_started )
 			{
-				deckard_log_overwrite( "Battery: %d%% PDO: %uV @ %umA", adsp_state.fuel_gauge_internal, adsp_state.pdo_volt / 1000, adsp_state.pdo_cur );
+				char *qph_str;
+
+				if (adsp_state.qph_state >= QPH_STATE_COUNT)
+					qph_str = "Unknown Charging State";
+				else
+					qph_str = qph_state_str[adsp_state.qph_state];
+
+				deckard_log_overwrite( "Battery: %d%% PDO: %uV @ %umA %s ~%dW", adsp_state.fuel_gauge_internal, adsp_state.pdo_volt / 1000, adsp_state.pdo_cur,
+							qph_str, (adsp_state.pdo_volt * adsp_state.usb_current) / 1000000 );
 				fflush(stdout);
 			}
 			else
