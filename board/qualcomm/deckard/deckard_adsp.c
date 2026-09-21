@@ -40,9 +40,32 @@ typedef union ADSP_PayloadOut_t {
 		uint32_t inhibit_poweroff : 1; // inhibit poweroff?
 		uint32_t pdo_volt : 4; // V
 		uint32_t pdo_cur : 5; // mA / 100
+		uint32_t qph2_en : 1;
     } bits;
 } ADSP_PayloadOut_t;
 
+typedef union ADSP_ChargerPayloadOut_t {
+    uint32_t u32;
+    struct {
+	// 0
+        uint32_t magic  : 2;  // DECKARD_ADSP_CHARGER_OUT_MAGIC
+	// 2
+        uint32_t sequence_count : 4; // sequence counter.  increments on each update
+	// 6
+	int32_t avg_current : 6; // mA / 100
+	// 12
+	uint32_t die_temp : 7; // milliC / 1000
+	// 19
+	uint32_t qph_state : 3;
+	// 22
+    } bits;
+} ADSP_ChargerPayloadOut_t;
+
+static int32_t sign_extend32( uint32_t value, int index )
+{
+	uint8_t shift = 31 - index;
+	return (int32_t)( value << shift ) >> shift;
+}
 
 static_assert( sizeof( ADSP_PayloadOut_t ) == 4 );
 static_assert( sizeof( UBOOT_PayloadOut_t ) == 4 );
@@ -52,9 +75,10 @@ static_assert( sizeof( UBOOT_PayloadOut_t ) == 4 );
 #define QDSP6V67SS_BOOT_PARAMS0 (QDSP6V67SS_BASE + 0x60)
 #define DECKARD_ADSP_OUT_ADDR	(QDSP6V67SS_BOOT_PARAMS0 + 4)
 #define DECKARD_UBOOT_OUT_ADDR	(QDSP6V67SS_BOOT_PARAMS0 + 8)
-#define DECKARD_UBOOT_UNUSED	(QDSP6V67SS_BOOT_PARAMS0 + 12)
+#define DECKARD_ADSP_CHARGER_OUT_ADDR	(QDSP6V67SS_BOOT_PARAMS0 + 12)
 #define DECKARD_UBOOT_OUT_MAGIC 0b10
 #define DECKARD_ADSP_OUT_MAGIC 0b01
+#define DECKARD_ADSP_CHARGER_OUT_MAGIC 0b11
 
 #define DECKARD_ADSP_ID 0
 
@@ -141,10 +165,24 @@ void deckard_adsp_read( ADSP_State_t * payload )
 		payload->fuel_gauge_internal = data.bits.fuel_gauge_internal;
 		payload->pdo_volt = data.bits.pdo_volt * 1000;
 		payload->pdo_cur = data.bits.pdo_cur * 100;
+		payload->qph2_en = data.bits.qph2_en;
 	}
 	else
 	{
 		deckard_adsp_state_clear( payload );
+	}
+
+	if (payload->valid) {
+		ADSP_ChargerPayloadOut_t cdata;
+		cdata.u32 = readl(DECKARD_ADSP_CHARGER_OUT_ADDR);
+
+		if ( cdata.bits.magic == DECKARD_ADSP_CHARGER_OUT_MAGIC )
+		{
+			payload->valid = true;
+			payload->avg_current = sign_extend32(cdata.bits.avg_current, 5) * 100;
+			payload->die_temp = cdata.bits.die_temp;
+			payload->qph_state = cdata.bits.qph_state;
+		}
 	}
 }
 

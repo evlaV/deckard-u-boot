@@ -35,6 +35,10 @@ typedef struct ADSP_State_t
     int fuel_gauge_internal;
     unsigned pdo_volt; // V
     unsigned pdo_cur; // mA
+    unsigned qph2_en;
+    int avg_current; // mA
+    unsigned die_temp; // C
+    unsigned qph_state;
 } ADSP_State_t;
 
 void deckard_adsp_state_clear( ADSP_State_t * payload );
