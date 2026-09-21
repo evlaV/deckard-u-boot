@@ -43,6 +43,26 @@ typedef union ADSP_PayloadOut_t {
     } bits;
 } ADSP_PayloadOut_t;
 
+typedef union ADSP_ChargerPayloadOut_t {
+    uint32_t u32;
+    struct {
+	// 0
+        uint32_t magic  : 2;  // DECKARD_ADSP_CHARGER_OUT_MAGIC
+	// 2
+        uint32_t sequence_count : 4; // sequence counter.  increments on each update
+	// 6
+	uint32_t qph_state : 3;
+	// 9
+	int32_t usb_current : 7; // mA / 50
+	// 16
+    } bits;
+} ADSP_ChargerPayloadOut_t;
+
+static int32_t sign_extend32( uint32_t value, int index )
+{
+	uint8_t shift = 31 - index;
+	return (int32_t)( value << shift ) >> shift;
+}
 
 static_assert( sizeof( ADSP_PayloadOut_t ) == 4 );
 static_assert( sizeof( UBOOT_PayloadOut_t ) == 4 );
@@ -52,9 +72,10 @@ static_assert( sizeof( UBOOT_PayloadOut_t ) == 4 );
 #define QDSP6V67SS_BOOT_PARAMS0 (QDSP6V67SS_BASE + 0x60)
 #define DECKARD_ADSP_OUT_ADDR	(QDSP6V67SS_BOOT_PARAMS0 + 4)
 #define DECKARD_UBOOT_OUT_ADDR	(QDSP6V67SS_BOOT_PARAMS0 + 8)
-#define DECKARD_UBOOT_UNUSED	(QDSP6V67SS_BOOT_PARAMS0 + 12)
+#define DECKARD_ADSP_CHARGER_OUT_ADDR	(QDSP6V67SS_BOOT_PARAMS0 + 12)
 #define DECKARD_UBOOT_OUT_MAGIC 0b10
 #define DECKARD_ADSP_OUT_MAGIC 0b01
+#define DECKARD_ADSP_CHARGER_OUT_MAGIC 0b11
 
 #define DECKARD_ADSP_ID 0
 
@@ -145,6 +166,18 @@ void deckard_adsp_read( ADSP_State_t * payload )
 	else
 	{
 		deckard_adsp_state_clear( payload );
+	}
+
+	if (payload->valid) {
+		ADSP_ChargerPayloadOut_t cdata;
+		cdata.u32 = readl(DECKARD_ADSP_CHARGER_OUT_ADDR);
+
+		if ( cdata.bits.magic == DECKARD_ADSP_CHARGER_OUT_MAGIC )
+		{
+			payload->valid = true;
+			payload->usb_current = sign_extend32(cdata.bits.usb_current, 6) * 50;
+			payload->qph_state = cdata.bits.qph_state;
+		}
 	}
 }
 
