@@ -13,13 +13,27 @@ static int max17320_reg_count(struct udevice *dev)
 static int max17320_write(struct udevice *dev, uint reg, const uint8_t *buff,
 		int len)
 {
+	uint8_t data[2] = {0};
 	int ret;
 
-	pr_err("max17320_write dm_i2c_write max1730x_regs[reg] = 0x%02x , buff = 0x%02x\n",max1730x_regs[reg], buff[0]);
+	// Unlock Write mode
+	ret = dm_i2c_read(dev, max1730x_regs[COMMSTAT_REG], data, 2);
+
+	data[0] &= 0x06;
+	data[1] &= 0xFF;
+
+	ret = dm_i2c_write(dev, max1730x_regs[COMMSTAT_REG], data, 2);
+	ret = dm_i2c_write(dev, max1730x_regs[COMMSTAT_REG], data, 2);
 
 	ret = dm_i2c_write(dev, max1730x_regs[reg], buff, len);
 	if (ret)
 		pr_err("write error to device: %p register: %#x!\n", dev, reg);
+
+	// lock Write mode
+	data[0] |= 0xF9;
+	data[1] |= 0x00;
+	ret = dm_i2c_write(dev, max1730x_regs[COMMSTAT_REG], data, 2);
+	ret = dm_i2c_write(dev, max1730x_regs[COMMSTAT_REG], data, 2);
 
 	return ret;
 }
