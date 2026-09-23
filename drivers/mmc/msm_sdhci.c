@@ -36,6 +36,11 @@
 
 #define CORE_VENDOR_SPEC_POR_VAL 0xa9c
 
+#define CORE_DLL_PDN		BIT(29)
+#define CORE_DLL_RST		BIT(30)
+
+#define MHZ(X) ((X) * 1000000UL)
+
 struct msm_sdhc_plat {
 	struct mmc_config cfg;
 	struct mmc mmc;
@@ -51,6 +56,7 @@ struct msm_sdhc {
 struct msm_sdhc_variant_info {
 	bool mci_removed;
 
+	u32 core_dll_config;
 	u32 core_vendor_spec;
 	u32 core_vendor_spec_capabilities0;
 };
@@ -61,15 +67,13 @@ static int msm_sdc_clk_init(struct udevice *dev)
 {
 	struct msm_sdhc *prv = dev_get_priv(dev);
 	const struct msm_sdhc_variant_info *var_info;
-	ofnode node = dev_ofnode(dev);
 	ulong clk_rate;
 	int ret, i = 0, n_clks;
 	const char *clk_name;
 
 	var_info = (void *)dev_get_driver_data(dev);
 
-	ret = ofnode_read_u32(node, "clock-frequency", (uint *)(&clk_rate));
-	if (ret)
+	if (dev_read_u32(dev, "max-frequency", (uint *)(&clk_rate)))
 		clk_rate = 201500000;
 
 	ret = clk_get_bulk(dev, &prv->clks);
@@ -85,7 +89,7 @@ static int msm_sdc_clk_init(struct udevice *dev)
 	}
 
 	/* If clock-names is unspecified, then the first clock is the core clock */
-	if (!ofnode_get_property(node, "clock-names", &n_clks)) {
+	if (!dev_read_prop(dev, "clock-names", &n_clks)) {
 		if (!clk_set_rate(&prv->clks.clks[0], clk_rate)) {
 			log_warning("Couldn't set core clock rate: %d\n", ret);
 			return -EINVAL;
@@ -94,7 +98,7 @@ static int msm_sdc_clk_init(struct udevice *dev)
 
 	/* Find the index of the "core" clock */
 	while (i < n_clks) {
-		ofnode_read_string_index(node, "clock-names", i, &clk_name);
+		dev_read_string_index(dev, "clock-names", i, &clk_name);
 		if (!strcmp(clk_name, "core"))
 			break;
 		i++;
@@ -113,6 +117,9 @@ static int msm_sdc_clk_init(struct udevice *dev)
 		log_warning("Couldn't set MMC core clock rate: %dE\n", clk_rate ? (int)PTR_ERR((void *)clk_rate) : 0);
 		return -EINVAL;
 	}
+
+	/* This is the base clock sdhci core will use to configure the SDCLK */
+	prv->host.max_clk = clk_rate;
 
 	writel_relaxed(CORE_VENDOR_SPEC_POR_VAL,
 		       prv->host.ioaddr + var_info->core_vendor_spec);
@@ -145,6 +152,34 @@ static int msm_sdc_mci_init(struct msm_sdhc *prv)
 
 	return 0;
 }
+
+static int msm_sdhci_config_dll(struct sdhci_host *host, u32 clock, bool enable)
+{
+	struct udevice *dev = mmc_to_dev(host->mmc);
+	const struct msm_sdhc_variant_info *var_info = (void *)dev_get_driver_data(dev);
+	u32 config;
+
+	if (enable && clock < MHZ(100)) {
+		/*
+		 * DLL is not required for clock <= 100MHz
+		 * Thus, make sure DLL is disabled when not required
+		 */
+		config = readl(host->ioaddr + var_info->core_dll_config);
+		config |= CORE_DLL_RST;
+		writel(config, host->ioaddr + var_info->core_dll_config);
+
+		config = readl(host->ioaddr + var_info->core_dll_config);
+		config |= CORE_DLL_PDN;
+		writel(config, host->ioaddr + var_info->core_dll_config);
+	}
+
+	return 0;
+}
+
+struct sdhci_ops msm_sdhci_ops = {
+	.config_dll = &msm_sdhci_config_dll,
+	.set_control_reg = &sdhci_set_control_reg,
+};
 
 static int msm_sdc_probe(struct udevice *dev)
 {
@@ -220,6 +255,7 @@ static int msm_sdc_probe(struct udevice *dev)
 
 	host->mmc = &plat->mmc;
 	host->mmc->dev = dev;
+	host->ops = &msm_sdhci_ops;
 	ret = sdhci_setup_cfg(&plat->cfg, host, 0, 0);
 	if (ret)
 		return ret;
@@ -285,6 +321,7 @@ static int msm_sdc_bind(struct udevice *dev)
 static const struct msm_sdhc_variant_info msm_sdhc_mci_var = {
 	.mci_removed = false,
 
+	.core_dll_config = 0x100,
 	.core_vendor_spec = 0x10c,
 	.core_vendor_spec_capabilities0 = 0x11c,
 };
@@ -292,6 +329,7 @@ static const struct msm_sdhc_variant_info msm_sdhc_mci_var = {
 static const struct msm_sdhc_variant_info msm_sdhc_v5_var = {
 	.mci_removed = true,
 
+	.core_dll_config = 0x200,
 	.core_vendor_spec = 0x20c,
 	.core_vendor_spec_capabilities0 = 0x21c,
 };
