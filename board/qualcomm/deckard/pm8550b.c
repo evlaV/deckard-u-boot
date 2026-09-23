@@ -42,23 +42,24 @@
 #define PM8550B_USB_SUSPEND										(PM8550B_USB_BASE + 0x54)
 
 #define PM8550B_BATIF_BASE               0x2800
-#define PM8550B_BATIF_JEITA_EN           (BATIF_BASE + 0x7F)
-#define PM8550B_BATIF_JEITA_FV_WARM      (BATIF_BASE + 0x80)
-#define PM8550B_BATIF_JEITA_FV_COOL      (BATIF_BASE + 0x81)
-#define PM8550B_BATIF_JEITA_CC_WARM      (BATIF_BASE + 0x82)
-#define PM8550B_BATIF_JEITA_CC_COOL      (BATIF_BASE + 0x83)
-#define PM8550B_BATIF_JEITA_THOT_MSB     (BATIF_BASE + 0x84)
-#define PM8550B_BATIF_JEITA_THOT_LSB     (BATIF_BASE + 0x85)
-#define PM8550B_BATIF_JEITA_WARM_MSB     (BATIF_BASE + 0x86)
-#define PM8550B_BATIF_JEITA_WARM_LSB     (BATIF_BASE + 0x87)
-#define PM8550B_BATIF_JEITA_COOL_MSB     (BATIF_BASE + 0x88)
-#define PM8550B_BATIF_JEITA_COOL_LSB     (BATIF_BASE + 0x89)
-#define PM8550B_BATIF_JEITA_COLD_MSB     (BATIF_BASE + 0x8A)
-#define PM8550B_BATIF_JEITA_COLD_LSB     (BATIF_BASE + 0x8B)
-#define PM8550B_BATIF_JEITA_THOT_AFP_MSB (BATIF_BASE + 0x8C)
-#define PM8550B_BATIF_JEITA_THOT_AFP_LSB (BATIF_BASE + 0x8D)
-#define PM8550B_BATIF_JEITA_COLD_AFP_MSB (BATIF_BASE + 0x8E)
-#define PM8550B_BATIF_JEITA_COLD_AFP_LSB (BATIF_BASE + 0x8F)
+#define PM8550B_BATIF_SHIP_MODE          (PM8550B_BATIF_BASE + 0x52)
+#define PM8550B_BATIF_JEITA_EN           (PM8550B_BATIF_BASE + 0x7F)
+#define PM8550B_BATIF_JEITA_FV_WARM      (PM8550B_BATIF_BASE + 0x80)
+#define PM8550B_BATIF_JEITA_FV_COOL      (PM8550B_BATIF_BASE + 0x81)
+#define PM8550B_BATIF_JEITA_CC_WARM      (PM8550B_BATIF_BASE + 0x82)
+#define PM8550B_BATIF_JEITA_CC_COOL      (PM8550B_BATIF_BASE + 0x83)
+#define PM8550B_BATIF_JEITA_THOT_MSB     (PM8550B_BATIF_BASE + 0x84)
+#define PM8550B_BATIF_JEITA_THOT_LSB     (PM8550B_BATIF_BASE + 0x85)
+#define PM8550B_BATIF_JEITA_WARM_MSB     (PM8550B_BATIF_BASE + 0x86)
+#define PM8550B_BATIF_JEITA_WARM_LSB     (PM8550B_BATIF_BASE + 0x87)
+#define PM8550B_BATIF_JEITA_COOL_MSB     (PM8550B_BATIF_BASE + 0x88)
+#define PM8550B_BATIF_JEITA_COOL_LSB     (PM8550B_BATIF_BASE + 0x89)
+#define PM8550B_BATIF_JEITA_COLD_MSB     (PM8550B_BATIF_BASE + 0x8A)
+#define PM8550B_BATIF_JEITA_COLD_LSB     (PM8550B_BATIF_BASE + 0x8B)
+#define PM8550B_BATIF_JEITA_THOT_AFP_MSB (PM8550B_BATIF_BASE + 0x8C)
+#define PM8550B_BATIF_JEITA_THOT_AFP_LSB (PM8550B_BATIF_BASE + 0x8D)
+#define PM8550B_BATIF_JEITA_COLD_AFP_MSB (PM8550B_BATIF_BASE + 0x8E)
+#define PM8550B_BATIF_JEITA_COLD_AFP_LSB (PM8550B_BATIF_BASE + 0x8F)
 
 #define PM8550B_QBG_MAIN_BASE                 (0x4F00)
 #define PM8550B_QBG_EN_CTL                    (PM8550B_QBG_MAIN_BASE + 0x46)
@@ -312,6 +313,44 @@ int pm8550b_enable_charging(struct udevice *pmic, bool enable)
 	ret = pmic_reg_write(pmic, PM8550B_CHGR_CHG_EN_ADDR, ret);
 	if (ret != 0) {
 		printf("Failed to %s Charging.\n", enable ? "Enable" : "Disable");
+		return ret;
+	}
+
+	return 0;
+}
+
+int pm8550b_pause_charging(struct udevice *pmic, bool pause)
+{
+	int ret;
+
+	/* check vbus status */
+	ret = pmic_reg_read(pmic, PM8550B_CHGR_CHG_EN_ADDR);
+	if (ret < 0)
+		return false;
+
+	if (pause) {
+		ret |=   PM8550B_CHGR_CHG_EN_CHARGING_PAUSE_CMD;
+	} else {
+		ret &= ~(PM8550B_CHGR_CHG_EN_CHARGING_PAUSE_CMD);
+	}
+
+	int write_ret = pmic_reg_write(pmic, PM8550B_CHGR_CHG_EN_ADDR, ret);
+	if (write_ret != 0) {
+		printf("Failed to pause Charging.\n");
+		return write_ret;
+	}
+
+	return 0;
+}
+
+int pm8550b_set_ship_mode(struct udevice *pmic, bool shipmode)
+{
+	uint8_t reg = shipmode;
+	int     ret;
+
+	ret = pmic_reg_write(pmic, PM8550B_BATIF_SHIP_MODE, reg);
+	if (ret != 0) {
+		printf("Failed to set pm8550b ship mode\n");
 		return ret;
 	}
 

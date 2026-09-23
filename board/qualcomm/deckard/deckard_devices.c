@@ -977,7 +977,7 @@ int deckard_fuel_gauge_enter_ship_mode(void)
 	deckard_devices_t * pdevices = get_deckard_devices_handle();
 	int ret = 0;
 	if(pdevices)
-		ret = deckard_battery_set_ship_mode(pdevices->max17320);
+		ret = deckard_battery_set_ship_mode(pdevices->max17320, pdevices->pm8550b);
 	else
 		return -1;
 

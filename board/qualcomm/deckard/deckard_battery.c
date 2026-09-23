@@ -392,12 +392,13 @@ int deckard_battery_get_avg_current(struct udevice *max17320)
 }
 
 
-int deckard_battery_set_ship_mode(struct udevice *max17320)
+int deckard_battery_set_ship_mode(struct udevice *max17320, struct udevice *pm8550b)
 {
 	uint8_t reg[2];
+	int ret = 0;
 	int len;
 
-	if(!max17320)
+	if(!max17320 || !pm8550b)
 		return -EINVAL;
 
 	len = 2;
@@ -406,11 +407,30 @@ int deckard_battery_set_ship_mode(struct udevice *max17320)
 		return -EIO;
 	}
 
-	reg[0] |= MAX17330_CONFIG_SHIP;
-	if ( pmic_write(max17320, CONFIG_REG, reg, len) ) {
-		deckard_log("failed to set fg ship mode\n");
+	if ( pm8550b_pause_charging(pm8550b, true) ) {
+		deckard_log("failed to pause charging\n");
 		return -EIO;
 	}
 
+	reg[0] |= MAX17330_CONFIG_SHIP;
+	if ( pmic_write(max17320, CONFIG_REG, reg, len) ) {
+		deckard_log("failed to set fg ship mode\n");
+		ret = -EIO;
+		goto cleanup;
+	}
+
+	if ( pm8550b_set_ship_mode(pm8550b, true) ) {
+		deckard_log("failed to set pm8550b ship mode\n");
+		goto cleanup;
+	}
+
 	return 0;
+
+cleanup:
+	//unpause charging
+	pm8550b_pause_charging(pm8550b, false);
+	//take max17320 out of ship mode
+	reg[0] &= ~MAX17330_CONFIG_SHIP;
+	pmic_write(max17320, CONFIG_REG, reg, 2);
+	return ret;
 }
