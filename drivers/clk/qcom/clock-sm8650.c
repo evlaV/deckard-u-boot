@@ -43,7 +43,7 @@ static const struct freq_tbl ftbl_gcc_sdcc2_apps_clk_src[] = {
 	F(400000, CFG_CLK_SRC_CXO, 12, 1, 4),
 	F(25000000, CFG_CLK_SRC_GPLL0_EVEN, 12, 0, 0),
 	F(100000000, CFG_CLK_SRC_GPLL0_EVEN, 3, 0, 0),
-	/* TOFIX F(202000000, CFG_CLK_SRC_GPLL9, 4, 0, 0), */
+	F(202000000, CFG_CLK_SRC_GPLL9, 4, 0, 0),
 	{ }
 };
 
@@ -65,6 +65,14 @@ static const struct freq_tbl ftbl_gcc_pcie_0_phy_rchng_clk_src[] = {
 	{ }
 };
 
+static struct pll_vote_clk gpll9_vote_clk = {
+	/* Use PLL_LOCK_DET bit as status. */
+	.status = 0x9000,
+	.status_bit = BIT(31),
+	.ena_vote = 0x52020,
+	.vote_bit = BIT(9),
+};
+
 static ulong sm8650_set_rate(struct clk *clk, ulong rate)
 {
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
@@ -78,6 +86,8 @@ static ulong sm8650_set_rate(struct clk *clk, ulong rate)
 		return freq->freq;
 	case GCC_SDCC2_APPS_CLK:
 		freq = qcom_find_freq(ftbl_gcc_sdcc2_apps_clk_src, rate);
+		if (freq->src == CFG_CLK_SRC_GPLL9)
+			clk_enable_gpll0(priv->base, &gpll9_vote_clk);
 		clk_rcg_set_rate_mnd(priv->base, 0x14018,
 				     freq->pre_div, freq->m, freq->n, freq->src, 8);
 		return freq->freq;
