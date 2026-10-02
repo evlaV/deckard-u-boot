@@ -393,6 +393,88 @@ fail:
 	return ret;
 }
 
+static int do_set_state(struct cmd_tbl *cmdtp, int flag, int argc,
+			      char *const argv[])
+{
+	int ret = 0;
+	char * target = NULL;
+    char * state = NULL;
+	bool set_target_slot_good = false;
+
+	if (argc < 3) {/* no subcommand */
+		printf("set state argc = %d\n", argc);
+		return cmd_usage(cmdtp);
+	}
+
+	target = argv[1]; // A or B
+    state = argv[2]; // good or bad
+
+	ret = env_spl_scsi_load();
+
+	if(ret)	goto fail;
+
+	if(!strcmp(state,"good"))
+	{
+		set_target_slot_good = true;
+	}
+	else if(!strcmp(state,"bad"))
+	{
+		set_target_slot_good = false;
+	}
+	else
+	{
+		printf("invalid state\n");
+		return 0;
+	}
+
+	if(!strcmp(target,"A"))
+	{
+		if (set_target_slot_good)
+		{
+			ret = env_spl_set("BOOT_STATE_A","1");
+			if(ret)	goto fail;
+			ret = env_scsi_save();
+			if(ret)	goto fail;
+		}
+		else
+		{
+			ret = env_spl_set("BOOT_STATE_A","0");
+			if(ret)	goto fail;
+			ret = env_scsi_save();
+			if(ret)	goto fail;
+		}
+	}
+	else if(!strcmp(target,"B"))
+	{
+		if (set_target_slot_good)
+		{
+			ret = env_spl_set("BOOT_STATE_B","1");
+			if(ret)	goto fail;
+			ret = env_scsi_save();
+			if(ret)	goto fail;
+		}
+		else
+		{
+			ret = env_spl_set("BOOT_STATE_B","0");
+			if(ret)	goto fail;
+			ret = env_scsi_save();
+			if(ret)	goto fail;
+		}
+	}
+	else
+	{
+		printf("invalid target\n");
+		return 0;
+	} 
+
+	//no error, don't print anything
+	return ret;
+
+fail:
+	printf("err %d\n",ret);
+	return ret;
+}
+
 static int do_force_usb(struct cmd_tbl *cmdtp, int flag, int argc,
 			char *const argv[])
 {
@@ -497,6 +579,7 @@ static int do_print_spl_env(struct cmd_tbl *cmdtp, int flag, int argc,
 
 static struct cmd_tbl cmd_splctl_sub[] = {
 	U_BOOT_CMD_MKENT(set-primary, 2, 1, do_set_primary, "", ""),
+	U_BOOT_CMD_MKENT(set-state, 3, 0, do_set_state, "", ""),
 	U_BOOT_CMD_MKENT(set-bootfw-slot, 2, 1, do_set_bootfw_slot, "", ""),
 	U_BOOT_CMD_MKENT(env, 1, 1, do_print_spl_env, "", ""),
 	U_BOOT_CMD_MKENT(force-usb, 1, 1, do_force_usb, "", ""),
@@ -519,17 +602,20 @@ static int do_splctl(struct cmd_tbl *cmdtp, int flag, int argc,
 	cp = find_cmd_tbl(argv[0], cmd_splctl_sub, ARRAY_SIZE(cmd_splctl_sub));
 	if (cp)
 		return cp->cmd(cmdtp, flag, argc, argv);
+	
+	printf("splctl argc %d cmd %s\n", argc, argv[0]);
 
 	return CMD_RET_USAGE;
 }
 
 U_BOOT_LONGHELP(splctl,
-	"set-primary [A/B] - SPL set primary partition\n"
-	"       force-usb    - SPL force booting from usb\n"
-	"       env - SPL print env\n"
+	"		set-state [A/B] [good/bad] - SPL set partition state\n"
+	"		set-primary [A/B] - SPL set primary partition\n"
+	"		force-usb    - SPL force booting from usb\n"
+	"		env - SPL print env\n"
 	);
 
-#define SPLCTL_CMD_MAXARGS 3
+#define SPLCTL_CMD_MAXARGS 4
 U_BOOT_CMD(splctl, SPLCTL_CMD_MAXARGS, 1, do_splctl,
 	   "splctl", splctl_help_text
 );
