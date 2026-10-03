@@ -804,11 +804,18 @@ static int deckard_spl_partition_erase(const char *partition)
 	}
 
 	buf = malloc_cache_aligned(part_info.blksz);
-	count = blk_write(blk_dev->bdev, part_info.start, part_info.size, buf);
-	if (count != part_info.size) {
-		deckard_log("failed to erase ddr partition, count: %lu size: %lu\n", count,
-				part_info.size);
-		return count;
+	if (!buf)
+		return -ENOMEM;
+	memset(buf, 0, part_info.blksz);
+
+	for (lbaint_t i = 0; i < part_info.size; i++) {
+		count = blk_write(blk_dev->bdev, part_info.start + i, 1, buf);
+		if (count != 1) {
+			deckard_log("failed to erase %s partition at block %lu\n", part_info.name,
+					(ulong)i);
+			free(buf);
+			return -EIO;
+		}
 	}
 	free(buf);
 
