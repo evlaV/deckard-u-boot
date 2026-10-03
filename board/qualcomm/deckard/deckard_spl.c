@@ -960,7 +960,7 @@ enum combined_button_state_t button_state_handler(void)
 
 static int set_booted_fw_slot(void)
 {
-	char active_partition_slot[2];
+	char active_partition_slot[2] = "X";
 	int bootfw_lun;
 	int ret = 0;
 	struct blk_desc *blk_dev;
