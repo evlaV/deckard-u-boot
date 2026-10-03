@@ -857,8 +857,21 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 			{
 				if ( auto_poweroff_time && get_timer( auto_poweroff_time ) > k_AutoPowerOffDelayMS )
 				{
-					deckard_log("Auto Power-Off Initiated\n ");
-					run_command("splctl set-uboot-poweroff-reason battery", 0); //inform the spl that we are shutting down due to low battery
+					deckard_log("Auto Power-Off Initiated\n");
+					// Because uboot is initiating this shutdown, we don't want the boot count to decrement
+					// Reset the current partition to good to reset the boot count
+					if (!strcmp(env_get("booted_slot"), "A"))
+					{
+						run_command("splctl set-state A good", 0);
+					}
+					else if (!strcmp(env_get("booted_slot"), "B"))
+					{
+						run_command("splctl set-state B good", 0);
+					}
+					else
+					{
+						deckard_log("Could not figure out booted slate before poweroff\n" );
+					}
 
 					deckard_log("Sysreset Poweroff...\n" );
 					int ret = sysreset_walk(SYSRESET_POWER_OFF);

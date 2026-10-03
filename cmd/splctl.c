@@ -398,7 +398,7 @@ static int do_set_state(struct cmd_tbl *cmdtp, int flag, int argc,
 {
 	int ret = 0;
 	char * target = NULL;
-    char * state = NULL;
+	char * state = NULL;
 	bool set_target_slot_good = false;
 
 	if (argc < 3) {/* no subcommand */
@@ -407,7 +407,7 @@ static int do_set_state(struct cmd_tbl *cmdtp, int flag, int argc,
 	}
 
 	target = argv[1]; // A or B
-    state = argv[2]; // good or bad
+	state = argv[2]; // good or bad
 
 	ret = env_spl_scsi_load();
 
@@ -433,14 +433,10 @@ static int do_set_state(struct cmd_tbl *cmdtp, int flag, int argc,
 		{
 			ret = env_spl_set("BOOT_STATE_A","1");
 			if(ret)	goto fail;
-			ret = env_scsi_save();
-			if(ret)	goto fail;
 		}
 		else
 		{
 			ret = env_spl_set("BOOT_STATE_A","0");
-			if(ret)	goto fail;
-			ret = env_scsi_save();
 			if(ret)	goto fail;
 		}
 	}
@@ -450,14 +446,10 @@ static int do_set_state(struct cmd_tbl *cmdtp, int flag, int argc,
 		{
 			ret = env_spl_set("BOOT_STATE_B","1");
 			if(ret)	goto fail;
-			ret = env_scsi_save();
-			if(ret)	goto fail;
 		}
 		else
 		{
 			ret = env_spl_set("BOOT_STATE_B","0");
-			if(ret)	goto fail;
-			ret = env_scsi_save();
 			if(ret)	goto fail;
 		}
 	}
@@ -466,6 +458,9 @@ static int do_set_state(struct cmd_tbl *cmdtp, int flag, int argc,
 		printf("invalid target\n");
 		return 0;
 	} 
+
+	ret = env_scsi_save();
+	if(ret)	goto fail;
 
 	//no error, don't print anything
 	return ret;
@@ -602,8 +597,6 @@ static int do_splctl(struct cmd_tbl *cmdtp, int flag, int argc,
 	cp = find_cmd_tbl(argv[0], cmd_splctl_sub, ARRAY_SIZE(cmd_splctl_sub));
 	if (cp)
 		return cp->cmd(cmdtp, flag, argc, argv);
-	
-	printf("splctl argc %d cmd %s\n", argc, argv[0]);
 
 	return CMD_RET_USAGE;
 }
