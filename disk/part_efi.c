@@ -438,12 +438,17 @@ int write_gpt_table(struct blk_desc *desc, gpt_header *gpt_h, gpt_entry *gpt_e)
 			      le32_to_cpu(gpt_h->header_size));
 	gpt_h->header_crc32 = cpu_to_le32(calc_crc32);
 
-	/* Write the First GPT to the block right after the Legacy MBR */
-	if (blk_dwrite(desc, 1, 1, gpt_h) != 1)
-		goto err;
-
+	/*
+	 * Write the entries before the header they are covered by, so a power
+	 * loss in between leaves the old header failing its CRC check instead
+	 * of a valid header over stale entries.
+	 */
 	if (blk_dwrite(desc, le64_to_cpu(gpt_h->partition_entry_lba),
 		       pte_blk_cnt, gpt_e) != pte_blk_cnt)
+		goto err;
+
+	/* Write the First GPT to the block right after the Legacy MBR */
+	if (blk_dwrite(desc, 1, 1, gpt_h) != 1)
 		goto err;
 
 	prepare_backup_gpt_header(gpt_h);
