@@ -272,6 +272,14 @@ const char *fs_firmware_get_interface(void)
 	return booted_from_usb() ? "usb" : "scsi";
 }
 
+// An unset or empty BOOT_FORCE_USB_* variable matches any device.
+static bool usb_boot_id_matches(const char *id, const char *env_name)
+{
+	const char *want = env_get(env_name);
+
+	return !want || !*want || strncmp(id, want, 64) == 0;
+}
+
 /* Get the devnum/partnum for a partition from its GPT partlabel */
 int deckard_find_part_by_label(enum disk_interface_t disk_interface, int devnum_restrict, const char *partname, int *devnum, int *partnum)
 {
@@ -302,9 +310,9 @@ int deckard_find_part_by_label(enum disk_interface_t disk_interface, int devnum_
 				if (strlen(udev->mf) || strlen(udev->prod) || strlen(udev->serial))
 					printf("[%d] %s %s %s\n", count, udev->mf, udev->prod, udev->serial);
 
-				int vendor_match  = ( strncmp(udev->mf,     env_get("BOOT_FORCE_USB_VENDOR"),  64) == 0);
-				int product_match = ( strncmp(udev->prod,   env_get("BOOT_FORCE_USB_PRODUCT"), 64) == 0);
-				int serial_match  = ( strncmp(udev->serial, env_get("BOOT_FORCE_USB_SERIAL"),  64) == 0);
+				int vendor_match  = usb_boot_id_matches(udev->mf, "BOOT_FORCE_USB_VENDOR");
+				int product_match = usb_boot_id_matches(udev->prod, "BOOT_FORCE_USB_PRODUCT");
+				int serial_match  = usb_boot_id_matches(udev->serial, "BOOT_FORCE_USB_SERIAL");
 				if(vendor_match && product_match && serial_match)
 				{
 					found_match = 1;

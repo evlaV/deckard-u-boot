@@ -65,6 +65,14 @@ int spl_usb_load_ext(struct blk_desc *stor_dev, struct spl_image_info *spl_image
 }
 #endif
 
+// An unset or empty BOOT_FORCE_USB_* variable matches any device.
+static bool usb_boot_id_matches(const char *id, const char *env_name)
+{
+	const char *want = env_get(env_name);
+
+	return !want || !*want || strncmp(id, want, 64) == 0;
+}
+
 int spl_usb_load(struct spl_image_info *spl_image,
 		 struct spl_boot_device *bootdev, int partition,
 		 const char *filename)
@@ -103,9 +111,9 @@ int spl_usb_load(struct spl_image_info *spl_image,
 			if (strlen(udev->mf) || strlen(udev->prod) || strlen(udev->serial))
 				printf("[%d] %s %s %s\n", count, udev->mf, udev->prod, udev->serial);
 
-			int vendor_match  = ( strncmp(udev->mf,     env_get("BOOT_FORCE_USB_VENDOR"),  64) == 0);
-			int product_match = ( strncmp(udev->prod,   env_get("BOOT_FORCE_USB_PRODUCT"), 64) == 0);
-			int serial_match  = ( strncmp(udev->serial, env_get("BOOT_FORCE_USB_SERIAL"),  64) == 0);
+			int vendor_match  = usb_boot_id_matches(udev->mf, "BOOT_FORCE_USB_VENDOR");
+			int product_match = usb_boot_id_matches(udev->prod, "BOOT_FORCE_USB_PRODUCT");
+			int serial_match  = usb_boot_id_matches(udev->serial, "BOOT_FORCE_USB_SERIAL");
 			if(vendor_match && product_match && serial_match)
 			{
 				found_match = 1;

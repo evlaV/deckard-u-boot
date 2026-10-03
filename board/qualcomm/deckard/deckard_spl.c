@@ -198,9 +198,9 @@ void spl_perform_fixups(struct spl_image_info *spl_image)
 	else if (spl_image->boot_device == BOOT_DEVICE_USB)
 	{
 		ret = fdt_setprop_string(blob, chosen, "u-boot,spl-boot-device", "U");
-		if(ret == 0) ret = fdt_setprop_string(blob, chosen, "u-boot,spl-usb-boot-product", env_get("BOOT_FORCE_USB_VENDOR"));
-		if(ret == 0) ret = fdt_setprop_string(blob, chosen, "u-boot,spl-usb-boot-vendor",  env_get("BOOT_FORCE_USB_PRODUCT"));
-		if(ret == 0) ret = fdt_setprop_string(blob, chosen, "u-boot,spl-usb-boot-serial",  env_get("BOOT_FORCE_USB_SERIAL"));
+		if(ret == 0) ret = fdt_setprop_string(blob, chosen, "u-boot,spl-usb-boot-product", env_get("BOOT_FORCE_USB_VENDOR") ?: "");
+		if(ret == 0) ret = fdt_setprop_string(blob, chosen, "u-boot,spl-usb-boot-vendor",  env_get("BOOT_FORCE_USB_PRODUCT") ?: "");
+		if(ret == 0) ret = fdt_setprop_string(blob, chosen, "u-boot,spl-usb-boot-serial",  env_get("BOOT_FORCE_USB_SERIAL") ?: "");
 	}
 	else
 	{
@@ -259,40 +259,41 @@ void board_boot_order(u32 *spl_boot_list)
 	//This function is called by the SPL loader to check what to boot!
 
 	char *boot_order = env_get("BOOT_TARGET");
+	int n = 0;
 
 	if (env_get_ulong("BOOT_FORCE_USB", 10, 0)) {
-		spl_boot_list[0] = BOOT_DEVICE_USB;
-		spl_boot_list[1] = BOOT_DEVICE_UFS_A;
-		spl_boot_list[2] = BOOT_DEVICE_UFS_B;
+		spl_boot_list[n++] = BOOT_DEVICE_USB;
 
 		/* we need to disable dcache before booting from USB */
 		dcache_disable();
 		invalidate_dcache_all();
-	} else if (!strcmp(boot_order, "A B"))
+	}
+
+	// A failed USB boot falls back to the same slots as a normal boot
+	if (!strcmp(boot_order, "A B"))
 	{
-		spl_boot_list[0] = BOOT_DEVICE_UFS_A;
-		spl_boot_list[1] = BOOT_DEVICE_UFS_B;
+		spl_boot_list[n++] = BOOT_DEVICE_UFS_A;
+		spl_boot_list[n++] = BOOT_DEVICE_UFS_B;
 	}
 	else if(!strcmp(boot_order, "B A"))
 	{
-		spl_boot_list[0] = BOOT_DEVICE_UFS_B;
-		spl_boot_list[1] = BOOT_DEVICE_UFS_A;
+		spl_boot_list[n++] = BOOT_DEVICE_UFS_B;
+		spl_boot_list[n++] = BOOT_DEVICE_UFS_A;
 	}
 	else if(!strcmp(boot_order, "A"))
 	{
-		spl_boot_list[0] = BOOT_DEVICE_UFS_A;
-		spl_boot_list[1] = BOOT_DEVICE_NONE;
+		spl_boot_list[n++] = BOOT_DEVICE_UFS_A;
 	}
 	else if(!strcmp(boot_order, "B"))
 	{
-		spl_boot_list[0] = BOOT_DEVICE_UFS_B;
-		spl_boot_list[1] = BOOT_DEVICE_NONE;
+		spl_boot_list[n++] = BOOT_DEVICE_UFS_B;
 	}
 	else
 	{
-		spl_boot_list[0] = BOOT_DEVICE_UFS_A;
-		spl_boot_list[1] = BOOT_DEVICE_UFS_B;
+		spl_boot_list[n++] = BOOT_DEVICE_UFS_A;
+		spl_boot_list[n++] = BOOT_DEVICE_UFS_B;
 	}
+	spl_boot_list[n] = BOOT_DEVICE_NONE;
 }
 
 static char *check_boot_order(void)
@@ -1183,9 +1184,9 @@ void qcom_spl_board_init(void)
 
 	determine_boot_target(); //sets BOOT_TARGET env var
 
-	char force_usb_vendor_str[64];
-	char force_usb_product_str[64];
-	char force_usb_serial_str[64];
+	char force_usb_vendor_str[64] = "";
+	char force_usb_product_str[64] = "";
+	char force_usb_serial_str[64] = "";
 
 	if (env_get("BOOT_FORCE_USB")) {
 		deckard_log("BOOT_FORCE_USB set in environment, going to try to boot from USB\n");
@@ -1194,13 +1195,13 @@ void qcom_spl_board_init(void)
 		//save these env vars so we can nuke them in on-disk environment, 
 		//then we can put back in environment for later processing
 		if(env_get("BOOT_FORCE_USB_VENDOR"))
-			strncpy(force_usb_vendor_str,env_get("BOOT_FORCE_USB_VENDOR"),64);
+			strlcpy(force_usb_vendor_str,env_get("BOOT_FORCE_USB_VENDOR"),sizeof(force_usb_vendor_str));
 		
 		if(env_get("BOOT_FORCE_USB_PRODUCT"))
-			strncpy(force_usb_product_str,env_get("BOOT_FORCE_USB_PRODUCT"),64);
+			strlcpy(force_usb_product_str,env_get("BOOT_FORCE_USB_PRODUCT"),sizeof(force_usb_product_str));
 		
 		if(env_get("BOOT_FORCE_USB_SERIAL"))
-			strncpy(force_usb_serial_str,env_get("BOOT_FORCE_USB_SERIAL"),64);
+			strlcpy(force_usb_serial_str,env_get("BOOT_FORCE_USB_SERIAL"),sizeof(force_usb_serial_str));
 
 		env_set("BOOT_FORCE_USB_VENDOR",NULL);
 		env_set("BOOT_FORCE_USB_PRODUCT",NULL);
