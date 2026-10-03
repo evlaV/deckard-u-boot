@@ -236,6 +236,7 @@ static int env_spl_scsi_save_buffer(env_t *env_new)
 	struct blk_desc *blk_dev = NULL;
 	struct disk_partition info;
 	int ret, part;
+	ulong blkcnt;
 	const char *dev_and_part = DECKARD_SPL_ENV_PARTITION;
 
 	part = blk_get_device_part_str("scsi", dev_and_part,
@@ -243,11 +244,12 @@ static int env_spl_scsi_save_buffer(env_t *env_new)
 	if (part < 0)
 		return 1;
 
-	/* NOTE: blk_write() size is in blocks ( 4k ) */
-	// TODO Should we check info.size against CONFIG_ENV_SIZE
-	ret = blk_write(blk_dev->bdev, info.start, info.size, env_new);
-	if (!ret)
+	/* NOTE: blk_write() size is in blocks ( 4k ); env_new is only DECKARD_SPL_CONFIG_ENV_SIZE long */
+	blkcnt = DECKARD_SPL_CONFIG_ENV_SIZE / info.blksz;
+	if (blk_write(blk_dev->bdev, info.start, blkcnt, env_new) != blkcnt) {
 		printf("Unable to write env\n");
+		return 1;
+	}
 
 	ret = env_spl_scsi_load();
 	if (ret != 0)

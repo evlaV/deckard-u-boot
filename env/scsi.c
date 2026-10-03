@@ -29,7 +29,8 @@ static int env_scsi_save_buffer(env_t *env_new)
 {
 	struct blk_desc *blk_dev = NULL;
 	struct disk_partition info;
-	int ret, part;
+	int part;
+	ulong blkcnt, ret;
 	const char *dev_and_part = env_scsi_get_dev_part();
 	ALLOC_CACHE_ALIGN_BUFFER(char, env_tmp, CONFIG_ENV_SIZE); //used for read back check
 
@@ -38,15 +39,17 @@ static int env_scsi_save_buffer(env_t *env_new)
 	if (part < 0)
 		return 1;
 
-	/* NOTE: blk_write() size is in blocks ( 4k ) */
-	// TODO Should we check info.size against CONFIG_ENV_SIZE
-	ret = blk_write(blk_dev->bdev, info.start, info.size, env_new);
-	if (!ret)
+	/* NOTE: blk_write() size is in blocks ( 4k ); env_new is only CONFIG_ENV_SIZE long */
+	blkcnt = CONFIG_ENV_SIZE < info.size * info.blksz ? CONFIG_ENV_SIZE / info.blksz : info.size;
+	ret = blk_write(blk_dev->bdev, info.start, blkcnt, env_new);
+	if (ret != blkcnt) {
 		printf("Unable to write env\n");
+		return 1;
+	}
 
 	//read back to ensure flushed
-	ret = blk_read(blk_dev->bdev, info.start, CONFIG_ENV_SIZE < info.size * info.blksz ? CONFIG_ENV_SIZE / info.blksz : info.size, env_tmp);
-	if (!ret)
+	ret = blk_read(blk_dev->bdev, info.start, blkcnt, env_tmp);
+	if (ret != blkcnt)
 		printf("Unable to read back env after save\n");
 
 	return 0;
