@@ -837,7 +837,7 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 					qph_str = qph_state_str[adsp_state.qph_state];
 
 				deckard_log_overwrite( "Battery: %d%% PDO: %uV @ %umA %s ~%dW", adsp_state.fuel_gauge_internal, adsp_state.pdo_volt / 1000, adsp_state.pdo_cur,
-							qph_str, (adsp_state.pdo_volt * adsp_state.usb_current) / 1000000 );
+							qph_str, ((int)adsp_state.pdo_volt * adsp_state.usb_current) / 1000000 );
 				fflush(stdout);
 			}
 			else
