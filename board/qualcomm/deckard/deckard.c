@@ -279,6 +279,9 @@ int misc_init_r(void)
 	g_boot_intention = calc_boot_intention( &g_deckard_devices );
 	deckard_log( "boot_intention: %s\n", boot_intention_to_string( g_boot_intention ) );
 
+	// Not every calc_boot_intention() path clears the reboot reason, and a stale EDL reason turns any later reset into EDL
+	pmk8550_set_reboot_command_reason( REBOOT_COMMAND_REASON_NONE );
+
 	// Set LED Color
 	LedColor ledColor = get_led_color_for_boot_intention( &g_deckard_devices, g_boot_intention );
 	deckard_setledcolor( ledColor, &g_deckard_devices );
