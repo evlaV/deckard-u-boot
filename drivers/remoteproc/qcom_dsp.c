@@ -43,7 +43,7 @@ enum qcom_dsp_state {
 };
 
 struct qcom_dsp {
-	char *firmware_name;
+	char firmware_name[EXT2_PATH_MAX];
 	void __iomem *base;
 	void __iomem *evb_sel;
 	u32 boot_addr;
@@ -287,9 +287,8 @@ static int qcom_dsp_probe(struct udevice *dev)
 	if (ret < 0)
 		return ret;
 
-	dsp->firmware_name = FIRMWARE_PATH_PREFIX; //TODO: replace this with generic function
-
-	strncat(dsp->firmware_name, firmware_name, EXT2_PATH_MAX);
+	snprintf(dsp->firmware_name, sizeof(dsp->firmware_name), "%s%s",
+		 FIRMWARE_PATH_PREFIX, firmware_name); //TODO: replace this with generic function
 
 	return 0;
 }
