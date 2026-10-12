@@ -420,10 +420,12 @@ static int env_update_fdt_addr_from_bloblist(void)
 
 void env_set_default(const char *s, int flags)
 {
+	bool load_failed = false;
 	if (s) {
 		if ((flags & H_INTERACTIVE) == 0) {
 			printf("*** Warning - %s, "
 				"using default environment\n\n", s);
+			load_failed = true;
 		} else {
 			puts(s);
 		}
@@ -442,6 +444,16 @@ void env_set_default(const char *s, int flags)
 
 	gd->flags |= GD_FLG_ENV_READY;
 	gd->flags |= GD_FLG_ENV_DEFAULT;
+
+
+#ifdef CONFIG_SYS_ENVIRONMENT_SAVE_ON_FAIL
+		if(load_failed)
+		{
+			pr_err("## Saving default environment and reloading\n");
+			env_save();
+			env_reload();
+		}
+#endif		
 
 	/* This has to be done after GD_FLG_ENV_READY is set */
 	if (env_update_fdt_addr_from_bloblist())

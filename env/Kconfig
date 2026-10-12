@@ -500,6 +500,13 @@ config SYS_REDUNDAND_ENVIRONMENT
 	  which is used by env import/export commands which are independent of
 	  storing variables to redundant location on a non volatile device.
 
+config SYS_ENVIRONMENT_SAVE_ON_FAIL
+	bool "Save default environment to disk on fail to load"
+	help
+	  If we fail to load the env from disk, normally, we rely upon the 
+	  redundant environment setup, however, we have a default environment 
+	  that can be used instead and just saved immediately to disk.
+
 config ENV_FAT_INTERFACE
 	string "Name of the block device for the environment"
 	depends on ENV_IS_IN_FAT
