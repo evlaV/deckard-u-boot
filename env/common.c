@@ -420,6 +420,14 @@ static int env_update_fdt_addr_from_bloblist(void)
 
 void env_set_default(const char *s, int flags)
 {
+#if defined(CONFIG_XPL_BUILD)
+	char default_spl_environment[] = {};
+	char * target_default_environment = default_spl_environment;
+	size_t target_default_env_size = sizeof(default_spl_environment);
+#else
+	char * target_default_environment = default_environment;
+	size_t target_default_env_size = sizeof(default_environment);
+#endif
 	bool load_failed = false;
 	if (s) {
 		if ((flags & H_INTERACTIVE) == 0) {
@@ -434,8 +442,9 @@ void env_set_default(const char *s, int flags)
 	}
 
 	flags |= H_DEFAULT;
-	if (himport_r(&env_htab, default_environment,
-			sizeof(default_environment), '\0', flags, 0,
+	if (himport_r(&env_htab, 
+			target_default_environment,target_default_env_size, 
+			'\0', flags, 0,
 			0, NULL) == 0) {
 		pr_err("## Error: Environment import failed: errno = %d\n",
 		       errno);
@@ -446,7 +455,7 @@ void env_set_default(const char *s, int flags)
 	gd->flags |= GD_FLG_ENV_DEFAULT;
 
 
-#ifdef CONFIG_SYS_ENVIRONMENT_SAVE_ON_FAIL
+#if defined(CONFIG_SYS_ENVIRONMENT_SAVE_ON_FAIL) && !defined(CONFIG_XPL_BUILD)
 		if(load_failed)
 		{
 			pr_err("## Saving default environment and reloading\n");
