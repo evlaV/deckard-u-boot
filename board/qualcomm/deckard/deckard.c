@@ -17,6 +17,7 @@
 #include <usb.h>
 #include <sysreset.h>
 #include <asm/io.h>
+#include <asm/setup.h>
 #include <asm/global_data.h>
 #include <fdt_support.h>
 #include <linux/delay.h>
@@ -1016,6 +1017,20 @@ static const char * get_booted_rootfs_slotname_OLD( void )
 }
 #endif
 
+// returns the snprintf() result: < 0 on error, >= size if the command line didn't fit
+static int format_bootargs(char * bootargs, size_t size, const char * steamos_efi_arg,
+						   const char * default_bootargs, const char * temp_bootargs,
+						   const char * rootfs_label)
+{
+	//TODO:gaber: can we get rid of noresume rootwait earlycon ?
+	return snprintf(bootargs, size,
+		"%s %s %s %s init=/sbin/init rauc.slot=%c noresume rootwait earlycon",
+		steamos_efi_arg,
+		default_bootargs ? default_bootargs : "",
+		temp_bootargs ? temp_bootargs : "",
+		rootfs_label,
+		get_booted_slot());
+}
 
 int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
@@ -1154,7 +1169,11 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 	// prep bootargs
 	char * default_bootargs = env_get("default_bootargs");
 	char * temp_bootargs = env_get("temp_bootargs");
-	char bootargs[PATHMAXLEN] = { 0 }; // how long can this be?
+	char * bootargs = calloc(1, COMMAND_LINE_SIZE);
+	if ( !bootargs ) {
+		deckard_log("Failed to allocate %d bytes for bootargs\n", COMMAND_LINE_SIZE);
+		goto fail;
+	}
 	char steamos_efi_arg[128] = { 0 }; // should be something like: steamos.efi=PARTUUID=886aefa6-96a5-4693-bc09-02b9ad5a288e
 	char rootfs_label[128] = { 0 }; //should be something like rootfs=PARTLABEL=rootfs-A
 	ret = init_steamos_efi_uuid_part_arg(steamos_efi_arg); //returns 0 on success
@@ -1166,17 +1185,23 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 		snprintf(rootfs_label,128,"root=PARTLABEL=%s",label);
 	}
 
-	//TODO:gaber: can we get rid of noresume rootwait earlycon ?
-	snprintf(bootargs, PATHMAXLEN, "%s %s %s init=/sbin/init rauc.slot=%c noresume rootwait earlycon %s",
-												default_bootargs ? default_bootargs : "", 
-												temp_bootargs ? temp_bootargs : "", 
-												rootfs_label,
-												get_booted_slot(), 
-												steamos_efi_arg );
+	int bootargs_len = format_bootargs(bootargs, COMMAND_LINE_SIZE, steamos_efi_arg, default_bootargs, temp_bootargs, rootfs_label);
+	if ( bootargs_len < 0 || bootargs_len >= COMMAND_LINE_SIZE ) {
+		deckard_log("WARNING: failed to build kernel command line (snprintf returned %d, max %d)!  Retrying without default_bootargs and temp_bootargs\n",
+					bootargs_len, COMMAND_LINE_SIZE - 1);
+		bootargs_len = format_bootargs(bootargs, COMMAND_LINE_SIZE, steamos_efi_arg,
+									   NULL, NULL, rootfs_label);
+		if ( bootargs_len < 0 || bootargs_len >= COMMAND_LINE_SIZE ) {
+			deckard_log("Failed to build kernel command line (snprintf returned %d)\n", bootargs_len);
+			free(bootargs);
+			goto fail;
+		}
+	}
 					
 	deckard_log("kernel command line: \n[ %s ]\n",bootargs);
 
 	env_set("bootargs", bootargs);
+	free(bootargs);
 
 	// erase temp bootargs which is used for Testing
 	env_set("temp_bootargs", "");
