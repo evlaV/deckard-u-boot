@@ -720,6 +720,9 @@ void putc(const char c)
 
 	console_record_putc(c);
 
+	if (CONFIG_IS_ENABLED(CONSOLE_TEE))
+		console_tee_write(&c, 1);
+
 	/* sandbox can send characters to stdout before it has a console */
 	if (IS_ENABLED(CONFIG_SANDBOX) && !(gd->flags & GD_FLG_SERIAL_READY)) {
 		os_putc(c);
@@ -760,6 +763,9 @@ void puts(const char *s)
 		return;
 
 	console_record_puts(s);
+
+	if (CONFIG_IS_ENABLED(CONSOLE_TEE))
+		console_tee_write(s, strlen(s));
 
 	/* sandbox can send characters to stdout before it has a console */
 	if (IS_ENABLED(CONFIG_SANDBOX) && !(gd->flags & GD_FLG_SERIAL_READY)) {

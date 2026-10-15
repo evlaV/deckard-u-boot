@@ -42,6 +42,15 @@ config CONSOLE_RECORD_OUT_SIZE_F
 	  some is removed.  The buffer is allocated immediately after the early
 	  malloc() region is ready.
 
+config SPL_CONSOLE_TEE
+	bool "Pass SPL console output to a board hook"
+	depends on SPL
+	help
+	  Call console_tee_write() with everything written to the SPL console,
+	  including output from before the console is set up. Boards can use
+	  this to keep a log of SPL output, e.g. to hand it over to U-Boot
+	  proper or send it out over another channel.
+
 config CONSOLE_RECORD_IN_SIZE
 	hex "Input buffer size"
 	depends on CONSOLE_RECORD

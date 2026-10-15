@@ -147,6 +147,18 @@ static inline bool console_record_isempty(void)
 #endif /* !CONFIG_CONSOLE_RECORD */
 
 /**
+ * console_tee_write() - board hook receiving all console output
+ *
+ * Implemented by the board when CONFIG_SPL_CONSOLE_TEE is enabled. It is
+ * called for every character written with putc()/puts(), before any other
+ * console processing, so it must not print itself.
+ *
+ * @s: characters written
+ * @len: number of characters
+ */
+void console_tee_write(const char *s, unsigned int len);
+
+/**
  * console_announce_r() - print a U-Boot console on non-serial consoles
  *
  * When U-Boot starts up with a display it generally does not announce itself
