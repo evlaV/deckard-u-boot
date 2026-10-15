@@ -288,7 +288,9 @@ config VIDEO_SYNC_CYCLIC_MS
 	  This sets the frequency of cyclic video syncs. The cyclic system is
 	  used to ensure that when U-Boot is idle, it syncs the video. This
 	  improves the responsiveness of the command line to new characters
-	  being entered.
+	  being entered. Set to 0 to not sync the video from the cyclic
+	  system at all, e.g. when a sync is expensive and CYCLIC is only
+	  enabled for something else.
 
 config PANEL
 	bool "Enable panel uclass support"
