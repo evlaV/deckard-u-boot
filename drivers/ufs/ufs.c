@@ -11,6 +11,7 @@
 #include <bouncebuf.h>
 #include <charset.h>
 #include <dm.h>
+#include <u-boot/schedule.h>
 #include <log.h>
 #include <dm/device_compat.h>
 #include <dm/devres.h>
@@ -80,6 +81,7 @@ static int ufshcd_wait_for_register(struct ufs_hba *hba, u32 reg, u32 mask,
 	val = val & mask;
 
 	while ((ufshcd_readl(hba, reg) & mask) != val) {
+		schedule();
 		if (get_timer(start) > timeout_ms) {
 			if ((ufshcd_readl(hba, reg) & mask) != val)
 				err = -ETIMEDOUT;
@@ -203,6 +205,7 @@ static int ufshcd_send_uic_cmd(struct ufs_hba *hba, struct uic_command *uic_cmd)
 
 	start = get_timer(0);
 	do {
+		schedule();
 		intr_status = ufshcd_readl(hba, REG_INTERRUPT_STATUS);
 		enabled_intr_status = intr_status & hba->intr_mask;
 		ufshcd_writel(hba, intr_status, REG_INTERRUPT_STATUS);
@@ -876,6 +879,7 @@ static int ufshcd_send_command(struct ufs_hba *hba, unsigned int task_tag)
 
 	start = get_timer(0);
 	do {
+		schedule();
 		intr_status = ufshcd_readl(hba, REG_INTERRUPT_STATUS);
 		enabled_intr_status = intr_status & hba->intr_mask;
 		ufshcd_writel(hba, intr_status, REG_INTERRUPT_STATUS);
