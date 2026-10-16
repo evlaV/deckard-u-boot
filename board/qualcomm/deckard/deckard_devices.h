@@ -30,6 +30,8 @@
 - EDL mode: Emergency Download Mode.  Same as holding down all buttons for 10s.  Very few people should
 		be developer only
 - USB mode: boot from USB media. 
+- initrd mode: boot normally, but append break=premount to the kernel command line for that boot only
+		so the initrd drops to a shell before mounting the root filesystem.
 */
 
 typedef enum
@@ -100,6 +102,7 @@ void deckard_setledcolor( LedColor color, deckard_devices_t * pdevices );
 bool deckard_factory_mode_enabled( void );
 bool deckard_adb_mode_enabled( void );
 bool deckard_pon_trigger_smpl( void );
+bool deckard_reboot_initrd_requested( void );
 bool deckard_steam_reset_enabled( void );
 
 int deckard_unbind_usb(void);

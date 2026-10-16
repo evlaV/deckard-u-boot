@@ -42,6 +42,7 @@ enum reboot_command_reason_t
 	REBOOT_COMMAND_REASON_EDL           = 0x03,
 	REBOOT_COMMAND_REASON_FASTBOOT      = 0x04,
 	REBOOT_COMMAND_REASON_USB           = 0x05,
+	REBOOT_COMMAND_REASON_INITRD        = 0x06,
  };
 
 struct pon_on_off_reason {
