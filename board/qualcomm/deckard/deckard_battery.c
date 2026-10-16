@@ -163,6 +163,34 @@ complete:
 	deckard_battery_enable_charging(pm8550b);
 }
 
+int deckard_battery_cleanup_charging(struct udevice *pm8550b)
+{
+	int ret = 0;
+
+	/* Disable AICL */
+	ret |= pm8550b_charger_aicl_disable(pm8550b);
+
+	if (pm8550b_charger_qph2_is_enabled(pm8550b)) {
+
+		/* Disable QPH2 */
+		ret |= pm8550b_charger_qph2_disable(pm8550b);
+
+		/* Wait 2ms */
+		mdelay(2000);
+
+		/* Set Termination Current to 150 mA */
+		ret |= pm8550b_set_termination_current(pm8550b, 150);
+
+		/* Set Fast Charge Current to 1,200 mA (QPH1 path limit - exp. tested) */
+		ret |= pm8550b_set_fast_charge_current(pm8550b, 1000);
+
+		/* Set Max Fast Charge Current to 1,200 mA (QPH1 path limit - exp. tested)) */
+		ret |= pm8550b_set_max_fast_charge_current(pm8550b, 1000);
+	}
+
+	return ret;
+}
+
 static void deckard_battery_enable_charging(struct udevice *pm8550b)
 {
 	int ret = 0;

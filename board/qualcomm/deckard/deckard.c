@@ -742,6 +742,10 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 				deckard_adsp_state_clear( &adsp_state );
 				adsp_started = false;
 			}
+
+			// Cleanup the charging state on hard reboot
+			if (!adsp_started)
+				deckard_battery_cleanup_charging(g_deckard_devices.pm8550b);
 		}
 
 		deckard_adsp_write( false,
@@ -931,6 +935,10 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 		}
 
 		deckard_adsp_stop();
+
+		// Cleanup the charging state on hard reboot
+		if ( adsp_state.runstate != RUNSTATE_STOPPED )
+			deckard_battery_cleanup_charging(g_deckard_devices.pm8550b);
 	}
 
 	*p_boot_intention = boot_intention;

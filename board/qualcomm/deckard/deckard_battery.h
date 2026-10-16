@@ -31,6 +31,7 @@
 #define OCV_MARGIN 50
 #define OCV_BOOT_VOLTAGE (UOCVP + OCV_MARGIN)
 
+int deckard_battery_cleanup_charging(struct udevice *pm8550b);
 void deckard_battery_prep_for_boot(struct udevice *pmk8550, struct udevice *pm8550b, struct udevice *max17320);
 bool deckard_battery_is_charging_enabled(struct udevice *pm8550b);
 
