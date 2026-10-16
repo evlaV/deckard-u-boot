@@ -63,6 +63,7 @@ extern void consolevr_set_background_image_enabled( bool enable );
 
 bool g_display_enabled = false;
 bool g_force_disable_display = false;
+static bool g_reboot_initrd = false; // set for one boot by 'reboot initrd'
 
 enum combined_serial_console_state_t g_total_console_state = 0;
 
@@ -247,6 +248,11 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices )
 		{
 			deckard_log("user issued 'reboot usb' detected\n");
 			return BOOT_INTENTION_BOOT_FROM_USB;
+		}
+		else if( pon_poff_reason.reboot_command_reason == REBOOT_COMMAND_REASON_INITRD )
+		{
+			deckard_log("user issued 'reboot initrd' detected\n");
+			g_reboot_initrd = true; // boot normally, but break into the initrd shell
 		}
 		else if( pon_poff_reason.reboot_command_reason == REBOOT_COMMAND_REASON_NONE )
 		{
@@ -526,6 +532,11 @@ bool deckard_adb_mode_enabled( void )
 bool deckard_pon_trigger_smpl( void )
 {
 	return ( env_get_ulong( "pon_trigger_smpl", 10, 0 ) != 0 ); // defaults to off
+}
+
+bool deckard_reboot_initrd_requested( void )
+{
+	return g_reboot_initrd;
 }
 
 bool deckard_steam_reset_enabled( void )
@@ -816,6 +827,8 @@ void sysreset_board_reset_prepare(int argc, char *const argv[], enum sysreset_t 
 		pmk8550_set_reboot_command_reason(REBOOT_COMMAND_REASON_BOOTLOADER);
 	} else if (argc == 2 && !strncmp(argv[1], "recovery", 8)) {
 		pmk8550_set_reboot_command_reason(REBOOT_COMMAND_REASON_RECOVERY);
+	} else if (argc == 2 && !strncmp(argv[1], "initrd", 6)) {
+		pmk8550_set_reboot_command_reason(REBOOT_COMMAND_REASON_INITRD);
 	}
 
 	if (*reset_type == SYSRESET_WARM)

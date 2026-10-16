@@ -191,6 +191,9 @@ enum reboot_command_reason_t pmk8550_get_reboot_command_reason(struct udevice *p
 		case REBOOT_COMMAND_REASON_USB:
 			deckard_log("reboot command reason: REBOOT_COMMAND_REASON_USB\n");
 			break;
+		case REBOOT_COMMAND_REASON_INITRD:
+			deckard_log("reboot command reason: REBOOT_COMMAND_REASON_INITRD\n");
+			break;
 		default:
 			deckard_log("reboot command reason: NONE\n");
 			break;

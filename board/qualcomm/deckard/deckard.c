@@ -1024,12 +1024,13 @@ static int format_bootargs(char * bootargs, size_t size, const char * steamos_ef
 {
 	//TODO:gaber: can we get rid of noresume rootwait earlycon ?
 	return snprintf(bootargs, size,
-		"%s %s %s %s init=/sbin/init rauc.slot=%c noresume rootwait earlycon",
+		"%s %s %s %s init=/sbin/init rauc.slot=%c noresume rootwait earlycon %s",
 		steamos_efi_arg,
 		default_bootargs ? default_bootargs : "",
 		temp_bootargs ? temp_bootargs : "",
 		rootfs_label,
-		get_booted_slot());
+		get_booted_slot(),
+		deckard_reboot_initrd_requested() ? "break=premount" : "");
 }
 
 int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
