@@ -1200,11 +1200,17 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 					
 	deckard_log("kernel command line: \n[ %s ]\n",bootargs);
 
+	// erase temp bootargs which is used for testing, if it's non-empty
+	if ( temp_bootargs && temp_bootargs[0] != '\0' )
+	{
+		if ( env_update("temp_bootargs", NULL) )
+			deckard_log("WARNING: failed to clear temp_bootargs from persistent env\n");
+		env_set("temp_bootargs", NULL);
+		temp_bootargs = NULL;
+	}
+
 	env_set("bootargs", bootargs);
 	free(bootargs);
-
-	// erase temp bootargs which is used for Testing
-	env_set("temp_bootargs", "");
 
 	env_set("kernel_addr_r", ADDR_KERNEL);
 	env_set("ramdisk_addr_r", INITRD_ADDR);
