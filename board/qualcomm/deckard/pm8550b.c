@@ -3,6 +3,17 @@
 #include <power/pmic.h>
 #include <linux/delay.h>
 
+#define PM8550B_CHGR_2_BASE	   				0x2500
+#define PM8550B_CHGR2_QPH2_RT_STS				(PM8550B_CHGR_2_BASE + 0x40 )
+#define PM8550B_CHGR2_QPH2_RT_STS_MAIN_CHG_OK_MASK		BIT(0)
+#define PM8550B_CHGR2_QPH2_RT_STS_VBAT1_HI_MASK			BIT(1)
+#define PM8550B_CHGR2_QPH2_RT_STS_VIN_HI_MASK			BIT(2)
+#define PM8550B_CHGR2_QPH2_RT_STS_QPH1_ON_MASK			BIT(4)
+#define PM8550B_CHGR2_QPH2_RT_STS_QPH2_ON_MASK			BIT(5)
+
+#define PM8550B_CHGR2_QPH2_CHG_CTRL				(PM8550B_CHGR_2_BASE + 0x42 )
+#define PM8550B_CHGR2_QPH2_CHG_CTRL_ALLOW_QPH2_MASK		BIT(7)
+
 #define PM8550B_CHGR_BASE                                       0x2600
 #define PM8550B_SCSCPQ_PK_CHGR2_ADDR                            (PM8550B_CHGR_BASE + 0x25)
 #define PM8550B_BUS_ADDR                            			(PM8550B_CHGR_BASE + 0x04)
@@ -33,6 +44,10 @@
 #define PM8550B_TYPEC_MODE_CFG_REG                         		(PM8550B_TYPEC_PORT_BASE + 0x44)
 #define TYPEC_DISABLE_CMD                               		BIT(0)
 #define PM8550B_TYPEC_VCONN_CONTROL_REG						    (PM8550B_TYPEC_PORT_BASE + 0x46)
+
+#define PM8550B_CHGR_MISC_BASE					0x2c00
+#define PM8550B_MISC_AICL_RERUN_TIME_CFG		 	(PM8550B_CHGR_MISC_BASE + 0x54)
+#define PM8550B_MISC_AICL_RERUN_TIME_ENABLE_MASK		GENMASK( 5, 4 )
 
 #define PM8550B_TYPEC_PHY_BASE                                  0x2D00
 #define PM8550B_USB_PDPHY_TX_CONTROL_REG                        (PM8550B_TYPEC_PHY_BASE + 0x44)
@@ -276,6 +291,59 @@ int pm8550b_enable_watchdog(struct udevice *pmic, bool enable)
 	ret = pmic_reg_write(pmic, PM8550B_CHGR_WD_CFG_ADDR, ret);
 	if (ret != 0) {
 		printf("Failed to %s Watchdog.\n", enable ? "Enable" : "Disable");
+		return ret;
+	}
+
+	return 0;
+}
+
+int pm8550b_charger_aicl_disable(struct udevice *pmic)
+{
+	int ret;
+
+	ret = pmic_reg_read(pmic, PM8550B_MISC_AICL_RERUN_TIME_CFG);
+	if (ret < 0) {
+		printf("Failed to disable AICL\n");
+		return ret;
+	}
+
+	ret &= ~(PM8550B_MISC_AICL_RERUN_TIME_ENABLE_MASK);
+
+	ret = pmic_reg_write(pmic, PM8550B_MISC_AICL_RERUN_TIME_CFG, ret);
+	if (ret < 0) {
+		printf("Failed to disable AICL\n");
+		return ret;
+	}
+
+	return 0;
+}
+
+bool pm8550b_charger_qph2_is_enabled(struct udevice *pmic)
+{
+	int ret;
+
+	ret = pmic_reg_read(pmic, PM8550B_CHGR2_QPH2_RT_STS);
+	if (ret < 0)
+		return false;
+
+	return !!(ret & PM8550B_CHGR2_QPH2_RT_STS_QPH2_ON_MASK);
+}
+
+int pm8550b_charger_qph2_disable(struct udevice *pmic)
+{
+	int ret;
+
+	ret = pmic_reg_read(pmic, PM8550B_CHGR2_QPH2_CHG_CTRL);
+	if (ret < 0) {
+		printf("Failed to disable QPH2 charging.\n");
+		return ret;
+	}
+
+	ret &= ~(PM8550B_CHGR2_QPH2_CHG_CTRL_ALLOW_QPH2_MASK);
+
+	ret = pmic_reg_write(pmic, PM8550B_CHGR2_QPH2_CHG_CTRL, ret);
+	if (ret < 0) {
+		printf("Failed to disable QPH2 charging.\n");
 		return ret;
 	}
 
