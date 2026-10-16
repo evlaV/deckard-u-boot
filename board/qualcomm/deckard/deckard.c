@@ -665,7 +665,7 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 	// Health check timeouts
 	static const int k_ADSP_MaxUnknownWaitMS = 500; // 500 ms  (measured: ~5ms nominal)
 	static const int k_ADSP_MaxStartWaitMS = 2000; // 2s (measured: ~400 ms nominal)
-	static const int k_ADSP_MaxHeartbeatWaitMS = 1000; // 1s (measured: ~20-50ms nominal )
+	static const int k_ADSP_MaxHeartbeatWaitMS = 1500; // 1.5s (measured: ~20-50ms nominal, max can be ~900ms )
 	static const int k_ADSP_RestartIntervalMS = 30 * 1000; // 30s. should be > k_ADSP_MaxStartWaitMS
 
 	static const int k_AutoPowerOffDelayMS = 30 * 1000; // 30s.
