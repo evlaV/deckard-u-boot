@@ -24,6 +24,7 @@
 #include "deckard_battery.h"
 #include "deckard_log.h"
 #include "deckard_led.h"
+#include "deckard_spl_log.h"
 #include <sysreset.h>
 #include <linux/delay.h>
 
@@ -190,6 +191,9 @@ void spl_perform_fixups(struct spl_image_info *spl_image)
 		deckard_log("%s: could not find/create '/chosen'\n", __func__);
 		return;
 	}
+
+	if (IS_ENABLED(CONFIG_SPL_CONSOLE_TEE))
+		deckard_spl_log_fixup(blob, chosen);
 
 	if (spl_image->boot_device == BOOT_DEVICE_UFS_A)
 		ret = fdt_setprop_string(blob, chosen, "u-boot,spl-boot-device", "A");
