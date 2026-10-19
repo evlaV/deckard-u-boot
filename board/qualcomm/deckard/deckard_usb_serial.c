@@ -7,10 +7,15 @@
 #include <console.h>
 #include <cyclic.h>
 #include <env.h>
+#include <fdtdec.h>
 #include <g_dnl.h>
+#include <malloc.h>
+#include <mapmem.h>
 #include <membuf.h>
 #include <time.h>
 #include <asm/global_data.h>
+#include <dm/ofnode.h>
+#include <linux/sizes.h>
 #include <linux/string.h>
 #include <soc/qcom/smem.h>
 #include <soc/qcom/socinfo.h>
@@ -18,6 +23,7 @@
 
 #include "deckard_devices.h"
 #include "deckard_log.h"
+#include "deckard_spl_log.h"
 #include "deckard_usb_serial.h"
 
 DECLARE_GLOBAL_DATA_PTR;
@@ -34,6 +40,10 @@ static char s_serial[16];
 static bool s_enabled;
 static struct cyclic_info s_cyclic;
 static bool s_prefilled;
+static char *s_spl_log;
+static unsigned int s_spl_log_len;
+static unsigned int s_spl_log_dropped;
+static struct deckard_usb_serial_log *s_kernel_log;
 
 /* Same identity as the kernel's g_serial, see deckard_usb_serial_bootargs() */
 static const char *usb_serial_set_identity(void)
@@ -57,13 +67,45 @@ static const char *usb_serial_set_identity(void)
 	return s_serial[0] ? s_serial : NULL;
 }
 
+/* Copy SPL's log, before memory gets reused */
+static void usb_serial_grab_spl_log(void)
+{
+	struct deckard_spl_log *log;
+	u32 addr;
+
+	if (ofnode_read_u32(ofnode_path("/chosen"), DECKARD_SPL_LOG_PROP, &addr))
+		return;
+
+	log = map_sysmem(addr, sizeof(*log));
+	if (log->magic != DECKARD_SPL_LOG_MAGIC ||
+	    log->size > DECKARD_SPL_LOG_SIZE || log->len > log->size) {
+		deckard_log("usb_serial: invalid SPL log at 0x%x\n", addr);
+		return;
+	}
+
+	s_spl_log_dropped = log->dropped;
+	if (log->len) {
+		s_spl_log = malloc(log->len);
+		if (s_spl_log) {
+			memcpy(s_spl_log, log->data, log->len);
+			s_spl_log_len = log->len;
+		}
+	}
+
+	/* Don't replay this again if we are entered again without SPL */
+	log->magic = 0;
+}
+
 static void usb_serial_cyclic(struct cyclic_info *c)
 {
 	acm_service();
 }
 
-/* Disconnect without leaving the host stuck on a half-done request */
-static void usb_serial_stop(void)
+/*
+ * Disconnect without leaving the host stuck on a half-done request. What the
+ * host did not read goes to @log, if given.
+ */
+static void usb_serial_stop(struct deckard_usb_serial_log *log)
 {
 	ulong start = get_timer(0);
 
@@ -71,6 +113,8 @@ static void usb_serial_stop(void)
 		acm_service();
 
 	acm_flush(500);
+	if (log)
+		log->len = acm_take_unsent(log->data, log->size);
 	cyclic_unregister(&s_cyclic);
 
 	/* Dropping usbacm from the console stops it and disconnects */
@@ -93,13 +137,15 @@ bool deckard_usb_serial_init(void)
 		return false;
 	}
 
+	usb_serial_grab_spl_log();
 	usb_serial_set_identity();
 	acm_set_nonblocking(true);
 
 	/* answer the host promptly even while nothing is being printed */
 	cyclic_register(&s_cyclic, usb_serial_cyclic, 1000, "usb_serial");
 
-	deckard_log("usb_serial: enabled\n");
+	deckard_log("usb_serial: enabled, %u bytes of SPL log to replay\n",
+		    s_spl_log_len);
 
 	return true;
 }
@@ -117,15 +163,29 @@ void deckard_usb_serial_disable(const char *why)
 	deckard_log("usb_serial: stopping, %s needs the USB controller\n", why);
 	s_enabled = false;
 
-	usb_serial_stop();
+	usb_serial_stop(NULL);
 }
 
-/* Called when "usbacm" starts: replay our output so far */
+/* Called when "usbacm" starts: replay SPL's log and our output so far */
 void acm_board_prefill(void)
 {
+	char msg[64];
+
 	if (!s_enabled || s_prefilled)
 		return;
 	s_prefilled = true;
+
+	if (s_spl_log_dropped) {
+		snprintf(msg, sizeof(msg), "\n[usb_serial: SPL log dropped %u bytes]\n",
+			 s_spl_log_dropped);
+		acm_queue(msg, strlen(msg), true);
+	}
+
+	if (s_spl_log) {
+		acm_queue(s_spl_log, s_spl_log_len, false);
+		free(s_spl_log);
+		s_spl_log = NULL;
+	}
 
 #if CONFIG_IS_ENABLED(CONSOLE_RECORD)
 	{
@@ -169,10 +229,52 @@ void deckard_usb_serial_bootargs(const char *bootargs, char *buf, size_t size)
 		snprintf(buf + n, size - n, " console=ttyMSM0,115200n8");
 }
 
-void deckard_usb_serial_handoff(void)
+void deckard_usb_serial_ft_setup(void *fdt)
 {
+	const char *compat = DECKARD_USB_SERIAL_LOG_COMPAT;
+	struct fdt_memory mem;
+	size_t size;
+	int ret;
+
 	if (!s_enabled)
 		return;
 
-	usb_serial_stop();
+	/* room for everything "usbacm" can hold */
+	size = ALIGN(sizeof(*s_kernel_log) + CONFIG_USB_FUNCTION_ACM_TX_BUF_SIZE,
+		     SZ_4K);
+	if (!s_kernel_log) {
+		/* U-Boot's own memory, which the kernel image is kept clear of */
+		s_kernel_log = memalign(SZ_4K, size);
+		if (!s_kernel_log)
+			return;
+	}
+	memset(s_kernel_log, 0, sizeof(*s_kernel_log));
+	s_kernel_log->size = size - sizeof(*s_kernel_log);
+
+	mem.start = map_to_sysmem(s_kernel_log);
+	mem.end = mem.start + size - 1;
+	ret = fdtdec_add_reserved_memory(fdt, "usb-serial-log", &mem, &compat, 1,
+					 NULL, 0);
+	if (ret) {
+		deckard_log("usb_serial: could not reserve memory for the kernel (%d)\n",
+			    ret);
+		free(s_kernel_log);
+		s_kernel_log = NULL;
+	}
+}
+
+void deckard_usb_serial_handoff(void)
+{
+	struct deckard_usb_serial_log *log = s_kernel_log;
+
+	if (!s_enabled)
+		return;
+
+	usb_serial_stop(log);
+	if (log) {
+		deckard_log("usb_serial: %u bytes the host did not read go to the kernel\n",
+			    log->len);
+		/* complete: let the kernel use it (caches are flushed before it starts) */
+		log->magic = DECKARD_USB_SERIAL_LOG_MAGIC;
+	}
 }

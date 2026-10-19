@@ -1,10 +1,13 @@
 USB serial console
 ==================
 
-One USB-C cable carries the boot log, from U-Boot proper to Linux userspace,
-as a CDC ACM serial port. You also get an interactive console in U-Boot and a
-login on ttyGS0 in Linux. The geni UART keeps working as before, and is still
-the only place SPL's output goes.
+One USB-C cable carries the boot log, from SPL to Linux userspace, as a CDC
+ACM serial port. You also get an interactive console in U-Boot and a login on
+ttyGS0 in Linux. The geni UART keeps working as before.
+
+USB comes up in U-Boot proper; SPL does not touch USB. Nothing is lost if the
+host opens the port late: whatever it has not read is carried over to the
+next stage.
 
 Enabling
 --------
@@ -16,15 +19,24 @@ In U-Boot proper's environment:
 How it works
 ------------
 
+- SPL (deckard_spl_log.c, CONFIG_SPL_CONSOLE_TEE) always copies its console
+  output into a log at DECKARD_SPL_LOG_ADDR and passes /chosen/u-boot,spl-log
+  to proper.
 - U-Boot proper starts "usbacm" without waiting for the host. It queues
-  everything proper printed so far (console record), then live output. A
-  cyclic function services the controller every millisecond (CONFIG_CYCLIC;
-  the UFS driver calls schedule() while it waits), so the host is answered
-  even while nothing prints. It disconnects in board_quiesce_devices().
+  SPL's log, everything proper printed so far (console record), then live
+  output, and sends it once the host opens the port. A cyclic function
+  services the controller every millisecond (CONFIG_CYCLIC; the UFS driver
+  calls schedule() while it waits), so the host is answered even while
+  nothing prints. It disconnects in board_quiesce_devices().
 - Before disconnecting, U-Boot keeps answering the host for
   USB_SERIAL_SETTLE_MS. Vanishing mid control transfer (e.g. during the
   host's cdc_acm probe) stalls the host's hub for ~10 s in transfer
   timeouts, long enough to miss the kernel's g_serial completely.
+- What the host has not read by then goes to the kernel, in a
+  /reserved-memory region ("valve,usb-serial-log", struct
+  deckard_usb_serial_log) that ft_board_setup() reserves in U-Boot's own
+  memory. With CONFIG_U_SERIAL_CONSOLE_BOOTLOADER_LOG, the kernel's ttyGS
+  console sends it ahead of the kernel log and then frees the memory.
 - Linux gets "console=ttyGS0 g_serial.enable=1 ..." ahead of the existing
   console arguments (plus console=ttyMSM0 if there were none, to keep the
   UART), and /chosen/u-boot,usb-serial. The built-in g_serial enumerates

@@ -472,6 +472,9 @@ int ft_board_setup(void *fdt, struct bd_info *bd)
 				DECKARD_USB_SERIAL_PROP, fdt_strerror(ret));
 			return ret;
 		}
+
+		//memory for the output the host has not read yet, filled in right before booting
+		deckard_usb_serial_ft_setup(fdt);
 	}
 
 	if(deckard_pon_trigger_smpl())
