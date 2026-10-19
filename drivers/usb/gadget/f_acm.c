@@ -57,6 +57,23 @@ struct f_acm {
 
 static struct f_acm *default_acm_function;
 
+/*
+ * Service the controller. The gadget driver can end up in schedule() (e.g.
+ * through udelay()), which may run a cyclic function that polls us again;
+ * don't recurse into the controller's event handling.
+ */
+static void acm_poll(struct udevice *udc)
+{
+	static bool polling;
+
+	if (polling)
+		return;
+
+	polling = true;
+	dm_usb_gadget_handle_interrupts(udc);
+	polling = false;
+}
+
 static inline struct f_acm *func_to_acm(struct usb_function *f)
 {
 	return container_of(f, struct f_acm, usb_function);
@@ -506,7 +523,7 @@ static void __acm_tx(struct f_acm *f_acm)
 	int len, ret;
 
 	do {
-		dm_usb_gadget_handle_interrupts(f_acm->udc);
+		acm_poll(f_acm->udc);
 
 		if (!(f_acm->handshake_bits & ACM_CTRL_DTR) || !f_acm->req_in)
 			break;
@@ -537,7 +554,7 @@ static bool acm_connected(struct stdio_dev *dev)
 	struct f_acm *f_acm = stdio_to_acm(dev);
 
 	/* give a chance to process udc irq */
-	dm_usb_gadget_handle_interrupts(f_acm->udc);
+	acm_poll(f_acm->udc);
 
 	return f_acm->connected;
 }
@@ -618,7 +635,7 @@ int acm_flush(unsigned long timeout_ms)
 		return -ENODEV;
 
 	while (f_acm->tx_buf.size || !f_acm->tx_on) {
-		dm_usb_gadget_handle_interrupts(f_acm->udc);
+		acm_poll(f_acm->udc);
 
 		if (!acm_host_ready(f_acm))
 			return -ENOTCONN;
@@ -646,7 +663,7 @@ int acm_flush(unsigned long timeout_ms)
 void acm_service(void)
 {
 	if (default_acm_function)
-		dm_usb_gadget_handle_interrupts(default_acm_function->udc);
+		acm_poll(default_acm_function->udc);
 }
 
 /* STDIO */
@@ -665,7 +682,7 @@ static int acm_stdio_tstc(struct stdio_dev *dev)
 {
 	struct f_acm *f_acm = stdio_to_acm(dev);
 
-	dm_usb_gadget_handle_interrupts(f_acm->udc);
+	acm_poll(f_acm->udc);
 
 	return (f_acm->rx_buf.size > 0);
 }
@@ -695,7 +712,7 @@ static void acm_stdio_putc(struct stdio_dev *dev, const char c)
 
 	if (!f_acm->connected) {
 		/* let enumeration make progress */
-		dm_usb_gadget_handle_interrupts(f_acm->udc);
+		acm_poll(f_acm->udc);
 		return;
 	}
 
@@ -715,7 +732,7 @@ static void acm_stdio_puts(struct stdio_dev *dev, const char *str)
 
 	if (!f_acm->connected) {
 		/* let enumeration make progress */
-		dm_usb_gadget_handle_interrupts(f_acm->udc);
+		acm_poll(f_acm->udc);
 		return;
 	}
 
