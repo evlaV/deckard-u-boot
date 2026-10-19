@@ -45,6 +45,7 @@
 #include "deckard_disk.h"
 #include "deckard_eeprom.h"
 #include "deckard_log.h"
+#include "deckard_usb_serial.h"
 
 
 // TODO: make these globals all static
@@ -209,6 +210,10 @@ int misc_init_r(void)
 		panic("No chosen node !\n");
 	}
 
+	// USB serial console (usb_serial=y)
+	if (deckard_usb_serial_init())
+		console_state_set_flags(USB_CONSOLE_MASK);
+
 	deckard_log( "deckard_disable_watchdog\n" );
 	deckard_disable_watchdog();
 
@@ -279,6 +284,10 @@ int misc_init_r(void)
 	// CALC POWER-ON BOOT INTENTION
 	g_boot_intention = calc_boot_intention( &g_deckard_devices );
 	deckard_log( "boot_intention: %s\n", boot_intention_to_string( g_boot_intention ) );
+
+	// USB host mode is needed to find the USB disk
+	if ( g_boot_intention == BOOT_INTENTION_BOOT_FROM_USB )
+		deckard_usb_serial_disable( "USB disk boot" );
 
 	// Set LED Color
 	LedColor ledColor = get_led_color_for_boot_intention( &g_deckard_devices, g_boot_intention );
@@ -454,6 +463,17 @@ int ft_board_setup(void *fdt, struct bd_info *bd)
 		}
 	}
 
+	if (deckard_usb_serial_enabled())
+	{
+		//userspace hands ttyGS0 over to its own gadget when this exists
+		ret = fdt_setprop_empty(fdt, nodeoffset, DECKARD_USB_SERIAL_PROP);
+		if (ret < 0) {
+			deckard_log("WARNING: could not set %s %s.\n",
+				DECKARD_USB_SERIAL_PROP, fdt_strerror(ret));
+			return ret;
+		}
+	}
+
 	if(deckard_pon_trigger_smpl())
 	{
 		//userspace will just look for the existence of this file or not, we set it to 1 just for readability
@@ -557,6 +577,12 @@ int overwrite_console(void)
 	return 0;
 }
 #endif
+
+/* Called right before jumping to the kernel (booti and EFI) */
+void board_quiesce_devices(void)
+{
+	deckard_usb_serial_handoff();
+}
 
 void show_boot_progress(int progress)
 {
@@ -939,6 +965,7 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 static void deckard_do_bootmenu(void)
 {
 	deckard_log("populate bootmenu\n");
+	deckard_usb_serial_disable("bootmenu USB disk scan");
 	usb_setup();
 	deckard_bootmenu_populate();
 
@@ -1198,6 +1225,21 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 		}
 	}
 					
+	// USB serial console args go first, see deckard_usb_serial_bootargs()
+	char usb_serial_args[256];
+	deckard_usb_serial_bootargs(bootargs, usb_serial_args, sizeof(usb_serial_args));
+	if ( usb_serial_args[0] ) {
+		char * full_bootargs = calloc(1, COMMAND_LINE_SIZE);
+		int full_len = full_bootargs ? snprintf(full_bootargs, COMMAND_LINE_SIZE, "%s %s", usb_serial_args, bootargs) : -1;
+		if ( full_len < 0 || full_len >= COMMAND_LINE_SIZE ) {
+			deckard_log("WARNING: no room for USB serial console args in the kernel command line, booting without them\n");
+			free(full_bootargs);
+		} else {
+			free(bootargs);
+			bootargs = full_bootargs;
+		}
+	}
+
 	deckard_log("kernel command line: \n[ %s ]\n",bootargs);
 
 	// erase temp bootargs which is used for testing, if it's non-empty

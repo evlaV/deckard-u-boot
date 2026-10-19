@@ -1,0 +1,56 @@
+USB serial console
+==================
+
+One USB-C cable carries the boot log, from U-Boot proper to Linux userspace,
+as a CDC ACM serial port. You also get an interactive console in U-Boot and a
+login on ttyGS0 in Linux. The geni UART keeps working as before, and is still
+the only place SPL's output goes.
+
+Enabling
+--------
+
+In U-Boot proper's environment:
+
+    => setenv usb_serial y; saveenv
+
+How it works
+------------
+
+- U-Boot proper starts "usbacm" without waiting for the host. It queues
+  everything proper printed so far (console record), then live output. A
+  cyclic function services the controller every millisecond (CONFIG_CYCLIC;
+  the UFS driver calls schedule() while it waits), so the host is answered
+  even while nothing prints. It disconnects in board_quiesce_devices().
+- Before disconnecting, U-Boot keeps answering the host for
+  USB_SERIAL_SETTLE_MS. Vanishing mid control transfer (e.g. during the
+  host's cdc_acm probe) stalls the host's hub for ~10 s in transfer
+  timeouts, long enough to miss the kernel's g_serial completely.
+- Linux gets "console=ttyGS0 g_serial.enable=1 ..." ahead of the existing
+  console arguments (plus console=ttyMSM0 if there were none, to keep the
+  UART), and /chosen/u-boot,usb-serial. The built-in g_serial enumerates
+  during early boot. The ttyGS console buffers 256 KiB until the host opens
+  the port.
+- Userspace: usb-serial-gadget.service (holo usb-gadget-tools) releases
+  g_serial before the configfs gadget binds and adds acm.GS0 as its first
+  function. With CONFIG_U_SERIAL_CONSOLE_PERSIST the ttyGS0 console moves
+  over without losing or repeating output, and adb/NCM keep working. When
+  the gadget is stopped (e.g. at shutdown) the console goes back to g_serial.
+
+Each stage re-enumerates. U-Boot and g_serial use manufacturer "Valve",
+product "Steam Frame", the SoC serial number, and ACM on interface 0; the
+configfs gadget keeps the serial number. That gives a stable host path, which
+a reconnecting terminal follows across the gaps:
+
+    tio /dev/serial/by-id/usb-Valve_Steam_Frame_<serial>-if00
+
+Limitations
+-----------
+
+- If proper boots from a USB disk (BOOT_FORCE_USB, the USB boot intent or
+  the boot menu's USB scan), the USB serial console is skipped or stopped,
+  because those need the controller in host mode. Fastboot also takes the
+  controller over.
+- The console record is set up afresh after relocation, so what proper
+  printed before relocation (e.g. its banner) is not in the replay.
+- misc_init_r() forces bootdelay=0, so to stop at the U-Boot prompt over USB,
+  also set usbconsole_enable=1 (20 s bootdelay).
