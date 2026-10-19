@@ -270,7 +270,13 @@ static void acm_unbind(struct usb_configuration *c, struct usb_function *f)
 {
 	struct f_acm *f_acm = func_to_acm(f);
 
+	struct stdio_dev *sdev = stdio_get_by_name("usbacm");
+
 	console_remove_by_name("usbacm");
+
+	/* make the next start register the gadget again */
+	if (sdev && sdev->priv == f_acm)
+		sdev->priv = NULL;
 
 	if (default_acm_function == f_acm)
 		default_acm_function = NULL;
@@ -470,6 +476,11 @@ static void acm_disable(struct usb_function *f)
 		usb_ep_free_request(f_acm->ep_in, f_acm->req_in);
 		f_acm->req_in = NULL;
 	}
+
+	/* e.g. bus reset: wait for set_alt and the host to open the port again */
+	f_acm->connected = false;
+	f_acm->tx_on = false;
+	f_acm->handshake_bits = 0;
 }
 
 /* static strings, in UTF-8 */
@@ -497,7 +508,7 @@ static void __acm_tx(struct f_acm *f_acm)
 	do {
 		dm_usb_gadget_handle_interrupts(f_acm->udc);
 
-		if (!(f_acm->handshake_bits & ACM_CTRL_DTR))
+		if (!(f_acm->handshake_bits & ACM_CTRL_DTR) || !f_acm->req_in)
 			break;
 
 		if (!f_acm->tx_on)
@@ -573,7 +584,8 @@ DECLARE_GADGET_BIND_CALLBACK(usb_serial_acm, acm_add);
 
 static bool acm_host_ready(struct f_acm *f_acm)
 {
-	return f_acm->connected && (f_acm->handshake_bits & ACM_CTRL_DTR);
+	return f_acm->connected && f_acm->req_in &&
+	       (f_acm->handshake_bits & ACM_CTRL_DTR);
 }
 
 void acm_queue(const char *buf, unsigned int len, bool crlf)
