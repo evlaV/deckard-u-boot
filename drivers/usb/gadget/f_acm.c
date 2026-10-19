@@ -660,6 +660,19 @@ int acm_flush(unsigned long timeout_ms)
 	return 0;
 }
 
+unsigned int acm_take_unsent(char *buf, unsigned int size)
+{
+	struct f_acm *f_acm = default_acm_function;
+	int len;
+
+	if (!f_acm)
+		return 0;
+
+	len = buf_pop(&f_acm->tx_buf, buf, size);
+
+	return len > 0 ? len : 0;
+}
+
 void acm_service(void)
 {
 	if (default_acm_function)

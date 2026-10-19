@@ -47,6 +47,18 @@ void acm_queue(const char *buf, unsigned int len, bool crlf);
 int acm_flush(unsigned long timeout_ms);
 
 /**
+ * acm_take_unsent() - take back queued output the host has not read
+ *
+ * E.g. to hand it over to the next stage before disconnecting. Output that
+ * is in flight to the host is not included.
+ *
+ * @buf: where to copy the output
+ * @size: size of @buf
+ * Return: number of bytes copied
+ */
+unsigned int acm_take_unsent(char *buf, unsigned int size);
+
+/**
  * acm_service() - service the USB controller
  *
  * Lets enumeration and pending transfers make progress while nothing is
