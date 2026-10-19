@@ -16,8 +16,10 @@
 #include <malloc.h>
 #include <memalign.h>
 #include <stdio_dev.h>
+#include <time.h>
 #include <version.h>
 #include <watchdog.h>
+#include <usb/f_acm.h>
 
 #include <linux/usb/ch9.h>
 #include <linux/usb/gadget.h>
@@ -559,7 +561,7 @@ static int acm_add(struct usb_configuration *c)
 	}
 
 	buf_init(&f_acm->rx_buf, 2048);
-	buf_init(&f_acm->tx_buf, 2048);
+	buf_init(&f_acm->tx_buf, CONFIG_USB_FUNCTION_ACM_TX_BUF_SIZE);
 
 	if (!default_acm_function)
 		default_acm_function = f_acm;
@@ -569,7 +571,84 @@ static int acm_add(struct usb_configuration *c)
 
 DECLARE_GADGET_BIND_CALLBACK(usb_serial_acm, acm_add);
 
+static bool acm_host_ready(struct f_acm *f_acm)
+{
+	return f_acm->connected && (f_acm->handshake_bits & ACM_CTRL_DTR);
+}
+
+void acm_queue(const char *buf, unsigned int len, bool crlf)
+{
+	struct f_acm *f_acm = default_acm_function;
+	unsigned int i;
+
+	if (!f_acm)
+		return;
+
+	if (!crlf) {
+		buf_push(&f_acm->tx_buf, buf, len);
+		return;
+	}
+
+	for (i = 0; i < len; i++) {
+		if (buf[i] == '\n')
+			buf_push(&f_acm->tx_buf, "\r", 1);
+		buf_push(&f_acm->tx_buf, &buf[i], 1);
+	}
+}
+
+int acm_flush(unsigned long timeout_ms)
+{
+	struct f_acm *f_acm = default_acm_function;
+	ulong start = get_timer(0);
+	int len;
+
+	if (!f_acm)
+		return -ENODEV;
+
+	while (f_acm->tx_buf.size || !f_acm->tx_on) {
+		dm_usb_gadget_handle_interrupts(f_acm->udc);
+
+		if (!acm_host_ready(f_acm))
+			return -ENOTCONN;
+
+		if (get_timer(start) > timeout_ms)
+			return -ETIMEDOUT;
+
+		if (!f_acm->tx_on)
+			continue;
+
+		len = buf_pop(&f_acm->tx_buf, f_acm->req_in->buf, REQ_SIZE_MAX);
+		if (!len)
+			continue;
+
+		f_acm->req_in->length = len;
+		if (usb_ep_queue(f_acm->ep_in, f_acm->req_in, 0))
+			return -EIO;
+
+		f_acm->tx_on = false;
+	}
+
+	return 0;
+}
+
+void acm_service(void)
+{
+	if (default_acm_function)
+		dm_usb_gadget_handle_interrupts(default_acm_function->udc);
+}
+
 /* STDIO */
+static bool acm_nonblocking;
+
+void acm_set_nonblocking(bool nonblocking)
+{
+	acm_nonblocking = nonblocking;
+}
+
+__weak void acm_board_prefill(void)
+{
+}
+
 static int acm_stdio_tstc(struct stdio_dev *dev)
 {
 	struct f_acm *f_acm = stdio_to_acm(dev);
@@ -602,8 +681,11 @@ static void acm_stdio_putc(struct stdio_dev *dev, const char c)
 
 	buf_push(&f_acm->tx_buf, &c, 1);
 
-	if (!f_acm->connected)
+	if (!f_acm->connected) {
+		/* let enumeration make progress */
+		dm_usb_gadget_handle_interrupts(f_acm->udc);
 		return;
+	}
 
 	__acm_tx(f_acm);
 }
@@ -619,8 +701,11 @@ static void acm_stdio_puts(struct stdio_dev *dev, const char *str)
 		buf_push(&f_acm->tx_buf, str++, 1);
 	}
 
-	if (!f_acm->connected)
+	if (!f_acm->connected) {
+		/* let enumeration make progress */
+		dm_usb_gadget_handle_interrupts(f_acm->udc);
 		return;
+	}
 
 	__acm_tx(f_acm);
 }
@@ -650,6 +735,11 @@ static int acm_stdio_start(struct stdio_dev *dev)
 		dev->priv = default_acm_function;
 	else
 		return -ENODEV;
+
+	acm_board_prefill();
+
+	if (acm_nonblocking)
+		return 0;
 
 	if (!g_dnl_board_usb_cable_connected()) {
 		printf("%s: USB cable not detected.\n", __func__);

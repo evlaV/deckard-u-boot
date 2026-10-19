@@ -230,6 +230,14 @@ config USB_FUNCTION_ACM
 	  interoperate with MS-Windows hosts or with the Linux-USB "cdc-acm"
 	  driver.
 
+config USB_FUNCTION_ACM_TX_BUF_SIZE
+	hex "CDC ACM transmit buffer size"
+	depends on USB_FUNCTION_ACM
+	default 0x800
+	help
+	  Size of the buffer holding output until the host opens the port.
+	  When it is full the oldest output is dropped.
+
 endif # USB_GADGET_DOWNLOAD
 
 config USB_ETHER
