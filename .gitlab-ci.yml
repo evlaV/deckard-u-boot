@@ -1,0 +1,25 @@
+# Build holo's deckard-uboot package from this commit, the same way
+# softapmanager's CI does: clone holo, point the PKGBUILD at ${CI_COMMIT_SHA}
+# instead of the pinned tag, and build it with holo's build_package.sh.
+stages:
+  - build
+
+deckard_uboot_build:
+  stage: build
+  image: registry.gitlab.steamos.cloud/deckard/deckardos/holo/steamos-arm64-package-builder-main:latest
+  variables:
+    PKGDEST: "${CI_PROJECT_DIR}/local_repo"
+    GIT_STRATEGY: "none"
+  before_script:
+    - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.steamos.cloud/deckard/deckardos/holo .
+    - sed -i -e "s/^pkgver=\(.*\)/pkgver=\1+g${CI_COMMIT_SHA:0:8}/" deckard/deckard-uboot/PKGBUILD
+    - sed -i -e "s/u-boot.git?\{0,1\}#[^\")]*/u-boot.git#commit=${CI_COMMIT_SHA}/" deckard/deckard-uboot/PKGBUILD
+    - cat deckard/deckard-uboot/PKGBUILD
+    - ulimit -c 0
+  script:
+    - ./.ci_scripts/build_package.sh deckard/deckard-uboot
+  tags:
+    - aarch64-linux-docker
+  artifacts:
+    paths:
+      - local_repo/*.pkg.tar.zst
