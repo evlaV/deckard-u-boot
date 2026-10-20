@@ -9,6 +9,8 @@
 #include <panel.h>
 #include <asm/gpio.h>
 #include <dm/device_compat.h>
+#include <time.h>
+#include <dm/uclass.h>
 #include <linux/delay.h>
 #include <power/regulator.h>
 
@@ -99,7 +101,24 @@ struct deckard_panel_priv {
 	u8 panel_mfg_info[PANEL_MFG_INFO_NUM_BYTES];
 	u8 panel_read_data[512];
 	char panel_vendor;
+	/* Set when exit sleep was sent, until display on is sent */
+	bool display_on_pending;
+	unsigned long exit_sleep_us;
+	/* Brightness to set after display on (-1: none) */
+	int pending_brightness;
 };
+
+/*
+ * After exit sleep, a panel needs 170 ms before display on. Instead of
+ * waiting for each panel in turn, only send display on once every panel
+ * has been sent exit sleep, so the waits overlap.
+ */
+#define PANEL_EXIT_SLEEP_US	170000
+#define MAX_PANELS		2
+
+static struct deckard_panel_priv *panels_pending[MAX_PANELS];
+static int panels_pending_count;
+static int panels_enabled_count;
 
 /* 90Hz */
 static const struct display_timing default_timing = {
@@ -311,8 +330,20 @@ static void dsi_write_panel_on(struct deckard_panel_priv *priv)
 	deckard_panel_dsi_write_buffer(priv, pps_cmd);
 	deckard_panel_dsi_write_seq(priv, MIPI_DCS_SET_TEAR_ON, 0x00);
 	deckard_panel_dsi_write_seq(priv, MIPI_DCS_EXIT_SLEEP_MODE);
-	mdelay(170);
-	deckard_panel_dsi_write_seq(priv, MIPI_DCS_SET_DISPLAY_ON);
+
+	/* Display on is sent by panels_display_on() */
+	priv->exit_sleep_us = timer_get_us();
+	priv->pending_brightness = -1;
+	if (priv->display_on_pending)
+		return;		/* already queued */
+	if (panels_pending_count < MAX_PANELS) {
+		panels_pending[panels_pending_count++] = priv;
+		priv->display_on_pending = true;
+	} else {
+		/* Shouldn't happen, but don't leave a panel dark */
+		mdelay(PANEL_EXIT_SLEEP_US / 1000);
+		deckard_panel_dsi_write_seq(priv, MIPI_DCS_SET_DISPLAY_ON);
+	}
 }
 
 static void dsi_panel_on(struct deckard_panel_priv *priv)
@@ -377,6 +408,42 @@ static int set_brightness(struct deckard_panel_priv *priv, u16 brightness, bool 
 	return 0;
 }
 
+/* Send display on to the pending panels, once each one's wait is over */
+static void panels_display_on(void)
+{
+	int i;
+
+	for (i = 0; i < panels_pending_count; i++) {
+		struct deckard_panel_priv *priv = panels_pending[i];
+		unsigned long waited = timer_get_us() - priv->exit_sleep_us;
+
+		if (waited < PANEL_EXIT_SLEEP_US)
+			udelay(PANEL_EXIT_SLEEP_US - waited);
+		deckard_panel_dsi_write_seq(priv, MIPI_DCS_SET_DISPLAY_ON);
+		priv->display_on_pending = false;
+
+		/* Brightness set while we were waiting */
+		if (priv->pending_brightness >= 0)
+			set_brightness(priv, priv->pending_brightness, true);
+	}
+	panels_pending_count = 0;
+}
+
+/* The number of panels qcom_dpu_probe() will enable */
+static int panels_count(void)
+{
+	struct udevice *dev;
+	struct uclass *uc;
+	int count = 0;
+
+	uclass_id_foreach_dev(UCLASS_PANEL, dev, uc) {
+		if (dev->driver == DM_DRIVER_GET(deckard_panel_panel))
+			count++;
+	}
+
+	return count;
+}
+
 static int deckard_panel_panel_enable_backlight(struct udevice *dev)
 {
 	struct deckard_panel_priv *priv = dev_get_priv(dev);
@@ -416,6 +483,13 @@ static int deckard_panel_panel_enable_backlight(struct udevice *dev)
 
 	//set_brightness(priv, BRIGHTNESS_DEFAULT, false);
 
+	/*
+	 * Once the last panel is enabled, turn them all on. That includes
+	 * the case where this panel didn't answer and isn't pending itself.
+	 */
+	if (++panels_enabled_count >= panels_count())
+		panels_display_on();
+
 	return 0;
 }
 
@@ -440,6 +514,12 @@ static void deckard_panel_panel_power_off(void)
 
 		panels_powered_on = 0;
 	}
+
+	/* Nothing to turn on any more; the next enable starts over */
+	for (int i = 0; i < panels_pending_count; i++)
+		panels_pending[i]->display_on_pending = false;
+	panels_pending_count = 0;
+	panels_enabled_count = 0;
 }
 
 static int deckard_panel_panel_set_backlight(struct udevice *dev, int percent)
@@ -448,6 +528,9 @@ static int deckard_panel_panel_set_backlight(struct udevice *dev, int percent)
 
 	if (!percent)
 		deckard_panel_panel_power_off();
+	else if (priv->display_on_pending)
+		/* Keep the order: display on, then brightness */
+		priv->pending_brightness = (percent * BRIGHTNESS_MAX_120) / 100;
 	else
 		set_brightness(priv, (percent * BRIGHTNESS_MAX_120) / 100, true);
 
@@ -553,7 +636,7 @@ U_BOOT_DRIVER(deckard_panel_panel) = {
 	.ops		= &deckard_panel_panel_ops,
 	.of_to_plat	= deckard_panel_panel_of_to_plat,
 	.probe		= deckard_panel_panel_probe,
-	.probe		= deckard_panel_panel_remove,
+	.remove		= deckard_panel_panel_remove,
 	.plat_auto	= sizeof(struct mipi_dsi_panel_plat),
 	.priv_auto	= sizeof(struct deckard_panel_priv),
 };
