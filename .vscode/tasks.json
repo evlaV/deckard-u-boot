@@ -1,0 +1,51 @@
+{
+    // Build U-Boot proper for deckard and write it to a device, with the
+    // scripts in board/qualcomm/deckard/. If a deployed U-Boot doesn't boot,
+    // boot the other slot and run "Restore packaged U-Boot on Frame".
+    "version": "2.0.0",
+    "inputs": [
+        {
+            "id": "deploy_target",
+            "type": "promptString",
+            "description": "Hostname to deploy to",
+            "default": "frame.local"
+        }
+    ],
+    "tasks": [
+        {
+            "label": "Build for Frame",
+            "type": "shell",
+            "command": "./board/qualcomm/deckard/build.sh",
+            "group": { "kind": "build" },
+            "problemMatcher": {
+                "base": "$gcc",
+                "fileLocation": ["autoDetect", "${workspaceFolder}"]
+            }
+        },
+        {
+            "label": "Deploy to Frame",
+            "type": "shell",
+            "command": "./board/qualcomm/deckard/deploy.sh ${input:deploy_target}",
+            "group": { "kind": "build" },
+            "dependsOn": ["Build for Frame"],
+            "problemMatcher": []
+        },
+        {
+            "label": "Restore packaged U-Boot on Frame",
+            "type": "shell",
+            "group": { "kind": "build" },
+            "command": "./board/qualcomm/deckard/deploy.sh ${input:deploy_target} --restore",
+            "problemMatcher": []
+        },
+        {
+            "label": "Clean build",
+            "type": "shell",
+            "command": "./board/qualcomm/deckard/build.sh clean",
+            "group": { "kind": "build" },
+            "problemMatcher": {
+                "base": "$gcc",
+                "fileLocation": ["autoDetect", "${workspaceFolder}"]
+            }
+        }
+    ]
+}
