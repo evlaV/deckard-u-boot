@@ -619,6 +619,37 @@ check_next:
 	return 1;
 }
 
+/*
+ * Like lookup_data_extent(), but first check whether the item after the one
+ * @path points to is the file extent at @file_offset.
+ *
+ * Files are read extent by extent in order, and extent buffers aren't cached
+ * once released, so this saves a tree search (re-reading and checksumming
+ * the tree blocks from disk) for each extent.
+ */
+static int next_data_extent(struct btrfs_root *root, struct btrfs_path *path,
+			    u64 ino, u64 file_offset, u64 *next_offset)
+{
+	struct btrfs_key key;
+	int ret;
+
+	if (path->nodes[0]) {
+		ret = btrfs_next_item(root, path);
+		if (ret < 0)
+			return ret;
+		if (ret == 0) {
+			btrfs_item_key_to_cpu(path->nodes[0], &key,
+					      path->slots[0]);
+			if (key.objectid == ino &&
+			    key.type == BTRFS_EXTENT_DATA_KEY &&
+			    key.offset == file_offset)
+				return 0;
+		}
+	}
+	btrfs_release_path(path);
+	return lookup_data_extent(root, path, ino, file_offset, next_offset);
+}
+
 static int read_and_truncate_page(struct btrfs_path *path,
 				  struct btrfs_file_extent_item *fi,
 				  int start, int len, char *dest)
@@ -710,8 +741,7 @@ int btrfs_file_read(struct btrfs_root *root, u64 ino, u64 file_offset, u64 len,
 		u64 extent_num_bytes;
 		u8 type;
 
-		btrfs_release_path(&path);
-		ret = lookup_data_extent(root, &path, ino, cur, &next_offset);
+		ret = next_data_extent(root, &path, ino, cur, &next_offset);
 		if (ret < 0)
 			goto out;
 		if (ret > 0) {
