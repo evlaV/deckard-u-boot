@@ -36,6 +36,9 @@ DECLARE_GLOBAL_DATA_PTR;
  */
 #define DECKARD_BOARD_INFO_VALUE_MAX (EEPROM_CONFIG_STRING_LEN + 1)
 
+static eeprom_strap_v2_t s_strap;
+static bool s_strap_valid;
+
 static uint8_t s_wifi_mac_addr[EEPROM_MAC_ADDR_LEN];
 static bool s_wifi_mac_addr_valid;
 
@@ -358,7 +361,6 @@ static void _eeprom_extract_strap_v2(const eeprom_strap_v2_t *strap)
 
 static void _eeprom_load_strap(void)
 {
-	eeprom_strap_v2_t strap;
 	struct udevice *dev;
 
 	/*
@@ -371,10 +373,11 @@ static void _eeprom_load_strap(void)
 		return;
 
 	if (_eeprom_load(dev, EEPROM_STRAP_ADDRESS_START, EEPROM_STRAP_V2_MAGIC_NUMBER,
-			 s_strap_v2_versions, &strap, sizeof(strap), "strap"))
+			 s_strap_v2_versions, &s_strap, sizeof(s_strap), "strap"))
 		return;
 
-	_eeprom_extract_strap_v2(&strap);
+	s_strap_valid = true;
+	_eeprom_extract_strap_v2(&s_strap);
 }
 
 void deckard_eeprom_init(void)
@@ -390,6 +393,131 @@ bool deckard_eeprom_get_wifi_mac_address(uint8_t mac[EEPROM_MAC_ADDR_LEN])
 
 	memcpy(mac, s_wifi_mac_addr, EEPROM_MAC_ADDR_LEN);
 	return true;
+}
+
+// Resistance clamp for Forgrand
+#define CLAMP_RES_FG(res)						\
+	if (res < 475 || res > 685) {					\
+		deckard_log("Invalid resistance value: %u\n", res);	\
+		res = 575;						\
+	}
+// Resistance clamp for Olewolff
+#define CLAMP_RES_OW(res)						\
+	if (res < 530 || res > 770) {					\
+		deckard_log("Invalid resistance value: %u\n", res);	\
+		res = 645;						\
+	}
+
+int deckard_eeprom_fixup_audio_info(void *fdt)
+{
+	const char *audio_module_vendor;
+	const char *firmware_name;
+	uint8_t dsm_volume_max;
+	uint16_t left_temp, left_resistance, right_temp, right_resistance;
+	uint32_t left_temp_reg, right_temp_reg;
+	int off = -1;
+
+	if (!s_strap_valid ||
+	    !s_board_info[BI_AUDIO_MODULE_VENDOR].present ||
+	    s_strap.left_audio_temp_valid != EEPROM_VALID ||
+	    s_strap.left_audio_resistance_valid != EEPROM_VALID ||
+	    s_strap.right_audio_temp_valid != EEPROM_VALID ||
+	    s_strap.right_audio_resistance_valid != EEPROM_VALID) {
+		deckard_log("Missing audio strap information\n");
+		return -1;
+	}
+
+	audio_module_vendor = s_board_info[BI_AUDIO_MODULE_VENDOR].value;
+	left_temp = s_strap.left_audio_temp;
+	left_resistance = s_strap.left_audio_resistance;
+	right_temp = s_strap.right_audio_temp;
+	right_resistance = s_strap.right_audio_resistance;
+
+	if (strcmp(audio_module_vendor, "Forgrand") == 0) {
+		firmware_name = "dsm_param_FG_2018b.bin";
+		dsm_volume_max = 127;
+	} else if (strcmp(audio_module_vendor, "Olewolff") == 0) {
+		firmware_name = "dsm_param_OW_2018b.bin";
+		dsm_volume_max = 127;
+	} else if (strcmp(audio_module_vendor, "ggec") == 0) {
+		/* Boulder */
+		firmware_name = "dsm_param_GG.bin";
+		dsm_volume_max = 127; /* TODO */
+	} else {
+		deckard_log("Invalid audio vendor: %s\n", audio_module_vendor);
+		return -1;
+	}
+
+	if (strcmp(audio_module_vendor, "ggec") != 0) {
+		/* Temperature values are stored in deciC.  We'll accept
+		 * temperature values between 15°C and 30°C as valid */
+		if (left_temp < 150 || left_temp > 300) {
+			deckard_log("Invalid left audio temp: %u\n", left_temp);
+			return -1;
+		}
+		if (right_temp < 150 || right_temp > 300) {
+			deckard_log("Invalid right audio temp: %u\n", right_temp);
+			return -1;
+		}
+
+		/* deciC -> C */
+		left_temp /= 10;
+		right_temp /= 10;
+
+		/* Temperature is used as a temp / 100, represented as a <4,12>
+		 * fixed point value. The math below is an approximation that was
+		 * originally used, do we keep it as-is. This includes a /10 bug
+		 * which we also keep to match final tuning in the DSM params. */
+		left_temp_reg = (left_temp * 1000 + 122) / 244;
+		right_temp_reg = (right_temp * 1000 + 122) / 244;
+
+		if (strcmp(audio_module_vendor, "Forgrand") == 0) {
+			CLAMP_RES_FG(left_resistance);
+			CLAMP_RES_FG(right_resistance);
+		} else {
+			CLAMP_RES_OW(left_resistance);
+			CLAMP_RES_OW(right_resistance);
+		}
+	} else {
+		/* Boulder gets static values for now */
+		left_temp_reg = right_temp_reg = 1024;
+		left_resistance = right_resistance = 406;
+	}
+
+	/* First validate that the speaker side prefixes are what we expect */
+	fdt_for_each_node_by_compatible(off, fdt, -1, "maxim,max98390") {
+		const char *prefix = fdt_getprop(fdt, off, "sound-name-prefix", NULL);
+
+		if (!prefix ||
+		    ((strcmp(prefix, "Speaker Left") != 0) &&
+		     (strcmp(prefix, "Speaker Right") != 0))) {
+			deckard_log("Device tree node missing sound-name-prefix\n");
+			return -1;
+		}
+	}
+
+	fdt_for_each_node_by_compatible(off, fdt, -1, "maxim,max98390") {
+		const char *prefix = fdt_getprop(fdt, off, "sound-name-prefix", NULL);
+		bool left = strcmp(prefix, "Speaker Left") == 0;
+		uint32_t temp = left ? left_temp_reg : right_temp_reg;
+		uint32_t resistance = left ? left_resistance : right_resistance;
+
+		fdt_setprop_u32(fdt, off, "maxim,temperature_calib", temp);
+
+		/* Resistance is used as admittance. (Rdc * 3/11)^-1,
+		 * represented as a <4,20> fixed point value. Stored value is
+		 * fixed point <6,8>, so math is value * 2^28 */
+		fdt_setprop_u32(fdt, off, "maxim,r0_calib",
+				268435456 / resistance);
+
+		fdt_setprop_u32(fdt, off, "maxim,dsm_volume_max",
+				dsm_volume_max);
+
+		fdt_setprop_string(fdt, off, "maxim,dsm_param_name",
+				firmware_name);
+	}
+
+	return 0;
 }
 
 int deckard_eeprom_fixup_board_info(void *fdt)
