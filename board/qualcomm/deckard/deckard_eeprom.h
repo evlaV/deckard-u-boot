@@ -220,6 +220,12 @@ void deckard_eeprom_init(void);
 /// a valid one.
 bool deckard_eeprom_get_wifi_mac_address(uint8_t mac[EEPROM_MAC_ADDR_LEN]);
 
+/// @brief Emit audio calibration data and hardware information into devicetree.
+/// These are used by the max98390 amp driver to tune dynamic speaker
+/// management, set device-specific volume limits, and adjust userspace speaker
+/// tuning.
+int deckard_eeprom_fixup_audio_info(void *fdt);
+
 /// @brief Emit the cached immutable board identity into /board-info in @fdt so
 /// userspace can read it out of /sys/firmware/devicetree/base/board-info/
 /// without going near i2c. Only fields the EEPROM marked valid are emitted,
