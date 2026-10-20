@@ -19,6 +19,7 @@ ccflags-y += -DZSTD_STRIP_ERROR_STRINGS
 ccflags-y += -DDYNAMIC_BMI2=0
 endif
 
+
 zstd_decompress-y := \
 		zstd_decompress_module.o \
 		decompress/huf_decompress.o \
@@ -34,3 +35,12 @@ zstd_common-y := \
 		common/error_private.o \
 		common/fse_decompress.o \
 		common/zstd_common.o \
+
+ifeq ($(CONFIG_ZSTD_UNALIGNED_ACCESS),y)
+ifndef CONFIG_XPL_BUILD
+ccflags-y += -O2
+# -mstrict-align comes from PLATFORM_CPPFLAGS, after ccflags-y, so remove it
+$(foreach o,$(basename $(notdir $(zstd_decompress-y) $(zstd_common-y))),\
+	$(eval CFLAGS_REMOVE_$(o).o += -mstrict-align))
+endif
+endif
