@@ -934,7 +934,6 @@ void deckard_display_image( boot_intention_t boot_intention )
 		if ( ret == 0 )
 		{
 			deckard_log("Found primary image %s, in load_source %d\n", filename, load_source );
-			bmp_info(CONFIG_SYS_LOAD_ADDR);
 			bmp_display(CONFIG_SYS_LOAD_ADDR, 0,0);
 			displayed_image = true;
 			break;
@@ -950,7 +949,6 @@ void deckard_display_image( boot_intention_t boot_intention )
 			if ( ret == 0 )
 			{
 				deckard_log("Found fallback image %s, in load_source %d\n", fallbackFilename, load_source );
-				bmp_info(CONFIG_SYS_LOAD_ADDR);
 				bmp_display(CONFIG_SYS_LOAD_ADDR, 0,0);
 				displayed_image = true;
 				break;
