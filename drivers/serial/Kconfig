@@ -1005,6 +1005,7 @@ config MSM_SERIAL
 config MSM_GENI_SERIAL
 	bool "Qualcomm on-chip GENI UART"
 	depends on QCOM_GENI
+	imply SERIAL_PUTS
 	help
 	  Support UART based on Generic Interface (GENI) Serial Engine (SE),
 	  used on Qualcomm Snapdragon SoCs. Should support all qualcomm SOCs

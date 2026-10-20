@@ -56,6 +56,7 @@
 
 #define M_TX_FIFO_WATERMARK_EN	(BIT(30))
 #define DEF_TX_WM	2
+#define DEF_FIFO_DEPTH_WORDS	16
 /* GENI_FORCE_DEFAULT_REG fields */
 #define FORCE_DEFAULT	(BIT(0))
 
@@ -119,7 +120,7 @@
  *
  * Defines following configuration:
  * - Bits of data per transfer word             8
- * - Number of words per fifo element           4
+ * - Number of words per fifo element           1
  * - Transfer from MSB to LSB or vice-versa     false
  */
 #define UART_PACKING_CFG0   0xf
@@ -445,6 +446,44 @@ static int msm_serial_putc(struct udevice *dev, const char ch)
 	return 0;
 }
 
+/*
+ * Send a whole string with one TX command, refilling the FIFO as it drains,
+ * instead of a command per character, like Linux's console does.
+ */
+static ssize_t msm_serial_puts(struct udevice *dev, const char *s, size_t len)
+{
+	struct msm_serial_data *priv = dev_get_priv(dev);
+	size_t i = 0;
+
+	if (!len)
+		return 0;
+
+	writel(DEF_TX_WM, priv->base + SE_GENI_TX_WATERMARK_REG);
+	qcom_geni_serial_setup_tx(priv->base, len);
+
+	while (i < len) {
+		size_t chunk = min_t(size_t, len - i,
+				     DEF_FIFO_DEPTH_WORDS - DEF_TX_WM);
+
+		/*
+		 * If the FIFO never drains, the TX state machine is stuck:
+		 * give up on the rest, and let polling for done abort it.
+		 */
+		if (!qcom_geni_serial_poll_bit(dev, SE_GENI_M_IRQ_STATUS,
+					       M_TX_FIFO_WATERMARK_EN, true))
+			break;
+
+		/* One character per FIFO word, see UART_PACKING_CFG0 */
+		for (; chunk; chunk--)
+			writel(s[i++], priv->base + SE_GENI_TX_FIFOn);
+		writel(M_TX_FIFO_WATERMARK_EN, priv->base + SE_GENI_M_IRQ_CLEAR);
+	}
+
+	qcom_geni_serial_poll_tx_done(dev);
+
+	return len;
+}
+
 static int msm_serial_getc(struct udevice *dev)
 {
 	struct msm_serial_data *priv = dev_get_priv(dev);
@@ -487,6 +526,7 @@ static int msm_serial_pending(struct udevice *dev, bool input)
 
 static const struct dm_serial_ops msm_serial_ops = {
 	.putc = msm_serial_putc,
+	.puts = msm_serial_puts,
 	.pending = msm_serial_pending,
 	.getc = msm_serial_getc,
 #ifndef CONFIG_SPL_BUILD
