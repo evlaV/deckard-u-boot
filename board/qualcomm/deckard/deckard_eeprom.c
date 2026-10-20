@@ -61,6 +61,7 @@ enum board_info_index {
 	BI_STRAP_REVISION,
 	BI_STRAP_MINOR,
 	BI_STRAP_CONFIG,
+	BI_AUDIO_MODULE_VENDOR,
 	BI_LEFT_AUDIO_SN,
 	BI_RIGHT_AUDIO_SN,
 	BI_COUNT
@@ -88,6 +89,7 @@ static struct board_info_entry s_board_info[BI_COUNT] = {
 	[BI_STRAP_REVISION]       = { .name = "strap_revision" },
 	[BI_STRAP_MINOR]          = { .name = "strap_minor" },
 	[BI_STRAP_CONFIG]         = { .name = "strap_config" },
+	[BI_AUDIO_MODULE_VENDOR]  = { .name = "audio_module_vendor" },
 	[BI_LEFT_AUDIO_SN]        = { .name = "left_audio_sn" },
 	[BI_RIGHT_AUDIO_SN]       = { .name = "right_audio_sn" },
 };
@@ -349,6 +351,7 @@ static void _eeprom_extract_strap_v2(const eeprom_strap_v2_t *strap)
 	BOARD_INFO_SET(BI_STRAP_REVISION, strap, strap_revision);
 	BOARD_INFO_SET(BI_STRAP_MINOR, strap, strap_minor);
 	BOARD_INFO_SET(BI_STRAP_CONFIG, strap, strap_config);
+	BOARD_INFO_SET(BI_AUDIO_MODULE_VENDOR, strap, audio_module_vendor);
 	BOARD_INFO_SET(BI_LEFT_AUDIO_SN, strap, left_audio_sn);
 	BOARD_INFO_SET(BI_RIGHT_AUDIO_SN, strap, right_audio_sn);
 }
