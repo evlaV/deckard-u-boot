@@ -424,7 +424,7 @@ int deckard_eeprom_fixup_audio_info(void *fdt)
 	    s_strap.right_audio_temp_valid != EEPROM_VALID ||
 	    s_strap.right_audio_resistance_valid != EEPROM_VALID) {
 		deckard_log("Missing audio strap information\n");
-		return -1;
+		goto error;
 	}
 
 	audio_module_vendor = s_board_info[BI_AUDIO_MODULE_VENDOR].value;
@@ -445,7 +445,7 @@ int deckard_eeprom_fixup_audio_info(void *fdt)
 		dsm_volume_max = 127; /* TODO */
 	} else {
 		deckard_log("Invalid audio vendor: %s\n", audio_module_vendor);
-		return -1;
+		goto error;
 	}
 
 	if (strcmp(audio_module_vendor, "ggec") != 0) {
@@ -453,11 +453,11 @@ int deckard_eeprom_fixup_audio_info(void *fdt)
 		 * temperature values between 15°C and 30°C as valid */
 		if (left_temp < 150 || left_temp > 300) {
 			deckard_log("Invalid left audio temp: %u\n", left_temp);
-			return -1;
+			goto error;
 		}
 		if (right_temp < 150 || right_temp > 300) {
 			deckard_log("Invalid right audio temp: %u\n", right_temp);
-			return -1;
+			goto error;
 		}
 
 		/* deciC -> C */
@@ -492,7 +492,7 @@ int deckard_eeprom_fixup_audio_info(void *fdt)
 		    ((strcmp(prefix, "Speaker Left") != 0) &&
 		     (strcmp(prefix, "Speaker Right") != 0))) {
 			deckard_log("Device tree node missing sound-name-prefix\n");
-			return -1;
+			goto error;
 		}
 	}
 
@@ -518,6 +518,15 @@ int deckard_eeprom_fixup_audio_info(void *fdt)
 	}
 
 	return 0;
+
+error:
+	deckard_log("Turning down audio output to 0 on both amps for safety");
+
+	fdt_for_each_node_by_compatible(off, fdt, -1, "maxim,max98390") {
+		fdt_setprop_u32(fdt, off, "maxim,dsm_volume_max", 0);
+	}
+
+	return -1;
 }
 
 int deckard_eeprom_fixup_board_info(void *fdt)
