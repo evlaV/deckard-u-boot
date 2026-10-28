@@ -523,6 +523,11 @@ int ft_board_setup(void *fdt, struct bd_info *bd)
 		}
 	}
 
+	/* Read audio calibration and related data and push to DT */
+	ret = deckard_eeprom_fixup_audio_info(fdt);
+	if (ret < 0)
+		deckard_log("WARNING: could not publish EEPROM audio info: %d\n", ret);
+
 	/*
 	 * Publish the immutable EEPROM identity (board revision, serial numbers,
 	 * ...) at /board-info so userspace can read it from
