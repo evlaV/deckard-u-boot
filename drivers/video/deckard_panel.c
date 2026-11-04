@@ -553,7 +553,7 @@ U_BOOT_DRIVER(deckard_panel_panel) = {
 	.ops		= &deckard_panel_panel_ops,
 	.of_to_plat	= deckard_panel_panel_of_to_plat,
 	.probe		= deckard_panel_panel_probe,
-	.probe		= deckard_panel_panel_remove,
+	.remove		= deckard_panel_panel_remove,
 	.plat_auto	= sizeof(struct mipi_dsi_panel_plat),
 	.priv_auto	= sizeof(struct deckard_panel_priv),
 };
