@@ -8,6 +8,7 @@
 
 #define LOG_CATEGORY LOGC_DM
 
+#include <asm/global_data.h>
 #include <debug_uart.h>
 #include <errno.h>
 #include <log.h>
@@ -19,6 +20,8 @@
 #include <dm/util.h>
 #include <fdtdec.h>
 #include <linux/compiler.h>
+
+DECLARE_GLOBAL_DATA_PTR;
 
 struct driver *lists_driver_lookup_name(const char *name)
 {
@@ -199,8 +202,16 @@ static int driver_check_compatible(const struct udevice_id *of_match,
 int lists_bind_fdt(struct udevice *parent, ofnode node, struct udevice **devp,
 		   struct driver *drv, bool pre_reloc_only)
 {
-	struct driver *driver = ll_entry_start(struct driver, driver);
-	const int n_ents = ll_entry_count(struct driver, driver);
+	/*
+	 * GD_FLG_HYP marks the hypervisor's own pass (dm_hyp_scan()): bind
+	 * against the HYP_DRIVER() list instead of the EL1 driver list.
+	 * Without the flag nothing here changes.
+	 */
+	bool hyp = gd->flags & GD_FLG_HYP;
+	struct driver *driver = hyp ? ll_entry_start(struct driver, hyp_driver)
+				    : ll_entry_start(struct driver, driver);
+	const int n_ents = hyp ? ll_entry_count(struct driver, hyp_driver)
+			       : ll_entry_count(struct driver, driver);
 	const struct udevice_id *id;
 	struct driver *entry;
 	struct udevice *dev;

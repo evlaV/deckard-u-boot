@@ -147,6 +147,10 @@ OBJCOPYFLAGS += -j .text -j .secure_text -j .secure_data -j .rodata -j .hash \
 		-j .binman_sym_table -j .text_rest
 endif
 
+ifdef CONFIG_HYPERVISOR
+OBJCOPYFLAGS += -j .hyp
+endif
+
 # if a dtb section exists we always have to include it
 # there are only two cases where it is generated
 # 1) OF_EMBEDED is turned on

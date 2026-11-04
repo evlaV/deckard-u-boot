@@ -8,6 +8,7 @@
  * Sysgo Real-Time Solutions, GmbH <www.elinos.com>
  * Marius Groeger <mgroeger@sysgo.de>
  */
+#define LOG_DEBUG
 
 #include <config.h>
 #include <bloblist.h>
@@ -51,6 +52,7 @@
 #include <dm/root.h>
 #include <linux/errno.h>
 #include <linux/log2.h>
+#include <hypervisor.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -1036,6 +1038,7 @@ static void initcall_run_f(void)
 	 * watchdog device is not serviced is as small as possible.
 	 */
 	INITCALL(cyclic_unregister_all);
+	INITCALL(hv_init);
 #if !CONFIG_IS_ENABLED(ARM) && !CONFIG_IS_ENABLED(SANDBOX)
 	INITCALL(jump_to_copy);
 #endif

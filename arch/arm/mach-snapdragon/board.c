@@ -10,6 +10,7 @@
 #define pr_fmt(fmt) "QCOM: " fmt
 
 #include <asm/armv8/mmu.h>
+#include <asm/sections.h>
 #include <asm/gpio.h>
 #include <asm/io.h>
 #include <asm/psci.h>
@@ -19,6 +20,7 @@
 #include <dm/uclass-internal.h>
 #include <dm/read.h>
 #include <power/regulator.h>
+#include <efi_loader.h>
 #include <env.h>
 #include <fdt_support.h>
 #include <init.h>
@@ -98,6 +100,11 @@ int board_fdt_blob_setup(void **fdtp)
 	external_fdt = (struct fdt_header *)get_prev_bl_fdt_addr();
 	external_valid = external_fdt && !fdt_check_header(external_fdt);
 	internal_valid = !fdt_check_header(internal_fdt);
+
+	// if (dcache_status()) {
+	// 	dcache_disable();
+	// 	printf("Disabled dcache!\n");
+	// }
 
 	/*
 	 * There is no point returning an error here, U-Boot can't do anything useful in this situation.
@@ -384,12 +391,90 @@ void __weak qcom_late_init(void)
 
 #define addr_alloc(size) lmb_alloc(size, SZ_2M)
 
+
+#ifdef CONFIG_HYPERVISOR
+/*
+ * After the EL2 handoff the hypervisor stays resident: the link-time U-Boot
+ * copy - the .hyp code/data plus the non-__hyp callees the trap handlers
+ * execute at EL2 - lives at [CONFIG_TEXT_BASE, CONFIG_TEXT_BASE + image
+ * size), and the guest's own relocated body (code, gd, malloc pool, stacks,
+ * DTB copy) at [gd->relocaddr, __bss_end).  Neither is marked used in the
+ * LMB map, so every lmb_alloc() below (the fastboot
+ * buffer included!) - and after ExitBootServices the kernel's memblock
+ * allocator - can land on the EL2 vectors and hypervisor data.  Stage-2
+ * maps all of DRAM RW and EL2 shares those blocks without VHE, so the only
+ * thing keeping the guest off the resident image is the memory map the
+ * guest publishes: this is what silently killed the Linux guest shortly
+ * after "Unpacking initramfs...".
+ *
+ * Reserve both regions before anything is allocated.  LMB reservations
+ * alone only reach the EFI memory map as BOOT_SERVICES_DATA
+ * (lmb_map_update_notify), which the kernel *frees* in
+ * efi_free_boot_services() right after ExitBootServices - so re-mark both
+ * regions as EFI_RUNTIME_SERVICES_CODE, the type the kernel keeps.  The
+ * DTB is deliberately left untouched: fdt_add_mem_rsv() would move its
+ * struct section out from under the driver-model offsets already cached.
+
+ */
+static void hyp_reserve_regions(void)
+{
+	phys_addr_t link_base = CONFIG_TEXT_BASE;
+	phys_addr_t link_size, base;
+	int ret;
+
+	/* First: pull the DT's own reserved regions into LMB (the fastboot
+	 * buffer and EFI allocations below must not land on TZ/VM memory -
+	 * that overlap is what stalls efi_load_pe's 222 MiB section copy). */
+	// boot_fdt_add_mem_rsv_regions(gd->fdt_blob);
+
+	/* __image_copy_start/__bss_end are fixup-adjusted references in the
+	 * relocated body: their difference is the link-time image size
+	 * (loaded copy + bss), exactly the span the resident copy occupies
+	 * at CONFIG_TEXT_BASE. */
+	link_size = (phys_addr_t)__bss_end - (phys_addr_t)__image_copy_start;
+
+	base = link_base;
+	ret = lmb_alloc_addr(base, link_size, LMB_NONE);
+	if (ret && ret != -EEXIST)
+		log_warning("hyp: cannot reserve resident image %#llx+%#llx (%d)\n",
+			    link_base, link_size, ret);
+
+	base = gd->relocaddr;
+	ret = lmb_alloc_addr(base,
+			    (phys_addr_t)__bss_end - gd->relocaddr, LMB_NONE);
+
+	if (ret && ret != -EEXIST)
+		log_warning("hyp: cannot reserve relocated U-Boot %#llx+%#llx (%d)\n",
+			    gd->relocaddr, (phys_addr_t)__bss_end - gd->relocaddr,
+			    ret);
+
+
+	/* Only the link-time copy needs marking here: efi_runtime_relocate()
+	 * already published the relocated body as runtime code, and
+	 * re-adding that region splits U-Boot's own entry (observed to
+	 * stall efi_load_pe's section copy). */
+	// if (efi_add_memory_map(link_base, link_size,
+	// 		       EFI_RUNTIME_SERVICES_CODE) != EFI_SUCCESS)
+	// 	log_warning("hyp: EFI map reservation of resident image failed\n");
+
+	log_info("hyp: resident %#llx+%#llx, relocated %#llx+%#llx: lmb+EFI reserved\n",
+		 link_base, link_size, gd->relocaddr,
+		 (phys_addr_t)__bss_end - gd->relocaddr);
+}
+#endif
+
 /* Stolen from arch/arm/mach-apple/board.c */
 int board_late_init(void)
 {
 	//u32 status = 0;
 	phys_addr_t addr;
 	struct fdt_header *fdt_blob = (struct fdt_header *)gd->fdt_blob;
+
+#ifdef CONFIG_HYPERVISOR
+	/* First thing: every allocation below must avoid the resident
+	 * hypervisor image (see hyp_reserve_regions()). */
+	hyp_reserve_regions();
+#endif
 
 #if 0
 	/* We need to be fairly conservative here as we support boards with just 1G of TOTAL RAM */
@@ -481,13 +566,19 @@ static int fdt_cmp_res(const void *v1, const void *v2)
 	return res1->start - res2->start;
 }
 
-#define N_RESERVED_REGIONS 32
+#define N_RESERVED_REGIONS 64
+/* Granule the carveouts are rounded to: this runs before the dcache is on, so
+ * the cost of a walk is paid in nanoseconds per descriptor and a few MB of
+ * over-carved space is the cheaper side of that trade. */
+#define GRANULE SZ_8K
 
-/* Mark all no-map regions as PTE_TYPE_FAULT to prevent speculative access.
- * On some platforms this is enough to trigger a security violation and trap
- * to EL3.
+/* Map and unmap reserved memory regions as appropriate.
+ * no-map regions are marked PTE_TYPE_FAULT to prevent speculative access: on
+ * some platforms a prefetch into one is enough to trigger a security
+ * violation and trap to EL3.  Reserved regions that are not no-map, or that
+ * have a compatible (so a driver here may use them), are left as they are.
  */
-static void carve_out_reserved_memory(void)
+static void configure_reserved_memory(void)
 {
 	static struct mem_resource_attrs res[N_RESERVED_REGIONS] = { 0 };
 	int parent, rmem, count, i = 0;
@@ -504,17 +595,22 @@ static void carve_out_reserved_memory(void)
 		return;
 	}
 
-	/* Collect the reserved memory regions and appropriate attrs */
+	/* Collect the reserved memory regions and appropriate attrs.
+	 * Only no-map regions are carved out at all: a reserved region without
+	 * no-map is ordinary memory the kernel may map, and one with a
+	 * compatible is something a U-Boot driver may still access - unmapping
+	 * either would only cost time or break that driver (port of
+	 * reform-qcs6490-uboot "mach-snapdragon: fix reserved memory
+	 * carveout"). */
 	fdt_for_each_subnode(rmem, gd->fdt_blob, parent) {
 		const fdt32_t *ptr;
-		attrs = PTE_TYPE_FAULT;
-		/* If the no-map property isn't set then the region is valid */
+
 		if (!fdt_getprop(gd->fdt_blob, rmem, "no-map", NULL))
-			attrs = PTE_TYPE_VALID | PTE_BLOCK_MEMTYPE(MT_NORMAL);
-		/* If the compatible property is set then this region may be accessed by drivers and should
-		 * be marked valid too. */
+			continue;
 		if (fdt_getprop(gd->fdt_blob, rmem, "compatible", NULL))
-			attrs = PTE_TYPE_VALID | PTE_BLOCK_MEMTYPE(MT_NORMAL);
+			continue;
+
+		attrs = PTE_TYPE_FAULT;
 
 		if (i == N_RESERVED_REGIONS) {
 			log_err("Too many reserved regions!\n");
@@ -527,11 +623,25 @@ static void carve_out_reserved_memory(void)
 		 */
 		ptr = fdt_getprop(gd->fdt_blob, rmem, "reg", NULL);
 		if (ptr) {
-			/* Qualcomm devices use #address/size-cells = <2> but all reserved regions are within
-			 * the 32-bit address space. So we can cheat here for speed.
-			 */
-			res[i].start = fdt32_to_cpu(ptr[1]);
-			res[i].size = fdt32_to_cpu(ptr[3]);
+			/* /reserved-memory here is #address-cells = <2>,
+			* #size-cells = <2>, and this board genuinely has reserved
+			* regions above 4 GiB - reading only the low cell (the old
+			* "all reserved regions are within the 32-bit address space"
+			* cheat) carves out the wrong addresses there.  Read all four
+			* cells.
+			*/
+			res[i].start = ((u64)fdt32_to_cpu(ptr[0]) << 32) |
+				       fdt32_to_cpu(ptr[1]);
+			res[i].size = ((u64)fdt32_to_cpu(ptr[2]) << 32) |
+				      fdt32_to_cpu(ptr[3]);
+
+			/* Align to the table granule: the point of this loop is
+			 * few, big mmu_change_region_attr_nobreak() calls before
+			 * the dcache is on, so rounding a carveout outward costs
+			 * a few MB of usable space and buys walk time. */
+			res[i].size += res[i].start - ALIGN_DOWN(res[i].start, GRANULE);
+			res[i].start = ALIGN_DOWN(res[i].start, GRANULE);
+			res[i].size = max((u64)GRANULE, ALIGN_DOWN(res[i].size, GRANULE));
 			res[i].attrs = attrs;
 			i++;
 		}
@@ -543,7 +653,7 @@ static void carve_out_reserved_memory(void)
 	debug("Mapping %d regions!\n", count);
 
 	/* Now set the right attributes for them. Often a lot of the regions are tightly packed together
-	 * so we can optimise the number of calls to mmu_change_region_attr() by combining adjacent
+	 * so we can optimise the number of calls to mmu_change_region_attr_nobreak() by combining adjacent
 	 * regions.
 	 */
 	start = res[0].start;
@@ -556,10 +666,11 @@ static void carve_out_reserved_memory(void)
 		/* If i == count we are done, just map the last region. If the last region is
 		 * too far away or the attrs don't match then map the meta-region we have and
 		 * start a new one. */
-		if (i == count || start + size < res[i].start - SZ_2M || attrs != res[i].attrs) {
+		if (i == count || start + size < res[i].start - SZ_8K || attrs != res[i].attrs) {
 			debug("  0x%016llx - 0x%016llx: %s\n",
 				start, start + size, attrs == PTE_TYPE_FAULT ? "FAULT" : "VALID");
-			mmu_change_region_attr(start, size, attrs);
+			/* No need to break-before-make since dcache is disabled */
+			mmu_change_region_attr_nobreak(start, size, attrs);
 			/* We have now mapped all the regions */
 			if (i == count)
 				break;
@@ -568,8 +679,8 @@ static void carve_out_reserved_memory(void)
 			size = res[i].size;
 			attrs = res[i].attrs;
 		} else {
-			/* This region is next to (<2M) the previous one so combine them. Accounting for
-			 * any small (<2M) gap. */
+			/* This region is next to (<8K) the previous one so combine them.
+			 * Accounting for any small (<8K) gap. */
 			size = (res[i].start - start) + res[i].size;
 		}
 	}
@@ -612,7 +723,7 @@ void enable_caches(void)
 	    fdt_node_check_compatible(gd->fdt_blob, 0, "qcom,sm8650") == 0) {
 		carveout_start = get_timer(0);
 		/* Takes ~20-50ms on SDM845 */
-		carve_out_reserved_memory();
+		configure_reserved_memory();
 		debug("carveout time: %lums\n", get_timer(carveout_start));
 	}
 	dcache_enable();

@@ -10,11 +10,14 @@
 #include <asm/io.h>
 #include <clk.h>
 #include <dm.h>
+#include <dm/device_compat.h>
 #include <errno.h>
 #include <linux/delay.h>
 #include <linux/time.h>
 #include <misc.h>
 #include <serial.h>
+#include <soc/qcom/qup-fw-load.h>
+#include <soc/qcom/geni-se.h>
 
 #define UART_OVERSAMPLING	32
 #define STALE_TIMEOUT	160
@@ -22,8 +25,6 @@
 /* Registers*/
 #define GENI_FORCE_DEFAULT_REG	0x20
 #define GENI_SER_M_CLK_CFG	0x48
-#define GENI_SER_S_CLK_CFG	0x4C
-#define SE_HW_PARAM_0	0xE24
 #define SE_GENI_STATUS	0x40
 #define SE_GENI_S_CMD0	0x630
 #define SE_GENI_S_CMD_CTRL_REG	0x634
@@ -39,7 +40,6 @@
 #define SE_GENI_RX_FIFOn	0x780
 #define SE_GENI_TX_FIFO_STATUS	0x800
 #define SE_GENI_RX_FIFO_STATUS	0x804
-#define SE_GENI_TX_WATERMARK_REG	0x80C
 #define SE_GENI_TX_PACKING_CFG0	0x260
 #define SE_GENI_TX_PACKING_CFG1	0x264
 #define SE_GENI_RX_PACKING_CFG0	0x284
@@ -54,59 +54,25 @@
 #define SE_UART_RX_TRANS_CFG	0x280
 #define SE_UART_RX_PARITY_CFG	0x2a8
 
-#define M_TX_FIFO_WATERMARK_EN	(BIT(30))
 #define DEF_TX_WM	2
+#define DEF_RX_WM	2
 /* GENI_FORCE_DEFAULT_REG fields */
-#define FORCE_DEFAULT	(BIT(0))
-
-#define S_CMD_ABORT_EN	(BIT(5))
 
 #define UART_START_READ	0x1
 
-/* GENI_M_CMD_CTRL_REG */
-#define M_GENI_CMD_CANCEL	(BIT(2))
-#define M_GENI_CMD_ABORT	(BIT(1))
-#define M_GENI_DISABLE	(BIT(0))
-
-#define M_CMD_ABORT_EN	(BIT(5))
-#define M_CMD_DONE_EN	(BIT(0))
 #define M_CMD_DONE_DISABLE_MASK	(~M_CMD_DONE_EN)
-
-#define S_GENI_CMD_ABORT	(BIT(1))
-
-/* GENI_S_CMD0 fields */
-#define S_OPCODE_MSK	(GENMASK(31, 27))
-#define S_PARAMS_MSK	(GENMASK(26, 0))
-
-/* GENI_STATUS fields */
-#define M_GENI_CMD_ACTIVE	(BIT(0))
-#define S_GENI_CMD_ACTIVE	(BIT(12))
-#define M_CMD_DONE_EN	(BIT(0))
-#define S_CMD_DONE_EN	(BIT(0))
 
 #define M_OPCODE_SHIFT	27
 #define S_OPCODE_SHIFT	27
-#define M_TX_FIFO_WATERMARK_EN	(BIT(30))
 #define UART_START_TX	0x1
 #define UART_CTS_MASK	(BIT(1))
-#define M_SEC_IRQ_EN	(BIT(31))
 #define TX_FIFO_WC_MSK	(GENMASK(27, 0))
-#define RX_FIFO_WC_MSK	(GENMASK(24, 0))
-
-#define S_RX_FIFO_WATERMARK_EN	(BIT(26))
-#define S_RX_FIFO_LAST_EN	(BIT(27))
-#define M_RX_FIFO_WATERMARK_EN	(BIT(26))
-#define M_RX_FIFO_LAST_EN	(BIT(27))
 
 /* GENI_SER_M_CLK_CFG/GENI_SER_S_CLK_CFG */
-#define SER_CLK_EN	(BIT(0))
-#define CLK_DIV_MSK	(GENMASK(15, 4))
 #define CLK_DIV_SHFT	4
 
 /* SE_HW_PARAM_0 fields */
-#define TX_FIFO_WIDTH_MSK	(GENMASK(29, 24))
 #define TX_FIFO_WIDTH_SHFT	24
-#define TX_FIFO_DEPTH_MSK	(GENMASK(21, 16))
 #define TX_FIFO_DEPTH_SHFT	16
 
 /* GENI SE QUP Registers */
@@ -131,6 +97,7 @@ struct msm_serial_data {
 	phys_addr_t base;
 	u32 baud;
 	u32 oversampling;
+	struct clk *se;
 };
 
 unsigned long root_freq[] = {7372800,  14745600, 19200000, 29491200,
@@ -181,19 +148,6 @@ static int get_clk_div_rate(u32 baud, u64 sampling_rate, u32 *clk_div)
 	return ser_clk;
 }
 
-static int geni_serial_set_clock_rate(struct udevice *dev, u64 rate)
-{
-	struct clk *clk;
-	int ret;
-
-	clk = devm_clk_get(dev, NULL);
-	if (IS_ERR(clk))
-		return PTR_ERR(clk);
-
-	ret = clk_set_rate(clk, rate);
-	return ret;
-}
-
 /**
  * geni_se_get_tx_fifo_depth() - Get the TX fifo depth of the serial engine
  * @base:	Pointer to the concerned serial engine.
@@ -242,7 +196,6 @@ static inline void geni_serial_baud(phys_addr_t base_address, u32 clk_div,
 	writel(s_clk_cfg, base_address + GENI_SER_S_CLK_CFG);
 }
 
-#ifndef CONFIG_SPL_BUILD
 static int msm_serial_setbrg(struct udevice *dev, int baud)
 {
 	struct msm_serial_data *priv = dev_get_priv(dev);
@@ -253,16 +206,19 @@ static int msm_serial_setbrg(struct udevice *dev, int baud)
 	priv->baud = baud;
 
 	clk_rate = get_clk_div_rate(baud, priv->oversampling, &clk_div);
-	ret = geni_serial_set_clock_rate(dev, clk_rate);
+	if (!clk_rate) {
+		pr_err("%s: Couldn't get clock division rate\n", __func__);
+		return -EINVAL;
+	}
+	ret = clk_set_rate(priv->se, clk_rate);
 	if (ret < 0) {
 		pr_err("%s: Couldn't set clock rate: %d\n", __func__, ret);
-		return ret;
+		return 0;
 	}
 	geni_serial_baud(priv->base, clk_div, baud);
 
 	return 0;
 }
-#endif
 
 /**
  * qcom_geni_serial_poll_bit() - Poll reg bit until desired value or timeout.
@@ -286,31 +242,26 @@ static bool qcom_geni_serial_poll_bit(const struct udevice *dev, int offset,
 	unsigned int tx_fifo_depth;
 	unsigned int tx_fifo_width;
 	unsigned int fifo_bits;
-	unsigned long timeout_us = 10000;
+	unsigned long timeout_us;
 
-	baud = 115200;
-
-	if (priv) {
-		baud = priv->baud;
-		if (!baud)
-			baud = 115200;
-		tx_fifo_depth = geni_se_get_tx_fifo_depth(priv->base);
-		tx_fifo_width = geni_se_get_tx_fifo_width(priv->base);
-		fifo_bits = tx_fifo_depth * tx_fifo_width;
-		/*
-		 * Total polling iterations based on FIFO worth of bytes to be
-		 * sent at current baud. Add a little fluff to the wait.
-		 */
-		timeout_us = ((fifo_bits * USEC_PER_SEC) / baud) + 500;
-	}
+	baud = priv->baud;
+	if (!baud)
+		baud = 115200;
+	tx_fifo_depth = geni_se_get_tx_fifo_depth(priv->base);
+	tx_fifo_width = geni_se_get_tx_fifo_width(priv->base);
+	fifo_bits = tx_fifo_depth * tx_fifo_width;
+	/*
+	 * Total polling iterations based on FIFO worth of bytes to be
+	 * sent at current baud. Add a little fluff to the wait.
+	 */
+	timeout_us = ((fifo_bits * USEC_PER_SEC) / baud) + 500;
 
 	timeout_us = DIV_ROUND_UP(timeout_us, 10) * 10;
 	while (timeout_us) {
 		reg = readl(priv->base + offset);
 		if ((bool)(reg & field) == set)
 			return true;
-		// Don't schedule() !
-		__udelay(10);
+		udelay(10);
 		timeout_us -= 10;
 	}
 	return false;
@@ -395,6 +346,7 @@ static void qcom_geni_serial_start_rx(struct udevice *dev)
 
 	geni_se_setup_s_cmd(priv->base, UART_START_READ, 0);
 
+	writel(DEF_RX_WM, priv->base + SE_GENI_RX_WATERMARK_REG);
 	setbits_le32(priv->base + SE_GENI_S_IRQ_EN, S_RX_FIFO_WATERMARK_EN | S_RX_FIFO_LAST_EN);
 	setbits_le32(priv->base + SE_GENI_M_IRQ_EN, M_RX_FIFO_WATERMARK_EN | M_RX_FIFO_LAST_EN);
 }
@@ -423,6 +375,7 @@ static void msm_geni_serial_setup_rx(struct udevice *dev)
 
 	geni_se_setup_s_cmd(priv->base, UART_START_READ, 0);
 
+	writel(DEF_RX_WM, priv->base + SE_GENI_RX_WATERMARK_REG);
 	setbits_le32(priv->base + SE_GENI_S_IRQ_EN, S_RX_FIFO_WATERMARK_EN | S_RX_FIFO_LAST_EN);
 	setbits_le32(priv->base + SE_GENI_M_IRQ_EN, M_RX_FIFO_WATERMARK_EN | M_RX_FIFO_LAST_EN);
 }
@@ -489,9 +442,7 @@ static const struct dm_serial_ops msm_serial_ops = {
 	.putc = msm_serial_putc,
 	.pending = msm_serial_pending,
 	.getc = msm_serial_getc,
-#ifndef CONFIG_SPL_BUILD
 	.setbrg = msm_serial_setbrg,
-#endif
 };
 
 static int geni_set_oversampling(struct udevice *dev)
@@ -566,13 +517,47 @@ static int msm_serial_probe(struct udevice *dev)
 {
 	struct msm_serial_data *priv = dev_get_priv(dev);
 	int ret;
+	u32 proto;
+	struct clk *clk;
+
+	clk = devm_clk_get_optional(dev, NULL);
+	if (IS_ERR(clk))
+		dev_dbg(dev, "Couldn't find UART clock: %ld", PTR_ERR(clk));
+	else
+		priv->se = clk;
+
+	/* Try enable clock */
+	clk_enable(clk);
+
+	/* Check if firmware loading is needed (BT UART) */
+	proto = readl(priv->base + GENI_FW_REVISION_RO);
+	proto &= FW_REV_PROTOCOL_MSK;
+	proto >>= FW_REV_PROTOCOL_SHFT;
+
+	if (proto == GENI_SE_INVALID_PROTO) {
+		qcom_geni_load_firmware(priv->base, dev);
+		proto = readl(priv->base + GENI_FW_REVISION_RO);
+		proto &= FW_REV_PROTOCOL_MSK;
+		proto >>= FW_REV_PROTOCOL_SHFT;
+	}
+
+	if (proto != GENI_SE_UART) {
+		dev_err(dev, "Invalid proto %d\n", proto);
+		clk_disable(clk);
+		return -ENXIO;
+	}
+
+	/* Don't actually probe non-debug UARTs */
+	if (ofnode_device_is_compatible(dev_ofnode(dev), "qcom,geni-uart"))
+		return -ENOENT;
 
 	ret = geni_set_oversampling(dev);
 	if (ret < 0)
 		return ret;
 
-	/* No need to reinitialize the UART after relocation */
-	if (gd->flags & GD_FLG_RELOC)
+	/* Skip re-init after relocation if debug UART and early DM skip are not enabled */
+	if ((!CONFIG_IS_ENABLED(DEBUG_UART) && !CONFIG_IS_ENABLED(SKIP_EARLY_DM)) &&
+	    (gd->flags & GD_FLG_RELOC))
 		return 0;
 
 	geni_serial_init(dev);
@@ -596,6 +581,7 @@ static int msm_serial_ofdata_to_platdata(struct udevice *dev)
 
 static const struct udevice_id msm_serial_ids[] = {
 	{ .compatible = "qcom,geni-debug-uart" },
+	{ .compatible = "qcom,geni-uart" },
 	{ }
 };
 
@@ -634,22 +620,47 @@ static inline void _debug_uart_init(void)
 	phys_addr_t base = CONFIG_VAL(DEBUG_UART_BASE);
 
 	geni_serial_init(&init_dev);
+	writel(DEF_RX_WM, base + SE_GENI_RX_WATERMARK_REG);
 	geni_serial_baud(base, CLK_DIV, CONFIG_BAUDRATE);
 	qcom_geni_serial_start_tx(base);
+}
+
+/*
+ * The debug UART (EL2 printascii) and the DM serial device share this one
+ * GENI serial engine.  Starting a TX command while the main sequencer is
+ * still busy tramples the in-flight command: both writers then poll for
+ * IRQs their own abort already cleared, and the output dies (M_IRQ_STATUS
+ * ends up latched with M_GENI_CMD_ABORT).  Start each byte only on an
+ * idle sequencer and wait for it to finish before returning, so the
+ * other writer always sees a quiescent SE.
+ */
+static void geni_se_tx_wait_idle(phys_addr_t base)
+{
+	unsigned int timeout = 100;	/* ms; a 1-byte TX at 115200 takes ~0.1 ms */
+
+	while (readl(base + SE_GENI_STATUS) & M_GENI_CMD_ACTIVE) {
+		if (!timeout--) {
+			writel(M_GENI_CMD_ABORT, base + SE_GENI_M_CMD_CTRL_REG);
+			writel(M_CMD_ABORT_EN, base + SE_GENI_M_IRQ_CLEAR);
+			break;
+		}
+		udelay(1000);
+	}
 }
 
 static inline void _debug_uart_putc(int ch)
 {
 	phys_addr_t base = CONFIG_VAL(DEBUG_UART_BASE);
 
+	geni_se_tx_wait_idle(base);
 	writel(DEF_TX_WM, base + SE_GENI_TX_WATERMARK_REG);
-	qcom_geni_serial_setup_tx(base, 1);
-	qcom_geni_serial_poll_bit(&init_dev, SE_GENI_M_IRQ_STATUS,
-				  M_TX_FIFO_WATERMARK_EN, true);
-
-	writel(ch, base + SE_GENI_TX_FIFOn);
-	writel(M_TX_FIFO_WATERMARK_EN, base + SE_GENI_M_IRQ_CLEAR);
-	qcom_geni_serial_poll_tx_done(&init_dev);
+	writel(1, base + SE_UART_TX_TRANS_LEN);
+	writel(UART_START_TX << M_OPCODE_SHIFT, base + SE_GENI_M_CMD0);
+	writel((u32)ch, base + SE_GENI_TX_FIFOn);
+	writel(M_TX_FIFO_WATERMARK_EN | M_CMD_DONE_EN | M_CMD_ABORT_EN,
+	       base + SE_GENI_M_IRQ_CLEAR);
+	/* Leave the SE idle: EL1 resumes via eret right after this. */
+	geni_se_tx_wait_idle(base);
 }
 
 DEBUG_UART_FUNCS

@@ -706,6 +706,12 @@ enum gd_flags {
 	 * drivers shall not be called.
 	 */
 	GD_FLG_HAVE_CONSOLE = 0x8000000,
+	/**
+	 * @GD_FLG_HYP: the hypervisor's own driver-model pass is running
+	 * (dm_hyp_scan() at EL2): lists_bind_fdt() binds against the
+	 * HYP_DRIVER() linker list and ignores the pre-relocation gate.
+	 */
+	GD_FLG_HYP = 0x10000000,
 };
 
 #endif /* __ASSEMBLY__ */

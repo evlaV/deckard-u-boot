@@ -39,6 +39,7 @@ extern char __ctors_start[], __ctors_end[];
 
 extern char __efi_runtime_rel_start[], __efi_runtime_rel_stop[];
 extern char __efi_runtime_start[], __efi_runtime_stop[];
+extern char __hyp_start[], __hyp_stop[];
 
 /* function descriptor handling (if any).  Override
  * in asm/sections.h */

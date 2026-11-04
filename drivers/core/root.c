@@ -20,6 +20,7 @@
 #include <dm/device-internal.h>
 #include <dm/lists.h>
 #include <dm/of.h>
+#include <dm/ofnode.h>
 #include <dm/of_access.h>
 #include <dm/platdata.h>
 #include <dm/read.h>
@@ -272,6 +273,93 @@ int dm_extended_scan(bool pre_reloc_only)
 
 	return ret;
 }
+
+/**
+ * dm_hyp_scan() - Hyp DM pass: bind + probe `hypervisor`-tagged nodes at EL2
+ *
+ * Runs from hv_init() (EL2, before U-Boot relocation), so gd->dm_root, the
+ * DTB and pre-reloc malloc are all live, and every code/data copy in use is
+ * the link-time one.  Walks the DT like dm_scan_fdt_node() but, with
+ * GD_FLG_HYP set for the duration of the walk, binds each node carrying the
+ * `hypervisor` property through lists_bind_fdt() — which then searches the
+ * HYP_DRIVER() linker list and ignores the pre-relocation gate.  Bound
+ * devices are probed immediately; they are discarded later by EL1's
+ * initr_dm(), as hyp state lives in __hyp_data.  With GD_FLG_HYP clear no
+ * EL1 code path sees any change.
+ *
+ * @parent: parent device (root) for the devices that will be created
+ * @parent_node: node whose subnodes to scan (ofnode_root() at the top call)
+ * @taggedp: tally of `hypervisor`-tagged nodes seen
+ * @boundp: tally of tagged devices bound
+ * Return: 0 if OK (including "no hypervisor support"), -ENOSYS if there is
+ * no driver root, other -ve on bind error
+ */
+int dm_hyp_scan(struct udevice *parent, ofnode parent_node, int *taggedp,
+		int *boundp)
+{
+	int ret = 0;
+	ofnode node;
+
+	if (!IS_ENABLED(CONFIG_HYPERVISOR))
+		return 0;
+
+	if (!gd->dm_root)
+		return -ENOSYS;
+
+	if (!ofnode_valid(parent_node))
+		return 0;
+
+	gd->flags |= GD_FLG_HYP;
+
+	ofnode_for_each_subnode(node, parent_node) {
+		struct udevice *dev = NULL;
+		const char *node_name = ofnode_get_name(node);
+		int err;
+
+		if (!ofnode_is_enabled(node)) {
+			pr_debug("   - ignoring disabled device\n");
+			continue;
+		}
+
+		if (ofnode_read_bool(node, "hypervisor")) {
+			(*taggedp)++;
+
+			err = lists_bind_fdt(parent, node, &dev, NULL, true);
+			if (err) {
+				dm_warn("hyp DM: bind %s failed: %d\n",
+					node_name, err);
+				if (!ret)
+					ret = err;
+			} else if (dev) {
+				int probe_ret;
+
+				(*boundp)++;
+				printf("hyp DM: bound %s @ %s\n",
+				       dev->driver->name, node_name);
+				probe_ret = device_probe(dev);
+				printf("hyp DM: probed %s (ret %d)\n",
+				       dev->name, probe_ret);
+			} else {
+				printf("hyp DM: tagged node %s has no hyp driver\n",
+				       node_name);
+			}
+		}
+
+		/* Tagged parents may host tagged children (regulators-0 style) */
+		err = dm_hyp_scan(parent, node, taggedp, boundp);
+		if (err && !ret)
+			ret = err;
+	}
+
+	/* Top of the walk: drop the flag and report the tallies */
+	if (ofnode_equal(parent_node, ofnode_root())) {
+		gd->flags &= ~GD_FLG_HYP;
+		printf("hyp DM: %d tagged, %d bound\n", *taggedp, *boundp);
+	}
+
+	return ret;
+}
+
 #endif
 
 __weak int dm_scan_other(bool pre_reloc_only)

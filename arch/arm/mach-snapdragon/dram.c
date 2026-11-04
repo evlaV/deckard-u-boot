@@ -40,7 +40,8 @@ struct smem_ram_ptn {
 	u32 type;
 	u32 num_partitions;
 	u32 reserved[3];
-	u32 reserved2[2]; /* The struct grew by 8 bytes at some point */
+	u64 available_length;
+	// u32 reserved2[2]; /* The struct grew by 8 bytes at some point */
 } __packed;
 
 struct smem_ram_ptable {
@@ -120,7 +121,7 @@ static int qcom_parse_memory_smem(phys_addr_t *ram_end)
 		p = &ram_ptable->parts[i];
 		if (p->category != CATEGORY_SDRAM || p->type != TYPE_SYSMEM)
 			continue;
-		if (!p->size && !p->start)
+		if (!p->available_length && !p->start)
 			break;
 
 		// XXX: the start of this region is reserved for cpucp
@@ -128,7 +129,7 @@ static int qcom_parse_memory_smem(phys_addr_t *ram_end)
 			continue;
 
 		prevbl_ddr_banks[j].start = p->start;
-		prevbl_ddr_banks[j].size = p->size;
+		prevbl_ddr_banks[j].size = p->available_length;
 
 		// for booting with LCP enabled:
 		// 0x81200000 to 0x816E0000 is hyp tags

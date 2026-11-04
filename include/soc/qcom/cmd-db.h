@@ -23,9 +23,21 @@ enum cmd_db_hw_type {
 u32 cmd_db_read_addr(const char *resource_id);
 enum cmd_db_hw_type cmd_db_read_slave_id(const char *resource_id);
 const void *cmd_db_read_aux_data(const char *resource_id, size_t *len);
+bool cmd_db_ready(void);
+int cmd_db_read_name(u32 addr, char *name, int len);
+int cmd_db_init_dt(void);
 
 #else
 static inline u32 cmd_db_read_addr(const char *resource_id)
+{ return 0; }
+
+static inline bool cmd_db_ready(void)
+{ return false; }
+
+static inline int cmd_db_read_name(u32 addr, char *name, int len)
+{ return -ENODEV; }
+
+static inline int cmd_db_init_dt(void)
 { return 0; }
 
 #endif /* CONFIG_QCOM_COMMAND_DB */

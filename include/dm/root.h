@@ -9,6 +9,7 @@
 #ifndef _DM_ROOT_H_
 #define _DM_ROOT_H_
 
+#include <dm/ofnode.h>
 #include <dm/tag.h>
 
 struct udevice;
@@ -108,6 +109,25 @@ int dm_scan_fdt(bool pre_reloc_only);
  * Return: 0 if OK, -ve on error
  */
 int dm_extended_scan(bool pre_reloc_only);
+
+/**
+ * dm_hyp_scan() - Scan the device tree for hypervisor-only devices
+ *
+ * The hypervisor's private driver-model pass, run from hv_init() at EL2
+ * before the EL1 handoff: binds and probes only the nodes carrying the
+ * `hypervisor` property, via lists_bind_fdt() with GD_FLG_HYP set (which
+ * switches it to the HYP_DRIVER() linker list).  Every EL1 scan path is
+ * untouched.
+ *
+ * @parent: parent device (gd->dm_root) for the devices that will be created
+ * @parent_node: node whose subnodes to scan (ofnode_root() at the top call)
+ * @taggedp: tally of `hypervisor`-tagged nodes seen
+ * @boundp: tally of tagged devices bound
+ * Return: 0 if OK (including when CONFIG_HYPERVISOR is off), -ENOSYS if
+ * there is no driver root, other -ve on bind error
+ */
+int dm_hyp_scan(struct udevice *parent, ofnode parent_node, int *taggedp,
+		int *boundp);
 
 /**
  * dm_scan_other() - Scan for other devices

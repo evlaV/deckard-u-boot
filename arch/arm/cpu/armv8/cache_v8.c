@@ -892,6 +892,11 @@ static u64 set_one_region(u64 start, u64 size, u64 attrs, bool flag, int level)
 	u64 levelsize = 1ULL << levelshift;
 	u64 *pte = find_pte(start, level);
 
+	/* Don't panic when unmapping a page which isn't mapped */
+	if (pte_type(pte) == PTE_TYPE_FAULT && attrs == PTE_TYPE_FAULT &&
+	    size < levelsize)
+		return size;
+
 	/* Can we can just modify the current level block PTE? */
 	if (is_aligned(start, size, levelsize)) {
 		if (flag) {
@@ -1033,6 +1038,10 @@ void mmu_change_region_attr(phys_addr_t addr, size_t siz, u64 attrs)
 	flush_dcache_range(gd->arch.tlb_addr,
 			   gd->arch.tlb_addr + gd->arch.tlb_size);
 	__asm_invalidate_tlb_all();
+
+	/* If we were unmapping a region then we have nothing to make and can return. */
+	if (attrs == PTE_TYPE_FAULT)
+		return;
 
 	mmu_change_region_attr_nobreak(addr, siz, attrs);
 }

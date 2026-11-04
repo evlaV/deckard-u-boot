@@ -398,6 +398,8 @@ int ft_board_debug_fixup(void *fdt, struct bd_info *bd)
 	return 0;
 }
 
+int qcom_ft_board_setup(void *blob, struct bd_info *bd);
+
 int ft_board_setup(void *fdt, struct bd_info *bd)
 {
 	/* find or create "/chosen" node. */
@@ -542,6 +544,10 @@ int ft_board_setup(void *fdt, struct bd_info *bd)
 		deckard_log("WARNING: could not publish EEPROM board info: %d\n", ret);
 
 	ft_board_debug_fixup(fdt,bd);
+
+#if CONFIG_IS_ENABLED(HYPERVISOR)
+	qcom_ft_board_setup(fdt, bd);
+#endif
 
 	return 0;
 }
@@ -1029,7 +1035,7 @@ static int format_bootargs(char * bootargs, size_t size, const char * steamos_ef
 {
 	//TODO:gaber: can we get rid of noresume rootwait earlycon ?
 	return snprintf(bootargs, size,
-		"%s %s %s %s init=/sbin/init rauc.slot=%c noresume rootwait earlycon %s",
+		"%s %s %s %s init=/sbin/init rauc.slot=%c noresume rootwait earlycon cpuidle.off=1 nokaslr clk_ignore_unused %s",
 		steamos_efi_arg,
 		default_bootargs ? default_bootargs : "",
 		temp_bootargs ? temp_bootargs : "",

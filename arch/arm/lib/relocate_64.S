@@ -92,5 +92,10 @@ relocate_done:
 	bl	__asm_flush_dcache_range
 	bl     __asm_flush_l3_dcache
 5:	ldp	x29, x30, [sp],#32
+#if CONFIG_IS_ENABLED(HYPERVISOR)
+	mov	x1, x9
+	bl hv_start_vm
+#else
 	ret
+#endif
 ENDPROC(relocate_code)

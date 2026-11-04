@@ -6,16 +6,20 @@
 
 #define pr_fmt(fmt) "cmd-db: " fmt
 
+#include <asm/global_data.h>
 #include <asm/system.h>
 #include <dm.h>
 #include <dm/ofnode.h>
 #include <dm/device_compat.h>
+#include <linux/bitfield.h>
 #include <linux/kernel.h>
 #include <linux/types.h>
 #include <linux/ioport.h>
 #include <linux/byteorder/generic.h>
 
 #include <soc/qcom/cmd-db.h>
+
+DECLARE_GLOBAL_DATA_PTR;
 
 #define NUM_PRIORITY		2
 #define MAX_SLV_ID		8
@@ -228,6 +232,117 @@ const void *cmd_db_read_aux_data(const char *id, size_t *len)
 	return rsc_offset(rsc_hdr, ent);
 }
 
+/**
+ * cmd_db_ready() - is the command DB initialised?
+ *
+ * Return: true if cmd_db_header points at a validated database
+ */
+bool cmd_db_ready(void)
+{
+	return cmd_db_header != NULL;
+}
+
+/**
+ * cmd_db_read_name() - Reverse-map a resource address to its resource name.
+ *
+ * @addr: resource (register) address to look up
+ * @name: buffer to copy the NUL-terminated resource id into
+ * @len: size of @name
+ *
+ * Return: 0 on success, -ENODEV if no entry matches or the DB is not
+ * initialised
+ *
+ * The inverse of cmd_db_read_addr(): used to name the RPMH votes the EL2
+ * spy traps.  An entry matches on its exact address, or — for VRM
+ * resources — on VRM_ADDR(), since a VRM resource is voted through its
+ * voltage/enable/mode registers (addr + 0x0 / 0x4 / 0x8) while the DB
+ * stores the base.
+ */
+int cmd_db_read_name(u32 addr, char *name, int len)
+{
+	const struct rsc_hdr *rsc_hdr;
+	const struct entry_header *ent;
+	int i, j;
+	u32 slave = (addr >> SLAVE_ID_SHIFT) & SLAVE_ID_MASK;
+
+	if (!cmd_db_header || len < 1)
+		return -ENODEV;
+
+	for (i = 0; i < MAX_SLV_ID; i++) {
+		rsc_hdr = &cmd_db_header->header[i];
+		if (!rsc_hdr->slv_id)
+			break;
+
+		ent = rsc_to_entry_header(rsc_hdr);
+		for (j = 0; j < le16_to_cpu(rsc_hdr->cnt); j++, ent++) {
+			u32 ent_addr = le32_to_cpu(ent->addr);
+
+			if (ent_addr == addr ||
+			    (slave == CMD_DB_HW_VRM &&
+			     ((ent_addr >> SLAVE_ID_SHIFT) & SLAVE_ID_MASK) == CMD_DB_HW_VRM &&
+			     VRM_ADDR(ent_addr) == VRM_ADDR(addr))) {
+				strncpy(name, (const char *)ent->id, len - 1);
+				name[len - 1] = '\0';
+				return 0;
+			}
+		}
+	}
+
+	return -ENODEV;
+}
+EXPORT_SYMBOL_GPL(cmd_db_read_name);
+
+/**
+ * cmd_db_init_dt() - Locate + validate the command DB from the flat DTB
+ *
+ * Hyp-side entry point: callable at EL2 before relocation (from the RPMH
+ * hyp driver probe in hv_init()'s Hyp DM pass), where the DM driver
+ * qcom_cmd_db has not been bound yet.  Finds the qcom,cmd-db node in
+ * gd->fdt_blob and validates its magic, exactly like cmd_db_bind() does
+ * for the EL1 path.
+ *
+ * No mmu_map_region() here, deliberately: that call exists for EL1's
+ * stage-1 page tables (cmd-db may sit in a no-map reservation); at EL2
+ * the probe runs with the MMU off (identity), and after hyp_s1_enable()
+ * the DRAM banks — where cmd-db lives — are mapped anyway.  EL1 keeps its
+ * own bind path untouched.
+ *
+ * Return: 0 if the DB is ready, -ENOENT if the node or reg is missing,
+ * -EINVAL if the magic does not match
+ */
+int cmd_db_init_dt(void)
+{
+	const void *fdt = gd->fdt_blob;
+	fdt_size_t size;
+	struct cmd_db_header *base;
+	int node;
+
+	if (cmd_db_header)
+		return 0;
+
+	node = fdt_node_offset_by_compatible(fdt, -1, "qcom,cmd-db");
+	if (node < 0)
+		return -ENOENT;
+
+	base = (struct cmd_db_header *)
+		(phys_addr_t)ofnode_get_addr_size(offset_to_ofnode(node), "reg",
+						  &size);
+	if ((fdt_addr_t)base == FDT_ADDR_T_NONE) {
+		log_err("Failed to read Command DB base address\n");
+		return -ENOENT;
+	}
+
+	if (!cmd_db_magic_matches(base)) {
+		log_err("Invalid Command DB Magic\n");
+		return -EINVAL;
+	}
+
+	cmd_db_header = base;
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(cmd_db_init_dt);
+
 static int cmd_db_bind(struct udevice *dev)
 {
 	void __iomem *base;
@@ -248,7 +363,7 @@ static int cmd_db_bind(struct udevice *dev)
 	}
 
 	/* On SM8550/SM8650 and newer SoCs cmd-db might not be mapped */
-	//mmu_map_region((phys_addr_t)base, (phys_size_t)size, false);
+	mmu_map_region((phys_addr_t)base, (phys_size_t)size, false);
 
 	cmd_db_header = base;
 	if (!cmd_db_magic_matches(cmd_db_header)) {

@@ -66,6 +66,10 @@
 
 ENTRY(_main)
 
+	/* Terminate the frame-pointer chain. Backtraces stop here. */
+	mov	x29, #0
+	mov	x30, #0
+
 /*
  * Set up initial C runtime environment and call board_init_f(0).
  */
@@ -129,8 +133,12 @@ ENTRY(_main)
 	ldr	x9, [x18, #GD_RELOC_OFF]	/* x9 <- gd->reloc_off */
 	add	lr, lr, x9	/* new return address after relocation */
 	ldr	x0, [x18, #GD_RELOCADDR]	/* x0 <- gd->relocaddr */
+	# HYP: Setup EL1 stack pointer here
+	mov x1, sp
+	msr sp_el1, x1
 	b	relocate_code
 
+	.globl relocation_return
 relocation_return:
 
 /*

@@ -114,7 +114,13 @@
 	bootph-all;
 };
 
+&apps_smmu {
+	hypervisor-smmu;	/* EL2 drops U-Boot's stream mappings when the OS starts (hyp/smmu.c); inert at EL1 */
+};
+
 &apps_rsc {
+	hypervisor;
+	hypervisor-drv-id = <1>;
 	regulators-0 {
 		compatible = "qcom,pm8550-rpmh-regulators";
 
@@ -899,6 +905,24 @@
 	clock-frequency = <32000>;
 };
 
+/*
+ * The PMIC arbiter's debug bus, EL2's own channel to the PMICs (hyp/spmi.c): a second arbiter port,
+ * so the OS's arbiter is never touched.  The fuse word says whether the chip allows it.  The bus
+ * runs on the QDSS clock, which the hypervisor asks the AOSS for through `clocks`.  Not in the
+ * OS's device tree.
+ */
+&soc {
+	spmi_debug: spmi-debug@10b14000 {
+		compatible = "qcom,spmi-pmic-arb-debug";
+		reg = <0x0 0x10b14000 0x0 0x60>,
+		      <0x0 0x221c8784 0x0 0x4>;
+		reg-names = "core", "fuse";
+		clocks = <&aoss_qmp>;
+		clock-names = "core_clk";
+		qcom,fuse-enable-bit = <18>;
+	};
+};
+
 // nRF SPI HID
 &spi10 {
 	status = "okay";
@@ -1201,15 +1225,11 @@
 &usb_1 {
 	status = "okay";
 	bootph-all;
-};
-
-&usb_1_dwc3 {
+	hypervisor-takeover;
 	dr_mode = "otg";
 	usb-role-switch;
 	role-switch-default-mode = "peripheral";
 	vbus-supply = <&pm8550b_vbus>;
-	status = "okay";
-	bootph-all;
 };
 
 &usb_1_hsphy {

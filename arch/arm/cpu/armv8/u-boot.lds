@@ -36,6 +36,21 @@ SECTIONS
                 __efi_runtime_stop = .;
 	}
 
+	/* This needs to come before *(.text*) */
+	.hyp : {
+		__hyp_start = .;
+		*(.text.hyp*)
+		*(.rodata.hyp*)
+		*(.data.hyp*)
+		/* ld's first-match rule claims the hyp_driver linker-list
+		 * entries here, before the generic __u_boot_list section
+		 * below can; relocate_aarch64.c's [__hyp_start, __hyp_stop)
+		 * relocation skip then preserves their link-time pointers.
+		 */
+		KEEP(*(SORT(__u_boot_list_2_hyp_driver*)))
+		__hyp_stop = .;
+	}
+
 #ifdef CONFIG_MMU_PGPROT
 	.text_rest ALIGN(CONSTANT(COMMONPAGESIZE)) :
 #else

@@ -820,6 +820,8 @@ source "drivers/Kconfig"
 
 source "fs/Kconfig"
 
+source "hyp/Kconfig"
+
 source "lib/Kconfig"
 
 source "test/Kconfig"

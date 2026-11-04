@@ -57,6 +57,10 @@ int lists_bind_drivers(struct udevice *parent, bool pre_reloc_only);
  * @drv: if non-NULL, force this driver to be bound
  * @pre_reloc_only: If true, bind only nodes with special devicetree properties,
  * or drivers with the DM_FLAG_PRE_RELOC flag. If false bind all drivers.
+ * When GD_FLG_HYP is set in gd->flags the pass is the hypervisor's own:
+ * the HYP_DRIVER() (`hyp_driver`) linker list is searched instead of the
+ * EL1 `driver` list, and the pre-reloc gate is bypassed (the hyp pass runs
+ * at EL2 before relocation, where every driver is already resident).
  *
  * Return: 0 if device was bound, -EINVAL if the device tree is invalid,
  * other -ve value on error

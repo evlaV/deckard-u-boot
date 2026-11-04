@@ -1,0 +1,75 @@
+menu "Hypervisor"
+
+config HYPERVISOR
+	bool "Launch a tiny type-1 hypervisor for debugging"
+	depends on ARM64
+	help
+	  When U-Boot is launched in EL2, install a small bare
+	  metal hypervisor which can optionally take over a USB
+	  port and allow U-Boot or the kernel to be debugged.
+
+	  Inspired by (and aiming to be compatible with) m1n1.
+
+config HYP_USB
+	bool "Take the USB controller over from the guest"
+	depends on HYPERVISOR && ARCH_SNAPDRAGON
+	default y
+	select OF_BOARD_SETUP
+	select OF_LIBFDT_OVERLAY
+	help
+	  Take the board's USB controller away from the EL1 guest once it
+	  has finished with it, for the hypervisor's own debug link
+	  (scripts/USB_GADGET.md).  The controller is the DT node tagged
+	  `hypervisor-takeover`.  The guest's board setup releases its own
+	  drivers, deletes the node from the device tree it hands to the
+	  OS and issues the HV_USB_TAKEOVER hypercall; from then on a guest
+	  access to the controller's registers reads zero.
+
+config HYP_USB_HALT
+	bool "Halt the guest after the USB takeover until `boot`"
+	depends on HYP_USB
+	# default y
+	help
+	  Once the USB debug link is up, stop the guest inside its
+	  HV_USB_TAKEOVER hypercall and wait for `boot` on the hypervisor's
+	  telnet console (192.168.77.2:2323) before the OS is started, so
+	  that a GDB session or a console logger can be attached first.
+	  Without it the OS starts as soon as the link is up.
+
+config HYP_SPY_RPMH
+	bool "Demo MMIO spy on the RPMH resource state coordinator"
+	depends on HYPERVISOR
+	help
+	  Register the apps_rsc (RPMH-RSC) register region with the
+	  stage-2 MMIO watch (hyp_mmio_watch) from the RPMH hyp driver
+	  probe, and decode the guest's TCS programming - named
+	  regulator votes and all - to the console.  See
+	  drivers/soc/qcom/rpmh-rsc.c and scripts/RPMH_SPY.md.
+
+config HYP_RPMH_BCM_CAP
+	bool "Cap the guest's saturated interconnect bandwidth votes"
+	depends on HYPERVISOR
+	default y
+	help
+	  Until sync_state the OS's interconnect driver votes every
+	  bandwidth BCM at its saturated maximum.  The vote on the memory
+	  controller makes the AOP raise DDR to its top frequency, which
+	  resets the board.  Watch the apps_rsc window and clamp such
+	  votes to HYP_RPMH_BCM_CAP_VOTE.  See drivers/soc/qcom/rpmh-rsc.c.
+
+config HYP_RPMH_BCM_CAP_VOTE
+	hex "Largest bandwidth vote (x and y, 14 bits) the OS may send"
+	depends on HYP_RPMH_BCM_CAP
+	default 0x400
+
+config HYP_TEST
+	bool "Run the hypervisor self-test suite on every boot"
+	depends on HYPERVISOR
+	help
+	  Build hyp/test.c and run its cases from hv_start_vm(), at EL2,
+	  before the guest is handed control.  Every case asserts on
+	  registers, structs, return values and memory - never on console
+	  wording - and the run ends with a [HYPTEST] SUMMARY line; any
+	  failure halts the board.  Off for normal builds; scripts/test/run.sh
+	  adds it through configs/hyp-test.config.  See scripts/TESTING.md.
+endmenu

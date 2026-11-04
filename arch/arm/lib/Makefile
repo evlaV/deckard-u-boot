@@ -23,7 +23,7 @@ endif
 
 ifndef CONFIG_XPL_BUILD
 ifdef CONFIG_ARM64
-obj-y	+= relocate_64.o
+obj-y	+= relocate_aarch64.o #relocate_64.o
 else
 obj-y	+= relocate.o
 endif

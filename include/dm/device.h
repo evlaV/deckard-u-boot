@@ -405,6 +405,28 @@ struct driver {
 	ll_entry_declare(struct driver, __name, driver)
 
 /**
+ * HYP_DRIVER() - Declare a hypervisor-only U-Boot driver
+ * @__name: name of the driver
+ *
+ * Same `struct driver` as U_BOOT_DRIVER(), but placed in a separate
+ * `hyp_driver` linker list which is invisible to every EL1 consumer of the
+ * regular `driver` list (lists_bind_fdt(), dump.c, dtoc, ...). Only
+ * dm_hyp_scan() sees it: it sets GD_FLG_HYP, which makes lists_bind_fdt()
+ * search this list instead — the hypervisor's pre-relocation pass run from
+ * hv_init() at EL2.
+ *
+ * The entries land in the .hyp output section (see
+ * arch/arm/cpu/armv8/u-boot.lds), so their pointers keep their link-time
+ * addresses: relocate_aarch64.c skips relocations inside
+ * [__hyp_start, __hyp_stop), and the EL2 copy is the live one. The bind /
+ * probe functions themselves may be ordinary (non-__hyp) functions in the
+ * same .c file as the EL1 driver; only callbacks the spy calls after the
+ * EL1 handoff must be __hyp.
+ */
+#define HYP_DRIVER(__name)					\
+	ll_entry_declare(struct driver, __name, hyp_driver)
+
+/**
  * DM_DRIVER_GET() - Get a pointer to a given driver
  *
  * This is useful in code for referencing a driver at build time.
