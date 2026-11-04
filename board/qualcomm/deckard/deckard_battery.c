@@ -228,6 +228,14 @@ bool deckard_battery_is_charging_enabled(struct udevice *pm8550b)
 	return pm8550b_is_charging_enabled(pm8550b);
 }
 
+int deckard_battery_get_charger_die_temp(struct udevice *pm8550b, int *temp_mc)
+{
+	if ( !pm8550b )
+		return -ENODEV;
+
+	return pm8550b_get_die_temp(pm8550b, temp_mc);
+}
+
 int deckard_battery_ok_for_userspace( struct udevice *max17320_primary, struct udevice *max17320_external )
 {
 	if ( !max17320_primary )

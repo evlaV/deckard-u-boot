@@ -33,6 +33,7 @@
 
 void deckard_battery_prep_for_boot(struct udevice *pmk8550, struct udevice *pm8550b, struct udevice *max17320);
 bool deckard_battery_is_charging_enabled(struct udevice *pm8550b);
+int deckard_battery_get_charger_die_temp(struct udevice *pm8550b, int *temp_mc);
 
 int deckard_battery_ok_for_userspace( struct udevice *max17320_primary, struct udevice *max17320_external );
 int deckard_battery_ok_for_dsp( struct udevice *max17320_primary, struct udevice *max17320_external );

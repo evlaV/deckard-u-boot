@@ -2,6 +2,7 @@
 
 #include <power/pmic.h>
 #include <linux/delay.h>
+#include <linux/kernel.h>
 
 #define PM8550B_CHGR_BASE                                       0x2600
 #define PM8550B_SCSCPQ_PK_CHGR2_ADDR                            (PM8550B_CHGR_BASE + 0x25)
@@ -66,6 +67,50 @@
 #define PM8550B_QBG_EN_CTL_EN                 (0x80)
 #define PM8550B_QBG_EN_CTL_DIS                (0x00)
 #define PM8550B_QBG_LAST_BURST_AVG_ACC0_DATA0 (PM8550B_QBG_MAIN_BASE + 0xC0)
+
+// ADC5 Gen3 on the PMK8550 (SID 0), same SDAM as the Linux vadc@9000 node. PM8550B channels are
+// converted there by selecting SID 7. The PM8550B ADC_PBS block (0x3600) is read-only from apps.
+#define ADC5_GEN3_SDAM_BASE              0x9000
+#define ADC5_GEN3_HS                     (ADC5_GEN3_SDAM_BASE + 0x45)
+#define ADC5_GEN3_HS_READY               BIT(0)
+#define ADC5_GEN3_STATUS1                (ADC5_GEN3_SDAM_BASE + 0x46)
+#define ADC5_GEN3_STATUS1_CONV_FAULT     BIT(7)
+#define ADC5_GEN3_EOC_STS                (ADC5_GEN3_SDAM_BASE + 0x4A)
+#define ADC5_GEN3_EOC_CHAN_0             BIT(0)
+#define ADC5_GEN3_EOC_CLR                (ADC5_GEN3_SDAM_BASE + 0x4B)
+#define ADC5_GEN3_CONV_ERR_CLR           (ADC5_GEN3_SDAM_BASE + 0x4E)
+#define ADC5_GEN3_CONV_ERR_CLR_REQ       BIT(0)
+#define ADC5_GEN3_SID                    (ADC5_GEN3_SDAM_BASE + 0x4F)
+#define ADC5_GEN3_PERPH_CH               (ADC5_GEN3_SDAM_BASE + 0x50)
+#define ADC5_GEN3_CHAN_CONV_REQ          BIT(7) // channel 0, immediate conversion
+#define ADC5_GEN3_TIMER_SEL              (ADC5_GEN3_SDAM_BASE + 0x51)
+#define ADC5_GEN3_TIME_IMMEDIATE         0x01
+#define ADC5_GEN3_DIG_PARAM              (ADC5_GEN3_SDAM_BASE + 0x52)
+#define ADC5_GEN3_DIG_PARAM_MASK         (0x3 << 4 | 0x3 << 2) // CAL_SEL, DEC_RATIO_SEL
+#define ADC5_GEN3_DIG_PARAM_ABS_CAL      (2 << 4)
+#define ADC5_GEN3_DIG_PARAM_DEC_1360     (2 << 2)
+#define ADC5_GEN3_FAST_AVG               (ADC5_GEN3_SDAM_BASE + 0x53)
+#define ADC5_GEN3_FAST_AVG_EN            BIT(7) // 1 sample
+#define ADC5_GEN3_ADC_CH_SEL_CTL         (ADC5_GEN3_SDAM_BASE + 0x54)
+#define ADC5_GEN3_DELAY_CTL              (ADC5_GEN3_SDAM_BASE + 0x55) // 0 = 15 us settle
+#define ADC5_GEN3_CH0_DATA0              (ADC5_GEN3_SDAM_BASE + 0x5C)
+#define ADC5_GEN3_CH0_DATA1              (ADC5_GEN3_SDAM_BASE + 0x5D)
+#define ADC5_GEN3_CONV_REQ               (ADC5_GEN3_SDAM_BASE + 0xE5)
+#define ADC5_GEN3_CONV_REQ_REQ           BIT(0)
+// PBS can take up to 15 ms to hand over the SDAM, and up to 500 ms for a conversion with retries
+#define ADC5_GEN3_HS_TIMEOUT_US          15000
+#define ADC5_GEN3_CONV_TIMEOUT_US        501000
+#define ADC5_GEN3_POLL_US                100
+
+#define PM8550B_SID                      7
+#define PM8550B_ADC5_GEN3_CHG_TEMP       0x10 // charger die temp
+
+// ADC voltage: code * 1.875 V / 0x70E4, codes above 0x7FFF are below 0 V
+#define ADC5_GEN3_VREF_UV                1875000LL
+#define ADC5_GEN3_FULL_SCALE_CODE        0x70E4
+#define ADC5_GEN3_MAX_CODE               0x7FFF
+#define ADC5_GEN3_DATA_INVALID           0x8000
+// Charger die temp: T(C) = V / 3.3 mV - 277.12 (qcom_vadc_scale_hw_pm7_chg_temp)
 
 // NOTE These are 1s currents
 enum pre_charge_current
@@ -353,6 +398,133 @@ int pm8550b_set_ship_mode(struct udevice *pmic, bool shipmode)
 		printf("Failed to set pm8550b ship mode\n");
 		return ret;
 	}
+
+	return 0;
+}
+
+static int adc5_gen3_poll(struct udevice *adc, uint reg, uint mask, uint val, int timeout_us)
+{
+	int ret, i;
+
+	for (i = 0; i < timeout_us / ADC5_GEN3_POLL_US; i++) {
+		ret = pmic_reg_read(adc, reg);
+		if (ret < 0 || (ret & mask) == val)
+			return ret;
+		udelay(ADC5_GEN3_POLL_US);
+	}
+
+	return -ETIMEDOUT;
+}
+
+/// @brief One polled ADC5 Gen3 conversion, following adc5_gen3_do_conversion() in Linux.
+/// @param adc PMK8550
+/// @param sid PMIC the channel belongs to
+/// @param channel ADC5 Gen3 channel number
+/// @param code raw ADC code
+/// @return 0 on success, negative error code on failure
+static int adc5_gen3_read_code(struct udevice *adc, uint sid, uint channel, uint16_t *code)
+{
+	int ret, lsb, msb;
+
+	// Wait for PBS to hand the SDAM over
+	ret = adc5_gen3_poll(adc, ADC5_GEN3_HS, 0xFF, ADC5_GEN3_HS_READY, ADC5_GEN3_HS_TIMEOUT_US);
+	if (ret >= 0)
+		ret = adc5_gen3_poll(adc, ADC5_GEN3_CONV_REQ, 0xFF, 0, ADC5_GEN3_HS_TIMEOUT_US);
+	if (ret < 0)
+		return ret;
+
+	ret = pmic_reg_read(adc, ADC5_GEN3_DIG_PARAM);
+	if (ret < 0)
+		return ret;
+	ret = (ret & ~ADC5_GEN3_DIG_PARAM_MASK) | ADC5_GEN3_DIG_PARAM_ABS_CAL | ADC5_GEN3_DIG_PARAM_DEC_1360;
+
+	ret = pmic_reg_write(adc, ADC5_GEN3_DIG_PARAM, ret);
+	if (!ret)
+		ret = pmic_reg_write(adc, ADC5_GEN3_SID, sid & 0xF);
+	if (!ret)
+		ret = pmic_reg_write(adc, ADC5_GEN3_PERPH_CH, ADC5_GEN3_CHAN_CONV_REQ);
+	if (!ret)
+		ret = pmic_reg_write(adc, ADC5_GEN3_TIMER_SEL, ADC5_GEN3_TIME_IMMEDIATE);
+	if (!ret)
+		ret = pmic_reg_write(adc, ADC5_GEN3_FAST_AVG, ADC5_GEN3_FAST_AVG_EN);
+	if (!ret)
+		ret = pmic_reg_write(adc, ADC5_GEN3_ADC_CH_SEL_CTL, channel);
+	if (!ret)
+		ret = pmic_reg_write(adc, ADC5_GEN3_DELAY_CTL, 0);
+	if (!ret)
+		ret = pmic_reg_write(adc, ADC5_GEN3_CONV_REQ, ADC5_GEN3_CONV_REQ_REQ);
+	if (ret)
+		return ret;
+
+	// Linux waits for the SDAM interrupt, which fires on channel 0 EOC
+	ret = adc5_gen3_poll(adc, ADC5_GEN3_EOC_STS, ADC5_GEN3_EOC_CHAN_0, ADC5_GEN3_EOC_CHAN_0,
+			     ADC5_GEN3_CONV_TIMEOUT_US);
+	if (ret < 0)
+		return ret;
+
+	ret = pmic_reg_read(adc, ADC5_GEN3_STATUS1);
+	if (ret < 0)
+		return ret;
+	if (ret & ADC5_GEN3_STATUS1_CONV_FAULT) {
+		printf("ADC5 conversion fault: 0x%02x\n", ret);
+		pmic_reg_write(adc, ADC5_GEN3_CONV_ERR_CLR, ADC5_GEN3_CONV_ERR_CLR_REQ);
+		pmic_reg_write(adc, ADC5_GEN3_PERPH_CH, 0);
+		pmic_reg_write(adc, ADC5_GEN3_CONV_REQ, ADC5_GEN3_CONV_REQ_REQ);
+		return -EIO;
+	}
+
+	lsb = pmic_reg_read(adc, ADC5_GEN3_CH0_DATA0);
+	msb = pmic_reg_read(adc, ADC5_GEN3_CH0_DATA1);
+
+	// Clear EOC. PERPH_CH = 0 tells PBS the request is only a status clear.
+	ret = pmic_reg_write(adc, ADC5_GEN3_EOC_CLR, ADC5_GEN3_EOC_CHAN_0);
+	if (!ret)
+		ret = pmic_reg_write(adc, ADC5_GEN3_PERPH_CH, 0);
+	if (!ret)
+		ret = pmic_reg_write(adc, ADC5_GEN3_CONV_REQ, ADC5_GEN3_CONV_REQ_REQ);
+
+	if (lsb < 0 || msb < 0)
+		return lsb < 0 ? lsb : msb;
+	if (ret)
+		return ret;
+
+	*code = (msb << 8) | lsb;
+	if (*code == ADC5_GEN3_DATA_INVALID)
+		return -EINVAL;
+
+	return 0;
+}
+
+/// @brief Read the charger die temperature (CHG_TEMP) through the PMK8550 ADC5 Gen3.
+/// @param pmic PM8550B, only used for error checking. The conversion runs on the PMK8550.
+/// @param temp_mc die temperature in milli-degrees C
+/// @return 0 on success, negative error code on failure
+int pm8550b_get_die_temp(struct udevice *pmic, int *temp_mc)
+{
+	struct udevice *pmk8550;
+	uint16_t        code;
+	int64_t         uv;
+	int             ret;
+
+	if (!pmic)
+		return -ENODEV;
+
+	ret = pmic_get("pmic@0", &pmk8550);
+	if (ret != 0) {
+		printf("Failed to Find PMK8550\n");
+		return ret;
+	}
+
+	ret = adc5_gen3_read_code(pmk8550, PM8550B_SID, PM8550B_ADC5_GEN3_CHG_TEMP, &code);
+	if (ret) {
+		printf("Failed to Read PM8550B Die Temp: %d\n", ret);
+		return ret;
+	}
+
+	if (code > ADC5_GEN3_MAX_CODE)
+		code = 0;
+	uv = (int64_t)code * ADC5_GEN3_VREF_UV / ADC5_GEN3_FULL_SCALE_CODE;
+	*temp_mc = (int)((30303LL * uv - 27712LL * 1000000) / 100000);
 
 	return 0;
 }
