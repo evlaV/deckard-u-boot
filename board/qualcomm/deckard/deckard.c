@@ -36,6 +36,7 @@
 #include "smb1510.h"
 #include "pmk8550.h"
 #include <string.h>
+#include <mmc.h>
 
 #include "deckard.h"
 #include "deckard_adsp.h"
@@ -94,6 +95,9 @@ static void deckard_log_argv(const char *tag, int argc, char *const argv[])
 static int deckard_efi_setup(void *ctx, struct event *event)
 {
 	efi_status_t ret;
+
+	/* Initialise MMC here rather than during board_r so we don't touch it in the regular boot flow. */
+	mmc_initialize(gd->bd);
 
 	/* Get the EFI subsystem up and running! */
 	ret = efi_init_obj_list();
