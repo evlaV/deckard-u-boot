@@ -281,6 +281,8 @@ int misc_init_r(void)
 	g_boot_intention = calc_boot_intention( &g_deckard_devices );
 	deckard_log( "boot_intention: %s\n", boot_intention_to_string( g_boot_intention ) );
 
+	deckard_update_fan( &g_deckard_devices, g_boot_intention );
+
 	// Set LED Color
 	LedColor ledColor = get_led_color_for_boot_intention( &g_deckard_devices, g_boot_intention );
 	deckard_setledcolor( ledColor, &g_deckard_devices );
@@ -832,6 +834,10 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 
 			char die_temp_str[16] = "n/a";
 			int die_temp_mc;
+
+			// Follows USB while waiting
+			deckard_update_fan( pdevices, boot_intention );
+
 			if ( !deckard_battery_get_charger_die_temp(pdevices->pm8550b, &die_temp_mc) )
 			{
 				int die_temp_dc = die_temp_mc / 100;
@@ -1264,6 +1270,8 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 	// This is to workaround an incomplete hand-off implementation, where we (as of 12/11/25)
 	// need to allow the kernel to turn the display on itself (vs a 'hot transfer')
 	display_turn_off();
+
+	deckard_update_fan( &g_deckard_devices, BOOT_INTENTION_START_USERSPACE );
 
     // Attempt to launch the kernel.  If this succeeds, we now leave uboot and enter kernel code
 	deckard_log("**********   ATTEMPTING TO BOOT KERNEL ********\n");

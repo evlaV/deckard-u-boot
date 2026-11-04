@@ -25,6 +25,7 @@
 #include <fs.h>
 
 #include "deckard_disk.h"
+#include "slg4ax46073v.h"
 
 #define DECKARD_FASTBOOT_DUMMY_SERIAL_NUMB "123456789"
 
@@ -457,6 +458,14 @@ int deckard_setup_devices( deckard_devices_t * pdevices )
 	led_get_by_label( "green", &pdevices->led_green );
 	led_get_by_label( "blue", &pdevices->led_blue );
 
+	// Fan controller. Probing resets it, in case the kernel left it running at full speed
+	ret = slg4ax46073v_get( &pdevices->fan );
+	if (ret != 0) {
+		deckard_log("ERROR: Failed to find fan controller: %d\n", ret);
+		pdevices->fan = NULL;
+		nerror = 1;
+	}
+
 	if ( pdevices->pmk8550 )
 	{
 		// TODO: does this have side-effects? Should we check the return values?
@@ -486,6 +495,30 @@ int deckard_setup_devices( deckard_devices_t * pdevices )
 	}
 
 	return nerror;
+}
+
+void deckard_set_fan_enabled( deckard_devices_t * pdevices, bool enable )
+{
+	if ( !pdevices->fan )
+		return;
+
+	int ret = slg4ax46073v_set_enabled( pdevices->fan, enable );
+	if ( ret )
+	{
+		deckard_log( "ERROR: Failed to set fan enable: %d\n", ret );
+		return;
+	}
+
+	if ( pdevices->fan_on != enable )
+		deckard_log( "fan: %s\n", enable ? "on" : "off" );
+	pdevices->fan_on = enable;
+}
+
+void deckard_update_fan( deckard_devices_t * pdevices, boot_intention_t boot_intention )
+{
+	bool usb_connected = pdevices->pm8550b && deckard_battery_is_charging_enabled( pdevices->pm8550b );
+
+	deckard_set_fan_enabled( pdevices, usb_connected || boot_intention == BOOT_INTENTION_START_USERSPACE );
 }
 
 void deckard_setledcolor( LedColor color, deckard_devices_t * pdevices )

@@ -65,6 +65,8 @@ typedef struct
 	struct udevice *btn_vol_down;
 	struct udevice *btn_vol_up;
 	struct udevice *btn_select;
+	struct udevice *fan; // slg4ax46073v fan controller
+	bool fan_on;
 } deckard_devices_t;
 
 // Normal physical uart serial port
@@ -99,6 +101,9 @@ LedColor get_led_color_for_boot_intention( deckard_devices_t * pdevices, boot_in
 boot_intention_t calc_boot_intention( deckard_devices_t * pdevices );
 
 void deckard_setledcolor( LedColor color, deckard_devices_t * pdevices );
+void deckard_set_fan_enabled( deckard_devices_t * pdevices, bool enable );
+// Fan on when USB is connected or when booting to userspace, where the kernel fan driver takes over
+void deckard_update_fan( deckard_devices_t * pdevices, boot_intention_t boot_intention );
 bool deckard_factory_mode_enabled( void );
 bool deckard_adb_mode_enabled( void );
 bool deckard_pon_trigger_smpl( void );

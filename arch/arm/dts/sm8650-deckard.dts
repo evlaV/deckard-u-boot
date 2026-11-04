@@ -596,6 +596,14 @@
         status      = "okay";
 	};
 
+	// FAN_I2C. U-Boot resets the controller on probe and only drives the enable, which runs the
+	// fan at the controller's default speed; the kernel driver takes over speed control
+	fan_controller: slg4ax46073v@8 {
+		compatible = "silego,slg4ax46073v";
+		reg = <0x08>;
+		en-gpios = <&tlmm 138 GPIO_ACTIVE_HIGH>;
+		status = "okay";
+	};
 };
 
 &i2c5 {
