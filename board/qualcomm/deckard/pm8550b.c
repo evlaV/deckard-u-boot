@@ -2,6 +2,7 @@
 
 #include <power/pmic.h>
 #include <linux/delay.h>
+#include <linux/kernel.h>
 
 #define PM8550B_CHGR_BASE                                       0x2600
 #define PM8550B_SCSCPQ_PK_CHGR2_ADDR                            (PM8550B_CHGR_BASE + 0x25)
@@ -66,6 +67,35 @@
 #define PM8550B_QBG_EN_CTL_EN                 (0x80)
 #define PM8550B_QBG_EN_CTL_DIS                (0x00)
 #define PM8550B_QBG_LAST_BURST_AVG_ACC0_DATA0 (PM8550B_QBG_MAIN_BASE + 0xC0)
+
+#define PM8550B_MISC_BASE                0x2C00
+#define PM8550B_MISC_DIE_TEMP_CH_ID      (PM8550B_MISC_BASE + 0xA2) // ADC channel the charger uses for die temp
+#define PM8550B_MISC_DIE_TEMP_CH_DEFAULT 0x10
+
+// ADC conversion request peripheral, shared with PBS
+#define PM8550B_ADC_PBS_BASE             0x3600
+#define PM8550B_ADC_PBS_STATUS1          (PM8550B_ADC_PBS_BASE + 0x08)
+#define PM8550B_ADC_PBS_STATUS1_EOC      BIT(0)
+#define PM8550B_ADC_PBS_ADC_DIG_PARAM    (PM8550B_ADC_PBS_BASE + 0x42)
+#define PM8550B_ADC_PBS_DEC_RATIO_LONG   (2 << 2)
+#define PM8550B_ADC_PBS_CAL_SEL_ABS      (2 << 4)
+#define PM8550B_ADC_PBS_FAST_AVG_CTL     (PM8550B_ADC_PBS_BASE + 0x43)
+#define PM8550B_ADC_PBS_ADC_CH_SEL_CTL   (PM8550B_ADC_PBS_BASE + 0x44)
+#define PM8550B_ADC_PBS_DELAY_CTL        (PM8550B_ADC_PBS_BASE + 0x45)
+#define PM8550B_ADC_PBS_EN_CTL1          (PM8550B_ADC_PBS_BASE + 0x46)
+#define PM8550B_ADC_PBS_EN_CTL1_ADC_EN   BIT(7)
+#define PM8550B_ADC_PBS_CONV_REQ         (PM8550B_ADC_PBS_BASE + 0x47)
+#define PM8550B_ADC_PBS_CONV_REQ_REQ     BIT(7)
+#define PM8550B_ADC_PBS_DATA0            (PM8550B_ADC_PBS_BASE + 0x50)
+#define PM8550B_ADC_PBS_DATA1            (PM8550B_ADC_PBS_BASE + 0x51)
+#define PM8550B_ADC_PBS_CONV_TIMEOUT_US  50000
+
+// ADC voltage: DATA / 115600 * 7.5 V
+#define PM8550B_ADC_FULL_SCALE_UV        7500000LL
+#define PM8550B_ADC_FULL_SCALE_CODE      115600
+// Charger die temp sensor: Vtemp = 910 mV + 3.4 mV/C * T (HRD, DIE_TEMP_H_THD)
+#define PM8550B_DIE_TEMP_OFFSET_UV       910000
+#define PM8550B_DIE_TEMP_UV_PER_C        3400
 
 // NOTE These are 1s currents
 enum pre_charge_current
@@ -355,6 +385,88 @@ int pm8550b_set_ship_mode(struct udevice *pmic, bool shipmode)
 	}
 
 	return 0;
+}
+
+/// @brief Read the charger die temperature with a one-shot ADC conversion.
+///        The ADC_PBS request registers are shared with PBS, so they are restored afterwards.
+/// @param pmic
+/// @param temp_mc die temperature in milli-degrees C
+/// @return 0 on success, negative error code on failure
+int pm8550b_get_die_temp(struct udevice *pmic, int *temp_mc)
+{
+	static const uint saved_regs[] = {
+		PM8550B_ADC_PBS_ADC_DIG_PARAM,
+		PM8550B_ADC_PBS_FAST_AVG_CTL,
+		PM8550B_ADC_PBS_ADC_CH_SEL_CTL,
+		PM8550B_ADC_PBS_DELAY_CTL,
+		PM8550B_ADC_PBS_EN_CTL1,
+	};
+	int     saved[ARRAY_SIZE(saved_regs)];
+	uint8_t channel = PM8550B_MISC_DIE_TEMP_CH_DEFAULT;
+	int     ret, i, lsb, msb;
+	int64_t uv;
+
+	ret = pmic_reg_read(pmic, PM8550B_MISC_DIE_TEMP_CH_ID);
+	if (ret > 0)
+		channel = ret;
+
+	for (i = 0; i < ARRAY_SIZE(saved_regs); i++) {
+		saved[i] = pmic_reg_read(pmic, saved_regs[i]);
+		if (saved[i] < 0) {
+			printf("Failed to Read PM8550B ADC\n");
+			return saved[i];
+		}
+	}
+
+	ret = pmic_reg_write(pmic, PM8550B_ADC_PBS_ADC_DIG_PARAM,
+			     PM8550B_ADC_PBS_CAL_SEL_ABS | PM8550B_ADC_PBS_DEC_RATIO_LONG);
+	if (!ret)
+		ret = pmic_reg_write(pmic, PM8550B_ADC_PBS_FAST_AVG_CTL, 0);
+	if (!ret)
+		ret = pmic_reg_write(pmic, PM8550B_ADC_PBS_ADC_CH_SEL_CTL, channel);
+	if (!ret)
+		ret = pmic_reg_write(pmic, PM8550B_ADC_PBS_DELAY_CTL, 0);
+	if (!ret)
+		ret = pmic_reg_write(pmic, PM8550B_ADC_PBS_EN_CTL1, PM8550B_ADC_PBS_EN_CTL1_ADC_EN);
+	if (!ret)
+		ret = pmic_reg_write(pmic, PM8550B_ADC_PBS_CONV_REQ, PM8550B_ADC_PBS_CONV_REQ_REQ);
+	if (ret)
+		goto restore;
+
+	for (i = 0; i < PM8550B_ADC_PBS_CONV_TIMEOUT_US / 100; i++) {
+		ret = pmic_reg_read(pmic, PM8550B_ADC_PBS_STATUS1);
+		if (ret < 0 || (ret & PM8550B_ADC_PBS_STATUS1_EOC))
+			break;
+		udelay(100);
+	}
+	if (ret < 0)
+		goto restore;
+	if (!(ret & PM8550B_ADC_PBS_STATUS1_EOC)) {
+		ret = -ETIMEDOUT;
+		goto restore;
+	}
+
+	lsb = pmic_reg_read(pmic, PM8550B_ADC_PBS_DATA0);
+	msb = pmic_reg_read(pmic, PM8550B_ADC_PBS_DATA1);
+	if (lsb < 0 || msb < 0) {
+		ret = lsb < 0 ? lsb : msb;
+		goto restore;
+	}
+
+	// DATA[15:0] is 2's complement
+	uv = (int64_t)(int16_t)((msb << 8) | lsb) * PM8550B_ADC_FULL_SCALE_UV / PM8550B_ADC_FULL_SCALE_CODE;
+	*temp_mc = (int)((uv - PM8550B_DIE_TEMP_OFFSET_UV) * 1000 / PM8550B_DIE_TEMP_UV_PER_C);
+	ret = 0;
+
+restore:
+	// Restore in reverse order, so EN_CTL1 goes back first
+	for (i = ARRAY_SIZE(saved_regs) - 1; i >= 0; i--)
+		pmic_reg_write(pmic, saved_regs[i], saved[i]);
+
+	if (ret)
+		printf("Failed to Read PM8550B Die Temp: %d\n", ret);
+
+	return ret;
 }
 
 int pm8550b_disable_typec_charging(struct udevice *pmic)

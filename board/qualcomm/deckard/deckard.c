@@ -21,6 +21,7 @@
 #include <asm/global_data.h>
 #include <fdt_support.h>
 #include <linux/delay.h>
+#include <linux/kernel.h>
 #include <button.h>
 #include <power/pmic.h>
 #include <command.h>
@@ -829,6 +830,15 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 		{
 			deckard_infrequent_loop_counter = 10;
 
+			char die_temp_str[16] = "n/a";
+			int die_temp_mc;
+			if ( !deckard_battery_get_charger_die_temp(pdevices->pm8550b, &die_temp_mc) )
+			{
+				int die_temp_dc = die_temp_mc / 100;
+				snprintf( die_temp_str, sizeof(die_temp_str), "%s%ld.%ldC", die_temp_dc < 0 ? "-" : "",
+						abs(die_temp_dc) / 10, abs(die_temp_dc) % 10 );
+			}
+
 			// Print out battery status
 			if ( adsp_started )
 			{
@@ -839,8 +849,10 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 				else
 					qph_str = qph_state_str[adsp_state.qph_state];
 
-				deckard_log_overwrite( "Battery: %d%% PDO: %uV @ %umA %s ~%dW", adsp_state.fuel_gauge_internal, adsp_state.pdo_volt / 1000, adsp_state.pdo_cur,
-							qph_str, ((int)adsp_state.pdo_volt * adsp_state.usb_current) / 1000000 );
+
+
+				deckard_log_overwrite( "Battery: %d%% PDO: %uV @ %umA %s ~%dW PM8550B die: %s", adsp_state.fuel_gauge_internal, adsp_state.pdo_volt / 1000, adsp_state.pdo_cur,
+							qph_str, ((int)adsp_state.pdo_volt * adsp_state.usb_current) / 1000000, die_temp_str );
 				fflush(stdout);
 			}
 			else
@@ -848,7 +860,7 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 				int soc = deckard_battery_get_capacity(pdevices->max17320);
 				int avg_vcell = deckard_battery_get_avg_vcell(pdevices->max17320);
 				int avg_current = deckard_battery_get_avg_current(pdevices->max17320);
-				deckard_log_overwrite( "Battery: %d%%, %dmV, %dmA", soc,avg_vcell,avg_current );
+				deckard_log_overwrite( "Battery: %d%%, %dmV, %dmA, PM8550B die: %s", soc,avg_vcell,avg_current,die_temp_str );
 				fflush(stdout);
 			}
 
