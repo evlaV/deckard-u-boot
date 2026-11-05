@@ -28,6 +28,7 @@ int pm8550b_disable_typec_charging(struct udevice *pmic);
 int pm8550b_pause_charging(struct udevice *pmic, bool pause);
 int pm8550b_set_ship_mode(struct udevice *pmic, bool shipmode);
 int pm8550b_get_die_temp(struct udevice *pmic, int *temp_mc);
+int pm8550b_get_pmic_die_temp(struct udevice *pmic, int *temp_mc);
 
 /**
  * enum pm8550b_board_therm - board thermistors read through the PMK8550 ADC
@@ -49,6 +50,7 @@ int pm8550b_get_board_therm_temp(struct udevice *pmic, enum pm8550b_board_therm 
  * @temp_range: MISC_TEMP_RANGE_STATUS (0x2C08), see PM8550B_TEMP_RANGE_*
  * @die_temp: MISC_DIE_TEMP_STATUS (0x2C09), see PM8550B_DIE_TEMP_*
  * @die_temp_shdn_cfg: MISC_DIE_TEMP_SHDN_CFG (0x2C61), reset and shutdown thresholds
+ * @die_temp_ch_id: MISC_DIE_TEMP_CH_ID (0x2CA2), ADC channel the protection uses (0x10 CHG_TEMP)
  * @chg_rt: CHGR_CHG_RT_STS (0x26B0), see PM8550B_CHG_STS_*
  * @chg_lt: CHGR_CHG_LT_STS (0x26B1), latched copy of @chg_rt
  * @usb_rt: CHGR_USB_RT_STS (0x26B2), see PM8550B_USB_STS_*
@@ -60,6 +62,7 @@ struct pm8550b_temp_status {
 	uint8_t temp_range;
 	uint8_t die_temp;
 	uint8_t die_temp_shdn_cfg;
+	uint8_t die_temp_ch_id;
 	uint8_t chg_rt;
 	uint8_t chg_lt;
 	uint8_t usb_rt;

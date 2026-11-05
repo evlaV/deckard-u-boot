@@ -82,6 +82,7 @@
 #define PM8550B_MISC_TEMP_RANGE_STATUS   (PM8550B_MISC_BASE + 0x08)
 #define PM8550B_MISC_DIE_TEMP_STATUS     (PM8550B_MISC_BASE + 0x09)
 #define PM8550B_MISC_DIE_TEMP_SHDN_CFG   (PM8550B_MISC_BASE + 0x61)
+#define PM8550B_MISC_DIE_TEMP_CH_ID      (PM8550B_MISC_BASE + 0xA2) // ADC channel the protection uses
 
 // ADC5 Gen3 on the PMK8550 (SID 0), same SDAM as the Linux vadc@9000 node. PM8550B channels are
 // converted there by selecting SID 7. The PM8550B ADC_PBS block (0x3600) is read-only from apps.
@@ -123,6 +124,7 @@
 #define PM8550_SID                       1
 #define PM8550_ADC5_GEN3_AMUX_THM2_100K_PU            0x45
 #define PM8550B_SID                      7
+#define PM8550B_ADC5_GEN3_DIE_TEMP       0x03 // PMIC die temp, pm8550b_die_temp in Linux
 #define PM8550B_ADC5_GEN3_CHG_TEMP       0x10 // charger die temp
 #define PM8550B_ADC5_GEN3_AMUX_THM4_USB_THERM_100K_PU 0x47
 
@@ -319,6 +321,22 @@ static const struct adc5_map_pt adc5_map_100k[] = {
 	{ 2560, 128000 },
 	{ 2489, 129024 },
 	{ 2420, 130048 }
+};
+
+// PMIC die temp, voltage in uV to temperature, adcmap7_die_temp in qcom-vadc-common.c
+static const struct adc5_map_pt adc5_map_die_temp[] = {
+	{ 857300, 160000 },
+	{ 820100, 140000 },
+	{ 782500, 120000 },
+	{ 744600, 100000 },
+	{ 706400, 80000 },
+	{ 667900, 60000 },
+	{ 629300, 40000 },
+	{ 590500, 20000 },
+	{ 551500, 0 },
+	{ 512400, -20000 },
+	{ 473100, -40000 },
+	{ 433700, -60000 },
 };
 
 /**
@@ -778,6 +796,41 @@ static int adc5_map_temp(const struct adc5_map_pt *pts, int size, s32 input)
 				    (pts[i].x - pts[i - 1].x));
 }
 
+/// @brief Read the PM8550B die temperature (DIE_TEMP, channel 0x03) through the PMK8550 ADC5 Gen3.
+/// This is the sensor the ADSP QPH2 limit uses, not CHG_TEMP.
+/// @param pmic PM8550B, only used for error checking. The conversion runs on the PMK8550.
+/// @param temp_mc die temperature in milli-degrees C
+/// @return 0 on success, negative error code on failure
+int pm8550b_get_pmic_die_temp(struct udevice *pmic, int *temp_mc)
+{
+	struct udevice *pmk8550;
+	uint16_t        code;
+	int64_t         uv;
+	int             ret;
+
+	if (!pmic)
+		return -ENODEV;
+
+	ret = pmic_get("pmic@0", &pmk8550);
+	if (ret != 0) {
+		printf("Failed to Find PMK8550\n");
+		return ret;
+	}
+
+	ret = adc5_gen3_read_code(pmk8550, PM8550B_SID, PM8550B_ADC5_GEN3_DIE_TEMP,
+				  ADC5_GEN3_DIG_PARAM_ABS_CAL, ADC5_GEN3_HW_SETTLE_15US, &code);
+	if (ret)
+		return ret;
+
+	// qcom_vadc7_scale_hw_calib_die_temp()
+	if (code > ADC5_GEN3_MAX_CODE)
+		code = 0;
+	uv = (int64_t)code * ADC5_GEN3_VREF_UV / ADC5_GEN3_FULL_SCALE_CODE;
+	*temp_mc = adc5_map_temp(adc5_map_die_temp, ARRAY_SIZE(adc5_map_die_temp), (s32)uv);
+
+	return 0;
+}
+
 /// @brief Read a board thermistor through the PMK8550 ADC5 Gen3.
 /// @param pmic PM8550B, only used for error checking. The conversion runs on the PMK8550.
 /// @param therm thermistor to read
@@ -834,6 +887,7 @@ int pm8550b_get_temp_status(struct udevice *pmic, struct pm8550b_temp_status *st
 		PM8550B_MISC_TEMP_RANGE_STATUS,
 		PM8550B_MISC_DIE_TEMP_STATUS,
 		PM8550B_MISC_DIE_TEMP_SHDN_CFG,
+		PM8550B_MISC_DIE_TEMP_CH_ID,
 		PM8550B_CHGR_CHG_RT_STS,
 		PM8550B_CHGR_CHG_LT_STS,
 		PM8550B_CHGR_USB_RT_STS,
@@ -842,7 +896,7 @@ int pm8550b_get_temp_status(struct udevice *pmic, struct pm8550b_temp_status *st
 		PM8550B_CHGR_TEMP_LT_STS,
 	};
 	uint8_t *vals[] = {
-		&sts->temp_range, &sts->die_temp, &sts->die_temp_shdn_cfg,
+		&sts->temp_range, &sts->die_temp, &sts->die_temp_shdn_cfg, &sts->die_temp_ch_id,
 		&sts->chg_rt, &sts->chg_lt, &sts->usb_rt, &sts->usb_lt,
 		&sts->temp_rt, &sts->temp_lt,
 	};
