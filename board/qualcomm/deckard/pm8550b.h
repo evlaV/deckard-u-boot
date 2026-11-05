@@ -32,6 +32,23 @@ int pm8550b_get_pmic_die_temp(struct udevice *pmic, int *temp_mc);
 int pm8550b_get_vref_1p25(struct udevice *pmic, int *uv, uint16_t *raw_code);
 
 /**
+ * struct pm8550b_adc_refs - PM8550B ADC reference channels, raw codes
+ * @gnd: REF_GND (0x00), absolute calibration, should be 0
+ * @vref_1p25: 1P25VREF (0x01), absolute calibration, should be 1.25 V (0x4B43)
+ * @vref_vadc: VREF_VADC (0x02), absolute calibration, should be 1.875 V (0x70E4)
+ * @vref_vadc_ratio: VREF_VADC (0x02), ratiometric calibration, the ratiometric full scale
+ */
+struct pm8550b_adc_refs {
+	uint16_t gnd;
+	uint16_t vref_1p25;
+	uint16_t vref_vadc;
+	uint16_t vref_vadc_ratio;
+};
+
+int pm8550b_get_adc_refs(struct udevice *pmic, struct pm8550b_adc_refs *refs);
+int pm8550b_adc_code_to_uv(uint16_t code);
+
+/**
  * enum pm8550b_board_therm - board thermistors read through the PMK8550 ADC
  * @PM8550B_BOARD_THERM_40PIN_CONNECTOR: PM8550 AMUX_THM2, pcba_at_40pin_connector (SDM skin, RT507)
  * @PM8550B_BOARD_THERM_HEAT_SINK_FINS: PM8550B USB_THERM, pcba_at_heat_sink_fins

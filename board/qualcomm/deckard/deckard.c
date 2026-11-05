@@ -85,6 +85,31 @@ static void deckard_log_pm8550b_status( struct udevice * pm8550b )
 		!!(sts.temp_lt & PM8550B_TEMP_STS_CHG_TEMP_SHDN), !!(sts.temp_lt & PM8550B_TEMP_STS_USB_THERM_SHDN) );
 }
 
+// Prints the ADC reference channels on the first call and then every 10th, to check the ADC
+// calibration before and after the ADSP starts
+static void deckard_log_adc_refs( struct udevice * pm8550b )
+{
+	static int s_count;
+	struct pm8550b_adc_refs refs;
+	int ret;
+
+	if ( s_count++ % 10 )
+		return;
+
+	ret = pm8550b_get_adc_refs( pm8550b, &refs );
+	if ( ret )
+	{
+		deckard_log( "\nADC refs: read failed (%d)\n", ret );
+		return;
+	}
+
+	deckard_log( "\nADC refs: gnd %dmV (0x%04x) 1p25 %dmV (0x%04x) vadc %dmV (0x%04x) vadc ratio 0x%04x\n",
+		pm8550b_adc_code_to_uv( refs.gnd ) / 1000, refs.gnd,
+		pm8550b_adc_code_to_uv( refs.vref_1p25 ) / 1000, refs.vref_1p25,
+		pm8550b_adc_code_to_uv( refs.vref_vadc ) / 1000, refs.vref_vadc,
+		refs.vref_vadc_ratio );
+}
+
 // Formats milli-degrees C as e.g. "-1.5C"
 static void deckard_format_temp( char * buf, size_t len, int temp_mc )
 {
@@ -891,6 +916,7 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 			pm8550b_get_vref_1p25( pdevices->pm8550b, &vref_uv, &vref_code );
 
 			deckard_log_pm8550b_status( pdevices->pm8550b );
+			deckard_log_adc_refs( pdevices->pm8550b );
 
 			// Print out battery status
 			if ( adsp_started )

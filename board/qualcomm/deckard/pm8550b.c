@@ -124,7 +124,9 @@
 #define PM8550_SID                       1
 #define PM8550_ADC5_GEN3_AMUX_THM2_100K_PU            0x45
 #define PM8550B_SID                      7
+#define PM8550B_ADC5_GEN3_REF_GND        0x00 // ground reference, pm8550b_offset_ref in Linux
 #define PM8550B_ADC5_GEN3_1P25VREF       0x01 // 1.25 V reference, pm8550b_vref_1p25 in Linux
+#define PM8550B_ADC5_GEN3_VREF_VADC      0x02 // VADC reference (1.875 V)
 #define PM8550B_ADC5_GEN3_DIE_TEMP       0x03 // PMIC die temp, pm8550b_die_temp in Linux
 #define PM8550B_ADC5_GEN3_CHG_TEMP       0x10 // charger die temp
 #define PM8550B_ADC5_GEN3_AMUX_THM4_USB_THERM_100K_PU 0x47
@@ -864,6 +866,49 @@ int pm8550b_get_vref_1p25(struct udevice *pmic, int *uv, uint16_t *raw_code)
 	*uv = (int)((int64_t)code * ADC5_GEN3_VREF_UV / ADC5_GEN3_FULL_SCALE_CODE);
 
 	return 0;
+}
+
+/// @brief Read the PM8550B ADC references, to check the ADC calibration.
+/// @param pmic PM8550B, only used for error checking. The conversion runs on the PMK8550.
+/// @param refs raw codes
+/// @return 0 on success, negative error code on failure
+int pm8550b_get_adc_refs(struct udevice *pmic, struct pm8550b_adc_refs *refs)
+{
+	struct udevice *pmk8550;
+	int             ret;
+
+	if (!pmic)
+		return -ENODEV;
+
+	ret = pmic_get("pmic@0", &pmk8550);
+	if (ret != 0) {
+		printf("Failed to Find PMK8550\n");
+		return ret;
+	}
+
+	ret = adc5_gen3_read_code(pmk8550, PM8550B_SID, PM8550B_ADC5_GEN3_REF_GND,
+				  ADC5_GEN3_DIG_PARAM_ABS_CAL, ADC5_GEN3_HW_SETTLE_15US, &refs->gnd);
+	if (!ret)
+		ret = adc5_gen3_read_code(pmk8550, PM8550B_SID, PM8550B_ADC5_GEN3_1P25VREF,
+					  ADC5_GEN3_DIG_PARAM_ABS_CAL, ADC5_GEN3_HW_SETTLE_15US, &refs->vref_1p25);
+	if (!ret)
+		ret = adc5_gen3_read_code(pmk8550, PM8550B_SID, PM8550B_ADC5_GEN3_VREF_VADC,
+					  ADC5_GEN3_DIG_PARAM_ABS_CAL, ADC5_GEN3_HW_SETTLE_15US, &refs->vref_vadc);
+	if (!ret)
+		ret = adc5_gen3_read_code(pmk8550, PM8550B_SID, PM8550B_ADC5_GEN3_VREF_VADC,
+					  ADC5_GEN3_DIG_PARAM_RATIO_CAL, ADC5_GEN3_HW_SETTLE_15US,
+					  &refs->vref_vadc_ratio);
+
+	return ret;
+}
+
+/// @brief Convert an absolute calibration code to uV, code * 1.875 V / 0x70E4
+int pm8550b_adc_code_to_uv(uint16_t code)
+{
+	if (code > ADC5_GEN3_MAX_CODE)
+		return 0;
+
+	return (int)((int64_t)code * ADC5_GEN3_VREF_UV / ADC5_GEN3_FULL_SCALE_CODE);
 }
 
 /// @brief Read a board thermistor through the PMK8550 ADC5 Gen3.
