@@ -57,6 +57,34 @@ static deckard_devices_t g_deckard_devices = { 0 };
 int deckard_check_for_key_press(void);
 static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_devices_t * pdevices );
 
+// Prints the charger temperature protection and input status when it changes
+static void deckard_log_pm8550b_status( struct udevice * pm8550b )
+{
+	static struct pm8550b_temp_status s_last;
+	static bool s_valid;
+	struct pm8550b_temp_status sts;
+
+	if ( pm8550b_get_temp_status( pm8550b, &sts ) )
+		return;
+	if ( s_valid && !memcmp( &sts, &s_last, sizeof(sts) ) )
+		return;
+	s_last = sts;
+	s_valid = true;
+
+	deckard_log( "\nPM8550B status: range %02x die %02x shdn_cfg %02x chg %02x/%02x usb %02x/%02x temp %02x/%02x (live/latched)\n",
+		sts.temp_range, sts.die_temp, sts.die_temp_shdn_cfg, sts.chg_rt, sts.chg_lt,
+		sts.usb_rt, sts.usb_lt, sts.temp_rt, sts.temp_lt );
+	deckard_log( "  therm reg %d, chg reset %d, chg shutdown %d | input ok %d, buck ok %d, temp ok %d | usb uv %d ov %d suspend %d | chg temp shdn %d, usb therm shdn %d (latched)\n",
+		!!(sts.temp_range & PM8550B_TEMP_RANGE_THERM_REG_ACTIVE),
+		!!((sts.temp_range & PM8550B_TEMP_RANGE_ALERT_LEVEL) || (sts.die_temp & PM8550B_DIE_TEMP_RST)),
+		!!((sts.temp_range & PM8550B_TEMP_RANGE_TLIM) || (sts.die_temp & PM8550B_DIE_TEMP_SHDN)),
+		!!(sts.chg_rt & PM8550B_CHG_STS_INPUT_OK), !!(sts.chg_rt & PM8550B_CHG_STS_BUCK_OK),
+		!!(sts.chg_rt & PM8550B_CHG_STS_TEMP_OK),
+		!!(sts.usb_rt & PM8550B_USB_STS_UV), !!(sts.usb_rt & PM8550B_USB_STS_OV),
+		!!(sts.usb_rt & PM8550B_USB_STS_SUSPEND),
+		!!(sts.temp_lt & PM8550B_TEMP_STS_CHG_TEMP_SHDN), !!(sts.temp_lt & PM8550B_TEMP_STS_USB_THERM_SHDN) );
+}
+
 // Formats milli-degrees C as e.g. "-1.5C"
 static void deckard_format_temp( char * buf, size_t len, int temp_mc )
 {
@@ -844,6 +872,7 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 			char die_temp_str[16] = "n/a";
 			char pin40_temp_str[16] = "n/a";
 			char fins_temp_str[16] = "n/a";
+			uint16_t pin40_code = 0, fins_code = 0;
 			int temp_mc;
 
 			// Follows USB while waiting
@@ -851,10 +880,12 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 
 			if ( !deckard_battery_get_charger_die_temp(pdevices->pm8550b, &temp_mc) )
 				deckard_format_temp( die_temp_str, sizeof(die_temp_str), temp_mc );
-			if ( !pm8550b_get_board_therm_temp(pdevices->pm8550b, PM8550B_BOARD_THERM_40PIN_CONNECTOR, &temp_mc) )
+			if ( !pm8550b_get_board_therm_temp(pdevices->pm8550b, PM8550B_BOARD_THERM_40PIN_CONNECTOR, &temp_mc, &pin40_code) )
 				deckard_format_temp( pin40_temp_str, sizeof(pin40_temp_str), temp_mc );
-			if ( !pm8550b_get_board_therm_temp(pdevices->pm8550b, PM8550B_BOARD_THERM_HEAT_SINK_FINS, &temp_mc) )
+			if ( !pm8550b_get_board_therm_temp(pdevices->pm8550b, PM8550B_BOARD_THERM_HEAT_SINK_FINS, &temp_mc, &fins_code) )
 				deckard_format_temp( fins_temp_str, sizeof(fins_temp_str), temp_mc );
+
+			deckard_log_pm8550b_status( pdevices->pm8550b );
 
 			// Print out battery status
 			if ( adsp_started )
@@ -868,9 +899,9 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 
 
 
-				deckard_log_overwrite( "Battery: %d%% PDO: %uV @ %umA %s ~%dW PM8550B die: %s 40pin: %s fins: %s", adsp_state.fuel_gauge_internal, adsp_state.pdo_volt / 1000, adsp_state.pdo_cur,
+				deckard_log_overwrite( "Battery: %d%% PDO: %uV @ %umA %s ~%dW PM8550B die: %s 40pin: %s (0x%04x) fins: %s (0x%04x)", adsp_state.fuel_gauge_internal, adsp_state.pdo_volt / 1000, adsp_state.pdo_cur,
 							qph_str, ((int)adsp_state.pdo_volt * adsp_state.usb_current) / 1000000, die_temp_str,
-							pin40_temp_str, fins_temp_str );
+							pin40_temp_str, pin40_code, fins_temp_str, fins_code );
 				fflush(stdout);
 			}
 			else
@@ -878,8 +909,8 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 				int soc = deckard_battery_get_capacity(pdevices->max17320);
 				int avg_vcell = deckard_battery_get_avg_vcell(pdevices->max17320);
 				int avg_current = deckard_battery_get_avg_current(pdevices->max17320);
-				deckard_log_overwrite( "Battery: %d%%, %dmV, %dmA, PM8550B die: %s 40pin: %s fins: %s", soc,avg_vcell,avg_current,die_temp_str,
-						pin40_temp_str, fins_temp_str );
+				deckard_log_overwrite( "Battery: %d%%, %dmV, %dmA, PM8550B die: %s 40pin: %s (0x%04x) fins: %s (0x%04x)", soc,avg_vcell,avg_current,die_temp_str,
+						pin40_temp_str, pin40_code, fins_temp_str, fins_code );
 				fflush(stdout);
 			}
 

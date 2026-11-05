@@ -68,6 +68,21 @@
 #define PM8550B_QBG_EN_CTL_DIS                (0x00)
 #define PM8550B_QBG_LAST_BURST_AVG_ACC0_DATA0 (PM8550B_QBG_MAIN_BASE + 0xC0)
 
+// Charger status. Each *_LT_STS latches its *_RT_STS bits when MAIN_CHG_OK or INPUT_SS_DONE goes
+// low, and holds them until 1 is written to CHG_LT_CLR (0x26AF).
+#define PM8550B_CHGR_CHG_RT_STS          (PM8550B_CHGR_BASE + 0xB0)
+#define PM8550B_CHGR_CHG_LT_STS          (PM8550B_CHGR_BASE + 0xB1)
+#define PM8550B_CHGR_USB_RT_STS          (PM8550B_CHGR_BASE + 0xB2)
+#define PM8550B_CHGR_USB_LT_STS          (PM8550B_CHGR_BASE + 0xB3)
+#define PM8550B_CHGR_TEMP_RT_STS         (PM8550B_CHGR_BASE + 0xB8)
+#define PM8550B_CHGR_TEMP_LT_STS         (PM8550B_CHGR_BASE + 0xB9)
+
+// Charger thermal regulation, reset (ICL to 500 mA) and shutdown, all on CHG_TEMP
+#define PM8550B_MISC_BASE                0x2C00
+#define PM8550B_MISC_TEMP_RANGE_STATUS   (PM8550B_MISC_BASE + 0x08)
+#define PM8550B_MISC_DIE_TEMP_STATUS     (PM8550B_MISC_BASE + 0x09)
+#define PM8550B_MISC_DIE_TEMP_SHDN_CFG   (PM8550B_MISC_BASE + 0x61)
+
 // ADC5 Gen3 on the PMK8550 (SID 0), same SDAM as the Linux vadc@9000 node. PM8550B channels are
 // converted there by selecting SID 7. The PM8550B ADC_PBS block (0x3600) is read-only from apps.
 #define ADC5_GEN3_SDAM_BASE              0x9000
@@ -765,8 +780,10 @@ static int adc5_map_temp(const struct adc5_map_pt *pts, int size, s32 input)
 /// @param pmic PM8550B, only used for error checking. The conversion runs on the PMK8550.
 /// @param therm thermistor to read
 /// @param temp_mc temperature in milli-degrees C
+/// @param raw_code raw ADC code, may be NULL. Set whenever the conversion succeeded.
 /// @return 0 on success, -EINVAL if the code is out of range (open thermistor), negative error code on failure
-int pm8550b_get_board_therm_temp(struct udevice *pmic, enum pm8550b_board_therm therm, int *temp_mc)
+int pm8550b_get_board_therm_temp(struct udevice *pmic, enum pm8550b_board_therm therm, int *temp_mc,
+				 uint16_t *raw_code)
 {
 	const struct pm8550b_board_therm_chan *chan;
 	struct udevice *pmk8550;
@@ -790,12 +807,51 @@ int pm8550b_get_board_therm_temp(struct udevice *pmic, enum pm8550b_board_therm 
 				  ADC5_GEN3_HW_SETTLE_200US, &code);
 	if (ret)
 		return ret;
+	if (raw_code)
+		*raw_code = code;
 
 	if (code >= ADC5_GEN3_RATIO_MAX_CODE)
 		return -EINVAL;
 
 	ohms = (s64)code * ADC5_GEN3_R_PU_100K / (ADC5_GEN3_RATIO_MAX_CODE - code);
 	*temp_mc = adc5_map_temp(adc5_map_100k, ARRAY_SIZE(adc5_map_100k), (s32)ohms);
+
+	return 0;
+}
+
+/// @brief Read the charger temperature protection and input status registers. Reads only.
+/// @param pmic PM8550B
+/// @param sts register values
+/// @return 0 on success, negative error code on failure
+int pm8550b_get_temp_status(struct udevice *pmic, struct pm8550b_temp_status *sts)
+{
+	static const uint regs[] = {
+		PM8550B_MISC_TEMP_RANGE_STATUS,
+		PM8550B_MISC_DIE_TEMP_STATUS,
+		PM8550B_MISC_DIE_TEMP_SHDN_CFG,
+		PM8550B_CHGR_CHG_RT_STS,
+		PM8550B_CHGR_CHG_LT_STS,
+		PM8550B_CHGR_USB_RT_STS,
+		PM8550B_CHGR_USB_LT_STS,
+		PM8550B_CHGR_TEMP_RT_STS,
+		PM8550B_CHGR_TEMP_LT_STS,
+	};
+	uint8_t *vals[] = {
+		&sts->temp_range, &sts->die_temp, &sts->die_temp_shdn_cfg,
+		&sts->chg_rt, &sts->chg_lt, &sts->usb_rt, &sts->usb_lt,
+		&sts->temp_rt, &sts->temp_lt,
+	};
+	int ret, i;
+
+	if (!pmic)
+		return -ENODEV;
+
+	for (i = 0; i < ARRAY_SIZE(regs); i++) {
+		ret = pmic_reg_read(pmic, regs[i]);
+		if (ret < 0)
+			return ret;
+		*vals[i] = ret;
+	}
 
 	return 0;
 }

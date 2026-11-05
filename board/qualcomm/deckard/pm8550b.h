@@ -41,5 +41,46 @@ enum pm8550b_board_therm {
 	PM8550B_BOARD_THERM_COUNT,
 };
 
-int pm8550b_get_board_therm_temp(struct udevice *pmic, enum pm8550b_board_therm therm, int *temp_mc);
+int pm8550b_get_board_therm_temp(struct udevice *pmic, enum pm8550b_board_therm therm, int *temp_mc,
+				 uint16_t *raw_code);
+
+/**
+ * struct pm8550b_temp_status - charger temperature protection and input status
+ * @temp_range: MISC_TEMP_RANGE_STATUS (0x2C08), see PM8550B_TEMP_RANGE_*
+ * @die_temp: MISC_DIE_TEMP_STATUS (0x2C09), see PM8550B_DIE_TEMP_*
+ * @die_temp_shdn_cfg: MISC_DIE_TEMP_SHDN_CFG (0x2C61), reset and shutdown thresholds
+ * @chg_rt: CHGR_CHG_RT_STS (0x26B0), see PM8550B_CHG_STS_*
+ * @chg_lt: CHGR_CHG_LT_STS (0x26B1), latched copy of @chg_rt
+ * @usb_rt: CHGR_USB_RT_STS (0x26B2), see PM8550B_USB_STS_*
+ * @usb_lt: CHGR_USB_LT_STS (0x26B3), latched copy of @usb_rt
+ * @temp_rt: CHGR_TEMP_RT_STS (0x26B8), see PM8550B_TEMP_STS_*
+ * @temp_lt: CHGR_TEMP_LT_STS (0x26B9), latched copy of @temp_rt
+ */
+struct pm8550b_temp_status {
+	uint8_t temp_range;
+	uint8_t die_temp;
+	uint8_t die_temp_shdn_cfg;
+	uint8_t chg_rt;
+	uint8_t chg_lt;
+	uint8_t usb_rt;
+	uint8_t usb_lt;
+	uint8_t temp_rt;
+	uint8_t temp_lt;
+};
+
+#define PM8550B_TEMP_RANGE_ALERT_LEVEL      0x10 // above the reset threshold
+#define PM8550B_TEMP_RANGE_TLIM             0x20 // above the shutdown threshold
+#define PM8550B_TEMP_RANGE_THERM_REG_ACTIVE 0x40 // thermal regulation lowering ICL
+#define PM8550B_DIE_TEMP_RST                0x04
+#define PM8550B_DIE_TEMP_SHDN               0x08
+#define PM8550B_CHG_STS_INPUT_OK            0x01
+#define PM8550B_CHG_STS_BUCK_OK             0x02
+#define PM8550B_CHG_STS_TEMP_OK             0x04
+#define PM8550B_USB_STS_UV                  0x01
+#define PM8550B_USB_STS_OV                  0x02
+#define PM8550B_USB_STS_SUSPEND             0x04
+#define PM8550B_TEMP_STS_CHG_TEMP_SHDN      0x01
+#define PM8550B_TEMP_STS_USB_THERM_SHDN     0x08
+
+int pm8550b_get_temp_status(struct udevice *pmic, struct pm8550b_temp_status *sts);
 #endif /* __PM8550B_H */
