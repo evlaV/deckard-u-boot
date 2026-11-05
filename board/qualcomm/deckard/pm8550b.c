@@ -133,8 +133,10 @@
 #define ADC5_GEN3_DATA_INVALID           0x8000
 // Charger die temp: T(C) = V / 3.3 mV - 277.12 (qcom_vadc_scale_hw_pm7_chg_temp)
 
-// Ratiometric 100k pull-up thermistors: R = code * 100k / (0x4000 - code) (qcom_vadc7_scale_hw_calib_therm)
-#define ADC5_GEN3_RATIO_MAX_CODE         0x4000
+// Ratiometric 100k pull-up thermistors: R = code * 100k / (full scale - code). The code is on the
+// same 0x70E4 full scale as voltages, not the 0x4000 of qcom_vadc7_scale_hw_calib_therm(): 0x3300
+// on a room temperature board is 82k (30 C), 392k (-2 C) on the 0x4000 scale.
+#define ADC5_GEN3_RATIO_MAX_CODE         ADC5_GEN3_FULL_SCALE_CODE
 #define ADC5_GEN3_R_PU_100K              100000LL
 
 /**
@@ -814,6 +816,9 @@ int pm8550b_get_board_therm_temp(struct udevice *pmic, enum pm8550b_board_therm 
 		return -EINVAL;
 
 	ohms = (s64)code * ADC5_GEN3_R_PU_100K / (ADC5_GEN3_RATIO_MAX_CODE - code);
+	// near full scale this overflows s32, which would map to the hot end of the table
+	if (ohms > S32_MAX)
+		ohms = S32_MAX;
 	*temp_mc = adc5_map_temp(adc5_map_100k, ARRAY_SIZE(adc5_map_100k), (s32)ohms);
 
 	return 0;
