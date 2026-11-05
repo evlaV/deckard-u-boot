@@ -124,6 +124,7 @@
 #define PM8550_SID                       1
 #define PM8550_ADC5_GEN3_AMUX_THM2_100K_PU            0x45
 #define PM8550B_SID                      7
+#define PM8550B_ADC5_GEN3_1P25VREF       0x01 // 1.25 V reference, pm8550b_vref_1p25 in Linux
 #define PM8550B_ADC5_GEN3_DIE_TEMP       0x03 // PMIC die temp, pm8550b_die_temp in Linux
 #define PM8550B_ADC5_GEN3_CHG_TEMP       0x10 // charger die temp
 #define PM8550B_ADC5_GEN3_AMUX_THM4_USB_THERM_100K_PU 0x47
@@ -827,6 +828,40 @@ int pm8550b_get_pmic_die_temp(struct udevice *pmic, int *temp_mc)
 		code = 0;
 	uv = (int64_t)code * ADC5_GEN3_VREF_UV / ADC5_GEN3_FULL_SCALE_CODE;
 	*temp_mc = adc5_map_temp(adc5_map_die_temp, ARRAY_SIZE(adc5_map_die_temp), (s32)uv);
+
+	return 0;
+}
+
+/// @brief Read the PM8550B 1.25 V reference, to check the ADC voltage scale.
+/// @param pmic PM8550B, only used for error checking. The conversion runs on the PMK8550.
+/// @param uv voltage in uV with the usual code * 1.875 V / 0x70E4 scale, should be 1250000
+/// @param raw_code raw ADC code, may be NULL
+/// @return 0 on success, negative error code on failure
+int pm8550b_get_vref_1p25(struct udevice *pmic, int *uv, uint16_t *raw_code)
+{
+	struct udevice *pmk8550;
+	uint16_t        code;
+	int             ret;
+
+	if (!pmic)
+		return -ENODEV;
+
+	ret = pmic_get("pmic@0", &pmk8550);
+	if (ret != 0) {
+		printf("Failed to Find PMK8550\n");
+		return ret;
+	}
+
+	ret = adc5_gen3_read_code(pmk8550, PM8550B_SID, PM8550B_ADC5_GEN3_1P25VREF,
+				  ADC5_GEN3_DIG_PARAM_ABS_CAL, ADC5_GEN3_HW_SETTLE_15US, &code);
+	if (ret)
+		return ret;
+	if (raw_code)
+		*raw_code = code;
+
+	if (code > ADC5_GEN3_MAX_CODE)
+		code = 0;
+	*uv = (int)((int64_t)code * ADC5_GEN3_VREF_UV / ADC5_GEN3_FULL_SCALE_CODE);
 
 	return 0;
 }

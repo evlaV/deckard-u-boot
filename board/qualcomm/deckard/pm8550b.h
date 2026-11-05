@@ -29,6 +29,7 @@ int pm8550b_pause_charging(struct udevice *pmic, bool pause);
 int pm8550b_set_ship_mode(struct udevice *pmic, bool shipmode);
 int pm8550b_get_die_temp(struct udevice *pmic, int *temp_mc);
 int pm8550b_get_pmic_die_temp(struct udevice *pmic, int *temp_mc);
+int pm8550b_get_vref_1p25(struct udevice *pmic, int *uv, uint16_t *raw_code);
 
 /**
  * enum pm8550b_board_therm - board thermistors read through the PMK8550 ADC

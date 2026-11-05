@@ -873,8 +873,8 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 			char pmic_die_temp_str[16] = "n/a";
 			char pin40_temp_str[16] = "n/a";
 			char fins_temp_str[16] = "n/a";
-			uint16_t pin40_code = 0, fins_code = 0;
-			int temp_mc;
+			uint16_t pin40_code = 0, fins_code = 0, vref_code = 0;
+			int temp_mc, vref_uv = 0;
 
 			// Follows USB while waiting
 			deckard_update_fan( pdevices, boot_intention );
@@ -887,6 +887,8 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 				deckard_format_temp( pin40_temp_str, sizeof(pin40_temp_str), temp_mc );
 			if ( !pm8550b_get_board_therm_temp(pdevices->pm8550b, PM8550B_BOARD_THERM_HEAT_SINK_FINS, &temp_mc, &fins_code) )
 				deckard_format_temp( fins_temp_str, sizeof(fins_temp_str), temp_mc );
+
+			pm8550b_get_vref_1p25( pdevices->pm8550b, &vref_uv, &vref_code );
 
 			deckard_log_pm8550b_status( pdevices->pm8550b );
 
@@ -902,9 +904,10 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 
 
 
-				deckard_log_overwrite( "Battery: %d%% PDO: %uV @ %umA %s ~%dW PM8550B chg: %s die: %s 40pin: %s (0x%04x) fins: %s (0x%04x)", adsp_state.fuel_gauge_internal, adsp_state.pdo_volt / 1000, adsp_state.pdo_cur,
+				deckard_log_overwrite( "Battery: %d%% PDO: %uV @ %umA %s ~%dW PM8550B chg: %s die: %s 40pin: %s (0x%04x) fins: %s (0x%04x) 1p25: %dmV (0x%04x)", adsp_state.fuel_gauge_internal, adsp_state.pdo_volt / 1000, adsp_state.pdo_cur,
 							qph_str, ((int)adsp_state.pdo_volt * adsp_state.usb_current) / 1000000, die_temp_str, pmic_die_temp_str,
-							pin40_temp_str, pin40_code, fins_temp_str, fins_code );
+							pin40_temp_str, pin40_code, fins_temp_str, fins_code,
+							vref_uv / 1000, vref_code );
 				fflush(stdout);
 			}
 			else
@@ -912,8 +915,9 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 				int soc = deckard_battery_get_capacity(pdevices->max17320);
 				int avg_vcell = deckard_battery_get_avg_vcell(pdevices->max17320);
 				int avg_current = deckard_battery_get_avg_current(pdevices->max17320);
-				deckard_log_overwrite( "Battery: %d%%, %dmV, %dmA, PM8550B chg: %s die: %s 40pin: %s (0x%04x) fins: %s (0x%04x)", soc,avg_vcell,avg_current,die_temp_str, pmic_die_temp_str,
-						pin40_temp_str, pin40_code, fins_temp_str, fins_code );
+				deckard_log_overwrite( "Battery: %d%%, %dmV, %dmA, PM8550B chg: %s die: %s 40pin: %s (0x%04x) fins: %s (0x%04x) 1p25: %dmV (0x%04x)", soc,avg_vcell,avg_current,die_temp_str, pmic_die_temp_str,
+						pin40_temp_str, pin40_code, fins_temp_str, fins_code,
+							vref_uv / 1000, vref_code );
 				fflush(stdout);
 			}
 
