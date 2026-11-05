@@ -129,6 +129,8 @@
 #define PM8550B_ADC5_GEN3_VREF_VADC      0x02 // VADC reference (1.875 V)
 #define PM8550B_ADC5_GEN3_DIE_TEMP       0x03 // PMIC die temp, pm8550b_die_temp in Linux
 #define PM8550B_ADC5_GEN3_CHG_TEMP       0x10 // charger die temp
+#define PM8550B_ADC5_GEN3_VBAT_2S_MID    0x94 // battery voltage, 1/6 prescale, ADC_CHANNEL_VBAT in the ADSP
+#define PM8550B_VBAT_PRESCALE            6
 #define PM8550B_ADC5_GEN3_AMUX_THM4_USB_THERM_100K_PU 0x47
 
 // ADC voltage: code * 1.875 V / 0x70E4, codes above 0x7FFF are below 0 V
@@ -984,6 +986,40 @@ int pm8550b_adc_code_to_uv(uint16_t code)
 		return 0;
 
 	return (int)((int64_t)code * ADC5_GEN3_VREF_UV / ADC5_GEN3_FULL_SCALE_CODE);
+}
+
+/// @brief Read the battery voltage on the channel the ADSP uses, with and without the software
+/// calibration, to compare with the ADSP's own reading.
+/// @param pmic PM8550B, only used for error checking. The conversion runs on the PMK8550.
+/// @param raw_mv code * 1.875 V / 0x70E4 * 6, the ADSP conversion
+/// @param cal_mv with the software calibration
+/// @return 0 on success, negative error code on failure
+int pm8550b_get_vbat(struct udevice *pmic, int *raw_mv, int *cal_mv)
+{
+	struct adc5_gen3_cal cal;
+	struct udevice *pmk8550;
+	uint16_t        code;
+	int             ret;
+
+	if (!pmic)
+		return -ENODEV;
+
+	ret = pmic_get("pmic@0", &pmk8550);
+	if (ret != 0) {
+		printf("Failed to Find PMK8550\n");
+		return ret;
+	}
+
+	ret = adc5_gen3_read_code(pmk8550, PM8550B_SID, PM8550B_ADC5_GEN3_VBAT_2S_MID,
+				  ADC5_GEN3_DIG_PARAM_ABS_CAL, ADC5_GEN3_HW_SETTLE_15US, &code);
+	if (ret)
+		return ret;
+
+	adc5_gen3_read_cal(pmk8550, PM8550B_SID, ADC5_GEN3_DIG_PARAM_ABS_CAL, &cal);
+	*raw_mv = pm8550b_adc_code_to_uv(code) * PM8550B_VBAT_PRESCALE / 1000;
+	*cal_mv = (int)(adc5_gen3_cal_uv(&cal, code) * PM8550B_VBAT_PRESCALE / 1000);
+
+	return 0;
 }
 
 /// @brief Read a board thermistor through the PMK8550 ADC5 Gen3.

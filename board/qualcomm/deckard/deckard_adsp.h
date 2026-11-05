@@ -37,6 +37,8 @@ typedef struct ADSP_State_t
     unsigned pdo_cur; // mA
     unsigned qph_state;
     int usb_current; // mA
+    int adc_vbat; // mV, from the ADSP ADC, 0 if not reported
+    int adc_die_temp; // milli-degrees C, from the ADSP ADC, 0 if not reported
 } ADSP_State_t;
 
 void deckard_adsp_state_clear( ADSP_State_t * payload );

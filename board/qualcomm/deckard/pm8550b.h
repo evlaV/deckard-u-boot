@@ -47,6 +47,7 @@ struct pm8550b_adc_refs {
 
 int pm8550b_get_adc_refs(struct udevice *pmic, struct pm8550b_adc_refs *refs);
 int pm8550b_adc_code_to_uv(uint16_t code);
+int pm8550b_get_vbat(struct udevice *pmic, int *raw_mv, int *cal_mv);
 
 /**
  * enum pm8550b_board_therm - board thermistors read through the PMK8550 ADC

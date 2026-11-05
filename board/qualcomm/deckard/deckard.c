@@ -87,10 +87,11 @@ static void deckard_log_pm8550b_status( struct udevice * pm8550b )
 
 // Prints the ADC reference channels on the first call and then every 10th, to check the ADC
 // calibration before and after the ADSP starts
-static void deckard_log_adc_refs( struct udevice * pm8550b )
+static void deckard_log_adc_refs( struct udevice * pm8550b, const ADSP_State_t * adsp_state )
 {
 	static int s_count;
 	struct pm8550b_adc_refs refs;
+	int raw_mv, cal_mv, die_mc;
 	int ret;
 
 	if ( s_count++ % 10 )
@@ -108,6 +109,14 @@ static void deckard_log_adc_refs( struct udevice * pm8550b )
 		pm8550b_adc_code_to_uv( refs.vref_1p25 ) / 1000, refs.vref_1p25,
 		pm8550b_adc_code_to_uv( refs.vref_vadc ) / 1000, refs.vref_vadc,
 		refs.vref_vadc_ratio );
+
+	// The ADSP converts without any correction. It reports VBAT in 50 mV steps and the die temp
+	// in 0.5 C steps.
+	if ( !pm8550b_get_vbat( pm8550b, &raw_mv, &cal_mv ) )
+		deckard_log( "VBAT: adsp %dmV, uboot uncorrected %dmV, uboot corrected %dmV\n",
+			adsp_state->adc_vbat, raw_mv, cal_mv );
+	if ( !pm8550b_get_pmic_die_temp( pm8550b, &die_mc ) )
+		deckard_log( "Die temp: adsp %dmC, uboot corrected %dmC\n", adsp_state->adc_die_temp, die_mc );
 }
 
 // Formats milli-degrees C as e.g. "-1.5C"
@@ -916,7 +925,7 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 			pm8550b_get_vref_1p25( pdevices->pm8550b, &vref_uv, &vref_code );
 
 			deckard_log_pm8550b_status( pdevices->pm8550b );
-			deckard_log_adc_refs( pdevices->pm8550b );
+			deckard_log_adc_refs( pdevices->pm8550b, &adsp_state );
 
 			// Print out battery status
 			if ( adsp_started )

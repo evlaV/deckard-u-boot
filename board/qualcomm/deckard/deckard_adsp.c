@@ -55,6 +55,10 @@ typedef union ADSP_ChargerPayloadOut_t {
 	// 9
 	int32_t usb_current : 7; // mA / 50
 	// 16
+	uint32_t adc_vbat : 8; // mV / 50, battery voltage from the ADSP ADC, 0 from an older ADSP
+	// 24
+	uint32_t adc_die_temp : 8; // C * 2, PM8550B die temp from the ADSP ADC, 0 from an older ADSP
+	// 32
     } bits;
 } ADSP_ChargerPayloadOut_t;
 
@@ -177,6 +181,8 @@ void deckard_adsp_read( ADSP_State_t * payload )
 			payload->valid = true;
 			payload->usb_current = sign_extend32(cdata.bits.usb_current, 6) * 50;
 			payload->qph_state = cdata.bits.qph_state;
+			payload->adc_vbat = cdata.bits.adc_vbat * 50;
+			payload->adc_die_temp = cdata.bits.adc_die_temp * 500;
 		}
 	}
 }
