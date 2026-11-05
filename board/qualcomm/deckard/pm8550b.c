@@ -138,11 +138,21 @@
 #define ADC5_GEN3_DATA_INVALID           0x8000
 // Charger die temp: T(C) = V / 3.3 mV - 277.12 (qcom_vadc_scale_hw_pm7_chg_temp)
 
-// Ratiometric 100k pull-up thermistors: R = code * 100k / (full scale - code). The code is on the
-// same 0x70E4 full scale as voltages, not the 0x4000 of qcom_vadc7_scale_hw_calib_therm(): 0x3300
-// on a room temperature board is 82k (30 C), 392k (-2 C) on the 0x4000 scale.
+// Ratiometric 100k pull-up thermistors: R = code * 100k / (full scale - code), with the full scale
+// being the VADC reference (nominally 0x70E4)
 #define ADC5_GEN3_RATIO_MAX_CODE         ADC5_GEN3_FULL_SCALE_CODE
 #define ADC5_GEN3_R_PU_100K              100000LL
+
+// In U-Boot the conversions come back uncalibrated, with both calibration methods: the ground
+// reference reads ~0xFC and the 1.25 V reference ~0x5274 instead of 0x4B43, while Linux gets
+// calibrated codes for the same request. So calibrate in software from the reference channels of
+// the same PMIC. With working hardware calibration the references read nominal and this does nothing.
+#define ADC5_GEN3_REF_GND                0x00
+#define ADC5_GEN3_1P25VREF               0x01
+#define ADC5_GEN3_VREF_VADC              0x02
+#define ADC5_GEN3_1P25VREF_UV            1250000LL
+// A reference this close to ground means a bad read, use the nominal scale instead
+#define ADC5_GEN3_CAL_MIN_SPAN           0x1000
 
 /**
  * struct adc5_map_pt - thermistor resistance to temperature
@@ -744,6 +754,81 @@ static int adc5_gen3_read_code(struct udevice *adc, uint sid, uint channel, uint
 	return 0;
 }
 
+/**
+ * struct adc5_gen3_cal - software two-point calibration
+ * @gnd: ground reference code
+ * @ref: reference code, the 1.25 V reference for absolute and the VADC reference for ratiometric
+ * @ref_uv: voltage @ref stands for (absolute only)
+ */
+struct adc5_gen3_cal {
+	int gnd;
+	int ref;
+	s64 ref_uv;
+};
+
+/// @brief Read the reference channels for a conversion on @sid with calibration @cal.
+/// @param adc PMK8550
+/// @param sid PMIC the channel belongs to, the references are read on the same PMIC
+/// @param cal ADC5_GEN3_DIG_PARAM_ABS_CAL or ADC5_GEN3_DIG_PARAM_RATIO_CAL
+/// @param out calibration, nominal if the references couldn't be read
+static void adc5_gen3_read_cal(struct udevice *adc, uint sid, uint cal, struct adc5_gen3_cal *out)
+{
+	bool ratiometric = cal == ADC5_GEN3_DIG_PARAM_RATIO_CAL;
+	uint16_t gnd, ref;
+	int ret;
+
+	ret = adc5_gen3_read_code(adc, sid, ADC5_GEN3_REF_GND, cal, ADC5_GEN3_HW_SETTLE_15US, &gnd);
+	if (!ret)
+		ret = adc5_gen3_read_code(adc, sid, ratiometric ? ADC5_GEN3_VREF_VADC : ADC5_GEN3_1P25VREF,
+					  cal, ADC5_GEN3_HW_SETTLE_15US, &ref);
+
+	if (ret || gnd > ADC5_GEN3_MAX_CODE || ref > ADC5_GEN3_MAX_CODE ||
+	    (int)ref - (int)gnd < ADC5_GEN3_CAL_MIN_SPAN) {
+		out->gnd = 0;
+		out->ref = ADC5_GEN3_FULL_SCALE_CODE;
+		out->ref_uv = ADC5_GEN3_VREF_UV;
+		return;
+	}
+
+	out->gnd = gnd;
+	out->ref = ref;
+	out->ref_uv = ratiometric ? ADC5_GEN3_VREF_UV : ADC5_GEN3_1P25VREF_UV;
+}
+
+/// @brief Absolute calibration code to uV, through the software calibration. Below ground is 0.
+static s64 adc5_gen3_cal_uv(const struct adc5_gen3_cal *cal, uint16_t code)
+{
+	s64 counts;
+
+	// codes above 0x7FFF are below 0 V
+	if (code > ADC5_GEN3_MAX_CODE)
+		return 0;
+
+	counts = (s64)code - cal->gnd;
+	if (counts < 0)
+		return 0;
+
+	return counts * cal->ref_uv / (cal->ref - cal->gnd);
+}
+
+/// @brief Read one channel and convert it to uV with the software calibration (absolute).
+static int adc5_gen3_read_uv(struct udevice *adc, uint sid, uint channel, s64 *uv)
+{
+	struct adc5_gen3_cal cal;
+	uint16_t code;
+	int ret;
+
+	ret = adc5_gen3_read_code(adc, sid, channel, ADC5_GEN3_DIG_PARAM_ABS_CAL,
+				  ADC5_GEN3_HW_SETTLE_15US, &code);
+	if (ret)
+		return ret;
+
+	adc5_gen3_read_cal(adc, sid, ADC5_GEN3_DIG_PARAM_ABS_CAL, &cal);
+	*uv = adc5_gen3_cal_uv(&cal, code);
+
+	return 0;
+}
+
 /// @brief Read the charger die temperature (CHG_TEMP) through the PMK8550 ADC5 Gen3.
 /// @param pmic PM8550B, only used for error checking. The conversion runs on the PMK8550.
 /// @param temp_mc die temperature in milli-degrees C
@@ -751,8 +836,7 @@ static int adc5_gen3_read_code(struct udevice *adc, uint sid, uint channel, uint
 int pm8550b_get_die_temp(struct udevice *pmic, int *temp_mc)
 {
 	struct udevice *pmk8550;
-	uint16_t        code;
-	int64_t         uv;
+	s64             uv;
 	int             ret;
 
 	if (!pmic)
@@ -764,16 +848,12 @@ int pm8550b_get_die_temp(struct udevice *pmic, int *temp_mc)
 		return ret;
 	}
 
-	ret = adc5_gen3_read_code(pmk8550, PM8550B_SID, PM8550B_ADC5_GEN3_CHG_TEMP,
-				  ADC5_GEN3_DIG_PARAM_ABS_CAL, ADC5_GEN3_HW_SETTLE_15US, &code);
+	ret = adc5_gen3_read_uv(pmk8550, PM8550B_SID, PM8550B_ADC5_GEN3_CHG_TEMP, &uv);
 	if (ret) {
 		printf("Failed to Read PM8550B Die Temp: %d\n", ret);
 		return ret;
 	}
 
-	if (code > ADC5_GEN3_MAX_CODE)
-		code = 0;
-	uv = (int64_t)code * ADC5_GEN3_VREF_UV / ADC5_GEN3_FULL_SCALE_CODE;
 	*temp_mc = (int)((30303LL * uv - 27712LL * 1000000) / 100000);
 	// The channel reads 0 V with no charger connected, which converts to -277 C
 	if (*temp_mc < 0)
@@ -807,8 +887,7 @@ static int adc5_map_temp(const struct adc5_map_pt *pts, int size, s32 input)
 int pm8550b_get_pmic_die_temp(struct udevice *pmic, int *temp_mc)
 {
 	struct udevice *pmk8550;
-	uint16_t        code;
-	int64_t         uv;
+	s64             uv;
 	int             ret;
 
 	if (!pmic)
@@ -820,15 +899,11 @@ int pm8550b_get_pmic_die_temp(struct udevice *pmic, int *temp_mc)
 		return ret;
 	}
 
-	ret = adc5_gen3_read_code(pmk8550, PM8550B_SID, PM8550B_ADC5_GEN3_DIE_TEMP,
-				  ADC5_GEN3_DIG_PARAM_ABS_CAL, ADC5_GEN3_HW_SETTLE_15US, &code);
+	ret = adc5_gen3_read_uv(pmk8550, PM8550B_SID, PM8550B_ADC5_GEN3_DIE_TEMP, &uv);
 	if (ret)
 		return ret;
 
 	// qcom_vadc7_scale_hw_calib_die_temp()
-	if (code > ADC5_GEN3_MAX_CODE)
-		code = 0;
-	uv = (int64_t)code * ADC5_GEN3_VREF_UV / ADC5_GEN3_FULL_SCALE_CODE;
 	*temp_mc = adc5_map_temp(adc5_map_die_temp, ARRAY_SIZE(adc5_map_die_temp), (s32)uv);
 
 	return 0;
@@ -921,9 +996,10 @@ int pm8550b_get_board_therm_temp(struct udevice *pmic, enum pm8550b_board_therm 
 				 uint16_t *raw_code)
 {
 	const struct pm8550b_board_therm_chan *chan;
+	struct adc5_gen3_cal cal;
 	struct udevice *pmk8550;
 	uint16_t        code;
-	s64             ohms;
+	s64             counts, span, ohms;
 	int             ret;
 
 	if (!pmic)
@@ -945,10 +1021,15 @@ int pm8550b_get_board_therm_temp(struct udevice *pmic, enum pm8550b_board_therm 
 	if (raw_code)
 		*raw_code = code;
 
-	if (code >= ADC5_GEN3_RATIO_MAX_CODE)
+	adc5_gen3_read_cal(pmk8550, chan->sid, ADC5_GEN3_DIG_PARAM_RATIO_CAL, &cal);
+	counts = (s64)code - cal.gnd;
+	span = cal.ref - cal.gnd;
+	if (counts < 0)
+		counts = 0;
+	if (counts >= span)
 		return -EINVAL;
 
-	ohms = (s64)code * ADC5_GEN3_R_PU_100K / (ADC5_GEN3_RATIO_MAX_CODE - code);
+	ohms = counts * ADC5_GEN3_R_PU_100K / (span - counts);
 	// near full scale this overflows s32, which would map to the hot end of the table
 	if (ohms > S32_MAX)
 		ohms = S32_MAX;
