@@ -27,6 +27,10 @@ int slg4ax46073v_get(struct udevice **devp);
  * @dev: fan controller
  * @enable: true runs the fan at the controller's default speed
  *
+ * Turning the fan on resets the controller first (100 ms with the supply off), so a PWM clock left
+ * disabled by the kernel or the ADSP doesn't run the fan at full speed. Does nothing if the fan is
+ * already in the requested state.
+ *
  * Return: 0 on success, negative error code on failure
  */
 int slg4ax46073v_set_enabled(struct udevice *dev, bool enable);

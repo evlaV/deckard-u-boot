@@ -34,10 +34,12 @@
  * struct slg4ax46073v_priv - device data
  * @en_gpio: fan supply enable
  * @version: controller version, 0 if it couldn't be read
+ * @enabled: fan supply is on
  */
 struct slg4ax46073v_priv {
 	struct gpio_desc en_gpio;
 	int version;
+	bool enabled;
 };
 
 static int slg4ax46073v_read_version(struct udevice *dev)
@@ -55,11 +57,46 @@ static int slg4ax46073v_read_version(struct udevice *dev)
 	return ret;
 }
 
+// Same sequence as slg4ax46073v_reset() in the kernel: disable the oscillator, watchdog and tach,
+// wait with the fan supply off, then reset. The supply is left off.
+static int slg4ax46073v_reset(struct udevice *dev)
+{
+	struct slg4ax46073v_priv *priv = dev_get_priv(dev);
+	int ret;
+
+	ret = dm_i2c_reg_write(dev, SLG4AX46073V_REG_VIRTUAL_INPUT, SLG4AX46073V_VI_DISABLE_PWM_CLK0);
+	dm_gpio_set_value(&priv->en_gpio, 0);
+	priv->enabled = false;
+	if (ret)
+		return ret;
+
+	mdelay(SLG4AX46073V_SUPPLY_OFF_MS);
+
+	return dm_i2c_reg_write(dev, SLG4AX46073V_REG_RESET, SLG4AX46073V_RESET);
+}
+
 int slg4ax46073v_set_enabled(struct udevice *dev, bool enable)
 {
 	struct slg4ax46073v_priv *priv = dev_get_priv(dev);
+	int ret;
 
-	return dm_gpio_set_value(&priv->en_gpio, enable);
+	if (enable == priv->enabled)
+		return 0;
+
+	// The kernel and the ADSP leave the PWM clock disabled when they turn the fan off, and the
+	// supply coming back on in that state runs the fan at full speed. Reset first.
+	if (enable && priv->version >= SLG4AX46073V_VERSION_7) {
+		ret = slg4ax46073v_reset(dev);
+		if (ret)
+			dev_err(dev, "reset failed (%d), enabling anyway\n", ret);
+	}
+
+	ret = dm_gpio_set_value(&priv->en_gpio, enable);
+	if (ret)
+		return ret;
+	priv->enabled = enable;
+
+	return 0;
 }
 
 int slg4ax46073v_get(struct udevice **devp)
@@ -93,13 +130,8 @@ static int slg4ax46073v_probe(struct udevice *dev)
 		return 0;
 	}
 
-	// Same sequence as slg4ax46073v_reset() in the kernel: disable the oscillator, watchdog and
-	// tach, wait with the fan supply off, then reset. The supply stays off until enabled.
-	ret = dm_i2c_reg_write(dev, SLG4AX46073V_REG_VIRTUAL_INPUT, SLG4AX46073V_VI_DISABLE_PWM_CLK0);
-	if (!ret) {
-		mdelay(SLG4AX46073V_SUPPLY_OFF_MS);
-		ret = dm_i2c_reg_write(dev, SLG4AX46073V_REG_RESET, SLG4AX46073V_RESET);
-	}
+	// The supply stays off until enabled
+	ret = slg4ax46073v_reset(dev);
 	if (ret) {
 		dev_err(dev, "reset failed (%d)\n", ret);
 		return 0;
