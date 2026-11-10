@@ -459,12 +459,14 @@ int deckard_setup_devices( deckard_devices_t * pdevices )
 	led_get_by_label( "blue", &pdevices->led_blue );
 
 	// Fan controller. Probing resets it, in case the kernel left it running at full speed
-	ret = slg4ax46073v_get( &pdevices->fan );
+	#if 0
+    ret = slg4ax46073v_get( &pdevices->fan );
 	if (ret != 0) {
 		deckard_log("ERROR: Failed to find fan controller: %d\n", ret);
 		pdevices->fan = NULL;
 		nerror = 1;
 	}
+    #endif
 
 	if ( pdevices->pmk8550 )
 	{
@@ -499,6 +501,7 @@ int deckard_setup_devices( deckard_devices_t * pdevices )
 
 void deckard_set_fan_enabled( deckard_devices_t * pdevices, bool enable )
 {
+    return;
 	if ( !pdevices->fan )
 		return;
 

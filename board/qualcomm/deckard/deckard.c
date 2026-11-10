@@ -352,7 +352,7 @@ int misc_init_r(void)
 	g_boot_intention = calc_boot_intention( &g_deckard_devices );
 	deckard_log( "boot_intention: %s\n", boot_intention_to_string( g_boot_intention ) );
 
-	deckard_update_fan( &g_deckard_devices, g_boot_intention );
+	//deckard_update_fan( &g_deckard_devices, g_boot_intention );
 
 	// Set LED Color
 	LedColor ledColor = get_led_color_for_boot_intention( &g_deckard_devices, g_boot_intention );
@@ -911,7 +911,7 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 			int temp_mc, vref_uv = 0;
 
 			// Follows USB while waiting
-			deckard_update_fan( pdevices, boot_intention );
+			//deckard_update_fan( pdevices, boot_intention );
 
 			if ( !deckard_battery_get_charger_die_temp(pdevices->pm8550b, &temp_mc) )
 				deckard_format_temp( die_temp_str, sizeof(die_temp_str), temp_mc );
@@ -925,7 +925,7 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 			pm8550b_get_vref_1p25( pdevices->pm8550b, &vref_uv, &vref_code );
 
 			deckard_log_pm8550b_status( pdevices->pm8550b );
-			deckard_log_adc_refs( pdevices->pm8550b, &adsp_state );
+			//deckard_log_adc_refs( pdevices->pm8550b, &adsp_state );
 
 			// Print out battery status
 			if ( adsp_started )
@@ -1357,7 +1357,7 @@ int deckard_boot_cmd(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv
 	// need to allow the kernel to turn the display on itself (vs a 'hot transfer')
 	display_turn_off();
 
-	deckard_update_fan( &g_deckard_devices, BOOT_INTENTION_START_USERSPACE );
+	//deckard_update_fan( &g_deckard_devices, BOOT_INTENTION_START_USERSPACE );
 
     // Attempt to launch the kernel.  If this succeeds, we now leave uboot and enter kernel code
 	deckard_log("**********   ATTEMPTING TO BOOT KERNEL ********\n");
