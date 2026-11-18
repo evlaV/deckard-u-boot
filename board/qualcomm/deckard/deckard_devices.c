@@ -262,7 +262,7 @@ boot_intention_t calc_boot_intention( deckard_devices_t * pdevices )
 		boot_up_desired = deckard_boot_desired( pon_poff_reason );
 	}
 
-	if( boot_up_desired && !deckard_battery_ok_for_userspace( pdevices->max17320, pdevices->max17320_external ) )
+	if( boot_up_desired && !deckard_battery_ok_for_userspace( pdevices ) )
 	{
 		deckard_log("boot intention: cannot boot, battery not ready\n");
 		return BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY;
@@ -425,6 +425,14 @@ int deckard_setup_devices( deckard_devices_t * pdevices )
 		nerror = 1;
 	}
 
+	// Find boulder's northgate silego (optional, only present with a Boulder headstrap)
+	ret = pmic_get("pmic@18", &pdevices->boulder_northgate);
+	if (ret != 0)
+    {
+		pdevices->boulder_northgate = NULL;
+		deckard_log("Boulder northgate not found\n");
+	}
+    
 	// Power button
 	ret = button_get_by_label( "Power Button", &pdevices->btn_power );
 	if (ret != 0) {

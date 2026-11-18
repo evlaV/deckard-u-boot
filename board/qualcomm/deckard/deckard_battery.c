@@ -1,13 +1,15 @@
-
 #include <fs.h>
 #include <command.h>
+#include <dm.h>
+#include <i2c.h>
 #include <linux/delay.h>
 #include <led.h>
 
 #include "pm8550b.h"
 #include "pmk8550.h"
 #include "smb1510.h"
-#include "power/max17320_fg.h"
+#include <power/max17320_fg.h>
+#include <power/northgate_hotswap.h>
 #include <sysreset.h>
 
 #include "deckard.h"
@@ -16,6 +18,15 @@
 
 #define BATTERY_MIN_BOOT_VOLTAGE 7200
 #define BATTERY_DEAD_VOLTAGE     6000
+
+#define BOULDER_SWITCH_SETTLE_MS    100
+
+typedef enum
+{
+    BATTERY_FG_READ_ERROR,
+    BATTERY_OK_TO_BOOT,
+    BATTERY_NOT_OK_TO_BOOT,
+} battery_state_t;
 
 /**
  * sign_extend32 - sign extend a 32-bit value using specified bit as sign-bit
@@ -228,58 +239,107 @@ bool deckard_battery_is_charging_enabled(struct udevice *pm8550b)
 	return pm8550b_is_charging_enabled(pm8550b);
 }
 
-int deckard_battery_ok_for_userspace( struct udevice *max17320_primary, struct udevice *max17320_external )
+static battery_state_t deckard_get_battery_state( struct udevice *max17320, bool check_soc )
 {
-	if ( !max17320_primary )
-		return true; // error should fail in direction of allow booting
+    if ( !max17320 )
+    {
+        return BATTERY_FG_READ_ERROR;
+    }
 
-	// state of charge on primary
-	{
-		int soc = deckard_battery_get_capacity( max17320_primary );
-		int ocv = deckard_battery_get_vfocv( max17320_primary );
-		if ( soc < 0 || ocv < 0 )
-			return true; // error on primary fail in direction of allow booting
+	int ocv = deckard_battery_get_vfocv( max17320 );
+	int soc = check_soc ? deckard_battery_get_capacity( max17320 ) : BATTERY_MIN_BOOT_SOC;
 
-		if ( soc >= BATTERY_MIN_BOOT_SOC && ocv > OCV_BOOT_VOLTAGE )
-			return true;
-	}
+	if ( ocv < 0 || soc < 0 )
+		return BATTERY_FG_READ_ERROR;
 
-	if ( max17320_external )
-	{
-		int soc = deckard_battery_get_capacity( max17320_external );
-		int ocv = deckard_battery_get_vfocv( max17320_external );
-		if ( soc < 0 || ocv < 0 )
-			return false;  // Error on external shouldnt allow booting
-		if ( soc >= BATTERY_MIN_BOOT_SOC && ocv > OCV_BOOT_VOLTAGE )
-			return true;
-	}
-
-	return false;
+	return ( soc >= BATTERY_MIN_BOOT_SOC && ocv > OCV_BOOT_VOLTAGE ) ? BATTERY_OK_TO_BOOT : BATTERY_NOT_OK_TO_BOOT;
 }
 
-int deckard_battery_ok_for_dsp( struct udevice *max17320_primary, struct udevice *max17320_external )
+/*
+ * The boot decision follows the battery that is actually powering the system.
+ *
+ * Boulder's battery selection is left alone unless the active battery can't boot the system
+ * and the other one can, in which case the system is switched over.
+ *
+ * Similarly, the charger will only charge the active battery as well, no cross charging
+ * 
+ *  > No external pack, internal OK                            -  Boot
+ *  > No external pack, internal gauge missing or unreadable   -  Boot (fail open)
+ *  > No external pack, internal too low                       -  Don’t boot
+ *  > On internal, internal gauge error, external OK           -  Switch to external; boot, a refused switch falls back to fail-open
+ *  > On internal, too low, external OK                        -  Switch to external; boot only if the switch took
+ *  > On external, too low, internal OK                        -  Switch to internal; boot only if the switch took
+ *  > On external, too low, internal gauge error               -  Don’t boot
+ *  > External gauge present, active battery unknown           -  Boot if either battery is known OK
+*/
+static bool deckard_ok_for_boot( deckard_devices_t *p_devices, bool check_soc )
 {
-	if ( !max17320_primary )
-		return true; // error should fail in direction of allow booting
+    struct udevice *max17320_primary = p_devices->max17320;
+    struct udevice *max17320_external = p_devices->max17320_external;
+    struct udevice *northgate = p_devices->boulder_northgate;
+    struct udevice *pm8550b = p_devices->pm8550b;
+    
+	// Check existing OK states
+	battery_state_t internal_state = deckard_get_battery_state( max17320_primary, check_soc );
+	battery_state_t external_state = deckard_get_battery_state( max17320_external, check_soc );
 
+	// Identify which battery is powering the system
+	battery_t active_battery = BATTERY_UNKNOWN;
+	if ( northgate )
+		active_battery = northgate_hotswap_get_active_battery( northgate );
+	else if ( !max17320_external )
+		active_battery = BATTERY_INTERNAL;  // If there's no northgate and no external fuel gauge, assume internal
+
+	// See if the system needs to switch batteries
+	battery_t battery_to_switch_to = BATTERY_NONE;
+	if ( ( active_battery == BATTERY_INTERNAL ) && ( internal_state != BATTERY_OK_TO_BOOT ) && ( external_state == BATTERY_OK_TO_BOOT ) )
+		battery_to_switch_to = BATTERY_EXTERNAL;
+
+	if ( ( active_battery == BATTERY_EXTERNAL ) && ( internal_state == BATTERY_OK_TO_BOOT ) && ( external_state != BATTERY_OK_TO_BOOT ) )
+		battery_to_switch_to = BATTERY_INTERNAL;
+
+	if ( ( battery_to_switch_to != BATTERY_NONE ) && ( northgate ) )
+	{
+        // Switch batteries, pause charging across the switch
+        if ( pm8550b_pause_charging( pm8550b, true ) )
+        {
+            deckard_log( "Boulder: failed to pause charging, not switching battery\n" );
+            return -EIO;
+        }
+        else
+        {
+            mdelay( BOULDER_SWITCH_SETTLE_MS );
+            int retv = northgate_hotswap_select_battery( northgate, battery_to_switch_to );
+            pm8550b_pause_charging( pm8550b, false );
+
+            deckard_log( "Boulder: switch to %s battery %s\n",
+                         ( battery_to_switch_to == BATTERY_INTERNAL ) ? "internal" : "external",
+                         ( retv ) ? "failed" : "done" );
+        }        
+        
+		active_battery = northgate_hotswap_get_active_battery( northgate );
+	}
+
+	bool ok_to_boot = false;
+	ok_to_boot |= ( active_battery == BATTERY_INTERNAL ) && ( ( internal_state == BATTERY_OK_TO_BOOT ) || ( internal_state == BATTERY_FG_READ_ERROR ) ); // Internal fg read error, default to booting
+	ok_to_boot |= ( active_battery == BATTERY_EXTERNAL ) && ( external_state == BATTERY_OK_TO_BOOT );
+	ok_to_boot |= ( active_battery == BATTERY_UNKNOWN ) && ( ( internal_state == BATTERY_OK_TO_BOOT ) || ( external_state == BATTERY_OK_TO_BOOT ) ); // Error case: external pack present but can't talk to northgate
+
+	return ok_to_boot;
+}
+
+bool deckard_battery_ok_for_userspace( deckard_devices_t *p_devices )
+{
+	// state of charge and VF OCV of the active battery
+	return deckard_ok_for_boot( p_devices, true );
+}
+
+bool deckard_battery_ok_for_dsp( deckard_devices_t *p_devices )
+{
 	// VF OCV must be above boot voltage to survive charging pause and PD Negotiation.
 	// ADSP controls high charging mode. prior to ADSP being initialized, it's still
 	// capable of charging in lower (typically 5V@1A) mode.
-
-	{
-		int ocv = deckard_battery_get_vfocv( max17320_primary );
-		if ( ocv > OCV_BOOT_VOLTAGE || ocv < 0 )
-			return true;
-	}
-
-	if ( max17320_external )
-	{
-		int ocv = deckard_battery_get_vfocv( max17320_external );
-		if ( ocv > OCV_BOOT_VOLTAGE )
-			return true;
-	}
-
-	return false;
+	return deckard_ok_for_boot( p_devices, false );
 }
  
 int deckard_spl_battery_charging_setup(uint16_t * battery_voltage)

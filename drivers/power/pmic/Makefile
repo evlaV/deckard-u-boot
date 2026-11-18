@@ -52,3 +52,5 @@ endif
 
 obj-$(CONFIG_$(PHASE_)POWER_TPS62362) += pmic_tps62362.o
 obj-$(CONFIG_SPL_POWER_TPS65910) += pmic_tps65910.o
+
+obj-$(CONFIG_$(PHASE_)HOTSWAP_NORTHGATE) += northgate_hotswap.o
