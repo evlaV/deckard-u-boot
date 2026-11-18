@@ -58,6 +58,7 @@ typedef struct
 	struct udevice *pm8550b;
 	struct udevice *max17320; // fuel gauge over i2c. cant use while adsp is loaded
 	struct udevice *max17320_external; // removable (boulder) fuel gauge over i2c. cant use while adsp is loaded?
+    struct udevice *boulder_northgate; // boulder silego device
 	struct udevice *led_red;
 	struct udevice *led_green;
 	struct udevice *led_blue;

@@ -679,6 +679,13 @@
 		status		= "okay";
 		reg			= <0x76>;
 	};
+    
+	// Boulder headstrap
+	boulder_northgate: pmic@18 {
+		compatible  = "silego,northgate_hotswap";
+		status      = "okay";
+		reg         = <0x18>;
+	};
 };
 
 &pcie0 {

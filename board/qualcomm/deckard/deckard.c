@@ -681,7 +681,7 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 		// Note that deckard_battery_ok_for_dsp can only be called if adsp is not started (i2c)
 		bool try_start_adsp = ( !adsp_started && 
 			( !adsp_start_time || get_timer( adsp_start_time ) > k_ADSP_RestartIntervalMS ) &&
-			deckard_battery_ok_for_dsp( pdevices->max17320, pdevices->max17320_external ) );
+			deckard_battery_ok_for_dsp( &g_deckard_devices ) );
 
 		if ( try_start_adsp )
 		{
@@ -762,7 +762,7 @@ static void deckard_wait_to_boot( boot_intention_t * p_boot_intention, deckard_d
 				{
 					boot_intention = BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY;
 				}
-				else if ( !adsp_started && !deckard_battery_ok_for_userspace( pdevices->max17320, pdevices->max17320_external ) )
+				else if ( !adsp_started && !deckard_battery_ok_for_userspace( &g_deckard_devices ) )
 				{
 					boot_intention = BOOT_INTENTION_CANNOT_BOOT_BATTERY_NOT_READY;
 				}
