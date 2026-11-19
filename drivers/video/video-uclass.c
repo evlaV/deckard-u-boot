@@ -402,6 +402,18 @@ void video_set_default_colors(struct udevice *dev, bool invert)
 	priv->colour_bg = video_index_to_colour(priv, back);
 }
 
+static uint video_fb_gen;
+
+void video_fb_changed(void)
+{
+	video_fb_gen++;
+}
+
+uint video_fb_generation(void)
+{
+	return video_fb_gen;
+}
+
 /* Notify about changes in the frame buffer */
 #ifdef CONFIG_VIDEO_DAMAGE
 void video_damage(struct udevice *vid, int x, int y, int width, int height)
@@ -409,6 +421,8 @@ void video_damage(struct udevice *vid, int x, int y, int width, int height)
 	struct video_priv *priv = dev_get_uclass_priv(vid);
 	int xend = x + width;
 	int yend = y + height;
+
+	video_fb_changed();
 
 	if (x > priv->xsize)
 		return;
@@ -497,6 +511,8 @@ int video_sync(struct udevice *vid, bool force)
 	struct video_priv *priv = dev_get_uclass_priv(vid);
 	struct video_ops *ops = video_get_ops(vid);
 	int ret;
+
+	video_fb_changed();
 
 	if (IS_ENABLED(CONFIG_VIDEO_COPY))
 		video_flush_copy(vid);
@@ -642,6 +658,8 @@ static int video_post_probe(struct udevice *dev)
 	struct udevice *cons;
 	int ret;
 
+	video_fb_changed();
+
 	/* Set up the line and display size */
 	priv->fb = map_sysmem(plat->base, plat->size);
 	if (!priv->line_length)
@@ -751,6 +769,8 @@ static int video_pre_remove(struct udevice *dev)
 {
 	struct video_uc_priv *uc_priv = uclass_get_priv(dev->uclass);
 	int ret;
+
+	video_fb_changed();
 
 	if (uc_priv->cons) {
 		ret = device_remove(uc_priv->cons, DM_REMOVE_NORMAL);

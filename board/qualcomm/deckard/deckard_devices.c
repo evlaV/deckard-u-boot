@@ -895,6 +895,25 @@ void deckard_fastboot_enable(deckard_devices_t * pdevices)
 }
 
 
+// The image we last drew, and the frame buffer generation right after that.
+// While the generation is unchanged, nothing else has drawn, so that image
+// is still on the screen.
+static const char * s_shown_image;
+static uint s_shown_fb_gen;
+
+static bool deckard_show_image( const char * filename )
+{
+	if ( bmp_display(CONFIG_SYS_LOAD_ADDR, 0,0) )
+	{
+		s_shown_image = NULL;
+		return false;
+	}
+
+	s_shown_image = filename;
+	s_shown_fb_gen = video_fb_generation();
+	return true;
+}
+
 void deckard_display_image( boot_intention_t boot_intention )
 {
 	if ( ! display_enabled() )
@@ -927,22 +946,32 @@ void deckard_display_image( boot_intention_t boot_intention )
 
 	bool displayed_image = false;
 
-	// Try the primary image name for all load sources (partitions)
-	for ( load_source_t load_source = 0; load_source < LOAD_SOURCE_COUNT; ++load_source )
+	// Don't load, decompress and draw it again if it's still on the screen
+	if ( s_shown_image && s_shown_fb_gen == video_fb_generation() &&
+	     ( !strcmp( s_shown_image, filename ) ||
+	       ( fallbackFilename && !strcmp( s_shown_image, fallbackFilename ) ) ) )
 	{
-		int ret = deckard_load_image( filename, CONFIG_SYS_LOAD_ADDR, load_source );
-		if ( ret == 0 )
+		deckard_log("%s is still on screen\n", s_shown_image );
+		displayed_image = true;
+	}
+
+	// Try the primary image name for all load sources (partitions)
+	if ( !displayed_image )
+	{
+		for ( load_source_t load_source = 0; load_source < LOAD_SOURCE_COUNT; ++load_source )
 		{
-			deckard_log("Found primary image %s, in load_source %d\n", filename, load_source );
-			bmp_info(CONFIG_SYS_LOAD_ADDR);
-			bmp_display(CONFIG_SYS_LOAD_ADDR, 0,0);
-			displayed_image = true;
-			break;
+			int ret = deckard_load_image( filename, CONFIG_SYS_LOAD_ADDR, load_source );
+			if ( ret == 0 )
+			{
+				deckard_log("Found primary image %s, in load_source %d\n", filename, load_source );
+				displayed_image = deckard_show_image( filename );
+				break;
+			}
 		}
 	}
 
 	// Try the fallback image for all load sources
-	if ( !displayed_image )
+	if ( !displayed_image && fallbackFilename )
 	{
 		for ( load_source_t load_source = 0; load_source < LOAD_SOURCE_COUNT; ++load_source )
 		{
@@ -950,9 +979,7 @@ void deckard_display_image( boot_intention_t boot_intention )
 			if ( ret == 0 )
 			{
 				deckard_log("Found fallback image %s, in load_source %d\n", fallbackFilename, load_source );
-				bmp_info(CONFIG_SYS_LOAD_ADDR);
-				bmp_display(CONFIG_SYS_LOAD_ADDR, 0,0);
-				displayed_image = true;
+				displayed_image = deckard_show_image( fallbackFilename );
 				break;
 			}
 		}

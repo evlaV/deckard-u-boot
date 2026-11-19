@@ -375,44 +375,41 @@ int video_bmp_display(struct udevice *dev, ulong bmp_image, int x, int y,
 	case 24:
 		if (CONFIG_IS_ENABLED(BMP_24BPP)) {
 			for (i = 0; i < height; ++i) {
-				for (j = 0; j < width; j++) {
-					if (bpix == 16) {
-						/* 16bit 565RGB format */
-						*(u16 *)fb = ((bmap[2] >> 3)
-							<< 11) |
-							((bmap[1] >> 2) << 5) |
-							(bmap[0] >> 3);
-						bmap += 3;
-						fb += 2;
-					} else if (eformat == VIDEO_X2R10G10B10) {
-						u32 pix;
+				if (bpix == 16) {
+					u16 *fb16 = (u16 *)fb;
 
-						pix = *bmap++ << 2U;
-						pix |= *bmap++ << 12U;
-						pix |= *bmap++ << 22U;
-						*fb++ = pix & 0xff;
-						*fb++ = (pix >> 8) & 0xff;
-						*fb++ = (pix >> 16) & 0xff;
-						*fb++ = pix >> 24;
-					} else if (eformat == VIDEO_RGBA8888) {
-						u32 pix;
+					/* 16bit 565RGB format */
+					for (j = 0; j < width; j++, bmap += 3)
+						*fb16++ = ((bmap[2] >> 3) << 11) |
+							  ((bmap[1] >> 2) << 5) |
+							  (bmap[0] >> 3);
+				} else {
+					u32 *fb32 = (u32 *)fb;
 
-						pix = *bmap++ << 8U; /* blue */
-						pix |= *bmap++ << 16U; /* green */
-						pix |= *bmap++ << 24U; /* red */
-
-						*fb++ = (pix >> 24) & 0xff;
-						*fb++ = (pix >> 16) & 0xff;
-						*fb++ = (pix >> 8) & 0xff;
-						*fb++ = 0xff;
-					} else {
-						*fb++ = *bmap++;
-						*fb++ = *bmap++;
-						*fb++ = *bmap++;
-						*fb++ = 0;
+					/* Pick the format once per row, not per pixel */
+					switch (eformat) {
+					case VIDEO_X2R10G10B10:
+						for (j = 0; j < width; j++, bmap += 3)
+							*fb32++ = bmap[0] << 2U |
+								  bmap[1] << 12U |
+								  bmap[2] << 22U;
+						break;
+					case VIDEO_RGBA8888:
+						for (j = 0; j < width; j++, bmap += 3)
+							*fb32++ = bmap[2] |
+								  bmap[1] << 8U |
+								  bmap[0] << 16U |
+								  0xffU << 24U;
+						break;
+					default:
+						for (j = 0; j < width; j++, bmap += 3)
+							*fb32++ = bmap[0] |
+								  bmap[1] << 8U |
+								  bmap[2] << 16U;
+						break;
 					}
 				}
-				fb -= priv->line_length + width * (bpix / 8);
+				fb -= priv->line_length;
 				bmap += (padded_width - width);
 			}
 		}
@@ -420,37 +417,30 @@ int video_bmp_display(struct udevice *dev, ulong bmp_image, int x, int y,
 	case 32:
 		if (CONFIG_IS_ENABLED(BMP_32BPP)) {
 			for (i = 0; i < height; ++i) {
-				for (j = 0; j < width; j++) {
-					if (eformat == VIDEO_X2R10G10B10) {
-						u32 pix;
+				u32 *fb32 = (u32 *)fb;
 
-						pix = *bmap++ << 2U;
-						pix |= *bmap++ << 12U;
-						pix |= *bmap++ << 22U;
-						pix |= (*bmap++ >> 6) << 30U;
-						*fb++ = pix & 0xff;
-						*fb++ = (pix >> 8) & 0xff;
-						*fb++ = (pix >> 16) & 0xff;
-						*fb++ = pix >> 24;
-					} else if (eformat == VIDEO_RGBA8888) {
-						u32 pix;
-
-						pix = *bmap++ << 8U; /* blue */
-						pix |= *bmap++ << 16U; /* green */
-						pix |= *bmap++ << 24U; /* red */
-						bmap++;
-						*fb++ = (pix >> 24) & 0xff;
-						*fb++ = (pix >> 16) & 0xff;
-						*fb++ = (pix >> 8) & 0xff;
-						*fb++ = 0xff; /* opacity */
-					} else {
-						*fb++ = *bmap++;
-						*fb++ = *bmap++;
-						*fb++ = *bmap++;
-						*fb++ = *bmap++;
-					}
+				/* Pick the format once per row, not per pixel */
+				switch (eformat) {
+				case VIDEO_X2R10G10B10:
+					for (j = 0; j < width; j++, bmap += 4)
+						*fb32++ = bmap[0] << 2U |
+							  bmap[1] << 12U |
+							  bmap[2] << 22U |
+							  (u32)(bmap[3] >> 6) << 30U;
+					break;
+				case VIDEO_RGBA8888:
+					for (j = 0; j < width; j++, bmap += 4)
+						*fb32++ = bmap[2] |
+							  bmap[1] << 8U |
+							  bmap[0] << 16U |
+							  0xffU << 24U; /* opacity */
+					break;
+				default:
+					for (j = 0; j < width; j++, bmap += 4)
+						*fb32++ = get_unaligned_le32(bmap);
+					break;
 				}
-				fb -= priv->line_length + width * (bpix / 8);
+				fb -= priv->line_length;
 			}
 		}
 		break;

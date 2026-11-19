@@ -385,6 +385,24 @@ void video_set_white_on_black(struct udevice *dev, bool white_on_black);
  */
 int video_default_font_height(struct udevice *dev);
 
+/**
+ * video_fb_changed() - Note that the frame buffer contents may have changed
+ *
+ * Called by video_damage(), video_sync() and when a video device is probed
+ * or removed.
+ */
+void video_fb_changed(void);
+
+/**
+ * video_fb_generation() - Get the frame buffer change count
+ *
+ * This changes whenever the frame buffer contents may have changed, so a
+ * caller can tell whether what it drew is still on the screen.
+ *
+ * Return: current change count
+ */
+uint video_fb_generation(void);
+
 #ifdef CONFIG_VIDEO_DAMAGE
 /**
  * video_damage() - Notify the video subsystem about screen updates.
@@ -405,7 +423,7 @@ void video_damage(struct udevice *vid, int x, int y, int width, int height);
 static inline void video_damage(struct udevice *vid, int x, int y, int width,
 				int height)
 {
-	return;
+	video_fb_changed();
 }
 #endif /* CONFIG_VIDEO_DAMAGE */
 
