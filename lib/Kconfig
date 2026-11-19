@@ -867,6 +867,20 @@ config ZSTD_LIB_MINIFY
 
 	  https://github.com/facebook/zstd/blob/dev/lib/README.md
 
+config ZSTD_UNALIGNED_ACCESS
+	bool "Build Zstandard for speed, with unaligned accesses"
+	depends on ARM64 && !SYS_DCACHE_OFF
+	help
+	  ARMv8 builds use -mstrict-align, so GCC can't inline zstd's small
+	  unaligned copies (ZSTD_copy8/16, wildcopy). Each one becomes a call
+	  to memcpy(), which makes decompression several times slower.
+
+	  U-Boot proper runs with the MMU and caches enabled, where unaligned
+	  accesses to normal memory are fine. This builds zstd for U-Boot
+	  proper (not SPL/TPL/VPL) with -O2 -mno-strict-align.
+
+	  Combine with ZSTD_LIB_MINIFY=n for full speed.
+
 endif
 
 config SPL_BZIP2
